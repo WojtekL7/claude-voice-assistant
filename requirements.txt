@@ -1,0 +1,27 @@
+# Claude Voice Assistant - Dependencies
+# GUI
+PyQt5>=5.15.0
+PyQt5-Qt5>=5.15.0
+PyQt5-sip>=12.0.0
+
+# Terminal/PTY communication
+pexpect>=4.8.0
+ptyprocess>=0.7.0
+
+# Text-to-Speech
+edge-tts>=6.1.0
+pygame>=2.5.0
+
+# Speech-to-Text
+sounddevice>=0.4.6
+scipy>=1.11.0
+numpy>=1.24.0
+requests>=2.31.0
+
+# Utilities
+python-dotenv>=1.0.0
+aiohttp>=3.9.0
+asyncio>=3.4.3
+
+# Packaging
+pyinstaller>=6.0.0
