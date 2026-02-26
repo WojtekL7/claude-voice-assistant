@@ -178,6 +178,33 @@ class MainWindow(QMainWindow):
             self.terminal.setTerminalOpacity(1.0)
             self.terminal.setHistorySize(10000)
 
+            # Scrollbar styling (Ubuntu terminal style - light gray)
+            self.terminal.setStyleSheet("""
+                QScrollBar:vertical {
+                    background: transparent;
+                    width: 12px;
+                    margin: 2px;
+                }
+                QScrollBar::handle:vertical {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                        stop:0 #888888, stop:0.5 #aaaaaa, stop:1 #888888);
+                    border-radius: 5px;
+                    min-height: 30px;
+                }
+                QScrollBar::handle:vertical:hover {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                        stop:0 #999999, stop:0.5 #bbbbbb, stop:1 #999999);
+                }
+                QScrollBar::add-line:vertical,
+                QScrollBar::sub-line:vertical {
+                    height: 0px;
+                }
+                QScrollBar::add-page:vertical,
+                QScrollBar::sub-page:vertical {
+                    background: transparent;
+                }
+            """)
+
             # Connect signal for TTS (read terminal output)
             self.terminal.receivedData.connect(self._on_terminal_output)
             self.terminal.finished.connect(self._on_terminal_finished)
