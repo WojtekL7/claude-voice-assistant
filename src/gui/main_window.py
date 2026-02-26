@@ -1000,8 +1000,12 @@ class MainWindow(QMainWindow):
         self.input_field.clear()
 
         if self.terminal and QTERMWIDGET_AVAILABLE:
-            # Send to real terminal
-            self.terminal.sendText(text + "\n")
+            # Send text to terminal
+            self.terminal.sendText(text)
+
+            # Small delay (50ms) then send Enter - gives Claude Code time to process
+            QTimer.singleShot(50, lambda: self.terminal.sendText("\r"))
+
             self._update_status("Wysłano do terminala...")
         else:
             # Fallback to Claude bridge
