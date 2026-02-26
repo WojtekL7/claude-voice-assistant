@@ -4,8 +4,9 @@ Asystent głosowy dla Claude Code - dyktuj polecenia i słuchaj odpowiedzi.
 
 ## Funkcje
 
-- **Dyktowanie głosem** - mów, a Claude Code otrzyma tekst (Groq Whisper)
-- **Czytanie odpowiedzi** - słuchaj odpowiedzi Claude Code (edge-tts)
+- **Prawdziwy terminal** - pełny emulator terminala VT100 (QTermWidget)
+- **Dyktowanie głosem** - mów, a polecenia wpisują się w terminalu (Groq Whisper)
+- **Czytanie odpowiedzi** - słuchaj odpowiedzi z terminala (edge-tts)
 - **Pauza/Wznów** - kontroluj czytanie w dowolnym momencie
 - **70+ języków** - wielojęzyczność interfejsu i głosów
 - **Szybkie akcje** - dropdown z często używanymi poleceniami
@@ -18,6 +19,7 @@ Asystent głosowy dla Claude Code - dyktuj polecenia i słuchaj odpowiedzi.
 - Claude Code CLI (`claude` lub `ai`)
 - Klucz API Groq (do rozpoznawania mowy)
 - Linux (Ubuntu 20.04+)
+- **QTermWidget** (dla prawdziwego terminala)
 
 ## Instalacja
 
@@ -38,11 +40,42 @@ cd claude-voice-assistant
 python3 -m venv venv
 source venv/bin/activate
 
-# Zainstaluj zależności
+# Zainstaluj zależności systemowe (Ubuntu/Debian)
+sudo apt-get install -y libqtermwidget5-1-dev qtbase5-dev
+
+# Zainstaluj zależności Python
 pip install -r requirements.txt
+
+# Zainstaluj QTermWidget (z dołączonego wheel)
+pip install wheels/qtermwidget-1.4.0-cp310-abi3-manylinux_2_17_x86_64.whl
 
 # Uruchom aplikację
 python src/main.py
+```
+
+### Budowanie QTermWidget ze źródeł (opcjonalne)
+
+Jeśli dołączony wheel nie działa, możesz zbudować QTermWidget samodzielnie:
+
+```bash
+# Zainstaluj narzędzia do budowania
+pip install sip pyqt-builder
+
+# Sklonuj QTermWidget (wersja 1.4.0 dla Qt5)
+git clone https://github.com/lxqt/qtermwidget.git /tmp/qtermwidget
+cd /tmp/qtermwidget
+git checkout 1.4.0
+
+# Dodaj ścieżkę do nagłówków w pyqt/project.py
+# W metodzie apply_user_defaults dodaj:
+# self.include_dirs.append('/usr/include/qtermwidget5')
+
+# Zbuduj wheel
+cd pyqt
+sip-wheel --qmake /usr/bin/qmake
+
+# Zainstaluj
+pip install qtermwidget-1.4.0-*.whl
 ```
 
 ## Konfiguracja

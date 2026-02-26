@@ -18,6 +18,14 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QObject
 from PyQt5.QtGui import QFont, QTextCursor, QIcon, QKeySequence, QPalette, QColor, QTextCharFormat
 
+# QTermWidget for real terminal emulation
+try:
+    from QTermWidget import QTermWidget
+    QTERMWIDGET_AVAILABLE = True
+except ImportError:
+    QTERMWIDGET_AVAILABLE = False
+    print("Warning: QTermWidget not available, using fallback QTextEdit")
+
 
 class SignalBridge(QObject):
     """Thread-safe bridge for signals from background threads to GUI."""
@@ -142,40 +150,82 @@ class MainWindow(QMainWindow):
         main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(10)
 
-        # Conversation area - styled like Ubuntu terminal
-        self.conversation_area = QTextEdit()
-        self.conversation_area.setReadOnly(True)
-        terminal_font = QFont("Ubuntu Mono", 13)
-        terminal_font.setStyleHint(QFont.Monospace)
-        self.conversation_area.setFont(terminal_font)
-        self.conversation_area.setCursorWidth(8)
-        self.conversation_area.setStyleSheet("""
-            QTextEdit {
-                background-color: #300A24;
-                color: #ffffff;
-                border: 1px solid #4a1a3a;
-                border-radius: 8px;
-                padding: 12px;
-                selection-background-color: #6a2a5a;
-            }
-            QScrollBar:vertical {
-                background-color: #300A24;
-                width: 12px;
-                border-radius: 6px;
-            }
-            QScrollBar::handle:vertical {
-                background-color: #4a1a3a;
-                border-radius: 6px;
-                min-height: 30px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background-color: #6a2a5a;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0px;
-            }
-        """)
-        main_layout.addWidget(self.conversation_area, stretch=1)
+        # Terminal area - real terminal emulator using QTermWidget
+        if QTERMWIDGET_AVAILABLE:
+            self.terminal = QTermWidget(0)  # 0 = don't start shell yet
+            self.terminal.setShellProgram("/usr/bin/bash")
+            self.terminal.setWorkingDirectory(str(Path.home()))
+
+            # Terminal font
+            terminal_font = QFont("Ubuntu Mono", 13)
+            terminal_font.setStyleHint(QFont.Monospace)
+            self.terminal.setTerminalFont(terminal_font)
+
+            # Color scheme (Ubuntu-like)
+            available_schemes = self.terminal.availableColorSchemes()
+            if "Linux" in available_schemes:
+                self.terminal.setColorScheme("Linux")
+            elif "Ubuntu" in available_schemes:
+                self.terminal.setColorScheme("Ubuntu")
+
+            # Terminal settings
+            self.terminal.setScrollBarPosition(QTermWidget.ScrollBarRight)
+            self.terminal.setTerminalOpacity(1.0)
+            self.terminal.setHistorySize(10000)
+
+            # Connect signal for TTS (read terminal output)
+            self.terminal.receivedData.connect(self._on_terminal_output)
+            self.terminal.finished.connect(self._on_terminal_finished)
+
+            # Buffer for TTS
+            self._terminal_output_buffer = ""
+            self._tts_timer = QTimer()
+            self._tts_timer.setSingleShot(True)
+            self._tts_timer.timeout.connect(self._read_terminal_buffer)
+
+            # Start the shell
+            self.terminal.startShellProgram()
+
+            main_layout.addWidget(self.terminal, stretch=1)
+
+            # Keep reference for compatibility
+            self.conversation_area = None
+        else:
+            # Fallback to QTextEdit if QTermWidget not available
+            self.terminal = None
+            self.conversation_area = QTextEdit()
+            self.conversation_area.setReadOnly(True)
+            terminal_font = QFont("Ubuntu Mono", 13)
+            terminal_font.setStyleHint(QFont.Monospace)
+            self.conversation_area.setFont(terminal_font)
+            self.conversation_area.setCursorWidth(8)
+            self.conversation_area.setStyleSheet("""
+                QTextEdit {
+                    background-color: #300A24;
+                    color: #ffffff;
+                    border: 1px solid #4a1a3a;
+                    border-radius: 8px;
+                    padding: 12px;
+                    selection-background-color: #6a2a5a;
+                }
+                QScrollBar:vertical {
+                    background-color: #300A24;
+                    width: 12px;
+                    border-radius: 6px;
+                }
+                QScrollBar::handle:vertical {
+                    background-color: #4a1a3a;
+                    border-radius: 6px;
+                    min-height: 30px;
+                }
+                QScrollBar::handle:vertical:hover {
+                    background-color: #6a2a5a;
+                }
+                QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                    height: 0px;
+                }
+            """)
+            main_layout.addWidget(self.conversation_area, stretch=1)
 
         # Bottom panel with dark background for buttons
         bottom_panel = QFrame()
@@ -784,6 +834,49 @@ class MainWindow(QMainWindow):
         self._append_system_message(f"Błąd: {error}")
         self._update_status(f"Błąd: {error}")
 
+    # ==================== Terminal Handlers ====================
+
+    def _on_terminal_output(self, data):
+        """Handle data received from terminal (for TTS)."""
+        if not self.terminal:
+            return
+
+        # Decode bytes to string
+        try:
+            text = data.data().decode('utf-8', errors='ignore')
+        except:
+            text = str(data)
+
+        # Filter out ANSI escape codes for TTS
+        import re
+        clean_text = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', text)
+        clean_text = re.sub(r'\x1b\][^\x07]*\x07', '', clean_text)  # OSC sequences
+        clean_text = clean_text.strip()
+
+        if clean_text:
+            self._terminal_output_buffer += clean_text + " "
+
+            # Reset timer - wait 1 second after last output before reading
+            if self.auto_read_responses:
+                self._tts_timer.stop()
+                self._tts_timer.start(1000)
+
+    def _read_terminal_buffer(self):
+        """Read accumulated terminal output via TTS."""
+        if self._terminal_output_buffer.strip():
+            # Don't read if it's just prompts or short commands
+            text = self._terminal_output_buffer.strip()
+            if len(text) > 20:  # Only read substantial output
+                self.tts.speak(text)
+            self._terminal_output_buffer = ""
+
+    def _on_terminal_finished(self):
+        """Handle terminal session finished."""
+        self._update_status("Terminal zakończony")
+        # Optionally restart
+        if self.terminal:
+            self.terminal.startShellProgram()
+
     def _on_tts_state_changed(self, state: TTSState):
         """Handle TTS state change."""
         if state == TTSState.PLAYING:
@@ -832,15 +925,22 @@ class MainWindow(QMainWindow):
     # ==================== Actions ====================
 
     def _send_message(self):
-        """Send message to Claude."""
+        """Send message to terminal or Claude."""
         text = self.input_field.text().strip()
         if not text:
             return
 
         self.input_field.clear()
-        self._append_user_message(text)
-        self.claude.send(text)
-        self._update_status("Wysłano...")
+
+        if self.terminal and QTERMWIDGET_AVAILABLE:
+            # Send to real terminal
+            self.terminal.sendText(text + "\n")
+            self._update_status("Wysłano do terminala...")
+        else:
+            # Fallback to Claude bridge
+            self._append_user_message(text)
+            self.claude.send(text)
+            self._update_status("Wysłano...")
 
     def _toggle_dictation(self):
         """Toggle voice dictation."""
@@ -853,7 +953,23 @@ class MainWindow(QMainWindow):
             self.stt.start_recording()
 
     def _read_last_response(self):
-        """Read the last response aloud (only the last AI response)."""
+        """Read the last response aloud."""
+        if self.terminal and QTERMWIDGET_AVAILABLE:
+            # For terminal mode - read from buffer or selected text
+            selected = self.terminal.selectedText()
+            if selected:
+                self.tts.speak(selected)
+            elif self._terminal_output_buffer.strip():
+                self.tts.speak(self._terminal_output_buffer.strip())
+                self._terminal_output_buffer = ""
+            else:
+                self._update_status("Brak tekstu do odczytania")
+            return
+
+        # Fallback for QTextEdit mode
+        if not self.conversation_area:
+            return
+
         text = self.conversation_area.toPlainText()
         if not text:
             return
@@ -901,7 +1017,15 @@ class MainWindow(QMainWindow):
         """Stop all operations."""
         self.tts.stop()
         self.stt.cancel_recording()
-        self.claude.send_interrupt()
+
+        if self.terminal and QTERMWIDGET_AVAILABLE:
+            # Send Ctrl+C to terminal
+            self.terminal.sendText("\x03")  # Ctrl+C
+            self._terminal_output_buffer = ""
+            self._tts_timer.stop()
+        else:
+            self.claude.send_interrupt()
+
         self._update_status("Zatrzymano")
 
     def _insert_quick_action(self, command: str):
@@ -926,15 +1050,20 @@ class MainWindow(QMainWindow):
             "Edytuj plik:\n" + str(QUICK_ACTIONS_FILE))
 
     def _new_session(self):
-        """Start new Claude session."""
+        """Start new terminal/Claude session."""
         reply = QMessageBox.question(self, "Nowa sesja",
             "Czy na pewno chcesz rozpocząć nową sesję?",
             QMessageBox.Yes | QMessageBox.No)
 
         if reply == QMessageBox.Yes:
-            self.conversation_area.clear()
-            self.claude.stop()
-            self._start_claude()
+            if self.terminal and QTERMWIDGET_AVAILABLE:
+                # Clear terminal and restart shell
+                self.terminal.sendText("clear\n")
+                self._terminal_output_buffer = ""
+            else:
+                self.conversation_area.clear()
+                self.claude.stop()
+                self._start_claude()
 
     def _show_settings(self):
         """Show settings dialog."""
@@ -1019,6 +1148,9 @@ class MainWindow(QMainWindow):
 
     def _append_user_message(self, text: str):
         """Append user message to conversation - yellow/orange like terminal."""
+        if not self.conversation_area:
+            return  # Using QTermWidget - no need to append
+
         cursor = self.conversation_area.textCursor()
         cursor.movePosition(QTextCursor.End)
 
@@ -1035,6 +1167,11 @@ class MainWindow(QMainWindow):
 
     def _append_system_message(self, text: str):
         """Append system message to conversation - cyan like terminal."""
+        if not self.conversation_area:
+            # For terminal mode - just update status bar
+            self._update_status(text)
+            return
+
         cursor = self.conversation_area.textCursor()
         cursor.movePosition(QTextCursor.End)
 
@@ -1056,7 +1193,14 @@ class MainWindow(QMainWindow):
         """Handle window close."""
         self.tts.stop()
         self.stt.cancel_recording()
-        self.claude.stop()
+
+        if self.terminal and QTERMWIDGET_AVAILABLE:
+            # Terminal cleanup
+            if hasattr(self, '_tts_timer'):
+                self._tts_timer.stop()
+        else:
+            self.claude.stop()
+
         self._save_settings()
         event.accept()
 
