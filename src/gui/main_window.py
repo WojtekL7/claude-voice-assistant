@@ -994,24 +994,29 @@ class MainWindow(QMainWindow):
     def _send_message(self):
         """Send message to terminal or Claude."""
         text = self.input_field.text().strip()
+
+        if self.terminal and QTERMWIDGET_AVAILABLE:
+            if text:
+                # Send text + Enter (with delay for Claude Code)
+                self.terminal.sendText(text)
+                QTimer.singleShot(50, lambda: self.terminal.sendText("\r"))
+                self.input_field.clear()
+            else:
+                # Empty field - just send Enter (accept Claude Code proposal)
+                self.terminal.sendText("\r")
+
+            self._update_status("Wysłano do terminala...")
+            return
+
+        # Fallback for non-terminal mode - require text
         if not text:
             return
 
         self.input_field.clear()
-
-        if self.terminal and QTERMWIDGET_AVAILABLE:
-            # Send text to terminal
-            self.terminal.sendText(text)
-
-            # Small delay (50ms) then send Enter - gives Claude Code time to process
-            QTimer.singleShot(50, lambda: self.terminal.sendText("\r"))
-
-            self._update_status("Wysłano do terminala...")
-        else:
-            # Fallback to Claude bridge
-            self._append_user_message(text)
-            self.claude.send(text)
-            self._update_status("Wysłano...")
+        # Fallback to Claude bridge
+        self._append_user_message(text)
+        self.claude.send(text)
+        self._update_status("Wysłano...")
 
     def _toggle_dictation(self):
         """Toggle voice dictation."""
