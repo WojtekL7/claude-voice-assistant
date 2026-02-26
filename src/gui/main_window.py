@@ -118,6 +118,7 @@ class MainWindow(QMainWindow):
 
         # Settings
         self.current_language = "pl-PL"
+        self.current_color_scheme = "Ubuntu"  # Default: Ubuntu purple theme
         self.auto_read_responses = False
         self.quick_actions = self._load_quick_actions()
 
@@ -161,12 +162,16 @@ class MainWindow(QMainWindow):
             terminal_font.setStyleHint(QFont.Monospace)
             self.terminal.setTerminalFont(terminal_font)
 
-            # Color scheme (Ubuntu-like)
+            # Apply saved color scheme (or default to Ubuntu)
             available_schemes = self.terminal.availableColorSchemes()
-            if "Linux" in available_schemes:
-                self.terminal.setColorScheme("Linux")
+            if self.current_color_scheme in available_schemes:
+                self.terminal.setColorScheme(self.current_color_scheme)
             elif "Ubuntu" in available_schemes:
                 self.terminal.setColorScheme("Ubuntu")
+                self.current_color_scheme = "Ubuntu"
+            elif "Linux" in available_schemes:
+                self.terminal.setColorScheme("Linux")
+                self.current_color_scheme = "Linux"
 
             # Terminal settings
             self.terminal.setScrollBarPosition(QTermWidget.ScrollBarRight)
@@ -468,6 +473,13 @@ class MainWindow(QMainWindow):
         manage_actions.triggered.connect(self._manage_quick_actions)
         edit_menu.addAction(manage_actions)
 
+        # Terminal color scheme submenu
+        if self.terminal and QTERMWIDGET_AVAILABLE:
+            edit_menu.addSeparator()
+            self.color_scheme_menu = edit_menu.addMenu("🎨 Schemat kolorów terminala")
+            self.color_scheme_actions = {}
+            self._populate_color_schemes_menu()
+
         # Language menu
         self.language_menu = menubar.addMenu("Język")
         self.language_actions = {}
@@ -644,6 +656,7 @@ class MainWindow(QMainWindow):
                     settings = json.load(f)
                     self.current_language = settings.get('language', 'pl-PL')
                     self.auto_read_responses = settings.get('auto_read', False)
+                    self.current_color_scheme = settings.get('color_scheme', 'Ubuntu')
 
                     # Set STT language
                     lang_code = self.current_language.split('-')[0]
@@ -670,7 +683,8 @@ class MainWindow(QMainWindow):
             'language': self.current_language,
             'auto_read': self.auto_read_responses,
             'groq_api_key': self.stt.api_key,
-            'anthropic_api_key': getattr(self, 'anthropic_api_key', '')
+            'anthropic_api_key': getattr(self, 'anthropic_api_key', ''),
+            'color_scheme': self.current_color_scheme
         }
         try:
             with open(CONFIG_FILE, 'w') as f:
@@ -738,6 +752,59 @@ class MainWindow(QMainWindow):
             self._append_system_message("Błąd: Nie można uruchomić Claude Code. Upewnij się, że jest zainstalowany.")
 
     # ==================== Event Handlers ====================
+
+    def _populate_color_schemes_menu(self):
+        """Populate color schemes submenu with available schemes."""
+        if not self.terminal or not QTERMWIDGET_AVAILABLE:
+            return
+
+        schemes = self.terminal.availableColorSchemes()
+
+        # Clear existing actions
+        self.color_scheme_menu.clear()
+        self.color_scheme_actions = {}
+
+        # Add schemes with nice names
+        scheme_labels = {
+            'Ubuntu': '🟣 Ubuntu (fioletowe tło)',
+            'Linux': '⚫ Linux (czarne tło)',
+            'Tango': '🔵 Tango (ciemne)',
+            'DarkPastels': '🌙 Dark Pastels (pastelowe)',
+            'Solarized': '🌅 Solarized Dark',
+            'SolarizedLight': '☀️ Solarized Light',
+            'WhiteOnBlack': '⬛ Białe na czarnym',
+            'BlackOnWhite': '⬜ Czarne na białym',
+            'GreenOnBlack': '💚 Zielone na czarnym (Matrix)',
+            'BreezeModified': '🌊 Breeze',
+            'Falcon': '🦅 Falcon',
+            'BlackOnLightYellow': '🟡 Czarne na żółtym',
+            'BlackOnRandomLight': '🎨 Czarne na losowym jasnym',
+        }
+
+        for scheme in sorted(schemes):
+            label = scheme_labels.get(scheme, scheme)
+            action = QAction(label, self)
+            action.setCheckable(True)
+            action.setChecked(scheme == self.current_color_scheme)
+            action.triggered.connect(lambda checked, s=scheme: self._set_color_scheme(s))
+            self.color_scheme_menu.addAction(action)
+            self.color_scheme_actions[scheme] = action
+
+    def _set_color_scheme(self, scheme: str):
+        """Set terminal color scheme."""
+        if not self.terminal or not QTERMWIDGET_AVAILABLE:
+            return
+
+        self.terminal.setColorScheme(scheme)
+        self.current_color_scheme = scheme
+
+        # Update checkmarks
+        for s, action in self.color_scheme_actions.items():
+            action.setChecked(s == scheme)
+
+        # Save to settings
+        self._save_settings()
+        self._update_status(f"Schemat kolorów: {scheme}")
 
     def _set_language(self, lang_code: str):
         """Handle language change from menu."""
