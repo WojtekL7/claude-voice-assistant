@@ -28,5 +28,10 @@ python-dotenv>=1.0.0
 aiohttp>=3.9.0
 asyncio>=3.4.3
 
+# Text cleaning for TTS (optional - dictionary filtering)
+# Requires system packages: libenchant-2-dev, aspell-pl (for Polish), aspell-en (for English)
+# On Ubuntu/Debian: sudo apt-get install libenchant-2-dev aspell-pl aspell-en
+pyenchant>=3.2.0
+
 # Packaging
 pyinstaller>=6.0.0

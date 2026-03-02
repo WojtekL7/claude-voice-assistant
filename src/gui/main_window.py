@@ -99,6 +99,7 @@ from core.claude_bridge import ClaudeBridgeAsync
 from core.tts_engine import TTSEngine, TTSState
 from core.stt_engine import STTEngine, STTState
 from core.license_manager import LicenseManager, LicenseStatus
+from core.text_cleaner import TextCleanerForTTS, extract_last_claude_response, fix_polish_encoding
 
 
 class MainWindow(QMainWindow):
@@ -149,7 +150,22 @@ class MainWindow(QMainWindow):
         # Main layout
         main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(10, 10, 10, 10)
-        main_layout.setSpacing(10)
+        main_layout.setSpacing(0)  # Splitter handles spacing
+
+        # Create splitter for terminal and bottom panel (prevents scroll on resize)
+        self.main_splitter = QSplitter(Qt.Vertical)
+        self.main_splitter.setHandleWidth(6)
+        self.main_splitter.setStyleSheet("""
+            QSplitter::handle:vertical {
+                background-color: #4a1a3a;
+                height: 6px;
+                border-radius: 3px;
+                margin: 2px 50px;
+            }
+            QSplitter::handle:vertical:hover {
+                background-color: #6a2a5a;
+            }
+        """)
 
         # Terminal area - real terminal emulator using QTermWidget
         if QTERMWIDGET_AVAILABLE:
@@ -177,6 +193,13 @@ class MainWindow(QMainWindow):
             self.terminal.setScrollBarPosition(QTermWidget.ScrollBarRight)
             self.terminal.setTerminalOpacity(1.0)
             self.terminal.setHistorySize(10000)
+
+            # Disable flow control warning (prevents white rectangle flash)
+            self.terminal.setFlowControlEnabled(False)
+            self.terminal.setFlowControlWarningEnabled(False)
+
+            # Disable terminal size hint (prevents white rectangle when resizing)
+            self.terminal.setTerminalSizeHint(False)
 
             # Scrollbar styling (Ubuntu terminal style - light gray)
             self.terminal.setStyleSheet("""
@@ -218,7 +241,7 @@ class MainWindow(QMainWindow):
             # Start the shell
             self.terminal.startShellProgram()
 
-            main_layout.addWidget(self.terminal, stretch=1)
+            self.main_splitter.addWidget(self.terminal)
 
             # Keep reference for compatibility
             self.conversation_area = None
@@ -257,7 +280,7 @@ class MainWindow(QMainWindow):
                     height: 0px;
                 }
             """)
-            main_layout.addWidget(self.conversation_area, stretch=1)
+            self.main_splitter.addWidget(self.conversation_area)
 
         # Bottom panel with dark background for buttons
         bottom_panel = QFrame()
@@ -280,7 +303,17 @@ class MainWindow(QMainWindow):
         control_area = self._create_control_area()
         bottom_layout.addLayout(control_area)
 
-        main_layout.addWidget(bottom_panel)
+        # Add bottom panel to splitter
+        self.main_splitter.addWidget(bottom_panel)
+
+        # Configure splitter behavior
+        self.main_splitter.setCollapsible(0, False)  # Terminal cannot be collapsed
+        self.main_splitter.setCollapsible(1, False)  # Bottom panel cannot be collapsed
+        self.main_splitter.setStretchFactor(0, 4)    # Terminal gets 80% of space
+        self.main_splitter.setStretchFactor(1, 0)    # Bottom panel: fixed size (no stretch)
+
+        # Add splitter to main layout
+        main_layout.addWidget(self.main_splitter)
 
         # Status bar
         self.status_bar = QStatusBar()
@@ -416,6 +449,26 @@ class MainWindow(QMainWindow):
             }
         """)
         layout.addWidget(self.read_btn)
+
+        # Copy button - orange
+        self.copy_btn = QPushButton("📋 Kopiuj")
+        self.copy_btn.setMinimumHeight(45)
+        self.copy_btn.clicked.connect(self._copy_selection)
+        self.copy_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f59e0b;
+                color: #0f172a;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-weight: bold;
+                font-size: 13px;
+            }
+            QPushButton:hover {
+                background-color: #d97706;
+            }
+        """)
+        layout.addWidget(self.copy_btn)
 
         # Pause button - neutral
         self.pause_btn = QPushButton("⏸ Pauza")
@@ -739,7 +792,7 @@ class MainWindow(QMainWindow):
 
     def _update_quick_actions_menu(self):
         """Update quick actions dropdown menu."""
-        menu = QMenu(self)
+        menu = QMenu(self.quick_actions_btn)
 
         for action in self.quick_actions:
             item = QAction(action['label'], self)
@@ -874,6 +927,7 @@ class MainWindow(QMainWindow):
         # Update buttons
         self.dictate_btn.setText(f"🎤 {self._get_text('dictate')}")
         self.read_btn.setText(f"🔊 {self._get_text('read')}")
+        self.copy_btn.setText(f"📋 {self._get_text('copy')}")
         self.pause_btn.setText(f"⏸ {self._get_text('pause')}")
         self.stop_btn.setText(f"⏹ {self._get_text('stop')}")
         self.send_btn.setText(f"📤 {self._get_text('send')}")
@@ -948,21 +1002,40 @@ class MainWindow(QMainWindow):
         clean_text = clean_text.strip()
 
         if clean_text:
-            self._terminal_output_buffer += clean_text + " "
+            # Add to buffer with newline separator
+            self._terminal_output_buffer += clean_text + "\n"
 
-            # Reset timer - wait 1 second after last output before reading
+            # LIMIT buffer size to last 5000 characters to prevent memory issues
+            if len(self._terminal_output_buffer) > 5000:
+                self._terminal_output_buffer = self._terminal_output_buffer[-5000:]
+
+            # Reset timer - wait 2 seconds after last output before auto-reading
             if self.auto_read_responses:
                 self._tts_timer.stop()
-                self._tts_timer.start(1000)
+                self._tts_timer.start(2000)
 
     def _read_terminal_buffer(self):
-        """Read accumulated terminal output via TTS."""
-        if self._terminal_output_buffer.strip():
-            # Don't read if it's just prompts or short commands
-            text = self._terminal_output_buffer.strip()
-            if len(text) > 20:  # Only read substantial output
-                self.tts.speak(text)
-            self._terminal_output_buffer = ""
+        """Read accumulated terminal output via TTS (auto-read mode)."""
+        if not self._terminal_output_buffer.strip():
+            return
+
+        # Use the same logic as manual read - extract Claude response only
+        last_response = extract_last_claude_response(self._terminal_output_buffer)
+
+        if last_response:
+            # Fix Polish encoding first
+            last_response = fix_polish_encoding(last_response)
+            # Clean for TTS
+            # use_dictionary=False because terminal encoding may corrupt Polish chars
+            text_cleaner = TextCleanerForTTS(self.current_language)
+            cleaned_text = text_cleaner.clean(last_response, use_dictionary=False)
+
+            if cleaned_text and len(cleaned_text) > 20:
+                self.tts.speak(cleaned_text)
+                self._update_status("Auto-czytam odpowiedź...")
+
+        # Always clear buffer after auto-read attempt
+        self._terminal_output_buffer = ""
 
     def _on_terminal_finished(self):
         """Handle terminal session finished."""
@@ -1056,15 +1129,78 @@ class MainWindow(QMainWindow):
             self.stt.start_recording()
 
     def _read_last_response(self):
-        """Read the last response aloud."""
+        """Read the last Claude Code response aloud (cleaned for TTS)."""
+        # Initialize text cleaner with current language
+        text_cleaner = TextCleanerForTTS(self.current_language)
+
         if self.terminal and QTERMWIDGET_AVAILABLE:
             # For terminal mode - read from buffer or selected text
             selected = self.terminal.selectedText()
+
             if selected:
-                self.tts.speak(selected)
-            elif self._terminal_output_buffer.strip():
-                self.tts.speak(self._terminal_output_buffer.strip())
-                self._terminal_output_buffer = ""
+                # Fix Polish encoding first
+                selected = fix_polish_encoding(selected)
+                # User selected text - clean and read it
+                # use_dictionary=False because terminal encoding may corrupt Polish chars
+                cleaned_text = text_cleaner.clean(selected, use_dictionary=False)
+                if cleaned_text:
+                    self.tts.speak(cleaned_text)
+                    self._update_status("Czytam zaznaczony tekst...")
+                else:
+                    self._update_status("Zaznaczony tekst nie zawiera treści do odczytania")
+                return
+
+            # DEBUG: Save buffer to file for analysis
+            debug_file = Path.home() / ".claude-voice-assistant" / "debug_buffer.txt"
+            try:
+                with open(debug_file, 'w') as f:
+                    f.write("=== RAW BUFFER ===\n")
+                    f.write(self._terminal_output_buffer)
+                    f.write("\n\n=== BUFFER LENGTH ===\n")
+                    f.write(str(len(self._terminal_output_buffer)))
+            except:
+                pass
+
+            # No selection - extract last Claude response from buffer
+            if self._terminal_output_buffer.strip():
+                # Extract only the last response
+                last_response = extract_last_claude_response(self._terminal_output_buffer)
+
+                # DEBUG: Save extracted response
+                try:
+                    with open(debug_file, 'a') as f:
+                        f.write("\n\n=== EXTRACTED RESPONSE ===\n")
+                        f.write(last_response if last_response else "(empty)")
+                except:
+                    pass
+
+                if last_response:
+                    # Fix Polish encoding first (UTF-8/Latin-1 issues from terminal)
+                    last_response = fix_polish_encoding(last_response)
+
+                    # Clean the response for TTS
+                    # use_dictionary=False because terminal encoding may corrupt Polish chars
+                    cleaned_text = text_cleaner.clean(last_response, use_dictionary=False)
+
+                    # DEBUG: Save cleaned text
+                    try:
+                        with open(debug_file, 'a') as f:
+                            f.write("\n\n=== CLEANED TEXT ===\n")
+                            f.write(cleaned_text if cleaned_text else "(empty)")
+                    except:
+                        pass
+
+                    if cleaned_text:
+                        self.tts.speak(cleaned_text)
+                        self._update_status("Czytam ostatnią odpowiedź...")
+                        # Clear buffer after reading
+                        self._terminal_output_buffer = ""
+                    else:
+                        self._update_status("Odpowiedź nie zawiera treści do odczytania")
+                else:
+                    self._update_status("Nie znaleziono odpowiedzi do odczytania")
+                    # Clear buffer anyway to prevent accumulation
+                    self._terminal_output_buffer = ""
             else:
                 self._update_status("Brak tekstu do odczytania")
             return
@@ -1077,40 +1213,44 @@ class MainWindow(QMainWindow):
         if not text:
             return
 
-        # Find the last AI response
-        # Split by user messages (lines starting with ">")
-        lines = text.strip().split('\n')
+        # Extract last response
+        last_response = extract_last_claude_response(text)
 
-        # Find the last user message position
-        last_user_msg_idx = -1
-        for i in range(len(lines) - 1, -1, -1):
-            if lines[i].strip().startswith('>'):
-                last_user_msg_idx = i
-                break
+        if last_response:
+            # Clean for TTS
+            cleaned_text = text_cleaner.clean(last_response)
 
-        if last_user_msg_idx >= 0:
-            # Get everything after the last user message
-            response_lines = lines[last_user_msg_idx + 1:]
+            if cleaned_text:
+                self.tts.speak(cleaned_text)
+            else:
+                self._update_status("Odpowiedź nie zawiera treści do odczytania")
         else:
-            # No user message found, take last 20 lines
-            response_lines = lines[-20:]
+            self._update_status("Nie znaleziono odpowiedzi do odczytania")
 
-        # Clean up the response
-        response_text = '\n'.join(response_lines).strip()
+    def _copy_selection(self):
+        """Copy selected text from terminal to system clipboard."""
+        if self.terminal and QTERMWIDGET_AVAILABLE:
+            selected = self.terminal.selectedText()
 
-        # Remove "Processing..." indicator if present
-        response_text = response_text.replace('⏳ Processing...', '').strip()
+            if selected and selected.strip():
+                # Copy to system clipboard
+                clipboard = QApplication.clipboard()
+                clipboard.setText(selected)
+                self._update_status(f"Skopiowano do schowka ({len(selected)} znaków)")
+            else:
+                self._update_status("Najpierw zaznacz tekst w terminalu")
+        else:
+            # Fallback for QTextEdit mode
+            if self.conversation_area:
+                cursor = self.conversation_area.textCursor()
+                selected = cursor.selectedText()
 
-        # Remove system messages
-        clean_lines = []
-        for line in response_text.split('\n'):
-            if not line.strip().startswith('[System]'):
-                clean_lines.append(line)
-
-        response_text = '\n'.join(clean_lines).strip()
-
-        if response_text:
-            self.tts.speak(response_text)
+                if selected and selected.strip():
+                    clipboard = QApplication.clipboard()
+                    clipboard.setText(selected)
+                    self._update_status(f"Skopiowano do schowka ({len(selected)} znaków)")
+                else:
+                    self._update_status("Najpierw zaznacz tekst")
 
     def _toggle_pause(self):
         """Toggle TTS pause/resume."""
