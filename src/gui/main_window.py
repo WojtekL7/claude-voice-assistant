@@ -320,6 +320,24 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.status_bar)
         self._update_status("Gotowy")
 
+        # Context usage counter (permanent widget on the right side of status bar)
+        self._total_context_chars = 0  # Track total conversation characters
+        self._context_label = QLabel("Kontekst: 0%")
+        self._context_label.setToolTip(
+            "Szacunkowe wykorzystanie kontekstu (200K tokenów).\n"
+            "Zielony <50% | Żółty 50-75% | Pomarańczowy 75-90% | Czerwony >90%\n"
+            "Przy 100% rozpocznie się nowa sesja z podsumowaniem."
+        )
+        self._context_label.setStyleSheet("""
+            QLabel {
+                color: #4ade80;
+                font-size: 11px;
+                padding: 0 10px;
+                font-weight: bold;
+            }
+        """)
+        self.status_bar.addPermanentWidget(self._context_label)
+
         # Menu bar
         self._create_menu_bar()
 
@@ -1005,6 +1023,9 @@ class MainWindow(QMainWindow):
             # Add to buffer with newline separator
             self._terminal_output_buffer += clean_text + "\n"
 
+            # Update context usage counter
+            self._update_context_usage(len(clean_text))
+
             # LIMIT buffer size to last 5000 characters to prevent memory issues
             if len(self._terminal_output_buffer) > 5000:
                 self._terminal_output_buffer = self._terminal_output_buffer[-5000:]
@@ -1101,6 +1122,8 @@ class MainWindow(QMainWindow):
                 self.terminal.sendText(text)
                 QTimer.singleShot(50, lambda: self.terminal.sendText("\r"))
                 self.input_field.clear()
+                # Update context usage with user input
+                self._update_context_usage(len(text))
             else:
                 # Empty field - just send Enter (accept Claude Code proposal)
                 self.terminal.sendText("\r")
@@ -1116,6 +1139,8 @@ class MainWindow(QMainWindow):
         # Fallback to Claude bridge
         self._append_user_message(text)
         self.claude.send(text)
+        # Update context usage with user input
+        self._update_context_usage(len(text))
         self._update_status("Wysłano...")
 
     def _toggle_dictation(self):
@@ -1303,10 +1328,12 @@ class MainWindow(QMainWindow):
                 # Clear terminal and restart shell
                 self.terminal.sendText("clear\n")
                 self._terminal_output_buffer = ""
+                self._reset_context_usage()  # Reset context counter
             else:
                 self.conversation_area.clear()
                 self.claude.stop()
                 self._start_claude()
+                self._reset_context_usage()  # Reset context counter
 
     def _show_settings(self):
         """Show settings dialog."""
@@ -1431,6 +1458,42 @@ class MainWindow(QMainWindow):
     def _update_status(self, text: str):
         """Update status bar."""
         self.status_bar.showMessage(text)
+
+    def _update_context_usage(self, additional_chars: int = 0):
+        """Update context usage percentage estimate.
+
+        Claude Opus 4.5 has 200K tokens context.
+        Rough estimate: 1 token ≈ 4 characters, so 200K tokens ≈ 800K chars.
+        """
+        MAX_CONTEXT_CHARS = 800000  # ~200K tokens
+
+        self._total_context_chars += additional_chars
+        percentage = min(100, (self._total_context_chars / MAX_CONTEXT_CHARS) * 100)
+
+        # Color coding based on usage
+        if percentage < 50:
+            color = "#4ade80"  # Green
+        elif percentage < 75:
+            color = "#fbbf24"  # Yellow
+        elif percentage < 90:
+            color = "#f97316"  # Orange
+        else:
+            color = "#ef4444"  # Red
+
+        self._context_label.setStyleSheet(f"""
+            QLabel {{
+                color: {color};
+                font-size: 11px;
+                padding: 0 10px;
+                font-weight: bold;
+            }}
+        """)
+        self._context_label.setText(f"Kontekst: {percentage:.0f}%")
+
+    def _reset_context_usage(self):
+        """Reset context counter (e.g., when starting new conversation)."""
+        self._total_context_chars = 0
+        self._update_context_usage(0)
 
     def closeEvent(self, event):
         """Handle window close."""
