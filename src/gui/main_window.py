@@ -321,12 +321,14 @@ class MainWindow(QMainWindow):
         self._update_status("Gotowy")
 
         # Context usage counter (permanent widget on the right side of status bar)
-        self._total_context_chars = 0  # Track total conversation characters
-        self._context_label = QLabel("Kontekst: 0%")
+        self._total_context_tokens = 0  # Track estimated tokens
+        self._max_context_tokens = 200000  # Claude context limit: 200K tokens
+        self._chars_per_token = 3.5  # Average for Polish text (English ~4)
+        self._context_label = QLabel("0 tokenów")
         self._context_label.setToolTip(
-            "Szacunkowe wykorzystanie kontekstu (200K tokenów).\n"
-            "Zielony <50% | Żółty 50-75% | Pomarańczowy 75-90% | Czerwony >90%\n"
-            "Przy 100% rozpocznie się nowa sesja z podsumowaniem."
+            "Licznik tokenów sesji.\n"
+            "Liczy od startu aplikacji do zamknięcia.\n"
+            "Po restarcie zobaczysz pop-up z poprzednią sesją."
         )
         self._context_label.setStyleSheet("""
             QLabel {
@@ -772,6 +774,25 @@ class MainWindow(QMainWindow):
                     # Set Anthropic API key
                     self.anthropic_api_key = settings.get('anthropic_api_key', '')
 
+                    # Load last session tokens and show popup
+                    last_tokens = settings.get('last_session_tokens', 0)
+                    if last_tokens > 0:
+                        # Format tokens for display
+                        if last_tokens >= 10000:
+                            tokens_display = f"{last_tokens / 1000:.0f}K"
+                        elif last_tokens >= 1000:
+                            tokens_display = f"{last_tokens / 1000:.1f}K"
+                        else:
+                            tokens_display = str(last_tokens)
+
+                        # Show popup after GUI loads (delayed)
+                        from PyQt5.QtCore import QTimer
+                        QTimer.singleShot(500, lambda: QMessageBox.information(
+                            self,
+                            "Poprzednia sesja",
+                            f"W poprzedniej sesji wykorzystano:\n\n{tokens_display} tokenów ({last_tokens:,} dokładnie)"
+                        ))
+
             except Exception as e:
                 print(f"Error loading settings: {e}")
 
@@ -782,7 +803,8 @@ class MainWindow(QMainWindow):
             'auto_read': self.auto_read_responses,
             'groq_api_key': self.stt.api_key,
             'anthropic_api_key': getattr(self, 'anthropic_api_key', ''),
-            'color_scheme': self.current_color_scheme
+            'color_scheme': self.current_color_scheme,
+            'last_session_tokens': self._total_context_tokens
         }
         try:
             with open(CONFIG_FILE, 'w') as f:
@@ -1328,12 +1350,12 @@ class MainWindow(QMainWindow):
                 # Clear terminal and restart shell
                 self.terminal.sendText("clear\n")
                 self._terminal_output_buffer = ""
-                self._reset_context_usage()  # Reset context counter
+                # Licznik tokenów NIE jest resetowany - liczy do końca sesji
             else:
                 self.conversation_area.clear()
                 self.claude.stop()
                 self._start_claude()
-                self._reset_context_usage()  # Reset context counter
+                # Licznik tokenów NIE jest resetowany - liczy do końca sesji
 
     def _show_settings(self):
         """Show settings dialog."""
@@ -1460,15 +1482,27 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage(text)
 
     def _update_context_usage(self, additional_chars: int = 0):
-        """Update context usage percentage estimate.
+        """Update context usage estimate in tokens.
 
-        Claude Opus 4.5 has 200K tokens context.
-        Rough estimate: 1 token ≈ 4 characters, so 200K tokens ≈ 800K chars.
+        Claude has 200K tokens context window.
+        Estimate: 1 token ≈ 3.5 characters for Polish text.
+        Auto-summarization triggers at ~85% (170K tokens).
         """
-        MAX_CONTEXT_CHARS = 800000  # ~200K tokens
+        # Convert chars to tokens
+        additional_tokens = int(additional_chars / self._chars_per_token)
+        self._total_context_tokens += additional_tokens
 
-        self._total_context_chars += additional_chars
-        percentage = min(100, (self._total_context_chars / MAX_CONTEXT_CHARS) * 100)
+        # Calculate percentage
+        percentage = min(100, (self._total_context_tokens / self._max_context_tokens) * 100)
+
+        # Format token count (e.g., 90K, 150K, 1.2K)
+        tokens_k = self._total_context_tokens / 1000
+        if tokens_k >= 10:
+            tokens_str = f"{tokens_k:.0f}K"
+        elif tokens_k >= 1:
+            tokens_str = f"{tokens_k:.1f}K"
+        else:
+            tokens_str = f"{self._total_context_tokens}"
 
         # Color coding based on usage
         if percentage < 50:
@@ -1488,12 +1522,20 @@ class MainWindow(QMainWindow):
                 font-weight: bold;
             }}
         """)
-        self._context_label.setText(f"Kontekst: {percentage:.0f}%")
+        self._context_label.setText(f"{tokens_str} tokenów")
 
     def _reset_context_usage(self):
         """Reset context counter (e.g., when starting new conversation)."""
-        self._total_context_chars = 0
-        self._update_context_usage(0)
+        self._total_context_tokens = 0
+        self._context_label.setText("0 tokenów")
+        self._context_label.setStyleSheet("""
+            QLabel {
+                color: #4ade80;
+                font-size: 11px;
+                padding: 0 10px;
+                font-weight: bold;
+            }
+        """)
 
     def closeEvent(self, event):
         """Handle window close."""
