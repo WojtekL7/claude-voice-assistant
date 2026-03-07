@@ -372,169 +372,191 @@ class MainWindow(QMainWindow):
         """)
         layout.addWidget(self.input_field, stretch=1)
 
-        # Quick actions dropdown
+        # Common button size for input area
+        input_btn_size = 48
+        input_icon_size = 20
+
+        # Quick actions dropdown - lightning + arrow down
         self.quick_actions_btn = QToolButton()
-        self.quick_actions_btn.setText("⚡ Szybkie akcje")
+        self.quick_actions_btn.setText("⚡▼")
+        self.quick_actions_btn.setToolTip("Szybkie akcje")
         self.quick_actions_btn.setPopupMode(QToolButton.InstantPopup)
-        self.quick_actions_btn.setMinimumHeight(40)
-        self.quick_actions_btn.setStyleSheet("""
-            QToolButton {
+        self.quick_actions_btn.setFixedSize(input_btn_size, input_btn_size)
+        self.quick_actions_btn.setStyleSheet(f"""
+            QToolButton {{
                 background-color: #4a1a3a;
                 color: #ffffff;
                 border: 1px solid #6a2a5a;
-                border-radius: 8px;
-                padding: 8px 12px;
-            }
-            QToolButton:hover {
+                border-radius: 12px;
+                font-size: {input_icon_size}px;
+            }}
+            QToolButton:hover {{
                 background-color: #6a2a5a;
-            }
-            QToolButton::menu-indicator {
+            }}
+            QToolButton::menu-indicator {{
                 image: none;
-            }
+            }}
         """)
 
         self._update_quick_actions_menu()
         layout.addWidget(self.quick_actions_btn)
 
-        # Send button
-        self.send_btn = QPushButton("✨ Wyślij")
-        self.send_btn.setMinimumHeight(40)
-        self.send_btn.setMinimumWidth(100)
+        # Send button - Enter icon
+        self.send_btn = QPushButton("↵")
+        self.send_btn.setFixedSize(input_btn_size, input_btn_size)
+        self.send_btn.setToolTip("Wyślij (Enter)")
         self.send_btn.clicked.connect(self._send_message)
-        self.send_btn.setStyleSheet("""
-            QPushButton {
+        self.send_btn.setStyleSheet(f"""
+            QPushButton {{
                 background-color: #22c55e;
                 color: #0f172a;
                 border: none;
-                border-radius: 8px;
-                padding: 8px 16px;
+                border-radius: 12px;
+                font-size: {input_icon_size + 4}px;
                 font-weight: bold;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #16a34a;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: #15803d;
-            }
+            }}
         """)
         layout.addWidget(self.send_btn)
 
         return layout
 
     def _create_control_area(self) -> QHBoxLayout:
-        """Create control buttons area."""
+        """Create control buttons area with icon-only buttons."""
         layout = QHBoxLayout()
 
-        # Dictate button - green
-        self.dictate_btn = QPushButton("🎤 Dyktuj")
-        self.dictate_btn.setMinimumHeight(45)
+        # Common button size
+        btn_size = 48
+        icon_size = 22
+
+        # Dictate button - microphone icon
+        self.dictate_btn = QPushButton("🎤")
+        self.dictate_btn.setFixedSize(btn_size, btn_size)
         self.dictate_btn.setCheckable(True)
+        self.dictate_btn.setToolTip("Dyktuj (nagrywanie głosu)")
         self.dictate_btn.clicked.connect(self._toggle_dictation)
-        self.dictate_btn.setStyleSheet("""
-            QPushButton {
+        self.dictate_btn.setStyleSheet(f"""
+            QPushButton {{
                 background-color: #22c55e;
                 color: #0f172a;
                 border: none;
-                border-radius: 8px;
-                padding: 10px 20px;
-                font-weight: bold;
-                font-size: 13px;
-            }
-            QPushButton:hover {
+                border-radius: 12px;
+                font-size: {icon_size}px;
+            }}
+            QPushButton:hover {{
                 background-color: #16a34a;
-            }
-            QPushButton:checked {
+                transform: scale(1.05);
+            }}
+            QPushButton:checked {{
                 background-color: #ef4444;
                 color: white;
-            }
+                animation: pulse 0.8s ease-in-out infinite;
+            }}
         """)
         layout.addWidget(self.dictate_btn)
 
-        # Read button - cyan
-        self.read_btn = QPushButton("🔊 Czytaj")
-        self.read_btn.setMinimumHeight(45)
+        # Timer for microphone pulse animation
+        self._mic_pulse_timer = QTimer()
+        self._mic_pulse_timer.timeout.connect(self._animate_mic_pulse)
+        self._mic_pulse_state = False
+
+        # Read button - speaker icon
+        self.read_btn = QPushButton("🔊")
+        self.read_btn.setFixedSize(btn_size, btn_size)
+        self.read_btn.setToolTip("Czytaj ostatnią odpowiedź")
         self.read_btn.clicked.connect(self._read_last_response)
-        self.read_btn.setStyleSheet("""
-            QPushButton {
+        self.read_btn.setStyleSheet(f"""
+            QPushButton {{
                 background-color: #06b6d4;
                 color: #0f172a;
                 border: none;
-                border-radius: 8px;
-                padding: 10px 20px;
-                font-weight: bold;
-                font-size: 13px;
-            }
-            QPushButton:hover {
+                border-radius: 12px;
+                font-size: {icon_size}px;
+            }}
+            QPushButton:hover {{
                 background-color: #0891b2;
-            }
+            }}
         """)
         layout.addWidget(self.read_btn)
 
-        # Copy button - orange
-        self.copy_btn = QPushButton("📋 Kopiuj")
-        self.copy_btn.setMinimumHeight(45)
-        self.copy_btn.clicked.connect(self._copy_selection)
-        self.copy_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #f59e0b;
-                color: #0f172a;
-                border: none;
-                border-radius: 8px;
-                padding: 10px 20px;
-                font-weight: bold;
-                font-size: 13px;
-            }
-            QPushButton:hover {
-                background-color: #d97706;
-            }
-        """)
-        layout.addWidget(self.copy_btn)
+        # Timer for speaker wave animation
+        self._speaker_anim_timer = QTimer()
+        self._speaker_anim_timer.timeout.connect(self._animate_speaker)
+        self._speaker_anim_state = 0
+        self._speaker_icons = ["🔈", "🔉", "🔊"]
 
-        # Pause button - neutral
-        self.pause_btn = QPushButton("⏸ Pauza")
-        self.pause_btn.setMinimumHeight(45)
+        # Pause button - two bars
+        self.pause_btn = QPushButton("⏸")
+        self.pause_btn.setFixedSize(btn_size, btn_size)
+        self.pause_btn.setToolTip("Pauza / Wznów")
         self.pause_btn.clicked.connect(self._toggle_pause)
         self.pause_btn.setEnabled(False)
-        self.pause_btn.setStyleSheet("""
-            QPushButton {
+        self.pause_btn.setStyleSheet(f"""
+            QPushButton {{
                 background-color: #4a1a3a;
                 color: #ffffff;
                 border: 1px solid #6a2a5a;
-                border-radius: 8px;
-                padding: 10px 20px;
-                font-weight: bold;
-                font-size: 13px;
-            }
-            QPushButton:hover {
+                border-radius: 12px;
+                font-size: {icon_size}px;
+            }}
+            QPushButton:hover {{
                 background-color: #6a2a5a;
-            }
-            QPushButton:disabled {
+            }}
+            QPushButton:disabled {{
                 background-color: #300A24;
                 color: #6a2a5a;
                 border-color: #4a1a3a;
-            }
+            }}
         """)
         layout.addWidget(self.pause_btn)
 
-        # Stop button - red
-        self.stop_btn = QPushButton("⏹ Stop")
-        self.stop_btn.setMinimumHeight(45)
+        # Timer for pause blink animation
+        self._pause_blink_timer = QTimer()
+        self._pause_blink_timer.timeout.connect(self._animate_pause_blink)
+        self._pause_blink_state = True
+
+        # Stop button - white square on red background
+        self.stop_btn = QPushButton("⬜")
+        self.stop_btn.setFixedSize(btn_size, btn_size)
+        self.stop_btn.setToolTip("Zatrzymaj wszystko")
         self.stop_btn.clicked.connect(self._stop_all)
-        self.stop_btn.setStyleSheet("""
-            QPushButton {
+        self.stop_btn.setStyleSheet(f"""
+            QPushButton {{
                 background-color: #ef4444;
                 color: white;
                 border: none;
-                border-radius: 8px;
-                padding: 10px 20px;
-                font-weight: bold;
-                font-size: 13px;
-            }
-            QPushButton:hover {
+                border-radius: 12px;
+                font-size: {icon_size - 4}px;
+            }}
+            QPushButton:hover {{
                 background-color: #dc2626;
-            }
+            }}
         """)
         layout.addWidget(self.stop_btn)
+
+        # Copy button - two overlapping pages
+        self.copy_btn = QPushButton("⧉")
+        self.copy_btn.setFixedSize(btn_size, btn_size)
+        self.copy_btn.setToolTip("Kopiuj zaznaczony tekst")
+        self.copy_btn.clicked.connect(self._copy_selection)
+        self.copy_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: #f59e0b;
+                color: #0f172a;
+                border: none;
+                border-radius: 12px;
+                font-size: {icon_size}px;
+            }}
+            QPushButton:hover {{
+                background-color: #d97706;
+            }}
+        """)
+        layout.addWidget(self.copy_btn)
 
         layout.addStretch()
 
@@ -964,16 +986,14 @@ class MainWindow(QMainWindow):
 
     def _update_ui_language(self):
         """Update all UI elements to current language."""
-        # Update buttons
-        self.dictate_btn.setText(f"🎤 {self._get_text('dictate')}")
-        self.read_btn.setText(f"🔊 {self._get_text('read')}")
-        self.copy_btn.setText(f"📋 {self._get_text('copy')}")
-        self.pause_btn.setText(f"⏸ {self._get_text('pause')}")
-        self.stop_btn.setText(f"⏹ {self._get_text('stop')}")
-        self.send_btn.setText(f"📤 {self._get_text('send')}")
-
-        # Update quick actions button
-        self.quick_actions_btn.setText(f"⚡ {self._get_text('quick_actions')}")
+        # Buttons are icon-only, update only tooltips
+        self.dictate_btn.setToolTip(self._get_text('dictate'))
+        self.read_btn.setToolTip(self._get_text('read'))
+        self.copy_btn.setToolTip(self._get_text('copy'))
+        self.pause_btn.setToolTip(self._get_text('pause'))
+        self.stop_btn.setToolTip(self._get_text('stop'))
+        self.send_btn.setToolTip(self._get_text('send'))
+        self.quick_actions_btn.setToolTip(self._get_text('quick_actions'))
 
         # Update checkbox
         self.auto_read_checkbox.setText(self._get_text('auto_read'))
@@ -1091,35 +1111,118 @@ class MainWindow(QMainWindow):
         """Handle TTS state change."""
         if state == TTSState.PLAYING:
             self.pause_btn.setEnabled(True)
-            self.pause_btn.setText("⏸ Pauza")
+            self.pause_btn.setText("⏸")
+            # Start speaker animation
+            self._speaker_anim_timer.start(300)
+            # Stop pause blink if running
+            self._pause_blink_timer.stop()
+            self.pause_btn.setVisible(True)
             self._update_status("Czytam...")
         elif state == TTSState.PAUSED:
-            self.pause_btn.setText("▶ Wznów")
+            self.pause_btn.setText("▶")
+            # Stop speaker animation
+            self._speaker_anim_timer.stop()
+            self.read_btn.setText("🔊")
+            # Start pause blink animation
+            self._pause_blink_timer.start(500)
             self._update_status("Wstrzymano")
         elif state == TTSState.GENERATING:
             self._update_status("Generowanie mowy...")
         else:
             self.pause_btn.setEnabled(False)
-            self.pause_btn.setText("⏸ Pauza")
+            self.pause_btn.setText("⏸")
+            # Stop all animations
+            self._speaker_anim_timer.stop()
+            self._pause_blink_timer.stop()
+            self.read_btn.setText("🔊")
+            self.pause_btn.setVisible(True)
             self._update_status("Gotowy")
 
     def _on_tts_finished(self):
         """Handle TTS finished."""
+        # Stop speaker animation
+        self._speaker_anim_timer.stop()
+        self.read_btn.setText("🔊")
         self._update_status("Gotowy")
 
     def _on_stt_state_changed(self, state: STTState):
         """Handle STT state change."""
         if state == STTState.RECORDING:
-            self.dictate_btn.setText("🔴 Nagrywanie...")
             self.dictate_btn.setChecked(True)
+            # Start microphone pulse animation
+            self._mic_pulse_timer.start(400)
             self._update_status("Nagrywanie... (kliknij ponownie aby zakończyć)")
         elif state == STTState.PROCESSING:
-            self.dictate_btn.setText("⏳ Przetwarzanie...")
+            self.dictate_btn.setText("⏳")
+            # Stop pulse animation
+            self._mic_pulse_timer.stop()
             self._update_status("Przetwarzanie mowy...")
         else:
-            self.dictate_btn.setText("🎤 Dyktuj")
+            self.dictate_btn.setText("🎤")
             self.dictate_btn.setChecked(False)
+            # Stop pulse animation and reset style
+            self._mic_pulse_timer.stop()
+            self._reset_mic_style()
             self._update_status("Gotowy")
+
+    # ==================== Animation Methods ====================
+
+    def _animate_mic_pulse(self):
+        """Animate microphone button pulsing red when recording."""
+        self._mic_pulse_state = not self._mic_pulse_state
+        if self._mic_pulse_state:
+            # Bright red, larger
+            self.dictate_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #ff0000;
+                    color: white;
+                    border: none;
+                    border-radius: 12px;
+                    font-size: 24px;
+                }
+            """)
+            self.dictate_btn.setText("🎤")
+        else:
+            # Darker red, normal
+            self.dictate_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #b91c1c;
+                    color: white;
+                    border: none;
+                    border-radius: 12px;
+                    font-size: 22px;
+                }
+            """)
+            self.dictate_btn.setText("🎤")
+
+    def _reset_mic_style(self):
+        """Reset microphone button to default style."""
+        self.dictate_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #22c55e;
+                color: #0f172a;
+                border: none;
+                border-radius: 12px;
+                font-size: 22px;
+            }
+            QPushButton:hover {
+                background-color: #16a34a;
+            }
+            QPushButton:checked {
+                background-color: #ef4444;
+                color: white;
+            }
+        """)
+
+    def _animate_speaker(self):
+        """Animate speaker icon showing sound waves."""
+        self._speaker_anim_state = (self._speaker_anim_state + 1) % 3
+        self.read_btn.setText(self._speaker_icons[self._speaker_anim_state])
+
+    def _animate_pause_blink(self):
+        """Animate pause button blinking."""
+        self._pause_blink_state = not self._pause_blink_state
+        self.pause_btn.setVisible(self._pause_blink_state)
 
     def _on_transcription(self, text: str):
         """Handle transcription result."""
@@ -1284,6 +1387,8 @@ class MainWindow(QMainWindow):
                 clipboard = QApplication.clipboard()
                 clipboard.setText(selected)
                 self._update_status(f"Skopiowano do schowka ({len(selected)} znaków)")
+                # Flash green effect
+                self._flash_copy_success()
             else:
                 self._update_status("Najpierw zaznacz tekst w terminalu")
         else:
@@ -1296,8 +1401,42 @@ class MainWindow(QMainWindow):
                     clipboard = QApplication.clipboard()
                     clipboard.setText(selected)
                     self._update_status(f"Skopiowano do schowka ({len(selected)} znaków)")
+                    # Flash green effect
+                    self._flash_copy_success()
                 else:
                     self._update_status("Najpierw zaznacz tekst")
+
+    def _flash_copy_success(self):
+        """Flash copy button green to indicate success."""
+        # Change to green with checkmark
+        self.copy_btn.setText("✓")
+        self.copy_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #22c55e;
+                color: white;
+                border: none;
+                border-radius: 12px;
+                font-size: 22px;
+            }
+        """)
+        # Reset after 500ms
+        QTimer.singleShot(500, self._reset_copy_style)
+
+    def _reset_copy_style(self):
+        """Reset copy button to default style."""
+        self.copy_btn.setText("⧉")
+        self.copy_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f59e0b;
+                color: #0f172a;
+                border: none;
+                border-radius: 12px;
+                font-size: 22px;
+            }
+            QPushButton:hover {
+                background-color: #d97706;
+            }
+        """)
 
     def _toggle_pause(self):
         """Toggle TTS pause/resume."""
