@@ -322,9 +322,9 @@ class MainWindow(QMainWindow):
 
         # Context usage counter (permanent widget on the right side of status bar)
         self._total_context_tokens = 0  # Track estimated tokens
-        self._max_context_tokens = 200000  # Claude context limit: 200K tokens
+        self._max_context_tokens = 4000000  # Session token pool: 4M tokens
         self._chars_per_token = 3.5  # Average for Polish text (English ~4)
-        self._context_label = QLabel("0 tokenów")
+        self._context_label = QLabel("0 / 4,000,000 (0%)")
         self._context_label.setToolTip(
             "Licznik tokenów sesji.\n"
             "Liczy od startu aplikacji do zamknięcia.\n"
@@ -1484,9 +1484,8 @@ class MainWindow(QMainWindow):
     def _update_context_usage(self, additional_chars: int = 0):
         """Update context usage estimate in tokens.
 
-        Claude has 200K tokens context window.
+        Session token pool: 4M tokens.
         Estimate: 1 token ≈ 3.5 characters for Polish text.
-        Auto-summarization triggers at ~85% (170K tokens).
         """
         # Convert chars to tokens
         additional_tokens = int(additional_chars / self._chars_per_token)
@@ -1495,24 +1494,17 @@ class MainWindow(QMainWindow):
         # Calculate percentage
         percentage = min(100, (self._total_context_tokens / self._max_context_tokens) * 100)
 
-        # Format token count (e.g., 90K, 150K, 1.2K)
-        tokens_k = self._total_context_tokens / 1000
-        if tokens_k >= 10:
-            tokens_str = f"{tokens_k:.0f}K"
-        elif tokens_k >= 1:
-            tokens_str = f"{tokens_k:.1f}K"
-        else:
-            tokens_str = f"{self._total_context_tokens}"
+        # Format token count with thousands separator
+        tokens_formatted = f"{self._total_context_tokens:,}".replace(",", ",")
+        max_formatted = f"{self._max_context_tokens:,}".replace(",", ",")
 
-        # Color coding based on usage
-        if percentage < 50:
-            color = "#4ade80"  # Green
-        elif percentage < 75:
-            color = "#fbbf24"  # Yellow
-        elif percentage < 90:
-            color = "#f97316"  # Orange
+        # Color coding based on usage (3 levels)
+        if percentage <= 50:
+            color = "#4ade80"  # Green: 0-50%
+        elif percentage <= 75:
+            color = "#f97316"  # Orange: 50-75%
         else:
-            color = "#ef4444"  # Red
+            color = "#ef4444"  # Red: >75%
 
         self._context_label.setStyleSheet(f"""
             QLabel {{
@@ -1522,12 +1514,12 @@ class MainWindow(QMainWindow):
                 font-weight: bold;
             }}
         """)
-        self._context_label.setText(f"{tokens_str} tokenów")
+        self._context_label.setText(f"{tokens_formatted} / {max_formatted} ({percentage:.2f}%)")
 
     def _reset_context_usage(self):
         """Reset context counter (e.g., when starting new conversation)."""
         self._total_context_tokens = 0
-        self._context_label.setText("0 tokenów")
+        self._context_label.setText("0 / 4,000,000 (0%)")
         self._context_label.setStyleSheet("""
             QLabel {
                 color: #4ade80;
