@@ -346,6 +346,11 @@ class MainWindow(QMainWindow):
         # Apply dark theme
         self._apply_dark_theme()
 
+        # Sync input field background with terminal (after terminal is created)
+        if self.terminal and QTERMWIDGET_AVAILABLE:
+            # Delay slightly to ensure terminal color scheme is applied
+            QTimer.singleShot(100, self._update_input_style)
+
 
     def _create_input_area(self) -> QHBoxLayout:
         """Create input area with text field and quick actions."""
@@ -944,9 +949,42 @@ class MainWindow(QMainWindow):
         for s, action in self.color_scheme_actions.items():
             action.setChecked(s == scheme)
 
+        # Update input field to match terminal background
+        self._update_input_style()
+
         # Save to settings
         self._save_settings()
         self._update_status(f"Schemat kolorów: {scheme}")
+
+    def _get_terminal_background_color(self) -> str:
+        """Get background color from terminal's current color scheme."""
+        if self.terminal and QTERMWIDGET_AVAILABLE:
+            # Get background color from terminal palette
+            palette = self.terminal.palette()
+            bg_color = palette.color(QPalette.Base)
+            return bg_color.name()  # Returns hex color like "#300A24"
+        return "#300A24"  # Default Ubuntu purple
+
+    def _update_input_style(self):
+        """Update input field style to match terminal background."""
+        bg_color = self._get_terminal_background_color()
+
+        # Calculate border color (slightly lighter than background)
+        bg = QColor(bg_color)
+        border_color = bg.lighter(150).name()
+        border_focus = bg.lighter(200).name()
+
+        self.input_field.setStyleSheet(f"""
+            QTextEdit {{
+                background-color: {bg_color};
+                color: #ffffff;
+                border: 1px solid {border_color};
+                border-radius: 8px;
+            }}
+            QTextEdit:focus {{
+                border-color: {border_focus};
+            }}
+        """)
 
     def _set_language(self, lang_code: str):
         """Handle language change from menu."""
