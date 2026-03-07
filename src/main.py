@@ -7,6 +7,9 @@ import sys
 import os
 from pathlib import Path
 
+# Force X11 backend to fix menu positioning on Wayland
+os.environ["QT_QPA_PLATFORM"] = "xcb"
+
 # Add src directory to path
 src_dir = Path(__file__).parent
 sys.path.insert(0, str(src_dir))
