@@ -101,6 +101,24 @@ from core.stt_engine import STTEngine, STTState
 from core.license_manager import LicenseManager, LicenseStatus
 from core.text_cleaner import TextCleanerForTTS, extract_last_claude_response, fix_polish_encoding
 
+# Mapowanie schematów kolorów QTermWidget na kolory tła
+# (QPalette.Base nie działa dla QTermWidget - trzeba zdefiniować ręcznie)
+COLOR_SCHEME_BACKGROUNDS = {
+    'Ubuntu': '#300A24',
+    'Linux': '#000000',
+    'Tango': '#2e3436',
+    'DarkPastels': '#1b1d1e',
+    'Solarized': '#002b36',
+    'SolarizedLight': '#fdf6e3',
+    'WhiteOnBlack': '#000000',
+    'BlackOnWhite': '#ffffff',
+    'GreenOnBlack': '#000000',
+    'BreezeModified': '#1b1f20',
+    'Falcon': '#020221',
+    'BlackOnLightYellow': '#ffffdd',
+    'BlackOnRandomLight': '#ffffff',
+}
+
 
 class MainWindow(QMainWindow):
     """Main application window."""
@@ -959,10 +977,8 @@ class MainWindow(QMainWindow):
     def _get_terminal_background_color(self) -> str:
         """Get background color from terminal's current color scheme."""
         if self.terminal and QTERMWIDGET_AVAILABLE:
-            # Get background color from terminal palette
-            palette = self.terminal.palette()
-            bg_color = palette.color(QPalette.Base)
-            return bg_color.name()  # Returns hex color like "#300A24"
+            # Użyj zdefiniowanego słownika kolorów (QPalette.Base nie działa dla QTermWidget)
+            return COLOR_SCHEME_BACKGROUNDS.get(self.current_color_scheme, '#300A24')
         return "#300A24"  # Default Ubuntu purple
 
     def _update_input_style(self):
