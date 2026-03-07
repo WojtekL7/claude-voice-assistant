@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
     QDialogButtonBox, QFormLayout, QMessageBox, QFrame,
     QToolButton, QSizePolicy, QApplication, QInputDialog
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QObject
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QObject, QEvent
 from PyQt5.QtGui import QFont, QTextCursor, QIcon, QKeySequence, QPalette, QColor, QTextCharFormat
 
 # QTermWidget for real terminal emulation
@@ -283,15 +283,15 @@ class MainWindow(QMainWindow):
             self.main_splitter.addWidget(self.conversation_area)
 
         # Bottom panel with dark background for buttons
-        bottom_panel = QFrame()
-        bottom_panel.setStyleSheet("""
+        self.bottom_panel = QFrame()
+        self.bottom_panel.setStyleSheet("""
             QFrame {
                 background-color: #131314;
                 border-radius: 10px;
                 padding: 5px;
             }
         """)
-        bottom_layout = QVBoxLayout(bottom_panel)
+        bottom_layout = QVBoxLayout(self.bottom_panel)
         bottom_layout.setContentsMargins(12, 12, 12, 12)
         bottom_layout.setSpacing(10)
 
@@ -304,7 +304,7 @@ class MainWindow(QMainWindow):
         bottom_layout.addLayout(control_area)
 
         # Add bottom panel to splitter
-        self.main_splitter.addWidget(bottom_panel)
+        self.main_splitter.addWidget(self.bottom_panel)
 
         # Configure splitter behavior
         self.main_splitter.setCollapsible(0, False)  # Terminal cannot be collapsed
@@ -1543,6 +1543,29 @@ class MainWindow(QMainWindow):
 
         self._save_settings()
         event.accept()
+
+    def changeEvent(self, event):
+        """Handle window activation/deactivation - change bottom panel color."""
+        if event.type() == QEvent.ActivationChange:
+            if self.isActiveWindow():
+                # Window is active - dark background
+                self.bottom_panel.setStyleSheet("""
+                    QFrame {
+                        background-color: #131314;
+                        border-radius: 10px;
+                        padding: 5px;
+                    }
+                """)
+            else:
+                # Window is inactive - gray background
+                self.bottom_panel.setStyleSheet("""
+                    QFrame {
+                        background-color: #3a3a3c;
+                        border-radius: 10px;
+                        padding: 5px;
+                    }
+                """)
+        super().changeEvent(event)
 
 
 class SettingsDialog(QDialog):
