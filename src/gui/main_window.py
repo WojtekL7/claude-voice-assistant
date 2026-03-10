@@ -340,9 +340,9 @@ class MainWindow(QMainWindow):
 
         # Context usage counter (permanent widget on the right side of status bar)
         self._total_context_tokens = 0  # Track estimated tokens
-        self._max_context_tokens = 4000000  # Session token pool: 4M tokens
+        self._max_context_tokens = 13000000  # Session token pool: 13M tokens
         self._chars_per_token = 3.5  # Average for Polish text (English ~4)
-        self._context_label = QLabel("0 / 4,000,000 (0%)")
+        self._context_label = QLabel("0 / 13,000,000 (0%)")
         self._context_label.setToolTip(
             "Licznik tokenów sesji.\n"
             "Liczy od startu aplikacji do zamknięcia.\n"
@@ -1712,7 +1712,7 @@ class MainWindow(QMainWindow):
     def _reset_context_usage(self):
         """Reset context counter (e.g., when starting new conversation)."""
         self._total_context_tokens = 0
-        self._context_label.setText("0 / 4,000,000 (0%)")
+        self._context_label.setText("0 / 13,000,000 (0%)")
         self._context_label.setStyleSheet("""
             QLabel {
                 color: #4ade80;
