@@ -28,6 +28,9 @@ def main():
     QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
     QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
 
+    # Disable native menu bar - fixes menu positioning on XWayland
+    QApplication.setAttribute(Qt.AA_DontUseNativeMenuBar, True)
+
     # Create application
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
