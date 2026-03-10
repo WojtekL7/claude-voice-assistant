@@ -86,6 +86,15 @@ class AutoResizeTextEdit(QTextEdit):
         """Set plain text (compatibility with QLineEdit)."""
         self.setPlainText(text)
 
+    def clear(self):
+        """Clear text without triggering layout recalculation that causes terminal scroll."""
+        # Block signals to prevent contentsChanged -> _adjust_height chain
+        self.document().blockSignals(True)
+        super().clear()
+        self.document().blockSignals(False)
+        # Manually reset to minimum height
+        self.setFixedHeight(self.min_height)
+
 # Import our modules
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
