@@ -596,7 +596,29 @@ class MainWindow(QMainWindow):
         self.auto_read_checkbox = QCheckBox("Auto-czytaj odpowiedzi")
         self.auto_read_checkbox.setChecked(self.auto_read_responses)
         self.auto_read_checkbox.stateChanged.connect(self._on_auto_read_changed)
-        self.auto_read_checkbox.setStyleSheet("color: #e4e4e7;")
+        self.auto_read_checkbox.setStyleSheet("""
+            QCheckBox {
+                color: #e4e4e7;
+                spacing: 8px;
+            }
+            QCheckBox::indicator {
+                width: 18px;
+                height: 18px;
+                border: 2px solid #6b7280;
+                border-radius: 4px;
+                background-color: #374151;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #10b981;
+                border-color: #10b981;
+            }
+            QCheckBox::indicator:checked::after {
+                content: "";
+            }
+            QCheckBox::indicator:hover {
+                border-color: #9ca3af;
+            }
+        """)
         layout.addWidget(self.auto_read_checkbox)
 
         return layout
