@@ -49,6 +49,7 @@ class AutoResizeTextEdit(QTextEdit):
         super().__init__(parent)
         self.min_height = 55
         self.max_height = 180  # ~5 lines
+        self._terminal_ref = None  # Reference to terminal for blocking updates
         self.document().contentsChanged.connect(self._adjust_height)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -58,13 +59,25 @@ class AutoResizeTextEdit(QTextEdit):
         self.setLineWrapMode(QTextEdit.WidgetWidth)
         self._adjust_height()
 
+    def set_terminal_ref(self, terminal):
+        """Set reference to terminal widget for blocking updates during resize."""
+        self._terminal_ref = terminal
+
     def _adjust_height(self):
-        """Adjust height based on content."""
+        """Adjust height based on content without causing terminal scroll."""
         doc_height = self.document().size().height()
         new_height = max(self.min_height, min(int(doc_height) + 16, self.max_height))
 
         if new_height != self.height():
+            # Block terminal updates during height change to prevent scroll
+            if self._terminal_ref:
+                self._terminal_ref.setUpdatesEnabled(False)
+
             self.setFixedHeight(new_height)
+
+            # Re-enable terminal updates after height change
+            if self._terminal_ref:
+                self._terminal_ref.setUpdatesEnabled(True)
 
     def keyPressEvent(self, event):
         """Handle key press - Enter sends, Shift+Enter adds new line."""
@@ -83,17 +96,31 @@ class AutoResizeTextEdit(QTextEdit):
         return self.toPlainText()
 
     def setText(self, text):
-        """Set plain text (compatibility with QLineEdit)."""
+        """Set plain text without causing terminal scroll."""
+        # Block terminal updates during text change
+        if self._terminal_ref:
+            self._terminal_ref.setUpdatesEnabled(False)
+
         self.setPlainText(text)
+
+        if self._terminal_ref:
+            self._terminal_ref.setUpdatesEnabled(True)
 
     def clear(self):
         """Clear text without triggering layout recalculation that causes terminal scroll."""
+        # Block terminal updates during clear
+        if self._terminal_ref:
+            self._terminal_ref.setUpdatesEnabled(False)
+
         # Block signals to prevent contentsChanged -> _adjust_height chain
         self.document().blockSignals(True)
         super().clear()
         self.document().blockSignals(False)
         # Manually reset to minimum height
         self.setFixedHeight(self.min_height)
+
+        if self._terminal_ref:
+            self._terminal_ref.setUpdatesEnabled(True)
 
 # Import our modules
 import sys
@@ -338,6 +365,11 @@ class MainWindow(QMainWindow):
         self.main_splitter.setCollapsible(1, False)  # Bottom panel cannot be collapsed
         self.main_splitter.setStretchFactor(0, 4)    # Terminal gets 80% of space
         self.main_splitter.setStretchFactor(1, 0)    # Bottom panel: fixed size (no stretch)
+        self.main_splitter.setOpaqueResize(False)    # Prevents scroll flash during resize
+
+        # Connect terminal reference to input field to prevent scroll during typing
+        if self.terminal:
+            self.input_field.set_terminal_ref(self.terminal)
 
         # Add splitter to main layout
         main_layout.addWidget(self.main_splitter)
