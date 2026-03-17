@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
     QDialogButtonBox, QFormLayout, QMessageBox, QFrame,
     QToolButton, QSizePolicy, QApplication, QInputDialog
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QObject, QEvent
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QObject, QEvent, QPoint
 from PyQt5.QtGui import QFont, QTextCursor, QIcon, QKeySequence, QPalette, QColor, QTextCharFormat
 
 # QTermWidget for real terminal emulation
@@ -37,6 +37,75 @@ class SignalBridge(QObject):
     stt_state_changed = pyqtSignal(object)
     stt_transcription = pyqtSignal(str)
     stt_error = pyqtSignal(str)
+
+
+class MenuPositionFixer(QObject):
+    """
+    Event filter that fixes menu positioning on rotated monitors.
+
+    On XWayland with rotated monitors, Qt calculates wrong coordinates
+    for popup menus. This filter intercepts menu Show events and
+    corrects the position to appear directly below the menu bar item.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._fixing = False  # Prevent recursion
+
+    def eventFilter(self, obj, event):
+        """Intercept QMenu show events and fix position."""
+        if isinstance(obj, QMenu) and event.type() == QEvent.Show and not self._fixing:
+            # Schedule position fix after menu is shown
+            QTimer.singleShot(0, lambda: self._fix_menu_position(obj))
+        return super().eventFilter(obj, event)
+
+    def _fix_menu_position(self, menu):
+        """Fix menu position if it's wrong."""
+        if self._fixing:
+            return
+
+        # Find the parent menubar and active action
+        parent = menu.parent()
+
+        # Handle QMenuBar menus
+        if isinstance(parent, QMenuBar):
+            action = parent.activeAction()
+            if action:
+                # Calculate correct position: below the menu bar item
+                action_rect = parent.actionGeometry(action)
+                correct_pos = parent.mapToGlobal(action_rect.bottomLeft())
+
+                current_pos = menu.pos()
+
+                # Check if position is significantly wrong (more than 50px off)
+                dx = abs(current_pos.x() - correct_pos.x())
+                dy = abs(current_pos.y() - correct_pos.y())
+
+                if dx > 50 or dy > 50:
+                    # Position is wrong - fix it
+                    self._fixing = True
+                    menu.move(correct_pos)
+                    self._fixing = False
+
+        # Handle submenus (QMenu -> QMenu)
+        elif isinstance(parent, QMenu):
+            # For submenus, check if position is reasonable
+            parent_pos = parent.pos()
+            current_pos = menu.pos()
+
+            # Submenu should appear near the parent menu
+            # If it's too far away, try to fix it
+            dx = abs(current_pos.x() - parent_pos.x())
+            dy = abs(current_pos.y() - parent_pos.y())
+
+            # Submenu should be within reasonable distance of parent
+            parent_width = parent.width()
+            if dx > parent_width + 100 or dy > parent.height() + 100:
+                # Position is wrong - place submenu to the right of parent
+                self._fixing = True
+                new_pos = QPoint(parent_pos.x() + parent_width, parent_pos.y())
+                menu.move(new_pos)
+                self._fixing = False
 
 
 class AutoResizeTextEdit(QTextEdit):
@@ -184,6 +253,10 @@ class MainWindow(QMainWindow):
         self._setup_ui()
         self._setup_connections()
         self._setup_shortcuts()
+
+        # Install menu position fixer for rotated monitors
+        self._menu_fixer = MenuPositionFixer(self)
+        QApplication.instance().installEventFilter(self._menu_fixer)
 
         # Check license
         self._check_license()
@@ -1787,6 +1860,10 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         """Handle window close."""
+        # Remove menu position fixer
+        if hasattr(self, '_menu_fixer'):
+            QApplication.instance().removeEventFilter(self._menu_fixer)
+
         self.tts.stop()
         self.stt.cancel_recording()
 
