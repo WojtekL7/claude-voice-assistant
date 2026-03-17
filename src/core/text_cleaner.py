@@ -452,7 +452,7 @@ def extract_last_claude_response(terminal_buffer: str) -> str:
     Claude Code UI structure:
     - User prompt: "> user text" inside ASCII box frames
     - Claude response: Natural text WITHOUT frames
-    - UI elements: frames (─═│╭╮), tips, shortcuts, status messages
+    - UI elements: frames (─═│╭╮), tips, shortcuts, status messages, spinners
 
     Args:
         terminal_buffer: Raw terminal output buffer
@@ -466,80 +466,72 @@ def extract_last_claude_response(terminal_buffer: str) -> str:
     # Step 1: Clean ANSI/OSC escape codes
     ansi_pattern = re.compile(r'(\x9B|\x1B\[)[0-?]*[ -/]*[@-~]')
     osc_pattern = re.compile(r'\x1B\][^\x07]*\x07')
-    control_pattern = re.compile(r'\[\?2026[hl]')  # Terminal control sequences
+    control_pattern = re.compile(r'\[\?2026[hl]\]?')  # Terminal control sequences
 
     clean_buffer = ansi_pattern.sub('', terminal_buffer)
     clean_buffer = osc_pattern.sub('', clean_buffer)
     clean_buffer = control_pattern.sub('', clean_buffer)
 
     # Step 2: Remove ALL ASCII box drawing characters (Claude Code UI frames)
-    # This includes: ─━│┃┄┅┆┇┈┉┊┋═║╒╓╔╕╖╗╘╙╚╛╜╝╞╟╠╡╢╣╤╥╦╧╨╩╪╫╬
-    # And also: ╭╮╯╰┌┐└┘├┤┬┴┼
-    box_chars = re.compile(r'[─━│┃┄┅┆┇┈┉┊┋═║╒╓╔╕╖╗╘╙╚╛╜╝╞╟╠╡╢╣╤╥╦╧╨╩╪╫╬╭╮╯╰┌┐└┘├┤┬┴┼▶▷◀◁●○■□★☆→←↑↓⬆⬇❯]+')
+    box_chars = re.compile(r'[─━│┃┄┅┆┇┈┉┊┋═║╒╓╔╕╖╗╘╙╚╛╜╝╞╟╠╡╢╣╤╥╦╧╨╩╪╫╬╭╮╯╰┌┐└┘├┤┬┴┼▶▷◀◁●○■□★☆→←↑↓⬆⬇❯âââââ]+')
     clean_buffer = box_chars.sub('', clean_buffer)
 
-    # Step 3: Remove Claude Code UI elements (specific patterns)
-    # Note: Some patterns need to match corrupted UTF-8 chars (â¢ becomes ¢, â¦ becomes ¦, · becomes Â·)
-    spinner_words = r'(Vibing|Germinating|Determining|Thinking|Processing|Cerebrating|Creating|Envisioning|Reasoning|Analyzing|Considering|Pondering|Reflecting|Contemplating|Working)'
-    ui_patterns = [
-        # PRIORITY: Direct match for exact formats seen in debug (must be first!)
-        # "Â· Creating¦ (" pattern - match the bullet, spinner word, broken pipe, space, open paren
-        re.compile(r'Â·\s*' + spinner_words + r'¦\s*\(', re.IGNORECASE),
-        re.compile(r'·\s*' + spinner_words + r'¦\s*\(', re.IGNORECASE),
-        # Spinner words followed by ¦ (broken ellipsis)
-        re.compile(spinner_words + r'¦', re.IGNORECASE),
-        # Spinners with bullet/star prefixes and optional ellipsis
-        re.compile(r'[·Â·\*\•\¢¦]+\s*' + spinner_words + r'[¦â¦\.]*', re.IGNORECASE),
-        # Spinner with full (esc to interrupt) - use non-greedy match
-        re.compile(spinner_words + r'[â¦¦\.]{0,3}\s*\([^)]{0,30}\)', re.IGNORECASE),
-        # Spinner at end of line
-        re.compile(spinner_words + r'[â¦¦\.]+.*$', re.MULTILINE | re.IGNORECASE),
-        # Spinner with interrupt text
-        re.compile(spinner_words + r'.*interrupt.*$', re.MULTILINE | re.IGNORECASE),
-        # Standalone bullet + spinner
-        re.compile(r'·\s*' + spinner_words + r'[¦â¦\.]*', re.IGNORECASE),
-        # Tips and hints
-        re.compile(r'Tip:.*$', re.MULTILINE | re.IGNORECASE),
-        re.compile(r'✿\s*Tip:.*$', re.MULTILINE),
-        # Keyboard shortcuts hints
-        re.compile(r'\?\s*for\s*shortcuts.*$', re.MULTILINE | re.IGNORECASE),
-        re.compile(r'esc\s*to\s*interrupt.*$', re.MULTILINE | re.IGNORECASE),
-        re.compile(r'↵\s*send.*$', re.MULTILINE | re.IGNORECASE),
-        # Status messages
-        re.compile(r'Auto-update\s*failed.*$', re.MULTILINE | re.IGNORECASE),
-        re.compile(r'Try\s*claude\s*doctor.*$', re.MULTILINE | re.IGNORECASE),
-        re.compile(r'npm\s*i\s*-g\s*@anthropic.*$', re.MULTILINE | re.IGNORECASE),
-        # Spinners and loading indicators (various Unicode and corrupted versions)
-        re.compile(r'[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏✿⋆▶▷◀◁●○â¶â»â½â¢¢\*]+\s*', re.MULTILINE),
-        # Empty prompts
-        re.compile(r'^>\s*$', re.MULTILINE),
-        re.compile(r'^❯\s*$', re.MULTILINE),
-        # User prompts (line starting with > followed by user text)
-        re.compile(r'^>\s+.+$', re.MULTILINE),
-        re.compile(r'^❯\s+.+$', re.MULTILINE),
+    # Step 3: Remove Claude Code UI elements - AGGRESSIVELY
+    # Spinner words that appear in Claude Code UI
+    spinner_words = r'(Vibing|Germinating|Determining|Thinking|Processing|Cerebrating|Creating|Envisioning|Reasoning|Analyzing|Considering|Pondering|Reflecting|Contemplating|Working|Shimmying|Cogitating|Musing|Ruminating)'
+
+    # First pass: Remove entire lines containing UI elements
+    line_removal_patterns = [
+        # Lines with spinners (any format)
+        re.compile(r'^.*' + spinner_words + r'.*$', re.MULTILINE | re.IGNORECASE),
+        # Lines with "claude doctor" or npm install
+        re.compile(r'^.*claude\s*doctor.*$', re.MULTILINE | re.IGNORECASE),
+        re.compile(r'^.*npm\s*i\s*-g.*$', re.MULTILINE | re.IGNORECASE),
+        re.compile(r'^.*@anthropic-ai/claude-code.*$', re.MULTILINE | re.IGNORECASE),
+        # Lines with tips
+        re.compile(r'^.*Tip:.*$', re.MULTILINE | re.IGNORECASE),
+        re.compile(r'^.*â¿.*Tip.*$', re.MULTILINE),
+        # Lines with shortcuts hints
+        re.compile(r'^.*\?\s*for\s*shortcuts.*$', re.MULTILINE | re.IGNORECASE),
+        re.compile(r'^.*esc\s*to\s*interrupt.*$', re.MULTILINE | re.IGNORECASE),
+        # Lines with auto-update messages
+        re.compile(r'^.*Auto-update\s*failed.*$', re.MULTILINE | re.IGNORECASE),
+        # Lines with token counts
+        re.compile(r'^.*â\s*[\d.]+k?\s*tokens.*$', re.MULTILINE | re.IGNORECASE),
+        re.compile(r'^.*↑\s*[\d.]+k?\s*tokens.*$', re.MULTILINE | re.IGNORECASE),
+        # Empty prompts and prompt lines
+        re.compile(r'^[>\s❯Â]*$', re.MULTILINE),
+        # User prompts (line starting with > followed by text)
+        re.compile(r'^>\s*.+$', re.MULTILINE),
+        re.compile(r'^❯\s*.+$', re.MULTILINE),
+        # Lines that are just special characters
+        re.compile(r'^[\s\-=_#\*·Â¢¦â¿✿⋆]+$', re.MULTILINE),
     ]
 
-    for pattern in ui_patterns:
+    for pattern in line_removal_patterns:
+        clean_buffer = pattern.sub('', clean_buffer)
+
+    # Second pass: Remove inline UI fragments
+    inline_patterns = [
+        # Spinners with various formats
+        re.compile(r'[·Â·â¢\•]+\s*' + spinner_words + r'[¦â¦\.…]*\s*\([^)]*\)', re.IGNORECASE),
+        re.compile(r'[·Â·â¢\•]+\s*' + spinner_words + r'[¦â¦\.…]*', re.IGNORECASE),
+        re.compile(spinner_words + r'[¦â¦\.…]+', re.IGNORECASE),
+        # Broken Unicode characters commonly seen
+        re.compile(r'[â¢â¿â¦Â·¦¢]+'),
+        # Loading indicators
+        re.compile(r'[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏✿⋆]+'),
+    ]
+
+    for pattern in inline_patterns:
         clean_buffer = pattern.sub('', clean_buffer)
 
     # Step 4: Remove technical/log output patterns
     technical_patterns = [
-        # Log lines with brackets
         re.compile(r'^\s*\[[\w-]+\].*$', re.MULTILINE),
-        # Email/IMAP processing logs
-        re.compile(r'^\s*(Searching|Fetched|Parsed|Email|WebSocket|IMAP).*$', re.MULTILINE | re.IGNORECASE),
-        re.compile(r'^\s*\d+\s*from\s+\S+@\S+.*$', re.MULTILINE),  # "2400 from email@domain"
-        re.compile(r'^\s*Search results for.*$', re.MULTILINE),
-        re.compile(r'^\s*\[Auto-Comment\].*$', re.MULTILINE),
-        # File paths
         re.compile(r'^\s*/[\w/.-]+\s*$', re.MULTILINE),
-        # URLs
         re.compile(r'https?://\S+'),
-        # Package manager output
-        re.compile(r'^\s*(Installing|Downloading|Pouring|Fetching|Building|Compiling).*$', re.MULTILINE | re.IGNORECASE),
-        # Shell prompts
         re.compile(r'^\s*[\w-]+@[\w.-]+[:\s$#%].*$', re.MULTILINE),
-        re.compile(r'^\s*\$\s*\S+.*$', re.MULTILINE),
     ]
 
     for pattern in technical_patterns:
@@ -557,43 +549,74 @@ def extract_last_claude_response(terminal_buffer: str) -> str:
         if not stripped:
             continue
 
-        # Skip very short lines (< 10 chars)
-        if len(stripped) < 10:
+        # Skip very short lines (< 10 chars) unless they end a sentence
+        if len(stripped) < 10 and not stripped.endswith(('?', '.', '!')):
             continue
 
         # Skip lines that are mostly non-alphabetic
         alpha_count = sum(1 for c in stripped if c.isalpha())
-        if len(stripped) > 0 and alpha_count / len(stripped) < 0.5:
+        if len(stripped) > 0 and alpha_count / len(stripped) < 0.4:
             continue
 
         # Skip lines that look like status/metadata
         if stripped.startswith(('Status:', 'Error:', 'Warning:', 'Note:', 'UID', 'seqno')):
             continue
 
+        # Skip lines that are just "y" or single letters (buffer cutoff artifacts)
+        if len(stripped) <= 2:
+            continue
+
         # This looks like natural language - keep it
         natural_lines.append(stripped)
 
-    # Step 6: Find the LAST substantial block of text
-    # (Claude's response is usually the last block before the new prompt)
     if not natural_lines:
         return ""
 
-    # Take last N lines (max 20) that form a coherent response
-    result_lines = natural_lines[-20:]
+    # Step 6: Find the actual start of Claude's response
+    # Look for lines that start a coherent response (capital letter, markdown headers, etc.)
+    start_idx = 0
+    for i, line in enumerate(natural_lines):
+        # Good starting indicators
+        if (line[0].isupper() or
+            line.startswith(('#', '**', '##', '1.', '- ')) or
+            line.startswith(('Zmiany', 'Rozumiem', 'Problem', 'Podsumowanie', 'Oto', 'Tak', 'Nie', 'Dobrze'))):
+            start_idx = i
+            break
+
+    # Step 7: Find the actual end of Claude's response
+    # Look for the last line that ends a sentence properly
+    end_idx = len(natural_lines)
+    for i in range(len(natural_lines) - 1, -1, -1):
+        line = natural_lines[i]
+        # Good ending indicators - ends with punctuation
+        if line.endswith(('?', '.', '!', ':', ')')):
+            end_idx = i + 1
+            break
+
+    # Extract the relevant portion
+    result_lines = natural_lines[start_idx:end_idx]
+
+    # Limit to last 30 lines if too long
+    if len(result_lines) > 30:
+        result_lines = result_lines[-30:]
 
     # Join and clean up
-    result = '\n'.join(result_lines)
+    result = ' '.join(result_lines)
 
-    # Final cleanup: remove multiple spaces/newlines
+    # Final cleanup: remove multiple spaces
     result = re.sub(r'\s+', ' ', result)
     result = result.strip()
+
+    # Remove any remaining garbage at start (fragments from buffer cutoff)
+    # Pattern: starts with lowercase word followed by space - likely a fragment
+    result = re.sub(r'^[a-z]+\s+', '', result)
 
     # Verify we have meaningful content
     if len(result) < 20:
         return ""
 
     # Check it's not just garbage (should be mostly letters and spaces)
-    letter_space_count = sum(1 for c in result if c.isalpha() or c.isspace() or c in '.,!?;:')
+    letter_space_count = sum(1 for c in result if c.isalpha() or c.isspace() or c in '.,!?;:()"-')
     if len(result) > 0 and letter_space_count / len(result) < 0.7:
         return ""
 
