@@ -1417,11 +1417,16 @@ class MainWindow(QMainWindow):
     def _on_transcription(self, text: str):
         """Handle transcription result - appends to existing text instead of replacing."""
         if text.strip():
-            # Jeśli pole ma już tekst, dodaj spację i nowy tekst (nie kasuj poprzedniego)
-            if self.input_field.text():
-                self.input_field.insert(" " + text)
+            current_text = self.input_field.toPlainText()
+            if current_text:
+                # Dołącz nowy tekst na końcu z spacją
+                self.input_field.setPlainText(current_text + " " + text)
+                # Przenieś kursor na koniec
+                cursor = self.input_field.textCursor()
+                cursor.movePosition(QTextCursor.End)
+                self.input_field.setTextCursor(cursor)
             else:
-                self.input_field.setText(text)
+                self.input_field.setPlainText(text)
             self._append_system_message(f"Rozpoznano: {text}")
 
     def _on_stt_error(self, error: str):
