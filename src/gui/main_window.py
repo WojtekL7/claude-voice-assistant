@@ -1415,18 +1415,30 @@ class MainWindow(QMainWindow):
         self.pause_btn.setVisible(self._pause_blink_state)
 
     def _on_transcription(self, text: str):
-        """Handle transcription result - appends to existing text instead of replacing."""
+        """Handle transcription result - inserts at cursor position."""
         if text.strip():
+            cursor = self.input_field.textCursor()
+            pos = cursor.position()
             current_text = self.input_field.toPlainText()
-            if current_text:
-                # Dołącz nowy tekst na końcu z spacją
-                self.input_field.setPlainText(current_text + " " + text)
-                # Przenieś kursor na koniec
-                cursor = self.input_field.textCursor()
-                cursor.movePosition(QTextCursor.End)
-                self.input_field.setTextCursor(cursor)
-            else:
-                self.input_field.setPlainText(text)
+
+            # Sprawdź czy trzeba dodać spację PRZED (jeśli poprzedni znak nie jest spacją/enterem)
+            needs_space_before = pos > 0 and current_text[pos-1] not in (' ', '\n', '\t')
+
+            # Sprawdź czy trzeba dodać spację PO (jeśli następny znak to litera/cyfra)
+            needs_space_after = pos < len(current_text) and current_text[pos] not in (' ', '\n', '\t', '.', ',', '!', '?', ':', ';')
+
+            # Zbuduj tekst do wstawienia z odpowiednimi spacjami
+            insert_text = ""
+            if needs_space_before:
+                insert_text += " "
+            insert_text += text
+            if needs_space_after:
+                insert_text += " "
+
+            # Wstaw tekst w pozycji kursora
+            cursor.insertText(insert_text)
+            self.input_field.setTextCursor(cursor)
+
             self._append_system_message(f"Rozpoznano: {text}")
 
     def _on_stt_error(self, error: str):
