@@ -1415,9 +1415,13 @@ class MainWindow(QMainWindow):
         self.pause_btn.setVisible(self._pause_blink_state)
 
     def _on_transcription(self, text: str):
-        """Handle transcription result."""
+        """Handle transcription result - appends to existing text instead of replacing."""
         if text.strip():
-            self.input_field.setText(text)
+            # Jeśli pole ma już tekst, dodaj spację i nowy tekst (nie kasuj poprzedniego)
+            if self.input_field.text():
+                self.input_field.insert(" " + text)
+            else:
+                self.input_field.setText(text)
             self._append_system_message(f"Rozpoznano: {text}")
 
     def _on_stt_error(self, error: str):
