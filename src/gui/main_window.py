@@ -1552,6 +1552,8 @@ class MainWindow(QMainWindow):
                         pass
 
                     if cleaned_text:
+                        # Stop auto-read timer to prevent double reading
+                        self._tts_timer.stop()
                         self.tts.speak(cleaned_text)
                         self._update_status("Czytam ostatnią odpowiedź...")
                         # Clear buffer after reading

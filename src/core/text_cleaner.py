@@ -607,10 +607,6 @@ def extract_last_claude_response(terminal_buffer: str) -> str:
     result = re.sub(r'\s+', ' ', result)
     result = result.strip()
 
-    # Remove any remaining garbage at start (fragments from buffer cutoff)
-    # Pattern: starts with lowercase word followed by space - likely a fragment
-    result = re.sub(r'^[a-z]+\s+', '', result)
-
     # Verify we have meaningful content
     if len(result) < 20:
         return ""
