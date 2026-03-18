@@ -1306,7 +1306,6 @@ class MainWindow(QMainWindow):
             self._speaker_anim_timer.start(300)
             # Stop pause blink if running
             self._pause_blink_timer.stop()
-            self.pause_btn.setVisible(True)
             self._update_status("Czytam...")
         elif state == TTSState.PAUSED:
             self.pause_btn.setText("▶")
@@ -1325,7 +1324,6 @@ class MainWindow(QMainWindow):
             self._speaker_anim_timer.stop()
             self._pause_blink_timer.stop()
             self.read_btn.setText("🔊")
-            self.pause_btn.setVisible(True)
             self._update_status("Gotowy")
 
     def _on_tts_finished(self):
@@ -1410,9 +1408,12 @@ class MainWindow(QMainWindow):
         self.read_btn.setText(self._speaker_icons[self._speaker_anim_state])
 
     def _animate_pause_blink(self):
-        """Animate pause button blinking."""
+        """Animate pause button blinking - icon only, button stays in place."""
         self._pause_blink_state = not self._pause_blink_state
-        self.pause_btn.setVisible(self._pause_blink_state)
+        if self._pause_blink_state:
+            self.pause_btn.setText("▶")  # Play icon visible
+        else:
+            self.pause_btn.setText("▷")  # Play icon dimmed (outline)
 
     def _on_transcription(self, text: str):
         """Handle transcription result - inserts at cursor position."""
