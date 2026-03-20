@@ -463,6 +463,45 @@ def extract_last_claude_response(terminal_buffer: str) -> str:
     if not terminal_buffer:
         return ""
 
+    # Step 0: Find the LAST user prompt and take only text AFTER it
+    # User prompts in Claude Code look like:
+    # ╭─────────────────────────────────────╮
+    # │ > user question here                │
+    # ╰─────────────────────────────────────╯
+    # We want to find the LAST occurrence of this pattern and take text after it
+
+    # Look for the last closing frame of user prompt (╰...╯)
+    last_prompt_end = -1
+
+    # Method 1: Find last occurrence of bottom frame character
+    for i in range(len(terminal_buffer) - 1, -1, -1):
+        if terminal_buffer[i] == '╰':
+            # Found bottom-left corner - this ends a user prompt box
+            # Find the end of this line
+            line_end = terminal_buffer.find('\n', i)
+            if line_end != -1:
+                last_prompt_end = line_end + 1
+            else:
+                last_prompt_end = i + 1
+            break
+
+    # Method 2: If no box frame found, look for last "> " or "❯ " prompt line
+    if last_prompt_end == -1:
+        lines = terminal_buffer.split('\n')
+        for i in range(len(lines) - 1, -1, -1):
+            stripped = lines[i].strip()
+            if stripped.startswith('> ') or stripped.startswith('❯ '):
+                # Found a prompt line - calculate position after it
+                pos = 0
+                for j in range(i + 1):
+                    pos += len(lines[j]) + 1  # +1 for newline
+                last_prompt_end = pos
+                break
+
+    # If we found a prompt, take only text after it
+    if last_prompt_end > 0 and last_prompt_end < len(terminal_buffer):
+        terminal_buffer = terminal_buffer[last_prompt_end:]
+
     # Step 1: Clean ANSI/OSC escape codes
     ansi_pattern = re.compile(r'(\x9B|\x1B\[)[0-?]*[ -/]*[@-~]')
     osc_pattern = re.compile(r'\x1B\][^\x07]*\x07')
@@ -471,6 +510,21 @@ def extract_last_claude_response(terminal_buffer: str) -> str:
     clean_buffer = ansi_pattern.sub('', terminal_buffer)
     clean_buffer = osc_pattern.sub('', clean_buffer)
     clean_buffer = control_pattern.sub('', clean_buffer)
+
+    # Step 1.5: Remove markdown code blocks (``` ... ```) and inline code (` ... `)
+    # These should not be read by TTS
+    code_block_pattern = re.compile(r'```[\s\S]*?```', re.MULTILINE)
+    inline_code_pattern = re.compile(r'`[^`]+`')
+    clean_buffer = code_block_pattern.sub('', clean_buffer)
+    clean_buffer = inline_code_pattern.sub('', clean_buffer)
+
+    # Step 1.6: Remove markdown tables (lines with | pipes)
+    # Table rows: | col1 | col2 |
+    # Table separators: |---|---|
+    table_row_pattern = re.compile(r'^\s*\|.*\|\s*$', re.MULTILINE)
+    table_separator_pattern = re.compile(r'^\s*\|[-:\|\s]+\|\s*$', re.MULTILINE)
+    clean_buffer = table_separator_pattern.sub('', clean_buffer)
+    clean_buffer = table_row_pattern.sub('', clean_buffer)
 
     # Step 2: Remove ALL ASCII box drawing characters (Claude Code UI frames)
     box_chars = re.compile(r'[─━│┃┄┅┆┇┈┉┊┋═║╒╓╔╕╖╗╘╙╚╛╜╝╞╟╠╡╢╣╤╥╦╧╨╩╪╫╬╭╮╯╰┌┐└┘├┤┬┴┼▶▷◀◁●○■□★☆→←↑↓⬆⬇❯âââââ]+')
@@ -482,8 +536,28 @@ def extract_last_claude_response(terminal_buffer: str) -> str:
 
     # First pass: Remove entire lines containing UI elements
     line_removal_patterns = [
-        # Lines with spinners (any format)
+        # === USER PROMPT BOX (ASCII frames) ===
+        # Top frame: ╭─────────────────╮
+        re.compile(r'^.*╭[─━]+╮.*$', re.MULTILINE),
+        # Prompt line inside box: │ > user text │
+        re.compile(r'^.*│.*[>❯].*│.*$', re.MULTILINE),
+        # Bottom frame: ╰─────────────────╯
+        re.compile(r'^.*╰[─━]+╯.*$', re.MULTILINE),
+        # Any line that is mostly box characters (frame lines)
+        re.compile(r'^[╭╮╯╰│─━┃┄┅═║\s]+$', re.MULTILINE),
+
+        # === SPINNERS ===
+        # Lines with spinner words (any format)
         re.compile(r'^.*' + spinner_words + r'.*$', re.MULTILINE | re.IGNORECASE),
+        # Lines starting with spinner characters (dots, braille)
+        re.compile(r'^[·•⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏✿⋆\s]*' + spinner_words, re.MULTILINE | re.IGNORECASE),
+        # Lines containing "(esc to interrupt)" or "(escape to interrupt)"
+        re.compile(r'^.*\(esc(ape)?\s*to\s*interrupt\).*$', re.MULTILINE | re.IGNORECASE),
+        # Lines containing just "esc to interrupt" without parentheses
+        re.compile(r'^.*esc(ape)?\s+to\s+interrupt.*$', re.MULTILINE | re.IGNORECASE),
+        # Lines that are just spinner characters
+        re.compile(r'^[·•⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏✿⋆¦\s]+$', re.MULTILINE),
+
         # Lines with "claude doctor" or npm install
         re.compile(r'^.*claude\s*doctor.*$', re.MULTILINE | re.IGNORECASE),
         re.compile(r'^.*npm\s*i\s*-g.*$', re.MULTILINE | re.IGNORECASE),
