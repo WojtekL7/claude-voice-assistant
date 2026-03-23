@@ -119,6 +119,7 @@ class AutoResizeTextEdit(QTextEdit):
         self.min_height = 55
         self.max_height = 180  # ~5 lines
         self._terminal_ref = None  # Reference to terminal for blocking updates
+        self._scroll_callback = None  # Callback to scroll terminal after resize
         self.document().contentsChanged.connect(self._adjust_height)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -131,6 +132,10 @@ class AutoResizeTextEdit(QTextEdit):
     def set_terminal_ref(self, terminal):
         """Set reference to terminal widget for blocking updates during resize."""
         self._terminal_ref = terminal
+
+    def set_scroll_callback(self, callback):
+        """Set callback to scroll terminal to bottom after resize."""
+        self._scroll_callback = callback
 
     def _adjust_height(self):
         """Adjust height based on content without causing terminal scroll."""
@@ -147,6 +152,10 @@ class AutoResizeTextEdit(QTextEdit):
             # Re-enable terminal updates after height change
             if self._terminal_ref:
                 self._terminal_ref.setUpdatesEnabled(True)
+
+            # Scroll terminal to bottom after layout stabilizes
+            if self._scroll_callback:
+                QTimer.singleShot(20, self._scroll_callback)
 
     def keyPressEvent(self, event):
         """Handle key press - Enter sends, Shift+Enter adds new line."""
@@ -190,6 +199,10 @@ class AutoResizeTextEdit(QTextEdit):
 
         if self._terminal_ref:
             self._terminal_ref.setUpdatesEnabled(True)
+
+        # Scroll terminal to bottom after layout stabilizes
+        if self._scroll_callback:
+            QTimer.singleShot(30, self._scroll_callback)
 
 # Import our modules
 import sys
@@ -443,6 +456,7 @@ class MainWindow(QMainWindow):
         # Connect terminal reference to input field to prevent scroll during typing
         if self.terminal:
             self.input_field.set_terminal_ref(self.terminal)
+            self.input_field.set_scroll_callback(self._ensure_terminal_at_bottom)
 
         # Add splitter to main layout
         main_layout.addWidget(self.main_splitter)
@@ -1138,6 +1152,18 @@ class MainWindow(QMainWindow):
             }}
         """)
 
+    def _ensure_terminal_at_bottom(self):
+        """Scroll terminal to the bottom after layout changes.
+
+        This fixes the issue where resizing input field causes
+        the terminal to scroll to random positions.
+        """
+        if self.terminal and QTERMWIDGET_AVAILABLE:
+            try:
+                self.terminal.scrollToEnd()
+            except Exception:
+                pass
+
     def _set_language(self, lang_code: str):
         """Handle language change from menu."""
         self.current_language = lang_code
@@ -1464,6 +1490,9 @@ class MainWindow(QMainWindow):
             else:
                 # Empty field - just send Enter (accept Claude Code proposal)
                 self.terminal.sendText("\r")
+
+            # Ensure terminal is scrolled to bottom after sending
+            QTimer.singleShot(100, self._ensure_terminal_at_bottom)
 
             self._update_status("Wysłano do terminala...")
             return
