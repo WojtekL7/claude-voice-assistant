@@ -108,18 +108,83 @@ class MenuPositionFixer(QObject):
                 self._fixing = False
 
 
+class TerminalScrollManager:
+    """
+    Centralized manager for terminal scrolling.
+
+    Solves the problem of inconsistent scrolling by:
+    1. Using a single debounced timer (150ms delay for layout to settle)
+    2. Using scrollbar.setValue(maximum) instead of scrollToEnd() - more reliable
+    3. Coalescing multiple scroll requests into one
+    4. Working correctly with rotated monitors
+    """
+
+    SCROLL_DELAY_MS = 150  # Delay to let layout fully settle
+
+    def __init__(self, terminal, parent):
+        self._terminal = terminal
+        self._timer = QTimer(parent)
+        self._timer.setSingleShot(True)
+        self._timer.timeout.connect(self._do_scroll)
+        self._enabled = True
+
+    def schedule_scroll(self):
+        """
+        Schedule a scroll to bottom.
+        Multiple calls within SCROLL_DELAY_MS are coalesced into one.
+        """
+        if not self._enabled or not self._terminal:
+            return
+        # Restart timer - this cancels any pending scroll and schedules a new one
+        self._timer.stop()
+        self._timer.start(self.SCROLL_DELAY_MS)
+
+    def scroll_now(self):
+        """Force immediate scroll to bottom (use sparingly)."""
+        self._timer.stop()
+        self._do_scroll()
+
+    def _do_scroll(self):
+        """Actually perform the scroll using scrollbar for reliability."""
+        if not self._terminal:
+            return
+        try:
+            # Method 1: Use scrollbar directly (most reliable)
+            scrollbar = self._terminal.verticalScrollBar()
+            if scrollbar:
+                scrollbar.setValue(scrollbar.maximum())
+            else:
+                # Fallback: use scrollToEnd
+                self._terminal.scrollToEnd()
+        except Exception:
+            pass
+
+    def disable(self):
+        """Temporarily disable scrolling (e.g., when user is reading history)."""
+        self._enabled = False
+        self._timer.stop()
+
+    def enable(self):
+        """Re-enable scrolling."""
+        self._enabled = True
+
+    def stop(self):
+        """Stop any pending scroll."""
+        self._timer.stop()
+
+
 class AutoResizeTextEdit(QTextEdit):
     """QTextEdit that auto-resizes based on content."""
 
     # Signal emitted when Enter is pressed (without Shift)
     returnPressed = pyqtSignal()
+    # Signal emitted when height changes (for scroll manager to react)
+    heightChanged = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.min_height = 55
         self.max_height = 180  # ~5 lines
-        self._terminal_ref = None  # Reference to terminal for blocking updates
-        self._scroll_callback = None  # Callback to scroll terminal after resize
         self.document().contentsChanged.connect(self._adjust_height)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -129,33 +194,15 @@ class AutoResizeTextEdit(QTextEdit):
         self.setLineWrapMode(QTextEdit.WidgetWidth)
         self._adjust_height()
 
-    def set_terminal_ref(self, terminal):
-        """Set reference to terminal widget for blocking updates during resize."""
-        self._terminal_ref = terminal
-
-    def set_scroll_callback(self, callback):
-        """Set callback to scroll terminal to bottom after resize."""
-        self._scroll_callback = callback
-
     def _adjust_height(self):
-        """Adjust height based on content without causing terminal scroll."""
+        """Adjust height based on content."""
         doc_height = self.document().size().height()
         new_height = max(self.min_height, min(int(doc_height) + 16, self.max_height))
 
         if new_height != self.height():
-            # Block terminal updates during height change to prevent scroll
-            if self._terminal_ref:
-                self._terminal_ref.setUpdatesEnabled(False)
-
             self.setFixedHeight(new_height)
-
-            # Re-enable terminal updates after height change
-            if self._terminal_ref:
-                self._terminal_ref.setUpdatesEnabled(True)
-
-            # Scroll terminal to bottom after layout stabilizes
-            if self._scroll_callback:
-                QTimer.singleShot(20, self._scroll_callback)
+            # Emit signal so scroll manager can handle terminal scrolling
+            self.heightChanged.emit()
 
     def keyPressEvent(self, event):
         """Handle key press - Enter sends, Shift+Enter adds new line."""
@@ -174,35 +221,19 @@ class AutoResizeTextEdit(QTextEdit):
         return self.toPlainText()
 
     def setText(self, text):
-        """Set plain text without causing terminal scroll."""
-        # Block terminal updates during text change
-        if self._terminal_ref:
-            self._terminal_ref.setUpdatesEnabled(False)
-
+        """Set plain text."""
         self.setPlainText(text)
 
-        if self._terminal_ref:
-            self._terminal_ref.setUpdatesEnabled(True)
-
     def clear(self):
-        """Clear text without triggering layout recalculation that causes terminal scroll."""
-        # Block terminal updates during clear
-        if self._terminal_ref:
-            self._terminal_ref.setUpdatesEnabled(False)
-
+        """Clear text and reset height."""
         # Block signals to prevent contentsChanged -> _adjust_height chain
         self.document().blockSignals(True)
         super().clear()
         self.document().blockSignals(False)
         # Manually reset to minimum height
         self.setFixedHeight(self.min_height)
-
-        if self._terminal_ref:
-            self._terminal_ref.setUpdatesEnabled(True)
-
-        # Scroll terminal to bottom after layout stabilizes
-        if self._scroll_callback:
-            QTimer.singleShot(30, self._scroll_callback)
+        # Emit signal so scroll manager can handle terminal scrolling
+        self.heightChanged.emit()
 
 # Import our modules
 import sys
@@ -453,10 +484,18 @@ class MainWindow(QMainWindow):
         self.main_splitter.setStretchFactor(1, 0)    # Bottom panel: fixed size (no stretch)
         self.main_splitter.setOpaqueResize(False)    # Prevents scroll flash during resize
 
-        # Connect terminal reference to input field to prevent scroll during typing
+        # Setup centralized scroll manager for terminal
+        self._scroll_manager = None
         if self.terminal:
-            self.input_field.set_terminal_ref(self.terminal)
-            self.input_field.set_scroll_callback(self._ensure_terminal_at_bottom)
+            self._scroll_manager = TerminalScrollManager(self.terminal, self)
+            # Connect input field height changes to scroll manager
+            self.input_field.heightChanged.connect(self._scroll_manager.schedule_scroll)
+            # Connect splitter resize to scroll manager
+            self.main_splitter.splitterMoved.connect(
+                lambda pos, idx: self._scroll_manager.schedule_scroll()
+            )
+            # Initial scroll after UI is fully set up
+            QTimer.singleShot(500, self._scroll_manager.schedule_scroll)
 
         # Add splitter to main layout
         main_layout.addWidget(self.main_splitter)
@@ -1155,14 +1194,10 @@ class MainWindow(QMainWindow):
     def _ensure_terminal_at_bottom(self):
         """Scroll terminal to the bottom after layout changes.
 
-        This fixes the issue where resizing input field causes
-        the terminal to scroll to random positions.
+        Uses the centralized scroll manager for consistent behavior.
         """
-        if self.terminal and QTERMWIDGET_AVAILABLE:
-            try:
-                self.terminal.scrollToEnd()
-            except Exception:
-                pass
+        if self._scroll_manager:
+            self._scroll_manager.schedule_scroll()
 
     def _set_language(self, lang_code: str):
         """Handle language change from menu."""
@@ -1322,6 +1357,9 @@ class MainWindow(QMainWindow):
         # Optionally restart
         if self.terminal:
             self.terminal.startShellProgram()
+            # Schedule scroll after terminal restarts
+            if self._scroll_manager:
+                QTimer.singleShot(500, self._scroll_manager.schedule_scroll)
 
     def _on_tts_state_changed(self, state: TTSState):
         """Handle TTS state change."""
@@ -1491,8 +1529,10 @@ class MainWindow(QMainWindow):
                 # Empty field - just send Enter (accept Claude Code proposal)
                 self.terminal.sendText("\r")
 
-            # Ensure terminal is scrolled to bottom after sending
-            QTimer.singleShot(100, self._ensure_terminal_at_bottom)
+            # Schedule scroll to bottom via centralized manager
+            # The manager handles debouncing and proper timing
+            if self._scroll_manager:
+                self._scroll_manager.schedule_scroll()
 
             self._update_status("Wysłano do terminala...")
             return
@@ -1911,11 +1951,22 @@ class MainWindow(QMainWindow):
             }
         """)
 
+    def resizeEvent(self, event):
+        """Handle window resize - ensure terminal scroll position is correct."""
+        super().resizeEvent(event)
+        # Schedule scroll after resize settles
+        if hasattr(self, '_scroll_manager') and self._scroll_manager:
+            self._scroll_manager.schedule_scroll()
+
     def closeEvent(self, event):
         """Handle window close."""
         # Remove menu position fixer
         if hasattr(self, '_menu_fixer'):
             QApplication.instance().removeEventFilter(self._menu_fixer)
+
+        # Stop scroll manager
+        if hasattr(self, '_scroll_manager') and self._scroll_manager:
+            self._scroll_manager.stop()
 
         self.tts.stop()
         self.stt.cancel_recording()
