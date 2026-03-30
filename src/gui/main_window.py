@@ -509,7 +509,7 @@ class MainWindow(QMainWindow):
         self._total_context_tokens = 0  # Track estimated tokens
         self._max_context_tokens = 13000000  # Session token pool: 13M tokens
         self._chars_per_token = 3.5  # Average for Polish text (English ~4)
-        self._context_label = QLabel("0 / 13,000,000 (0%)")
+        self._context_label = QLabel("0")
         self._context_label.setToolTip(
             "Licznik tokenów sesji.\n"
             "Liczy od startu aplikacji do zamknięcia.\n"
@@ -1008,24 +1008,8 @@ class MainWindow(QMainWindow):
                     # Set Anthropic API key
                     self.anthropic_api_key = settings.get('anthropic_api_key', '')
 
-                    # Load last session tokens and show popup
+                    # Load last session tokens (popup removed)
                     last_tokens = settings.get('last_session_tokens', 0)
-                    if last_tokens > 0:
-                        # Format tokens for display
-                        if last_tokens >= 10000:
-                            tokens_display = f"{last_tokens / 1000:.0f}K"
-                        elif last_tokens >= 1000:
-                            tokens_display = f"{last_tokens / 1000:.1f}K"
-                        else:
-                            tokens_display = str(last_tokens)
-
-                        # Show popup after GUI loads (delayed)
-                        from PyQt5.QtCore import QTimer
-                        QTimer.singleShot(500, lambda: QMessageBox.information(
-                            self,
-                            "Poprzednia sesja",
-                            f"W poprzedniej sesji wykorzystano:\n\n{tokens_display} tokenów ({last_tokens:,} dokładnie)"
-                        ))
 
             except Exception as e:
                 print(f"Error loading settings: {e}")
@@ -1082,16 +1066,10 @@ class MainWindow(QMainWindow):
         self.quick_actions_btn.setMenu(menu)
 
     def _check_license(self):
-        """Check license status (silent - no UI label)."""
+        """Check license status (silent - no popups)."""
         status = self.license_manager.validate()
-
-        if status == LicenseStatus.NO_LICENSE:
-            self._show_trial_dialog()
-        elif status == LicenseStatus.TRIAL_EXPIRED:
-            self._show_license_expired_dialog()
-        elif status == LicenseStatus.EXPIRED:
-            self._show_license_expired_dialog()
-        # TRIAL and VALID - just continue silently
+        # All license states handled silently - no popups
+        pass
 
     def _start_claude(self):
         """Start Claude Code process."""
@@ -1936,12 +1914,12 @@ class MainWindow(QMainWindow):
                 font-weight: bold;
             }}
         """)
-        self._context_label.setText(f"{tokens_formatted} / {max_formatted} ({percentage:.2f}%)")
+        self._context_label.setText(f"{tokens_formatted}")
 
     def _reset_context_usage(self):
         """Reset context counter (e.g., when starting new conversation)."""
         self._total_context_tokens = 0
-        self._context_label.setText("0 / 13,000,000 (0%)")
+        self._context_label.setText("0")
         self._context_label.setStyleSheet("""
             QLabel {
                 color: #4ade80;
