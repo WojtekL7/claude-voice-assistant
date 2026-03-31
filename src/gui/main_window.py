@@ -493,13 +493,6 @@ class MainWindow(QMainWindow):
             # Initial scroll after UI is fully set up
             QTimer.singleShot(500, self._scroll_manager.schedule_scroll)
 
-        # Auto-scroll flag - aktywna przez 30 sekund po wysłaniu wiadomości
-        # Pozwala na automatyczne scrollowanie gdy przychodzi odpowiedź
-        self._auto_scroll_after_send = False
-        self._auto_scroll_timer = QTimer(self)
-        self._auto_scroll_timer.setSingleShot(True)
-        self._auto_scroll_timer.timeout.connect(self._disable_auto_scroll)
-
         # Add splitter to main layout
         main_layout.addWidget(self.main_splitter)
 
@@ -1309,13 +1302,8 @@ class MainWindow(QMainWindow):
                 self._tts_timer.stop()
                 self._tts_timer.start(2000)
 
-            # Auto-scroll gdy flaga aktywna (30 sek po wysłaniu wiadomości)
-            if self._auto_scroll_after_send and self._scroll_manager:
-                self._scroll_manager.schedule_scroll()
-
-    def _disable_auto_scroll(self):
-        """Wyłącz auto-scroll po upływie czasu (30 sek od wysłania)."""
-        self._auto_scroll_after_send = False
+            # NOTE: Removed auto-scroll on terminal output - user controls scroll manually
+            # Previously this caused annoying jumps when trying to read history
 
     def _read_terminal_buffer(self):
         """Read accumulated terminal output via TTS (auto-read mode)."""
@@ -1523,11 +1511,8 @@ class MainWindow(QMainWindow):
             if self._scroll_manager:
                 self._scroll_manager.schedule_scroll()
 
-            # Aktywuj auto-scroll na 30 sekund - terminal będzie się przewijał
-            # automatycznie gdy przyjdzie odpowiedź od Claude
-            self._auto_scroll_after_send = True
-            self._auto_scroll_timer.stop()
-            self._auto_scroll_timer.start(30000)  # 30 sekund
+            # NOTE: Removed 30-second auto-scroll timer - was causing unwanted jumps
+            # User now has full control over scrolling after sending a message
 
             self._update_status("Wysłano do terminala...")
             return
