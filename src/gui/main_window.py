@@ -119,7 +119,7 @@ class TerminalScrollManager:
     4. Working correctly with rotated monitors
     """
 
-    SCROLL_DELAY_MS = 150  # Delay to let layout fully settle
+    SCROLL_DELAY_MS = 300  # Delay to let layout fully settle (increased for rotated monitors)
 
     def __init__(self, terminal, parent):
         self._terminal = terminal
@@ -488,12 +488,8 @@ class MainWindow(QMainWindow):
         self._scroll_manager = None
         if self.terminal:
             self._scroll_manager = TerminalScrollManager(self.terminal, self)
-            # Connect input field height changes to scroll manager
-            self.input_field.heightChanged.connect(self._scroll_manager.schedule_scroll)
-            # Connect splitter resize to scroll manager
-            self.main_splitter.splitterMoved.connect(
-                lambda pos, idx: self._scroll_manager.schedule_scroll()
-            )
+            # NOTE: Removed heightChanged and splitterMoved connections
+            # Terminal should only scroll when user sends a message, not during typing
             # Initial scroll after UI is fully set up
             QTimer.singleShot(500, self._scroll_manager.schedule_scroll)
 
@@ -1930,11 +1926,10 @@ class MainWindow(QMainWindow):
         """)
 
     def resizeEvent(self, event):
-        """Handle window resize - ensure terminal scroll position is correct."""
+        """Handle window resize."""
         super().resizeEvent(event)
-        # Schedule scroll after resize settles
-        if hasattr(self, '_scroll_manager') and self._scroll_manager:
-            self._scroll_manager.schedule_scroll()
+        # NOTE: Removed auto-scroll on resize - user controls scroll position manually
+        # This prevents unwanted jumps on rotated/portrait monitors
 
     def closeEvent(self, event):
         """Handle window close."""
