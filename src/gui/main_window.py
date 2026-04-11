@@ -13,7 +13,8 @@ from PyQt5.QtWidgets import (
     QTextEdit, QLineEdit, QPushButton, QLabel, QComboBox,
     QCheckBox, QMenuBar, QMenu, QAction, QStatusBar, QDialog,
     QDialogButtonBox, QFormLayout, QMessageBox, QFrame,
-    QToolButton, QSizePolicy, QApplication, QInputDialog
+    QToolButton, QSizePolicy, QApplication, QInputDialog,
+    QColorDialog, QGridLayout, QGroupBox, QScrollArea
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QObject, QEvent, QPoint
 from PyQt5.QtGui import QFont, QTextCursor, QIcon, QKeySequence, QPalette, QColor, QTextCharFormat
@@ -273,6 +274,38 @@ COLOR_SCHEME_BACKGROUNDS = {
     'BlackOnRandomLight': '#ffffff',
 }
 
+# Domyślne kolory skórki (motyw Ubuntu)
+DEFAULT_SKIN_COLORS = {
+    'main_window_bg': '#300A24',        # Tło głównego okna
+    'menu_bar_bg': '#300A24',           # Tło paska menu
+    'status_bar_bg': '#300A24',         # Tło paska statusu
+    'bottom_panel_bg': '#131314',       # Tło panelu z przyciskami
+    'border_color': '#4a1a3a',          # Kolor obramowań
+    'hover_color': '#6a2a5a',           # Kolor przy najechaniu
+    'splitter_color': '#4a1a3a',        # Kolor rozdzielacza
+    'text_color': '#ffffff',            # Kolor tekstu
+    'button_bg': '#4a1a3a',             # Tło przycisków
+    'button_hover': '#6a2a5a',          # Przycisk przy najechaniu
+    'input_bg': '#300A24',              # Tło pola tekstowego
+    'inactive_panel_bg': '#3a3a3c',     # Tło panelu gdy okno nieaktywne
+}
+
+# Nazwy kolorów do wyświetlenia w UI (po polsku)
+SKIN_COLOR_NAMES = {
+    'main_window_bg': 'Tło głównego okna',
+    'menu_bar_bg': 'Tło paska menu',
+    'status_bar_bg': 'Tło paska statusu',
+    'bottom_panel_bg': 'Tło panelu przycisków',
+    'border_color': 'Kolor obramowań',
+    'hover_color': 'Kolor podświetlenia (hover)',
+    'splitter_color': 'Kolor rozdzielacza',
+    'text_color': 'Kolor tekstu',
+    'button_bg': 'Tło przycisków',
+    'button_hover': 'Przycisk przy najechaniu',
+    'input_bg': 'Tło pola tekstowego',
+    'inactive_panel_bg': 'Panel nieaktywny',
+}
+
 
 class MainWindow(QMainWindow):
     """Main application window."""
@@ -294,6 +327,7 @@ class MainWindow(QMainWindow):
         self.current_color_scheme = "Ubuntu"  # Default: Ubuntu purple theme
         self.auto_read_responses = False
         self.quick_actions = self._load_quick_actions()
+        self.skin_colors = DEFAULT_SKIN_COLORS.copy()  # Custom skin colors
 
         # Load settings
         self._load_settings()
@@ -331,17 +365,7 @@ class MainWindow(QMainWindow):
         # Create splitter for terminal and bottom panel (prevents scroll on resize)
         self.main_splitter = QSplitter(Qt.Vertical)
         self.main_splitter.setHandleWidth(6)
-        self.main_splitter.setStyleSheet("""
-            QSplitter::handle:vertical {
-                background-color: #4a1a3a;
-                height: 6px;
-                border-radius: 3px;
-                margin: 2px 50px;
-            }
-            QSplitter::handle:vertical:hover {
-                background-color: #6a2a5a;
-            }
-        """)
+        # Style will be applied by _apply_dark_theme()
 
         # Terminal area - real terminal emulator using QTermWidget
         if QTERMWIDGET_AVAILABLE:
@@ -460,13 +484,7 @@ class MainWindow(QMainWindow):
 
         # Bottom panel with dark background for buttons
         self.bottom_panel = QFrame()
-        self.bottom_panel.setStyleSheet("""
-            QFrame {
-                background-color: #131314;
-                border-radius: 10px;
-                padding: 5px;
-            }
-        """)
+        # Style will be applied by _apply_dark_theme()
         bottom_layout = QVBoxLayout(self.bottom_panel)
         bottom_layout.setContentsMargins(12, 12, 12, 12)
         bottom_layout.setSpacing(10)
@@ -550,17 +568,7 @@ class MainWindow(QMainWindow):
         self.input_field.setFont(input_font)
         self.input_field.setCursorWidth(8)
         self.input_field.returnPressed.connect(self._send_message)
-        self.input_field.setStyleSheet("""
-            QTextEdit {
-                background-color: #300A24;
-                color: #ffffff;
-                border: 1px solid #4a1a3a;
-                border-radius: 8px;
-            }
-            QTextEdit:focus {
-                border-color: #6a2a5a;
-            }
-        """)
+        # Style will be applied by _apply_dark_theme()
         layout.addWidget(self.input_field, stretch=1)
 
         # Common button size for input area
@@ -573,21 +581,7 @@ class MainWindow(QMainWindow):
         self.quick_actions_btn.setToolTip("Szybkie akcje")
         self.quick_actions_btn.setPopupMode(QToolButton.InstantPopup)
         self.quick_actions_btn.setFixedSize(input_btn_size, input_btn_size)
-        self.quick_actions_btn.setStyleSheet(f"""
-            QToolButton {{
-                background-color: #4a1a3a;
-                color: #ffffff;
-                border: 1px solid #6a2a5a;
-                border-radius: 12px;
-                font-size: {input_icon_size}px;
-            }}
-            QToolButton:hover {{
-                background-color: #6a2a5a;
-            }}
-            QToolButton::menu-indicator {{
-                image: none;
-            }}
-        """)
+        # Style will be applied by _apply_dark_theme()
 
         self._update_quick_actions_menu()
         layout.addWidget(self.quick_actions_btn)
@@ -687,23 +681,7 @@ class MainWindow(QMainWindow):
         self.pause_btn.setToolTip("Pauza / Wznów")
         self.pause_btn.clicked.connect(self._toggle_pause)
         self.pause_btn.setEnabled(False)
-        self.pause_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: #4a1a3a;
-                color: #ffffff;
-                border: 1px solid #6a2a5a;
-                border-radius: 12px;
-                font-size: {icon_size}px;
-            }}
-            QPushButton:hover {{
-                background-color: #6a2a5a;
-            }}
-            QPushButton:disabled {{
-                background-color: #300A24;
-                color: #6a2a5a;
-                border-color: #4a1a3a;
-            }}
-        """)
+        # Style will be applied by _apply_dark_theme()
         layout.addWidget(self.pause_btn)
 
         # Timer for pause blink animation
@@ -755,29 +733,7 @@ class MainWindow(QMainWindow):
         self.auto_read_checkbox = QCheckBox("Auto-czytaj odpowiedzi")
         self.auto_read_checkbox.setChecked(self.auto_read_responses)
         self.auto_read_checkbox.stateChanged.connect(self._on_auto_read_changed)
-        # Path to checkmark SVG (same directory as this file)
-        checkmark_path = Path(__file__).parent / "checkmark.svg"
-        self.auto_read_checkbox.setStyleSheet(f"""
-            QCheckBox {{
-                color: #e4e4e7;
-                spacing: 8px;
-            }}
-            QCheckBox::indicator {{
-                width: 18px;
-                height: 18px;
-                border: 2px solid #6b7280;
-                border-radius: 4px;
-                background-color: #374151;
-            }}
-            QCheckBox::indicator:checked {{
-                background-color: #10b981;
-                border-color: #10b981;
-                image: url({checkmark_path});
-            }}
-            QCheckBox::indicator:hover {{
-                border-color: #9ca3af;
-            }}
-        """)
+        # Style will be applied by _apply_dark_theme()
         layout.addWidget(self.auto_read_checkbox)
 
         return layout
@@ -807,6 +763,13 @@ class MainWindow(QMainWindow):
         manage_actions = QAction("Zarządzaj szybkimi akcjami...", self)
         manage_actions.triggered.connect(self._manage_quick_actions)
         edit_menu.addAction(manage_actions)
+
+        edit_menu.addSeparator()
+
+        # Skin colors option
+        skin_colors_action = QAction("🎨 Zmień kolory skórki...", self)
+        skin_colors_action.triggered.connect(self._show_skin_settings)
+        edit_menu.addAction(skin_colors_action)
 
         # Terminal color scheme submenu
         if self.terminal and QTERMWIDGET_AVAILABLE:
@@ -884,102 +847,9 @@ class MainWindow(QMainWindow):
         pass
 
     def _apply_dark_theme(self):
-        """Apply dark theme matching Ubuntu terminal style."""
-        self.setStyleSheet("""
-            QMainWindow {
-                background-color: #300A24;
-            }
-            QMenuBar {
-                background-color: #300A24;
-                color: #ffffff;
-                border-bottom: 1px solid #4a1a3a;
-            }
-            QMenuBar::item:selected {
-                background-color: #4a1a3a;
-            }
-            QMenu {
-                background-color: #300A24;
-                color: #ffffff;
-                border: 1px solid #4a1a3a;
-            }
-            QMenu::item:selected {
-                background-color: #4a1a3a;
-            }
-            QStatusBar {
-                background-color: #300A24;
-                color: #ffffff;
-                border-top: 1px solid #4a1a3a;
-            }
-            QLabel {
-                color: #ffffff;
-            }
-            QCheckBox {
-                color: #ffffff;
-            }
-            QCheckBox::indicator {
-                width: 18px;
-                height: 18px;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #22c55e;
-                border-radius: 3px;
-            }
-            QMessageBox {
-                background-color: #300A24;
-                color: #ffffff;
-            }
-            QMessageBox QLabel {
-                color: #ffffff;
-            }
-            QMessageBox QPushButton {
-                background-color: #4a1a3a;
-                color: #ffffff;
-                border: 1px solid #6a2a5a;
-                border-radius: 5px;
-                padding: 6px 16px;
-                min-width: 60px;
-            }
-            QMessageBox QPushButton:hover {
-                background-color: #6a2a5a;
-            }
-            QDialog {
-                background-color: #300A24;
-                color: #ffffff;
-            }
-            QDialog QLabel {
-                color: #ffffff;
-            }
-            QDialog QLineEdit {
-                background-color: #1a0a14;
-                color: #ffffff;
-                border: 1px solid #4a1a3a;
-                border-radius: 5px;
-                padding: 6px;
-            }
-            QDialog QPushButton {
-                background-color: #4a1a3a;
-                color: #ffffff;
-                border: 1px solid #6a2a5a;
-                border-radius: 5px;
-                padding: 6px 16px;
-            }
-            QDialog QPushButton:hover {
-                background-color: #6a2a5a;
-            }
-            QInputDialog {
-                background-color: #300A24;
-            }
-            QInputDialog QLabel {
-                color: #ffffff;
-            }
-            QInputDialog QLineEdit {
-                background-color: #1a0a14;
-                color: #ffffff;
-                border: 1px solid #4a1a3a;
-                border-radius: 5px;
-                padding: 6px;
-            }
-        """)
+        """Apply dark theme using custom skin colors."""
+        # Use the apply_skin_colors method with current skin colors
+        self.apply_skin_colors(self.skin_colors)
 
     def _load_settings(self):
         """Load settings from file."""
@@ -992,6 +862,12 @@ class MainWindow(QMainWindow):
                     self.current_language = settings.get('language', 'pl-PL')
                     self.auto_read_responses = settings.get('auto_read', False)
                     self.current_color_scheme = settings.get('color_scheme', 'Ubuntu')
+
+                    # Load custom skin colors (merge with defaults)
+                    saved_skin = settings.get('skin_colors', {})
+                    for key in DEFAULT_SKIN_COLORS:
+                        if key in saved_skin:
+                            self.skin_colors[key] = saved_skin[key]
 
                     # Set STT language
                     lang_code = self.current_language.split('-')[0]
@@ -1023,6 +899,7 @@ class MainWindow(QMainWindow):
             'groq_api_key': self.stt.api_key,
             'anthropic_api_key': getattr(self, 'anthropic_api_key', ''),
             'color_scheme': self.current_color_scheme,
+            'skin_colors': self.skin_colors,
             'last_session_tokens': self._total_context_tokens
         }
         try:
@@ -1824,6 +1701,229 @@ class MainWindow(QMainWindow):
             import webbrowser
             webbrowser.open(self.license_manager.get_purchase_url())
 
+    def _show_skin_settings(self):
+        """Show skin customization dialog."""
+        dialog = SkinSettingsDialog(self, self.skin_colors)
+
+        # Store original colors for cancel
+        original_colors = self.skin_colors.copy()
+
+        if dialog.exec_() == QDialog.Accepted:
+            # User clicked Apply - save new colors
+            self.skin_colors = dialog.get_colors()
+            self._save_settings()
+            self._update_status("Kolory skórki zostały zapisane")
+        else:
+            # User cancelled - restore original colors
+            self.skin_colors = original_colors
+            self.apply_skin_colors(original_colors)
+
+    def apply_skin_colors(self, colors: dict = None):
+        """Apply skin colors to all UI elements.
+
+        This method updates all styled elements with the new colors.
+        Can be called for live preview or permanent application.
+        """
+        if colors is None:
+            colors = self.skin_colors
+
+        # Main window
+        self.setStyleSheet(f"""
+            QMainWindow {{
+                background-color: {colors['main_window_bg']};
+            }}
+            QMenuBar {{
+                background-color: {colors['menu_bar_bg']};
+                color: {colors['text_color']};
+                border-bottom: 1px solid {colors['border_color']};
+            }}
+            QMenuBar::item:selected {{
+                background-color: {colors['hover_color']};
+            }}
+            QMenu {{
+                background-color: {colors['main_window_bg']};
+                color: {colors['text_color']};
+                border: 1px solid {colors['border_color']};
+            }}
+            QMenu::item:selected {{
+                background-color: {colors['hover_color']};
+            }}
+            QStatusBar {{
+                background-color: {colors['status_bar_bg']};
+                color: {colors['text_color']};
+                border-top: 1px solid {colors['border_color']};
+            }}
+            QLabel {{
+                color: {colors['text_color']};
+            }}
+            QCheckBox {{
+                color: {colors['text_color']};
+            }}
+            QCheckBox::indicator {{
+                width: 18px;
+                height: 18px;
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: #22c55e;
+                border-radius: 3px;
+            }}
+            QMessageBox {{
+                background-color: {colors['main_window_bg']};
+                color: {colors['text_color']};
+            }}
+            QMessageBox QLabel {{
+                color: {colors['text_color']};
+            }}
+            QMessageBox QPushButton {{
+                background-color: {colors['button_bg']};
+                color: {colors['text_color']};
+                border: 1px solid {colors['border_color']};
+                border-radius: 5px;
+                padding: 6px 16px;
+                min-width: 60px;
+            }}
+            QMessageBox QPushButton:hover {{
+                background-color: {colors['button_hover']};
+            }}
+            QDialog {{
+                background-color: {colors['main_window_bg']};
+                color: {colors['text_color']};
+            }}
+            QDialog QLabel {{
+                color: {colors['text_color']};
+            }}
+            QDialog QLineEdit {{
+                background-color: {colors['input_bg']};
+                color: {colors['text_color']};
+                border: 1px solid {colors['border_color']};
+                border-radius: 5px;
+                padding: 6px;
+            }}
+            QDialog QPushButton {{
+                background-color: {colors['button_bg']};
+                color: {colors['text_color']};
+                border: 1px solid {colors['border_color']};
+                border-radius: 5px;
+                padding: 6px 16px;
+            }}
+            QDialog QPushButton:hover {{
+                background-color: {colors['button_hover']};
+            }}
+            QInputDialog {{
+                background-color: {colors['main_window_bg']};
+            }}
+            QInputDialog QLabel {{
+                color: {colors['text_color']};
+            }}
+            QInputDialog QLineEdit {{
+                background-color: {colors['input_bg']};
+                color: {colors['text_color']};
+                border: 1px solid {colors['border_color']};
+                border-radius: 5px;
+                padding: 6px;
+            }}
+        """)
+
+        # Bottom panel
+        self.bottom_panel.setStyleSheet(f"""
+            QFrame {{
+                background-color: {colors['bottom_panel_bg']};
+                border-radius: 10px;
+                padding: 5px;
+            }}
+        """)
+
+        # Splitter
+        self.main_splitter.setStyleSheet(f"""
+            QSplitter::handle:vertical {{
+                background-color: {colors['splitter_color']};
+                height: 6px;
+                border-radius: 3px;
+                margin: 2px 50px;
+            }}
+            QSplitter::handle:vertical:hover {{
+                background-color: {colors['hover_color']};
+            }}
+        """)
+
+        # Input field
+        border_focus = QColor(colors['border_color']).lighter(150).name()
+        self.input_field.setStyleSheet(f"""
+            QTextEdit {{
+                background-color: {colors['input_bg']};
+                color: {colors['text_color']};
+                border: 1px solid {colors['border_color']};
+                border-radius: 8px;
+            }}
+            QTextEdit:focus {{
+                border-color: {border_focus};
+            }}
+        """)
+
+        # Quick actions button
+        self.quick_actions_btn.setStyleSheet(f"""
+            QToolButton {{
+                background-color: {colors['button_bg']};
+                color: {colors['text_color']};
+                border: 1px solid {colors['border_color']};
+                border-radius: 12px;
+                font-size: 20px;
+            }}
+            QToolButton:hover {{
+                background-color: {colors['button_hover']};
+            }}
+            QToolButton::menu-indicator {{
+                image: none;
+            }}
+        """)
+
+        # Pause button
+        self.pause_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {colors['button_bg']};
+                color: {colors['text_color']};
+                border: 1px solid {colors['border_color']};
+                border-radius: 12px;
+                font-size: 22px;
+            }}
+            QPushButton:hover {{
+                background-color: {colors['button_hover']};
+            }}
+            QPushButton:disabled {{
+                background-color: {colors['main_window_bg']};
+                color: {colors['border_color']};
+                border-color: {colors['button_bg']};
+            }}
+        """)
+
+        # Update context label color (keep green for now)
+        # Auto-read checkbox
+        checkmark_path = Path(__file__).parent / "checkmark.svg"
+        self.auto_read_checkbox.setStyleSheet(f"""
+            QCheckBox {{
+                color: {colors['text_color']};
+                spacing: 8px;
+            }}
+            QCheckBox::indicator {{
+                width: 18px;
+                height: 18px;
+                border: 2px solid #6b7280;
+                border-radius: 4px;
+                background-color: #374151;
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: #10b981;
+                border-color: #10b981;
+                image: url({checkmark_path});
+            }}
+            QCheckBox::indicator:hover {{
+                border-color: #9ca3af;
+            }}
+        """)
+
+        # Store inactive panel color for changeEvent
+        self._inactive_panel_bg = colors['inactive_panel_bg']
+
     def _show_groq_api_dialog(self):
         """Show dialog to enter Groq API key."""
         current_key = self.stt.api_key or ""
@@ -1982,24 +2082,268 @@ class MainWindow(QMainWindow):
         """Handle window activation/deactivation - change bottom panel color."""
         if event.type() == QEvent.ActivationChange:
             if self.isActiveWindow():
-                # Window is active - dark background
-                self.bottom_panel.setStyleSheet("""
-                    QFrame {
-                        background-color: #131314;
+                # Window is active - use custom bottom panel color
+                self.bottom_panel.setStyleSheet(f"""
+                    QFrame {{
+                        background-color: {self.skin_colors['bottom_panel_bg']};
                         border-radius: 10px;
                         padding: 5px;
-                    }
+                    }}
                 """)
             else:
-                # Window is inactive - gray background
-                self.bottom_panel.setStyleSheet("""
-                    QFrame {
-                        background-color: #3a3a3c;
+                # Window is inactive - use custom inactive color
+                inactive_bg = getattr(self, '_inactive_panel_bg', self.skin_colors.get('inactive_panel_bg', '#3a3a3c'))
+                self.bottom_panel.setStyleSheet(f"""
+                    QFrame {{
+                        background-color: {inactive_bg};
                         border-radius: 10px;
                         padding: 5px;
-                    }
+                    }}
                 """)
         super().changeEvent(event)
+
+
+class SkinSettingsDialog(QDialog):
+    """Dialog do personalizacji kolorów skórki aplikacji."""
+
+    def __init__(self, parent, current_colors: dict):
+        super().__init__(parent)
+        self.setWindowTitle("Ustawienia skórki - Kolory interfejsu")
+        self.setMinimumSize(500, 600)
+        self.parent_window = parent
+        self.colors = current_colors.copy()
+        self.color_buttons = {}
+
+        self._setup_ui()
+
+    def _setup_ui(self):
+        """Setup dialog UI."""
+        layout = QVBoxLayout(self)
+        layout.setSpacing(15)
+
+        # Header
+        header = QLabel("Dostosuj kolory interfejsu aplikacji")
+        header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
+        layout.addWidget(header)
+
+        # Scroll area for color buttons
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("""
+            QScrollArea {
+                border: 1px solid #4a1a3a;
+                border-radius: 8px;
+                background-color: #1a0a14;
+            }
+        """)
+
+        # Container for color settings
+        container = QWidget()
+        colors_layout = QVBoxLayout(container)
+        colors_layout.setSpacing(10)
+
+        # Group: Main colors
+        main_group = QGroupBox("Główne elementy")
+        main_group.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                color: #ffffff;
+                border: 1px solid #4a1a3a;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+            }
+        """)
+        main_layout = QGridLayout(main_group)
+
+        main_colors = ['main_window_bg', 'menu_bar_bg', 'status_bar_bg', 'bottom_panel_bg']
+        for i, key in enumerate(main_colors):
+            self._add_color_row(main_layout, i, key)
+
+        colors_layout.addWidget(main_group)
+
+        # Group: Borders and effects
+        borders_group = QGroupBox("Obramowania i efekty")
+        borders_group.setStyleSheet(main_group.styleSheet())
+        borders_layout = QGridLayout(borders_group)
+
+        border_colors = ['border_color', 'hover_color', 'splitter_color']
+        for i, key in enumerate(border_colors):
+            self._add_color_row(borders_layout, i, key)
+
+        colors_layout.addWidget(borders_group)
+
+        # Group: Text and buttons
+        text_group = QGroupBox("Tekst i przyciski")
+        text_group.setStyleSheet(main_group.styleSheet())
+        text_layout = QGridLayout(text_group)
+
+        text_colors = ['text_color', 'button_bg', 'button_hover', 'input_bg', 'inactive_panel_bg']
+        for i, key in enumerate(text_colors):
+            self._add_color_row(text_layout, i, key)
+
+        colors_layout.addWidget(text_group)
+
+        colors_layout.addStretch()
+        scroll.setWidget(container)
+        layout.addWidget(scroll)
+
+        # Buttons row
+        buttons_layout = QHBoxLayout()
+
+        # Reset to defaults button
+        reset_btn = QPushButton("Przywróć domyślne (Ubuntu)")
+        reset_btn.clicked.connect(self._reset_to_defaults)
+        reset_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #ef4444;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 10px 20px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #dc2626;
+            }
+        """)
+        buttons_layout.addWidget(reset_btn)
+
+        buttons_layout.addStretch()
+
+        # Cancel button
+        cancel_btn = QPushButton("Anuluj")
+        cancel_btn.clicked.connect(self.reject)
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4a1a3a;
+                color: #ffffff;
+                border: 1px solid #6a2a5a;
+                border-radius: 6px;
+                padding: 10px 20px;
+            }
+            QPushButton:hover {
+                background-color: #6a2a5a;
+            }
+        """)
+        buttons_layout.addWidget(cancel_btn)
+
+        # Apply button
+        apply_btn = QPushButton("Zastosuj")
+        apply_btn.clicked.connect(self._apply_colors)
+        apply_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #22c55e;
+                color: #0f172a;
+                border: none;
+                border-radius: 6px;
+                padding: 10px 20px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #16a34a;
+            }
+        """)
+        buttons_layout.addWidget(apply_btn)
+
+        layout.addLayout(buttons_layout)
+
+    def _add_color_row(self, layout: QGridLayout, row: int, color_key: str):
+        """Add a color picker row to the layout."""
+        # Label
+        label = QLabel(SKIN_COLOR_NAMES.get(color_key, color_key))
+        label.setStyleSheet("color: #e4e4e7;")
+        layout.addWidget(label, row, 0)
+
+        # Color button (shows current color)
+        color_btn = QPushButton()
+        color_btn.setFixedSize(80, 30)
+        color_btn.setCursor(Qt.PointingHandCursor)
+        self._update_color_button(color_btn, self.colors[color_key])
+        color_btn.clicked.connect(lambda checked, k=color_key: self._pick_color(k))
+        layout.addWidget(color_btn, row, 1)
+
+        # Hex value label
+        hex_label = QLabel(self.colors[color_key])
+        hex_label.setStyleSheet("color: #9ca3af; font-family: monospace;")
+        hex_label.setFixedWidth(80)
+        layout.addWidget(hex_label, row, 2)
+
+        self.color_buttons[color_key] = (color_btn, hex_label)
+
+    def _update_color_button(self, button: QPushButton, color: str):
+        """Update button appearance with the selected color."""
+        # Calculate contrasting text color
+        qcolor = QColor(color)
+        luminance = (0.299 * qcolor.red() + 0.587 * qcolor.green() + 0.114 * qcolor.blue()) / 255
+        text_color = "#000000" if luminance > 0.5 else "#ffffff"
+
+        button.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {color};
+                color: {text_color};
+                border: 2px solid #6a2a5a;
+                border-radius: 4px;
+                font-family: monospace;
+                font-size: 11px;
+            }}
+            QPushButton:hover {{
+                border-color: #ffffff;
+            }}
+        """)
+        button.setText(color)
+
+    def _pick_color(self, color_key: str):
+        """Open color picker for the specified color."""
+        current_color = QColor(self.colors[color_key])
+        color = QColorDialog.getColor(
+            current_color,
+            self,
+            f"Wybierz kolor: {SKIN_COLOR_NAMES.get(color_key, color_key)}",
+            QColorDialog.ShowAlphaChannel
+        )
+
+        if color.isValid():
+            hex_color = color.name()
+            self.colors[color_key] = hex_color
+
+            # Update button appearance
+            btn, hex_label = self.color_buttons[color_key]
+            self._update_color_button(btn, hex_color)
+            hex_label.setText(hex_color)
+
+            # Live preview
+            self._preview_colors()
+
+    def _preview_colors(self):
+        """Apply colors as live preview."""
+        if hasattr(self.parent_window, 'apply_skin_colors'):
+            self.parent_window.apply_skin_colors(self.colors)
+
+    def _reset_to_defaults(self):
+        """Reset all colors to Ubuntu defaults."""
+        self.colors = DEFAULT_SKIN_COLORS.copy()
+
+        # Update all buttons
+        for key, (btn, hex_label) in self.color_buttons.items():
+            self._update_color_button(btn, self.colors[key])
+            hex_label.setText(self.colors[key])
+
+        # Apply preview
+        self._preview_colors()
+
+    def _apply_colors(self):
+        """Apply colors and close dialog."""
+        self.accept()
+
+    def get_colors(self) -> dict:
+        """Return the selected colors."""
+        return self.colors
 
 
 class SettingsDialog(QDialog):
