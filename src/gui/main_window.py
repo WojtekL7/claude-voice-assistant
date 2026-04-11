@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (
     QCheckBox, QMenuBar, QMenu, QAction, QStatusBar, QDialog,
     QDialogButtonBox, QFormLayout, QMessageBox, QFrame,
     QToolButton, QSizePolicy, QApplication, QInputDialog,
-    QColorDialog, QGridLayout, QGroupBox, QScrollArea
+    QColorDialog, QGridLayout, QGroupBox, QScrollArea, QFileDialog
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QObject, QEvent, QPoint
 from PyQt5.QtGui import QFont, QTextCursor, QIcon, QKeySequence, QPalette, QColor, QTextCharFormat
@@ -256,26 +256,9 @@ from core.stt_engine import STTEngine, STTState
 from core.license_manager import LicenseManager, LicenseStatus
 from core.text_cleaner import TextCleanerForTTS, extract_last_claude_response, fix_polish_encoding
 
-# Mapowanie schematów kolorów QTermWidget na kolory tła
-# (QPalette.Base nie działa dla QTermWidget - trzeba zdefiniować ręcznie)
-COLOR_SCHEME_BACKGROUNDS = {
-    'Ubuntu': '#300A24',
-    'Linux': '#000000',
-    'Tango': '#2e3436',
-    'DarkPastels': '#1b1d1e',
-    'Solarized': '#002b36',
-    'SolarizedLight': '#fdf6e3',
-    'WhiteOnBlack': '#000000',
-    'BlackOnWhite': '#ffffff',
-    'GreenOnBlack': '#000000',
-    'BreezeModified': '#1b1f20',
-    'Falcon': '#020221',
-    'BlackOnLightYellow': '#ffffdd',
-    'BlackOnRandomLight': '#ffffff',
-}
-
-# Domyślne kolory skórki (motyw Ubuntu)
+# Domyślne kolory skórki (motyw Ubuntu) - interfejs + terminal
 DEFAULT_SKIN_COLORS = {
+    # === Kolory interfejsu ===
     'main_window_bg': '#300A24',        # Tło głównego okna
     'menu_bar_bg': '#300A24',           # Tło paska menu
     'status_bar_bg': '#300A24',         # Tło paska statusu
@@ -288,10 +271,30 @@ DEFAULT_SKIN_COLORS = {
     'button_hover': '#6a2a5a',          # Przycisk przy najechaniu
     'input_bg': '#300A24',              # Tło pola tekstowego
     'inactive_panel_bg': '#3a3a3c',     # Tło panelu gdy okno nieaktywne
+    # === Kolory terminala ===
+    'terminal_bg': '#300A24',           # Tło terminala
+    'terminal_fg': '#EEEEEC',           # Tekst terminala
+    'terminal_color_0': '#2E3436',      # Czarny
+    'terminal_color_1': '#CC0000',      # Czerwony
+    'terminal_color_2': '#4E9A06',      # Zielony
+    'terminal_color_3': '#C4A000',      # Żółty
+    'terminal_color_4': '#3465A4',      # Niebieski
+    'terminal_color_5': '#75507B',      # Magenta
+    'terminal_color_6': '#06989A',      # Cyan
+    'terminal_color_7': '#D3D7CF',      # Biały
+    'terminal_color_0_bright': '#555753',  # Jasny czarny
+    'terminal_color_1_bright': '#EF2929',  # Jasny czerwony
+    'terminal_color_2_bright': '#8AE234',  # Jasny zielony
+    'terminal_color_3_bright': '#FCE94F',  # Jasny żółty
+    'terminal_color_4_bright': '#729FCF',  # Jasny niebieski
+    'terminal_color_5_bright': '#AD7FA8',  # Jasna magenta
+    'terminal_color_6_bright': '#34E2E2',  # Jasny cyan
+    'terminal_color_7_bright': '#EEEEEC',  # Jasny biały
 }
 
 # Nazwy kolorów do wyświetlenia w UI (po polsku)
 SKIN_COLOR_NAMES = {
+    # === Kolory interfejsu ===
     'main_window_bg': 'Tło głównego okna',
     'menu_bar_bg': 'Tło paska menu',
     'status_bar_bg': 'Tło paska statusu',
@@ -299,11 +302,52 @@ SKIN_COLOR_NAMES = {
     'border_color': 'Kolor obramowań',
     'hover_color': 'Kolor podświetlenia (hover)',
     'splitter_color': 'Kolor rozdzielacza',
-    'text_color': 'Kolor tekstu',
+    'text_color': 'Kolor tekstu interfejsu',
     'button_bg': 'Tło przycisków',
     'button_hover': 'Przycisk przy najechaniu',
     'input_bg': 'Tło pola tekstowego',
     'inactive_panel_bg': 'Panel nieaktywny',
+    # === Kolory terminala ===
+    'terminal_bg': 'Tło terminala',
+    'terminal_fg': 'Tekst terminala',
+    'terminal_color_0': 'Czarny',
+    'terminal_color_1': 'Czerwony',
+    'terminal_color_2': 'Zielony',
+    'terminal_color_3': 'Żółty',
+    'terminal_color_4': 'Niebieski',
+    'terminal_color_5': 'Magenta (fioletowy)',
+    'terminal_color_6': 'Cyan (turkusowy)',
+    'terminal_color_7': 'Biały',
+    'terminal_color_0_bright': 'Jasny czarny (szary)',
+    'terminal_color_1_bright': 'Jasny czerwony',
+    'terminal_color_2_bright': 'Jasny zielony',
+    'terminal_color_3_bright': 'Jasny żółty',
+    'terminal_color_4_bright': 'Jasny niebieski',
+    'terminal_color_5_bright': 'Jasna magenta',
+    'terminal_color_6_bright': 'Jasny cyan',
+    'terminal_color_7_bright': 'Jasny biały',
+}
+
+# Domyślne ikony przycisków (emoji/tekst)
+DEFAULT_SKIN_ICONS = {
+    'dictate': {'normal': '🎤', 'active': '🎤', 'processing': '⏳'},
+    'read': {'normal': '🔊', 'active': '🔉'},
+    'pause': {'normal': '⏸', 'active': '▶'},
+    'stop': {'normal': '⬜'},
+    'copy': {'normal': '⧉', 'active': '✓'},
+    'send': {'normal': '↵'},
+    'quick_actions': {'normal': '⚡▼'},
+}
+
+# Nazwy ikon do wyświetlenia w UI (po polsku)
+SKIN_ICON_NAMES = {
+    'dictate': 'Mikrofon (dyktowanie)',
+    'read': 'Głośnik (czytanie)',
+    'pause': 'Pauza',
+    'stop': 'Stop',
+    'copy': 'Kopiuj',
+    'send': 'Wyślij',
+    'quick_actions': 'Szybkie akcje',
 }
 
 
@@ -324,10 +368,10 @@ class MainWindow(QMainWindow):
 
         # Settings
         self.current_language = "pl-PL"
-        self.current_color_scheme = "Ubuntu"  # Default: Ubuntu purple theme
         self.auto_read_responses = False
         self.quick_actions = self._load_quick_actions()
-        self.skin_colors = DEFAULT_SKIN_COLORS.copy()  # Custom skin colors
+        self.skin_colors = DEFAULT_SKIN_COLORS.copy()  # Custom skin colors (interfejs + terminal)
+        self.skin_icons = {k: v.copy() for k, v in DEFAULT_SKIN_ICONS.items()}  # Custom icons
 
         # Load settings
         self._load_settings()
@@ -378,16 +422,7 @@ class MainWindow(QMainWindow):
             terminal_font.setStyleHint(QFont.Monospace)
             self.terminal.setTerminalFont(terminal_font)
 
-            # Apply saved color scheme (or default to Ubuntu)
-            available_schemes = self.terminal.availableColorSchemes()
-            if self.current_color_scheme in available_schemes:
-                self.terminal.setColorScheme(self.current_color_scheme)
-            elif "Ubuntu" in available_schemes:
-                self.terminal.setColorScheme("Ubuntu")
-                self.current_color_scheme = "Ubuntu"
-            elif "Linux" in available_schemes:
-                self.terminal.setColorScheme("Linux")
-                self.current_color_scheme = "Linux"
+            # Terminal colors are applied later by _apply_terminal_colors() via apply_skin_colors()
 
             # Terminal settings
             self.terminal.setScrollBarPosition(QTermWidget.ScrollBarRight)
@@ -547,14 +582,8 @@ class MainWindow(QMainWindow):
         # Menu bar
         self._create_menu_bar()
 
-        # Apply dark theme
+        # Apply dark theme (includes terminal colors via apply_skin_colors)
         self._apply_dark_theme()
-
-        # Sync input field background with terminal (after terminal is created)
-        if self.terminal and QTERMWIDGET_AVAILABLE:
-            # Delay slightly to ensure terminal color scheme is applied
-            QTimer.singleShot(100, self._update_input_style)
-
 
     def _create_input_area(self) -> QHBoxLayout:
         """Create input area with text field and quick actions."""
@@ -771,13 +800,6 @@ class MainWindow(QMainWindow):
         skin_colors_action.triggered.connect(self._show_skin_settings)
         edit_menu.addAction(skin_colors_action)
 
-        # Terminal color scheme submenu
-        if self.terminal and QTERMWIDGET_AVAILABLE:
-            edit_menu.addSeparator()
-            self.color_scheme_menu = edit_menu.addMenu("🎨 Schemat kolorów terminala")
-            self.color_scheme_actions = {}
-            self._populate_color_schemes_menu()
-
         # Language menu
         self.language_menu = menubar.addMenu("Język")
         self.language_actions = {}
@@ -847,9 +869,11 @@ class MainWindow(QMainWindow):
         pass
 
     def _apply_dark_theme(self):
-        """Apply dark theme using custom skin colors."""
+        """Apply dark theme using custom skin colors and icons."""
         # Use the apply_skin_colors method with current skin colors
         self.apply_skin_colors(self.skin_colors)
+        # Apply custom icons to buttons
+        self._apply_skin_icons()
 
     def _load_settings(self):
         """Load settings from file."""
@@ -861,13 +885,18 @@ class MainWindow(QMainWindow):
                     settings = json.load(f)
                     self.current_language = settings.get('language', 'pl-PL')
                     self.auto_read_responses = settings.get('auto_read', False)
-                    self.current_color_scheme = settings.get('color_scheme', 'Ubuntu')
 
-                    # Load custom skin colors (merge with defaults)
+                    # Load custom skin colors including terminal colors (merge with defaults)
                     saved_skin = settings.get('skin_colors', {})
                     for key in DEFAULT_SKIN_COLORS:
                         if key in saved_skin:
                             self.skin_colors[key] = saved_skin[key]
+
+                    # Load custom skin icons (merge with defaults)
+                    saved_icons = settings.get('skin_icons', {})
+                    for key in DEFAULT_SKIN_ICONS:
+                        if key in saved_icons:
+                            self.skin_icons[key] = saved_icons[key]
 
                     # Set STT language
                     lang_code = self.current_language.split('-')[0]
@@ -898,8 +927,8 @@ class MainWindow(QMainWindow):
             'auto_read': self.auto_read_responses,
             'groq_api_key': self.stt.api_key,
             'anthropic_api_key': getattr(self, 'anthropic_api_key', ''),
-            'color_scheme': self.current_color_scheme,
-            'skin_colors': self.skin_colors,
+            'skin_colors': self.skin_colors,  # Zawiera kolory interfejsu + terminala
+            'skin_icons': self.skin_icons,    # Zawiera ikony przycisków
             'last_session_tokens': self._total_context_tokens
         }
         try:
@@ -962,90 +991,6 @@ class MainWindow(QMainWindow):
             self._append_system_message("Błąd: Nie można uruchomić Claude Code. Upewnij się, że jest zainstalowany.")
 
     # ==================== Event Handlers ====================
-
-    def _populate_color_schemes_menu(self):
-        """Populate color schemes submenu with available schemes."""
-        if not self.terminal or not QTERMWIDGET_AVAILABLE:
-            return
-
-        schemes = self.terminal.availableColorSchemes()
-
-        # Clear existing actions
-        self.color_scheme_menu.clear()
-        self.color_scheme_actions = {}
-
-        # Add schemes with nice names
-        scheme_labels = {
-            'Ubuntu': '🟣 Ubuntu (fioletowe tło)',
-            'Linux': '⚫ Linux (czarne tło)',
-            'Tango': '🔵 Tango (ciemne)',
-            'DarkPastels': '🌙 Dark Pastels (pastelowe)',
-            'Solarized': '🌅 Solarized Dark',
-            'SolarizedLight': '☀️ Solarized Light',
-            'WhiteOnBlack': '⬛ Białe na czarnym',
-            'BlackOnWhite': '⬜ Czarne na białym',
-            'GreenOnBlack': '💚 Zielone na czarnym (Matrix)',
-            'BreezeModified': '🌊 Breeze',
-            'Falcon': '🦅 Falcon',
-            'BlackOnLightYellow': '🟡 Czarne na żółtym',
-            'BlackOnRandomLight': '🎨 Czarne na losowym jasnym',
-        }
-
-        for scheme in sorted(schemes):
-            label = scheme_labels.get(scheme, scheme)
-            action = QAction(label, self)
-            action.setCheckable(True)
-            action.setChecked(scheme == self.current_color_scheme)
-            action.triggered.connect(lambda checked, s=scheme: self._set_color_scheme(s))
-            self.color_scheme_menu.addAction(action)
-            self.color_scheme_actions[scheme] = action
-
-    def _set_color_scheme(self, scheme: str):
-        """Set terminal color scheme."""
-        if not self.terminal or not QTERMWIDGET_AVAILABLE:
-            return
-
-        self.terminal.setColorScheme(scheme)
-        self.current_color_scheme = scheme
-
-        # Update checkmarks
-        for s, action in self.color_scheme_actions.items():
-            action.setChecked(s == scheme)
-
-        # Update input field to match terminal background
-        self._update_input_style()
-
-        # Save to settings
-        self._save_settings()
-        self._update_status(f"Schemat kolorów: {scheme}")
-
-    def _get_terminal_background_color(self) -> str:
-        """Get background color from terminal's current color scheme."""
-        if self.terminal and QTERMWIDGET_AVAILABLE:
-            # Użyj zdefiniowanego słownika kolorów (QPalette.Base nie działa dla QTermWidget)
-            return COLOR_SCHEME_BACKGROUNDS.get(self.current_color_scheme, '#300A24')
-        return "#300A24"  # Default Ubuntu purple
-
-    def _update_input_style(self):
-        """Update input field style to match terminal background."""
-        bg_color = self._get_terminal_background_color()
-
-        # Calculate border color (slightly lighter than background)
-        bg = QColor(bg_color)
-        border_color = bg.lighter(150).name()
-        border_focus = bg.lighter(200).name()
-
-        self.input_field.setStyleSheet(f"""
-            QTextEdit {{
-                background-color: {bg_color};
-                color: #ffffff;
-                border: 1px solid {border_color};
-                border-radius: 8px;
-            }}
-            QTextEdit:focus {{
-                border-color: {border_focus};
-            }}
-        """)
 
     def _ensure_terminal_at_bottom(self):
         """Scroll terminal to the bottom after layout changes.
@@ -1224,17 +1169,17 @@ class MainWindow(QMainWindow):
         """Handle TTS state change."""
         if state == TTSState.PLAYING:
             self.pause_btn.setEnabled(True)
-            self.pause_btn.setText("⏸")
+            self.pause_btn.setText(self._get_icon('pause', 'normal'))
             # Start speaker animation
             self._speaker_anim_timer.start(300)
             # Stop pause blink if running
             self._pause_blink_timer.stop()
             self._update_status("Czytam...")
         elif state == TTSState.PAUSED:
-            self.pause_btn.setText("▶")
+            self.pause_btn.setText(self._get_icon('pause', 'active'))
             # Stop speaker animation
             self._speaker_anim_timer.stop()
-            self.read_btn.setText("🔊")
+            self.read_btn.setText(self._get_icon('read', 'normal'))
             # Start pause blink animation
             self._pause_blink_timer.start(500)
             self._update_status("Wstrzymano")
@@ -1242,18 +1187,18 @@ class MainWindow(QMainWindow):
             self._update_status("Generowanie mowy...")
         else:
             self.pause_btn.setEnabled(False)
-            self.pause_btn.setText("⏸")
+            self.pause_btn.setText(self._get_icon('pause', 'normal'))
             # Stop all animations
             self._speaker_anim_timer.stop()
             self._pause_blink_timer.stop()
-            self.read_btn.setText("🔊")
+            self.read_btn.setText(self._get_icon('read', 'normal'))
             self._update_status("Gotowy")
 
     def _on_tts_finished(self):
         """Handle TTS finished."""
         # Stop speaker animation
         self._speaker_anim_timer.stop()
-        self.read_btn.setText("🔊")
+        self.read_btn.setText(self._get_icon('read', 'normal'))
         self._update_status("Gotowy")
 
     def _on_stt_state_changed(self, state: STTState):
@@ -1264,12 +1209,12 @@ class MainWindow(QMainWindow):
             self._mic_pulse_timer.start(400)
             self._update_status("Nagrywanie... (kliknij ponownie aby zakończyć)")
         elif state == STTState.PROCESSING:
-            self.dictate_btn.setText("⏳")
+            self.dictate_btn.setText(self._get_icon('dictate', 'processing'))
             # Stop pulse animation
             self._mic_pulse_timer.stop()
             self._update_status("Przetwarzanie mowy...")
         else:
-            self.dictate_btn.setText("🎤")
+            self.dictate_btn.setText(self._get_icon('dictate', 'normal'))
             self.dictate_btn.setChecked(False)
             # Stop pulse animation and reset style
             self._mic_pulse_timer.stop()
@@ -1281,6 +1226,7 @@ class MainWindow(QMainWindow):
     def _animate_mic_pulse(self):
         """Animate microphone button pulsing red when recording."""
         self._mic_pulse_state = not self._mic_pulse_state
+        mic_icon = self._get_icon('dictate', 'active')
         if self._mic_pulse_state:
             # Bright red, larger
             self.dictate_btn.setStyleSheet("""
@@ -1292,7 +1238,7 @@ class MainWindow(QMainWindow):
                     font-size: 24px;
                 }
             """)
-            self.dictate_btn.setText("🎤")
+            self.dictate_btn.setText(mic_icon)
         else:
             # Darker red, normal
             self.dictate_btn.setStyleSheet("""
@@ -1304,7 +1250,7 @@ class MainWindow(QMainWindow):
                     font-size: 22px;
                 }
             """)
-            self.dictate_btn.setText("🎤")
+            self.dictate_btn.setText(mic_icon)
 
     def _reset_mic_style(self):
         """Reset microphone button to default style."""
@@ -1333,10 +1279,12 @@ class MainWindow(QMainWindow):
     def _animate_pause_blink(self):
         """Animate pause button blinking - icon only, button stays in place."""
         self._pause_blink_state = not self._pause_blink_state
+        pause_active = self._get_icon('pause', 'active')
         if self._pause_blink_state:
-            self.pause_btn.setText("▶")  # Play icon visible
+            self.pause_btn.setText(pause_active)  # Play icon visible
         else:
-            self.pause_btn.setText("▷")  # Play icon dimmed (outline)
+            # Slightly dimmed version (use same icon or fallback)
+            self.pause_btn.setText(pause_active)
 
     def _on_transcription(self, text: str):
         """Handle transcription result - inserts at cursor position."""
@@ -1567,7 +1515,7 @@ class MainWindow(QMainWindow):
     def _flash_copy_success(self):
         """Flash copy button green to indicate success."""
         # Change to green with checkmark
-        self.copy_btn.setText("✓")
+        self.copy_btn.setText(self._get_icon('copy', 'active'))
         self.copy_btn.setStyleSheet("""
             QPushButton {
                 background-color: #22c55e;
@@ -1582,7 +1530,7 @@ class MainWindow(QMainWindow):
 
     def _reset_copy_style(self):
         """Reset copy button to default style."""
-        self.copy_btn.setText("⧉")
+        self.copy_btn.setText(self._get_icon('copy', 'normal'))
         self.copy_btn.setStyleSheet("""
             QPushButton {
                 background-color: #f59e0b;
@@ -1703,20 +1651,167 @@ class MainWindow(QMainWindow):
 
     def _show_skin_settings(self):
         """Show skin customization dialog."""
-        dialog = SkinSettingsDialog(self, self.skin_colors)
+        dialog = SkinSettingsDialog(self, self.skin_colors, self.skin_icons)
 
-        # Store original colors for cancel
+        # Store originals for cancel
         original_colors = self.skin_colors.copy()
+        original_icons = {k: v.copy() for k, v in self.skin_icons.items()}
 
         if dialog.exec_() == QDialog.Accepted:
-            # User clicked Apply - save new colors
+            # User clicked Apply - save new colors and icons
             self.skin_colors = dialog.get_colors()
+            self.skin_icons = dialog.get_icons()
+            self._apply_skin_icons()  # Apply new icons to buttons
             self._save_settings()
-            self._update_status("Kolory skórki zostały zapisane")
+            self._update_status("Skórka została zapisana")
         else:
-            # User cancelled - restore original colors
+            # User cancelled - restore originals
             self.skin_colors = original_colors
+            self.skin_icons = original_icons
             self.apply_skin_colors(original_colors)
+            self._apply_skin_icons()
+
+    def _apply_skin_icons(self):
+        """Apply skin icons to all buttons."""
+        icons = self.skin_icons
+
+        # Dictate button (mikrofon)
+        if hasattr(self, 'dictate_btn'):
+            dictate_icons = icons.get('dictate', {})
+            self.dictate_btn.setText(dictate_icons.get('normal', '🎤'))
+
+        # Read button (głośnik)
+        if hasattr(self, 'read_btn'):
+            read_icons = icons.get('read', {})
+            self.read_btn.setText(read_icons.get('normal', '🔊'))
+
+        # Pause button
+        if hasattr(self, 'pause_btn'):
+            pause_icons = icons.get('pause', {})
+            self.pause_btn.setText(pause_icons.get('normal', '⏸'))
+
+        # Stop button
+        if hasattr(self, 'stop_btn'):
+            stop_icons = icons.get('stop', {})
+            self.stop_btn.setText(stop_icons.get('normal', '⬜'))
+
+        # Copy button
+        if hasattr(self, 'copy_btn'):
+            copy_icons = icons.get('copy', {})
+            self.copy_btn.setText(copy_icons.get('normal', '⧉'))
+
+        # Send button
+        if hasattr(self, 'send_btn'):
+            send_icons = icons.get('send', {})
+            self.send_btn.setText(send_icons.get('normal', '↵'))
+
+        # Quick actions button
+        if hasattr(self, 'quick_actions_btn'):
+            qa_icons = icons.get('quick_actions', {})
+            self.quick_actions_btn.setText(qa_icons.get('normal', '⚡▼'))
+
+    def _get_icon(self, button_name: str, state: str = 'normal') -> str:
+        """Get icon for a button from skin_icons."""
+        return self.skin_icons.get(button_name, {}).get(state, '?')
+
+    def _apply_terminal_colors(self, colors: dict = None):
+        """Apply terminal colors by creating a custom color scheme.
+
+        This generates a .colorscheme file and loads it into QTermWidget.
+        """
+        if not self.terminal or not QTERMWIDGET_AVAILABLE:
+            return
+
+        if colors is None:
+            colors = self.skin_colors
+
+        # Helper to convert hex to RGB tuple
+        def hex_to_rgb(hex_color: str) -> str:
+            hex_color = hex_color.lstrip('#')
+            r = int(hex_color[0:2], 16)
+            g = int(hex_color[2:4], 16)
+            b = int(hex_color[4:6], 16)
+            return f"{r},{g},{b}"
+
+        # Create custom color scheme content
+        scheme_content = f"""[General]
+Description=CustomSkin
+Opacity=1
+Wallpaper=
+
+[Background]
+Color={hex_to_rgb(colors.get('terminal_bg', '#300A24'))}
+
+[BackgroundIntense]
+Color={hex_to_rgb(colors.get('terminal_bg', '#300A24'))}
+
+[Foreground]
+Color={hex_to_rgb(colors.get('terminal_fg', '#EEEEEC'))}
+
+[ForegroundIntense]
+Color={hex_to_rgb(colors.get('terminal_fg', '#EEEEEC'))}
+
+[Color0]
+Color={hex_to_rgb(colors.get('terminal_color_0', '#2E3436'))}
+
+[Color0Intense]
+Color={hex_to_rgb(colors.get('terminal_color_0_bright', '#555753'))}
+
+[Color1]
+Color={hex_to_rgb(colors.get('terminal_color_1', '#CC0000'))}
+
+[Color1Intense]
+Color={hex_to_rgb(colors.get('terminal_color_1_bright', '#EF2929'))}
+
+[Color2]
+Color={hex_to_rgb(colors.get('terminal_color_2', '#4E9A06'))}
+
+[Color2Intense]
+Color={hex_to_rgb(colors.get('terminal_color_2_bright', '#8AE234'))}
+
+[Color3]
+Color={hex_to_rgb(colors.get('terminal_color_3', '#C4A000'))}
+
+[Color3Intense]
+Color={hex_to_rgb(colors.get('terminal_color_3_bright', '#FCE94F'))}
+
+[Color4]
+Color={hex_to_rgb(colors.get('terminal_color_4', '#3465A4'))}
+
+[Color4Intense]
+Color={hex_to_rgb(colors.get('terminal_color_4_bright', '#729FCF'))}
+
+[Color5]
+Color={hex_to_rgb(colors.get('terminal_color_5', '#75507B'))}
+
+[Color5Intense]
+Color={hex_to_rgb(colors.get('terminal_color_5_bright', '#AD7FA8'))}
+
+[Color6]
+Color={hex_to_rgb(colors.get('terminal_color_6', '#06989A'))}
+
+[Color6Intense]
+Color={hex_to_rgb(colors.get('terminal_color_6_bright', '#34E2E2'))}
+
+[Color7]
+Color={hex_to_rgb(colors.get('terminal_color_7', '#D3D7CF'))}
+
+[Color7Intense]
+Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
+"""
+
+        # Create custom color scheme directory and file
+        import os
+        custom_scheme_dir = Path.home() / '.config' / 'claude-voice-assistant' / 'color-schemes'
+        custom_scheme_dir.mkdir(parents=True, exist_ok=True)
+
+        scheme_file = custom_scheme_dir / 'CustomSkin.colorscheme'
+        with open(scheme_file, 'w') as f:
+            f.write(scheme_content)
+
+        # Add custom directory and apply scheme
+        self.terminal.addCustomColorSchemeDir(str(custom_scheme_dir))
+        self.terminal.setColorScheme('CustomSkin')
 
     def apply_skin_colors(self, colors: dict = None):
         """Apply skin colors to all UI elements.
@@ -1924,6 +2019,9 @@ class MainWindow(QMainWindow):
         # Store inactive panel color for changeEvent
         self._inactive_panel_bg = colors['inactive_panel_bg']
 
+        # Apply terminal colors
+        self._apply_terminal_colors(colors)
+
     def _show_groq_api_dialog(self):
         """Show dialog to enter Groq API key."""
         current_key = self.stt.api_key or ""
@@ -2104,15 +2202,17 @@ class MainWindow(QMainWindow):
 
 
 class SkinSettingsDialog(QDialog):
-    """Dialog do personalizacji kolorów skórki aplikacji."""
+    """Dialog do personalizacji kolorów i ikon skórki aplikacji."""
 
-    def __init__(self, parent, current_colors: dict):
+    def __init__(self, parent, current_colors: dict, current_icons: dict = None):
         super().__init__(parent)
-        self.setWindowTitle("Ustawienia skórki - Kolory interfejsu")
-        self.setMinimumSize(500, 600)
+        self.setWindowTitle("Ustawienia skórki - Kolory i ikony")
+        self.setMinimumSize(550, 700)
         self.parent_window = parent
         self.colors = current_colors.copy()
+        self.icons = {k: v.copy() for k, v in (current_icons or DEFAULT_SKIN_ICONS).items()}
         self.color_buttons = {}
+        self.icon_buttons = {}
 
         self._setup_ui()
 
@@ -2122,9 +2222,67 @@ class SkinSettingsDialog(QDialog):
         layout.setSpacing(15)
 
         # Header
-        header = QLabel("Dostosuj kolory interfejsu aplikacji")
+        header = QLabel("Dostosuj kolory i ikony aplikacji")
         header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
         layout.addWidget(header)
+
+        # Import/Export buttons row
+        import_export_layout = QHBoxLayout()
+
+        import_btn = QPushButton("📥 Importuj skórkę")
+        import_btn.clicked.connect(self._import_skin)
+        import_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3b82f6;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #2563eb;
+            }
+        """)
+        import_export_layout.addWidget(import_btn)
+
+        export_btn = QPushButton("📤 Eksportuj skórkę")
+        export_btn.clicked.connect(self._export_skin)
+        export_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #8b5cf6;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #7c3aed;
+            }
+        """)
+        import_export_layout.addWidget(export_btn)
+
+        # Help button
+        help_btn = QPushButton("❓ Pomoc - Ikony")
+        help_btn.clicked.connect(self._show_icons_help)
+        help_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #6b7280;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #4b5563;
+            }
+        """)
+        import_export_layout.addWidget(help_btn)
+
+        import_export_layout.addStretch()
+        layout.addLayout(import_export_layout)
 
         # Scroll area for color buttons
         scroll = QScrollArea()
@@ -2192,6 +2350,29 @@ class SkinSettingsDialog(QDialog):
             self._add_color_row(text_layout, i, key)
 
         colors_layout.addWidget(text_group)
+
+        # Group: Terminal background and text
+        terminal_bg_group = QGroupBox("Terminal - tło i tekst")
+        terminal_bg_group.setStyleSheet(main_group.styleSheet())
+        terminal_bg_layout = QGridLayout(terminal_bg_group)
+
+        terminal_bg_colors = ['terminal_bg', 'terminal_fg']
+        for i, key in enumerate(terminal_bg_colors):
+            self._add_color_row(terminal_bg_layout, i, key)
+
+        colors_layout.addWidget(terminal_bg_group)
+
+        # Group: Button icons
+        icons_group = QGroupBox("Ikony przycisków")
+        icons_group.setStyleSheet(main_group.styleSheet())
+        icons_layout = QGridLayout(icons_group)
+
+        row = 0
+        for icon_key in SKIN_ICON_NAMES.keys():
+            self._add_icon_row(icons_layout, row, icon_key)
+            row += 1
+
+        colors_layout.addWidget(icons_group)
 
         colors_layout.addStretch()
         scroll.setWidget(container)
@@ -2329,14 +2510,231 @@ class SkinSettingsDialog(QDialog):
         if hasattr(self.parent_window, 'apply_skin_colors'):
             self.parent_window.apply_skin_colors(self.colors)
 
-    def _reset_to_defaults(self):
-        """Reset all colors to Ubuntu defaults."""
-        self.colors = DEFAULT_SKIN_COLORS.copy()
+    def _add_icon_row(self, layout: QGridLayout, row: int, icon_key: str):
+        """Add an icon picker row to the layout."""
+        # Label
+        label = QLabel(SKIN_ICON_NAMES.get(icon_key, icon_key))
+        label.setStyleSheet("color: #ffffff; font-weight: 500;")
+        layout.addWidget(label, row, 0)
 
-        # Update all buttons
+        icon_data = self.icons.get(icon_key, {})
+
+        # Normal icon button
+        normal_btn = QPushButton(icon_data.get('normal', '?'))
+        normal_btn.setFixedSize(50, 30)
+        normal_btn.setToolTip("Ikona normalna")
+        normal_btn.setCursor(Qt.PointingHandCursor)
+        normal_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4a1a3a;
+                color: #ffffff;
+                border: 1px solid #6a2a5a;
+                border-radius: 4px;
+                font-size: 16px;
+            }
+            QPushButton:hover {
+                background-color: #6a2a5a;
+            }
+        """)
+        normal_btn.clicked.connect(lambda: self._edit_icon(icon_key, 'normal'))
+        layout.addWidget(normal_btn, row, 1)
+
+        # Active icon button (if exists)
+        active_btn = QPushButton(icon_data.get('active', icon_data.get('normal', '?')))
+        active_btn.setFixedSize(50, 30)
+        active_btn.setToolTip("Ikona aktywna")
+        active_btn.setCursor(Qt.PointingHandCursor)
+        active_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #22c55e;
+                color: #000000;
+                border: 1px solid #16a34a;
+                border-radius: 4px;
+                font-size: 16px;
+            }
+            QPushButton:hover {
+                background-color: #16a34a;
+            }
+        """)
+        active_btn.clicked.connect(lambda: self._edit_icon(icon_key, 'active'))
+        layout.addWidget(active_btn, row, 2)
+
+        self.icon_buttons[icon_key] = {'normal': normal_btn, 'active': active_btn}
+
+    def _edit_icon(self, icon_key: str, state: str):
+        """Edit icon text/emoji."""
+        current = self.icons.get(icon_key, {}).get(state, '')
+        text, ok = QInputDialog.getText(
+            self,
+            f"Zmień ikonę: {SKIN_ICON_NAMES.get(icon_key, icon_key)}",
+            f"Wpisz emoji lub tekst dla stanu '{state}':\n(np. 🎤 lub tekst)",
+            QLineEdit.Normal,
+            current
+        )
+        if ok and text:
+            if icon_key not in self.icons:
+                self.icons[icon_key] = {}
+            self.icons[icon_key][state] = text
+            # Update button
+            if icon_key in self.icon_buttons and state in self.icon_buttons[icon_key]:
+                self.icon_buttons[icon_key][state].setText(text)
+
+    def _show_icons_help(self):
+        """Show help dialog with instructions for icons."""
+        help_text = """
+<h2>🎨 Jak zmienić ikony przycisków</h2>
+
+<h3>📝 Instrukcja:</h3>
+<ol>
+<li>Kliknij na przycisk z ikoną którą chcesz zmienić</li>
+<li>Wpisz nowe emoji lub tekst</li>
+<li>Kliknij OK</li>
+</ol>
+
+<p><b>Ikona "normalna"</b> - wyświetlana gdy przycisk jest nieaktywny<br>
+<b>Ikona "aktywna"</b> - wyświetlana gdy przycisk jest wciśnięty/aktywny</p>
+
+<h3>⌨️ Jak wpisać emoji:</h3>
+<ul>
+<li><b>Windows:</b> Naciśnij <code>Win + .</code> (kropka)</li>
+<li><b>Linux:</b> Naciśnij <code>Ctrl + .</code> lub <code>Ctrl + Shift + E</code></li>
+<li><b>macOS:</b> Naciśnij <code>Ctrl + Cmd + Space</code></li>
+</ul>
+
+<h3>🌐 Strony z ikonami (skopiuj i wklej):</h3>
+<ul>
+<li><a href="https://emojipedia.org">emojipedia.org</a> - wszystkie emoji</li>
+<li><a href="https://getemoji.com">getemoji.com</a> - emoji do kopiowania</li>
+<li><a href="https://symbl.cc/en/">symbl.cc</a> - symbole Unicode</li>
+<li><a href="https://unicode-table.com">unicode-table.com</a> - tabela Unicode</li>
+<li><a href="https://fontawesome.com/search?o=r&m=free">fontawesome.com</a> - ikony (skopiuj jako Unicode)</li>
+</ul>
+
+<h3>💡 Przykładowe ikony:</h3>
+<table>
+<tr><td><b>Mikrofon:</b></td><td>🎤 🎙️ 🎚️ 📢 🔴</td></tr>
+<tr><td><b>Głośnik:</b></td><td>🔊 🔉 🔈 🔇 📣 🎵</td></tr>
+<tr><td><b>Pauza/Play:</b></td><td>⏸️ ▶️ ⏯️ ⏹️ ⏺️</td></tr>
+<tr><td><b>Stop:</b></td><td>⬜ ⏹️ 🛑 ❌ ✖️</td></tr>
+<tr><td><b>Kopiuj:</b></td><td>⧉ 📋 📄 📑 ✂️</td></tr>
+<tr><td><b>Wyślij:</b></td><td>↵ ➡️ 📤 📨 ✈️</td></tr>
+<tr><td><b>Akcje:</b></td><td>⚡ ⭐ 💫 🔥 ✨</td></tr>
+</table>
+
+<h3>📁 Import/Eksport skórki:</h3>
+<p>Możesz zapisać swoją skórkę do pliku <code>.skin.json</code> i udostępnić innym,
+lub wczytać skórkę od kogoś innego.</p>
+"""
+
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Pomoc - Ikony i skórki")
+        msg.setTextFormat(Qt.RichText)
+        msg.setText(help_text)
+        msg.setStyleSheet("""
+            QMessageBox {
+                background-color: #1a0a14;
+            }
+            QMessageBox QLabel {
+                color: #ffffff;
+                font-size: 12px;
+            }
+            QMessageBox QPushButton {
+                background-color: #4a1a3a;
+                color: #ffffff;
+                border: 1px solid #6a2a5a;
+                border-radius: 5px;
+                padding: 6px 20px;
+                min-width: 80px;
+            }
+            QMessageBox QPushButton:hover {
+                background-color: #6a2a5a;
+            }
+        """)
+        msg.exec_()
+
+    def _import_skin(self):
+        """Import skin from JSON file."""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Importuj skórkę",
+            str(Path.home()),
+            "Pliki skórki (*.skin.json);;Wszystkie pliki (*)"
+        )
+        if file_path:
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    skin_data = json.load(f)
+
+                # Load colors
+                if 'colors' in skin_data:
+                    for key, value in skin_data['colors'].items():
+                        if key in DEFAULT_SKIN_COLORS:
+                            self.colors[key] = value
+                    # Update color buttons
+                    for key, (btn, hex_label) in self.color_buttons.items():
+                        self._update_color_button(btn, self.colors[key])
+                        hex_label.setText(self.colors[key])
+
+                # Load icons
+                if 'icons' in skin_data:
+                    for key, states in skin_data['icons'].items():
+                        if key in DEFAULT_SKIN_ICONS:
+                            self.icons[key] = states
+                    # Update icon buttons
+                    for key, buttons in self.icon_buttons.items():
+                        icon_data = self.icons.get(key, {})
+                        if 'normal' in buttons:
+                            buttons['normal'].setText(icon_data.get('normal', '?'))
+                        if 'active' in buttons:
+                            buttons['active'].setText(icon_data.get('active', icon_data.get('normal', '?')))
+
+                self._preview_colors()
+                QMessageBox.information(self, "Sukces", f"Skórka wczytana z:\n{file_path}")
+
+            except Exception as e:
+                QMessageBox.warning(self, "Błąd", f"Nie udało się wczytać skórki:\n{e}")
+
+    def _export_skin(self):
+        """Export skin to JSON file."""
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Eksportuj skórkę",
+            str(Path.home() / "moja_skorka.skin.json"),
+            "Pliki skórki (*.skin.json);;Wszystkie pliki (*)"
+        )
+        if file_path:
+            try:
+                skin_data = {
+                    'name': 'Moja skórka',
+                    'version': '1.0',
+                    'colors': self.colors,
+                    'icons': self.icons
+                }
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    json.dump(skin_data, f, indent=2, ensure_ascii=False)
+
+                QMessageBox.information(self, "Sukces", f"Skórka zapisana do:\n{file_path}")
+
+            except Exception as e:
+                QMessageBox.warning(self, "Błąd", f"Nie udało się zapisać skórki:\n{e}")
+
+    def _reset_to_defaults(self):
+        """Reset all colors and icons to Ubuntu defaults."""
+        self.colors = DEFAULT_SKIN_COLORS.copy()
+        self.icons = {k: v.copy() for k, v in DEFAULT_SKIN_ICONS.items()}
+
+        # Update all color buttons
         for key, (btn, hex_label) in self.color_buttons.items():
             self._update_color_button(btn, self.colors[key])
             hex_label.setText(self.colors[key])
+
+        # Update all icon buttons
+        for key, buttons in self.icon_buttons.items():
+            icon_data = self.icons.get(key, {})
+            if 'normal' in buttons:
+                buttons['normal'].setText(icon_data.get('normal', '?'))
+            if 'active' in buttons:
+                buttons['active'].setText(icon_data.get('active', icon_data.get('normal', '?')))
 
         # Apply preview
         self._preview_colors()
@@ -2348,6 +2746,10 @@ class SkinSettingsDialog(QDialog):
     def get_colors(self) -> dict:
         """Return the selected colors."""
         return self.colors
+
+    def get_icons(self) -> dict:
+        """Return the selected icons."""
+        return self.icons
 
 
 class SettingsDialog(QDialog):
