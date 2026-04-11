@@ -2158,6 +2158,9 @@ class SkinSettingsDialog(QDialog):
                 left: 10px;
                 padding: 0 5px;
             }
+            QGroupBox QLabel {
+                color: #ffffff;
+            }
         """)
         main_layout = QGridLayout(main_group)
 
