@@ -67,37 +67,64 @@ def fix_polish_encoding(text: str) -> str:
     # Common patterns: Å + letter often indicates ł, ś, ń, ź, ż
     # Ä + letter often indicates ą, ć, ę
     polish_recovery = [
-        # PRIORITY: Specific word patterns FIRST (before general patterns)
+        # PRIORITY 1: Specific word patterns FIRST (before general patterns)
         # Common words ending in ę: się, mię, cię, ję
         (r'siÄ\b', 'się'), (r'siÄ$', 'się'),
         (r'miÄ\b', 'mię'), (r'miÄ$', 'mię'),
         (r'ciÄ\b', 'cię'), (r'ciÄ$', 'cię'),
         (r'jÄ\b', 'ję'), (r'jÄ$', 'ję'),
 
-        # Å patterns (C5 XX) - ł is most common, then ś, ń, ż
-        (r'Åa', 'ła'), (r'Åo', 'ło'), (r'Åu', 'łu'), (r'Åe', 'łe'), (r'Åi', 'łi'), (r'Åy', 'ły'),
-        (r'ÅA', 'ŁA'), (r'ÅO', 'ŁO'), (r'ÅU', 'ŁU'), (r'ÅE', 'ŁE'), (r'ÅI', 'ŁI'), (r'ÅY', 'ŁY'),
-        (r'Åw', 'św'), (r'Åm', 'śm'), (r'Ål', 'śl'), (r'Åp', 'śp'), (r'Åc', 'śc'), (r'År', 'śr'),
-        (r'Ån', 'śn'),  # ślub, świat, śmiech, etc.
-        # ÅN, ÅZ patterns - likely Ż (WAŻNE, RÓŻNE)
-        (r'ÅN', 'ŻN'), (r'ÅZ', 'ŻZ'), (r'ÅB', 'ŻB'), (r'ÅD', 'ŻD'),
-
-        # Ä patterns (C4 XX) - context-dependent
-        # Verb endings: -ać, -ić, -yć, -eć, -uć → ć
-        (r'aÄ\b', 'ać'), (r'aÄ$', 'ać'),
-        (r'iÄ\b', 'ić'), (r'iÄ$', 'ić'),
-        (r'yÄ\b', 'yć'), (r'yÄ$', 'yć'),
-        (r'eÄ\b', 'eć'), (r'eÄ$', 'eć'),
-        (r'uÄ\b', 'uć'), (r'uÄ$', 'uć'),
-        (r'oÄ\b', 'oć'), (r'oÄ$', 'oć'),  # Added: -oć endings
+        # PRIORITY 2: Verb endings BEFORE generic patterns: -ać, -ić, -yć, -eć, -uć → ć
+        (r'aÄ\b', 'ać'), (r'aÄ$', 'ać'), (r'aÄ(?=[\s.,!?;:\)\]\}"\'])', 'ać'),
+        (r'iÄ\b', 'ić'), (r'iÄ$', 'ić'), (r'iÄ(?=[\s.,!?;:\)\]\}"\'])', 'ić'),
+        (r'yÄ\b', 'yć'), (r'yÄ$', 'yć'), (r'yÄ(?=[\s.,!?;:\)\]\}"\'])', 'yć'),
+        (r'eÄ\b', 'eć'), (r'eÄ$', 'eć'), (r'eÄ(?=[\s.,!?;:\)\]\}"\'])', 'eć'),
+        (r'uÄ\b', 'uć'), (r'uÄ$', 'uć'), (r'uÄ(?=[\s.,!?;:\)\]\}"\'])', 'uć'),
+        (r'oÄ\b', 'oć'), (r'oÄ$', 'oć'), (r'oÄ(?=[\s.,!?;:\)\]\}"\'])', 'oć'),
         (r'AÄ\b', 'AĆ'), (r'IÄ\b', 'IĆ'), (r'YÄ\b', 'YĆ'), (r'EÄ\b', 'EĆ'), (r'UÄ\b', 'UĆ'),
 
-        # Ä followed by consonants → ę (kliknięcia, więcej, etc.)
-        (r'Äc', 'ęc'), (r'Äk', 'ęk'), (r'Ät', 'ęt'), (r'Äd', 'ęd'), (r'Äb', 'ęb'),
-        (r'Äp', 'ęp'), (r'Äs', 'ęs'), (r'Äz', 'ęz'), (r'Är', 'ęr'), (r'Äl', 'ęl'),
-        (r'Äj', 'ęj'),  # więcej
+        # PRIORITY 3: Genitive plural endings -eń (przeliczeń, zadrzeń, etc.)
+        (r'eÅ\b', 'eń'), (r'eÅ$', 'eń'), (r'eÅ(?=[\s.,!?;:\)\]\}"\'])', 'eń'),
+        # Past tense masculine -ał (polegał, działał, stał)
+        (r'aÅ\b', 'ał'), (r'aÅ$', 'ał'), (r'aÅ(?=[\s.,!?;:\)\]\}"\'])', 'ał'),
+        (r'iÅ\b', 'ił'), (r'iÅ$', 'ił'), (r'iÅ(?=[\s.,!?;:\)\]\}"\'])', 'ił'),  # robił, był
+        (r'yÅ\b', 'ył'), (r'yÅ$', 'ył'), (r'yÅ(?=[\s.,!?;:\)\]\}"\'])', 'ył'),  # był, żył
 
-        # Remaining Ä with punctuation → ę
+        # PRIORITY 4: Å at word end → ł (most common case: polegał, był, robił)
+        # Must come AFTER -eń pattern
+        (r'Å\b', 'ł'), (r'Å$', 'ł'), (r'Å(?=[\s.,!?;:\)\]\}"\'])', 'ł'),
+
+        # PRIORITY 5: Combined ÅÄ → łą (małą, całą, etc.)
+        (r'ÅÄ', 'łą'),
+
+        # PRIORITY 6: Å patterns (C5 XX) - ł before vowels
+        (r'Åa', 'ła'), (r'Åo', 'ło'), (r'Åu', 'łu'), (r'Åe', 'łe'), (r'Åi', 'łi'), (r'Åy', 'ły'),
+        (r'ÅA', 'ŁA'), (r'ÅO', 'ŁO'), (r'ÅU', 'ŁU'), (r'ÅE', 'ŁE'), (r'ÅI', 'ŁI'), (r'ÅY', 'ŁY'),
+        (r'Åą', 'łą'), (r'Åę', 'łę'),  # łąka, łęka
+
+        # PRIORITY 7: Å + consonant patterns for ś (świat, śmiech, śnieg, ślub, etc.)
+        (r'Åw', 'św'), (r'Åm', 'śm'), (r'Ål', 'śl'), (r'Åp', 'śp'), (r'Åc', 'śc'), (r'År', 'śr'),
+        (r'Ån', 'śn'), (r'Åt', 'śt'),
+        (r'ÅW', 'ŚW'), (r'ÅM', 'ŚM'), (r'ÅL', 'ŚL'), (r'ÅP', 'ŚP'), (r'ÅC', 'ŚC'), (r'ÅR', 'ŚR'),
+
+        # PRIORITY 8: Å patterns for ż (WAŻNE, RÓŻNE, KAŻDY)
+        (r'ÅN', 'ŻN'), (r'ÅZ', 'ŻZ'), (r'ÅB', 'ŻB'), (r'ÅD', 'ŻD'),
+
+        # PRIORITY 9: Ä + consonant → ą + consonant (pociągała, wiązać, książka)
+        # This is the KEY FIX - when continuation byte is lost, Ä appears before next char
+        (r'Äg', 'ąg'), (r'Äb', 'ąb'), (r'Äd', 'ąd'), (r'Äk', 'ąk'), (r'Ät', 'ąt'),
+        (r'Äc', 'ąc'), (r'Äp', 'ąp'), (r'Äs', 'ąs'), (r'Äz', 'ąz'), (r'Är', 'ąr'),
+        (r'Äl', 'ąl'), (r'Äm', 'ąm'), (r'Än', 'ąn'), (r'Äw', 'ąw'), (r'Äf', 'ąf'),
+        (r'Äj', 'ąj'), (r'Äh', 'ąh'), (r'Äż', 'ąż'), (r'Äź', 'ąź'), (r'Äć', 'ąć'),
+        (r'Äś', 'ąś'), (r'Äń', 'ąń'), (r'Äł', 'ął'),
+        # Uppercase
+        (r'ÄG', 'ĄG'), (r'ÄB', 'ĄB'), (r'ÄD', 'ĄD'), (r'ÄK', 'ĄK'), (r'ÄT', 'ĄT'),
+        (r'ÄC', 'ĄC'), (r'ÄP', 'ĄP'), (r'ÄS', 'ĄS'), (r'ÄZ', 'ĄZ'), (r'ÄR', 'ĄR'),
+
+        # PRIORITY 10: Ä at word end or before punctuation → ą (książką, ręką)
+        (r'Ä\b', 'ą'), (r'Ä$', 'ą'), (r'Ä(?=[\s.,!?;:\)\]\}"\'])', 'ą'),
+
+        # Remaining Ä with punctuation → ę (as fallback for ę patterns)
         (r'Ä\s', 'ę '), (r'Ä\.', 'ę.'), (r'Ä,', 'ę,'), (r'Ä\?', 'ę?'), (r'Ä!', 'ę!'),
 
         # Ã patterns (C3 XX) - ó is most common
@@ -107,9 +134,15 @@ def fix_polish_encoding(text: str) -> str:
     for pattern, replacement in polish_recovery:
         result = re.sub(pattern, replacement, result)
 
-    # Remove any remaining orphaned lead bytes
-    result = re.sub(r'[ÄÅÃ](?=[a-zA-Z0-9])', '', result)
-    result = re.sub(r'[ÄÅÃ]$', '', result)
+    # IMPROVED: Convert any remaining orphaned lead bytes to most likely Polish char
+    # Instead of removing, we make a best guess based on position and context
+    # Å alone → ł (most common), Ä alone → ą (most common)
+    result = re.sub(r'Å(?=[a-zA-Z0-9])', 'ł', result)  # Å before alphanumeric → ł
+    result = re.sub(r'Å$', 'ł', result)  # Å at end → ł
+    result = re.sub(r'Ä(?=[a-zA-Z0-9])', 'ą', result)  # Ä before alphanumeric → ą
+    result = re.sub(r'Ä$', 'ą', result)  # Ä at end → ą
+    result = re.sub(r'Ã(?=[a-zA-Z0-9])', 'ó', result)  # Ã before alphanumeric → ó
+    result = re.sub(r'Ã$', 'ó', result)  # Ã at end → ó
 
     # Compare Method 1 vs Method 2+3 results - use the one with more Polish chars
     if method1_result:
