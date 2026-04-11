@@ -2139,6 +2139,7 @@ class SkinSettingsDialog(QDialog):
 
         # Container for color settings
         container = QWidget()
+        container.setStyleSheet("background-color: #2d0a1e;")
         colors_layout = QVBoxLayout(container)
         colors_layout.setSpacing(10)
 
@@ -2260,7 +2261,7 @@ class SkinSettingsDialog(QDialog):
         """Add a color picker row to the layout."""
         # Label
         label = QLabel(SKIN_COLOR_NAMES.get(color_key, color_key))
-        label.setStyleSheet("color: #e4e4e7;")
+        label.setStyleSheet("color: #ffffff; font-weight: 500;")
         layout.addWidget(label, row, 0)
 
         # Color button (shows current color)
