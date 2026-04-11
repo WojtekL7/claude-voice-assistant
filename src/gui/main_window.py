@@ -200,9 +200,12 @@ class AutoResizeTextEdit(QTextEdit):
         new_height = max(self.min_height, min(int(doc_height) + 16, self.max_height))
 
         if new_height != self.height():
+            # Block signals to prevent QSplitter relayout from causing scroll
+            old_block = self.signalsBlocked()
+            self.blockSignals(True)
             self.setFixedHeight(new_height)
-            # Emit signal so scroll manager can handle terminal scrolling
-            self.heightChanged.emit()
+            self.blockSignals(old_block)
+            # NOTE: Removed heightChanged.emit() - it was causing unwanted page scrolling
 
     def keyPressEvent(self, event):
         """Handle key press - Enter sends, Shift+Enter adds new line."""
@@ -226,14 +229,16 @@ class AutoResizeTextEdit(QTextEdit):
 
     def clear(self):
         """Clear text and reset height."""
-        # Block signals to prevent contentsChanged -> _adjust_height chain
+        # Block ALL signals to prevent scroll issues during clear
+        old_block = self.signalsBlocked()
+        self.blockSignals(True)
         self.document().blockSignals(True)
         super().clear()
-        self.document().blockSignals(False)
-        # Manually reset to minimum height
+        # Manually reset to minimum height (with signals blocked)
         self.setFixedHeight(self.min_height)
-        # Emit signal so scroll manager can handle terminal scrolling
-        self.heightChanged.emit()
+        self.document().blockSignals(False)
+        self.blockSignals(old_block)
+        # NOTE: Removed heightChanged.emit() - it was causing unwanted page scrolling
 
 # Import our modules
 import sys
@@ -1477,9 +1482,22 @@ class MainWindow(QMainWindow):
             if needs_space_after:
                 insert_text += " "
 
+            # SCROLL FIX: Block signals during text insertion to prevent page scroll
+            # The contentsChanged -> _adjust_height -> setFixedHeight chain was causing scroll
+            self.input_field.blockSignals(True)
+            self.input_field.document().blockSignals(True)
+
             # Wstaw tekst w pozycji kursora
             cursor.insertText(insert_text)
             self.input_field.setTextCursor(cursor)
+
+            # Restore signals
+            self.input_field.document().blockSignals(False)
+            self.input_field.blockSignals(False)
+
+            # Manually trigger height adjustment AFTER signals are restored
+            # This ensures layout updates happen once, not multiple times
+            self.input_field._adjust_height()
 
             self._append_system_message(f"Rozpoznano: {text}")
 
