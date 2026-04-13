@@ -271,6 +271,14 @@ DEFAULT_SKIN_COLORS = {
     'button_hover': '#6a2a5a',          # Przycisk przy najechaniu
     'input_bg': '#300A24',              # Tło pola tekstowego
     'inactive_panel_bg': '#3a3a3c',     # Tło panelu gdy okno nieaktywne
+    # === Kolory ikon przycisków ===
+    'icon_dictate_color': '#22c55e',    # Kolor ikony mikrofonu (zielony)
+    'icon_read_color': '#06b6d4',       # Kolor ikony głośnika (turkusowy)
+    'icon_pause_color': '#a855f7',      # Kolor ikony pauzy (fioletowy)
+    'icon_stop_color': '#ef4444',       # Kolor ikony stop (czerwony)
+    'icon_copy_color': '#f59e0b',       # Kolor ikony kopiuj (pomarańczowy)
+    'icon_send_color': '#22c55e',       # Kolor ikony wyślij (zielony)
+    'icon_quick_actions_color': '#facc15',  # Kolor ikony szybkich akcji (żółty)
     # === Kolory terminala ===
     'terminal_bg': '#300A24',           # Tło terminala
     'terminal_fg': '#EEEEEC',           # Tekst terminala
@@ -326,12 +334,20 @@ SKIN_COLOR_NAMES = {
     'terminal_color_5_bright': 'Jasna magenta',
     'terminal_color_6_bright': 'Jasny cyan',
     'terminal_color_7_bright': 'Jasny biały',
+    # === Kolory ikon przycisków ===
+    'icon_dictate_color': 'Kolor ikony mikrofonu',
+    'icon_read_color': 'Kolor ikony głośnika',
+    'icon_pause_color': 'Kolor ikony pauzy',
+    'icon_stop_color': 'Kolor ikony stop',
+    'icon_copy_color': 'Kolor ikony kopiuj',
+    'icon_send_color': 'Kolor ikony wyślij',
+    'icon_quick_actions_color': 'Kolor ikony szybkich akcji',
 }
 
 # Domyślne ikony przycisków (emoji/tekst)
 DEFAULT_SKIN_ICONS = {
     'dictate': {'normal': '🎤', 'active': '🎤', 'processing': '⏳'},
-    'read': {'normal': '🔊', 'active': '🔉'},
+    'read': {'normal': '🔊', 'active': '🔉', 'processing': '⏳'},
     'pause': {'normal': '⏸', 'active': '▶'},
     'stop': {'normal': '⬜'},
     'copy': {'normal': '⧉', 'active': '✓'},
@@ -600,42 +616,16 @@ class MainWindow(QMainWindow):
         # Style will be applied by _apply_dark_theme()
         layout.addWidget(self.input_field, stretch=1)
 
-        # Common button size for input area
-        input_btn_size = 48
+        # Send button - Enter icon (wide rectangle = 2 buttons width)
+        send_btn_width = 100  # Width of ~2 buttons
+        send_btn_height = 48
         input_icon_size = 20
 
-        # Quick actions dropdown - lightning + arrow down
-        self.quick_actions_btn = QToolButton()
-        self.quick_actions_btn.setText("⚡▼")
-        self.quick_actions_btn.setToolTip("Szybkie akcje")
-        self.quick_actions_btn.setPopupMode(QToolButton.InstantPopup)
-        self.quick_actions_btn.setFixedSize(input_btn_size, input_btn_size)
-        # Style will be applied by _apply_dark_theme()
-
-        self._update_quick_actions_menu()
-        layout.addWidget(self.quick_actions_btn)
-
-        # Send button - Enter icon
-        self.send_btn = QPushButton("↵")
-        self.send_btn.setFixedSize(input_btn_size, input_btn_size)
+        self.send_btn = QPushButton("↵ Enter")
+        self.send_btn.setFixedSize(send_btn_width, send_btn_height)
         self.send_btn.setToolTip("Wyślij (Enter)")
         self.send_btn.clicked.connect(self._send_message)
-        self.send_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: #22c55e;
-                color: #0f172a;
-                border: none;
-                border-radius: 12px;
-                font-size: {input_icon_size + 4}px;
-                font-weight: bold;
-            }}
-            QPushButton:hover {{
-                background-color: #16a34a;
-            }}
-            QPushButton:pressed {{
-                background-color: #15803d;
-            }}
-        """)
+        # Style will be applied by _apply_button_icon_styles()
         layout.addWidget(self.send_btn)
 
         return layout
@@ -654,24 +644,7 @@ class MainWindow(QMainWindow):
         self.dictate_btn.setCheckable(True)
         self.dictate_btn.setToolTip("Dyktuj (nagrywanie głosu)")
         self.dictate_btn.clicked.connect(self._toggle_dictation)
-        self.dictate_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: #22c55e;
-                color: #0f172a;
-                border: none;
-                border-radius: 12px;
-                font-size: {icon_size}px;
-            }}
-            QPushButton:hover {{
-                background-color: #16a34a;
-                transform: scale(1.05);
-            }}
-            QPushButton:checked {{
-                background-color: #ef4444;
-                color: white;
-                animation: pulse 0.8s ease-in-out infinite;
-            }}
-        """)
+        # Style will be applied by _apply_button_icon_styles()
         layout.addWidget(self.dictate_btn)
 
         # Timer for microphone pulse animation
@@ -684,18 +657,7 @@ class MainWindow(QMainWindow):
         self.read_btn.setFixedSize(btn_size, btn_size)
         self.read_btn.setToolTip("Czytaj ostatnią odpowiedź")
         self.read_btn.clicked.connect(self._read_last_response)
-        self.read_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: #06b6d4;
-                color: #0f172a;
-                border: none;
-                border-radius: 12px;
-                font-size: {icon_size}px;
-            }}
-            QPushButton:hover {{
-                background-color: #0891b2;
-            }}
-        """)
+        # Style will be applied by _apply_button_icon_styles()
         layout.addWidget(self.read_btn)
 
         # Timer for speaker wave animation
@@ -723,18 +685,7 @@ class MainWindow(QMainWindow):
         self.stop_btn.setFixedSize(btn_size, btn_size)
         self.stop_btn.setToolTip("Zatrzymaj wszystko")
         self.stop_btn.clicked.connect(self._stop_all)
-        self.stop_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: #ef4444;
-                color: white;
-                border: none;
-                border-radius: 12px;
-                font-size: {icon_size - 4}px;
-            }}
-            QPushButton:hover {{
-                background-color: #dc2626;
-            }}
-        """)
+        # Style will be applied by _apply_button_icon_styles()
         layout.addWidget(self.stop_btn)
 
         # Copy button - two overlapping pages
@@ -742,19 +693,18 @@ class MainWindow(QMainWindow):
         self.copy_btn.setFixedSize(btn_size, btn_size)
         self.copy_btn.setToolTip("Kopiuj zaznaczony tekst")
         self.copy_btn.clicked.connect(self._copy_selection)
-        self.copy_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: #f59e0b;
-                color: #0f172a;
-                border: none;
-                border-radius: 12px;
-                font-size: {icon_size}px;
-            }}
-            QPushButton:hover {{
-                background-color: #d97706;
-            }}
-        """)
+        # Style will be applied by _apply_button_icon_styles()
         layout.addWidget(self.copy_btn)
+
+        # Quick actions dropdown - lightning + arrow down
+        self.quick_actions_btn = QToolButton()
+        self.quick_actions_btn.setText("⚡▼")
+        self.quick_actions_btn.setToolTip("Szybkie akcje")
+        self.quick_actions_btn.setPopupMode(QToolButton.InstantPopup)
+        self.quick_actions_btn.setFixedSize(btn_size, btn_size)
+        # Style will be applied by _apply_button_icon_styles()
+        self._update_quick_actions_menu()
+        layout.addWidget(self.quick_actions_btn)
 
         layout.addStretch()
 
@@ -1224,52 +1174,38 @@ class MainWindow(QMainWindow):
     # ==================== Animation Methods ====================
 
     def _animate_mic_pulse(self):
-        """Animate microphone button pulsing red when recording."""
+        """Animate microphone button pulsing when recording."""
         self._mic_pulse_state = not self._mic_pulse_state
         mic_icon = self._get_icon('dictate', 'active')
+        border_color = self.skin_colors.get('border_color', '#4a1a3a')
         if self._mic_pulse_state:
-            # Bright red, larger
-            self.dictate_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #ff0000;
-                    color: white;
-                    border: none;
+            # Bright recording state - red color, larger
+            self.dictate_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: transparent;
+                    color: #ff0000;
+                    border: 2px solid #ff0000;
                     border-radius: 12px;
                     font-size: 24px;
-                }
+                }}
             """)
             self.dictate_btn.setText(mic_icon)
         else:
-            # Darker red, normal
-            self.dictate_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #b91c1c;
-                    color: white;
-                    border: none;
+            # Darker recording state
+            self.dictate_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: transparent;
+                    color: #b91c1c;
+                    border: 2px solid #b91c1c;
                     border-radius: 12px;
                     font-size: 22px;
-                }
+                }}
             """)
             self.dictate_btn.setText(mic_icon)
 
     def _reset_mic_style(self):
         """Reset microphone button to default style."""
-        self.dictate_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #22c55e;
-                color: #0f172a;
-                border: none;
-                border-radius: 12px;
-                font-size: 22px;
-            }
-            QPushButton:hover {
-                background-color: #16a34a;
-            }
-            QPushButton:checked {
-                background-color: #ef4444;
-                color: white;
-            }
-        """)
+        self._apply_button_icon_style(self.dictate_btn, 'icon_dictate_color')
 
     def _animate_speaker(self):
         """Animate speaker icon showing sound waves."""
@@ -1515,15 +1451,16 @@ class MainWindow(QMainWindow):
     def _flash_copy_success(self):
         """Flash copy button green to indicate success."""
         # Change to green with checkmark
+        border_color = self.skin_colors.get('border_color', '#4a1a3a')
         self.copy_btn.setText(self._get_icon('copy', 'active'))
-        self.copy_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #22c55e;
-                color: white;
-                border: none;
+        self.copy_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: transparent;
+                color: #22c55e;
+                border: 2px solid #22c55e;
                 border-radius: 12px;
                 font-size: 22px;
-            }
+            }}
         """)
         # Reset after 500ms
         QTimer.singleShot(500, self._reset_copy_style)
@@ -1531,18 +1468,7 @@ class MainWindow(QMainWindow):
     def _reset_copy_style(self):
         """Reset copy button to default style."""
         self.copy_btn.setText(self._get_icon('copy', 'normal'))
-        self.copy_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #f59e0b;
-                color: #0f172a;
-                border: none;
-                border-radius: 12px;
-                font-size: 22px;
-            }
-            QPushButton:hover {
-                background-color: #d97706;
-            }
-        """)
+        self._apply_button_icon_style(self.copy_btn, 'icon_copy_color')
 
     def _toggle_pause(self):
         """Toggle TTS pause/resume."""
@@ -1713,6 +1639,89 @@ class MainWindow(QMainWindow):
     def _get_icon(self, button_name: str, state: str = 'normal') -> str:
         """Get icon for a button from skin_icons."""
         return self.skin_icons.get(button_name, {}).get(state, '?')
+
+    def _apply_button_icon_style(self, button, color_key: str, font_size: int = 22, with_disabled: bool = False):
+        """Apply transparent style with colored icon to a button.
+
+        Args:
+            button: QPushButton to style
+            color_key: Key in skin_colors for icon color (e.g., 'icon_dictate_color')
+            font_size: Font size for the icon
+            with_disabled: If True, add :disabled pseudo-selector styling
+        """
+        icon_color = self.skin_colors.get(color_key, '#ffffff')
+        border_color = self.skin_colors.get('border_color', '#4a1a3a')
+        hover_color = self.skin_colors.get('hover_color', '#6a2a5a')
+
+        disabled_style = ""
+        if with_disabled:
+            disabled_style = f"""
+            QPushButton:disabled {{
+                background-color: transparent;
+                color: {border_color};
+                border: 1px solid {border_color};
+            }}"""
+
+        button.setStyleSheet(f"""
+            QPushButton {{
+                background-color: transparent;
+                color: {icon_color};
+                border: 1px solid {border_color};
+                border-radius: 12px;
+                font-size: {font_size}px;
+            }}
+            QPushButton:hover {{
+                background-color: {hover_color};
+            }}
+            QPushButton:checked {{
+                color: #ff0000;
+                border: 2px solid #ff0000;
+            }}{disabled_style}
+        """)
+
+    def _apply_button_icon_styles(self):
+        """Apply transparent styles with colored icons to all main buttons."""
+        if hasattr(self, 'dictate_btn'):
+            self._apply_button_icon_style(self.dictate_btn, 'icon_dictate_color')
+
+        if hasattr(self, 'read_btn'):
+            self._apply_button_icon_style(self.read_btn, 'icon_read_color')
+
+        if hasattr(self, 'stop_btn'):
+            self._apply_button_icon_style(self.stop_btn, 'icon_stop_color')
+
+        if hasattr(self, 'copy_btn'):
+            self._apply_button_icon_style(self.copy_btn, 'icon_copy_color')
+
+        # Pause button - uses same style as other buttons but with disabled state
+        if hasattr(self, 'pause_btn'):
+            self._apply_button_icon_style(self.pause_btn, 'icon_pause_color', with_disabled=True)
+
+        # Send button - transparent style like other buttons
+        if hasattr(self, 'send_btn'):
+            self._apply_button_icon_style(self.send_btn, 'icon_send_color', font_size=16)
+
+        # Quick actions button (QToolButton - needs different selector)
+        if hasattr(self, 'quick_actions_btn'):
+            icon_color = self.skin_colors.get('icon_quick_actions_color', '#facc15')
+            border_color = self.skin_colors.get('border_color', '#4a1a3a')
+            hover_color = self.skin_colors.get('hover_color', '#6a2a5a')
+
+            self.quick_actions_btn.setStyleSheet(f"""
+                QToolButton {{
+                    background-color: transparent;
+                    color: {icon_color};
+                    border: 1px solid {border_color};
+                    border-radius: 12px;
+                    font-size: 20px;
+                }}
+                QToolButton:hover {{
+                    background-color: {hover_color};
+                }}
+                QToolButton::menu-indicator {{
+                    image: none;
+                }}
+            """)
 
     def _apply_terminal_colors(self, colors: dict = None):
         """Apply terminal colors by creating a custom color scheme.
@@ -1955,41 +1964,8 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
             }}
         """)
 
-        # Quick actions button
-        self.quick_actions_btn.setStyleSheet(f"""
-            QToolButton {{
-                background-color: {colors['button_bg']};
-                color: {colors['text_color']};
-                border: 1px solid {colors['border_color']};
-                border-radius: 12px;
-                font-size: 20px;
-            }}
-            QToolButton:hover {{
-                background-color: {colors['button_hover']};
-            }}
-            QToolButton::menu-indicator {{
-                image: none;
-            }}
-        """)
-
-        # Pause button
-        self.pause_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {colors['button_bg']};
-                color: {colors['text_color']};
-                border: 1px solid {colors['border_color']};
-                border-radius: 12px;
-                font-size: 22px;
-            }}
-            QPushButton:hover {{
-                background-color: {colors['button_hover']};
-            }}
-            QPushButton:disabled {{
-                background-color: {colors['main_window_bg']};
-                color: {colors['border_color']};
-                border-color: {colors['button_bg']};
-            }}
-        """)
+        # Button icon styles (transparent with colored icons)
+        self._apply_button_icon_styles()
 
         # Update context label color (keep green for now)
         # Auto-read checkbox
@@ -2208,6 +2184,15 @@ class SkinSettingsDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Ustawienia skórki - Kolory i ikony")
         self.setMinimumSize(550, 700)
+        self.setStyleSheet("""
+            QToolTip {
+                background-color: #2d0a1e;
+                color: #ffffff;
+                border: 1px solid #4a1a3a;
+                padding: 5px;
+                border-radius: 4px;
+            }
+        """)
         self.parent_window = parent
         self.colors = current_colors.copy()
         self.icons = {k: v.copy() for k, v in (current_icons or DEFAULT_SKIN_ICONS).items()}
@@ -2361,6 +2346,19 @@ class SkinSettingsDialog(QDialog):
             self._add_color_row(terminal_bg_layout, i, key)
 
         colors_layout.addWidget(terminal_bg_group)
+
+        # Group: Icon colors
+        icon_colors_group = QGroupBox("Kolory ikon przycisków")
+        icon_colors_group.setStyleSheet(main_group.styleSheet())
+        icon_colors_layout = QGridLayout(icon_colors_group)
+
+        icon_color_keys = ['icon_dictate_color', 'icon_read_color', 'icon_pause_color',
+                           'icon_stop_color', 'icon_copy_color', 'icon_send_color',
+                           'icon_quick_actions_color']
+        for i, key in enumerate(icon_color_keys):
+            self._add_color_row(icon_colors_layout, i, key)
+
+        colors_layout.addWidget(icon_colors_group)
 
         # Group: Button icons
         icons_group = QGroupBox("Ikony przycisków")
@@ -2518,66 +2516,205 @@ class SkinSettingsDialog(QDialog):
         layout.addWidget(label, row, 0)
 
         icon_data = self.icons.get(icon_key, {})
+        default_icon_data = DEFAULT_SKIN_ICONS.get(icon_key, {})
 
-        # Normal icon button
+        # Get colors for each state
+        normal_color = icon_data.get('normal_color', self.colors.get(f'icon_{icon_key}_color', '#ffffff'))
+        active_color = icon_data.get('active_color', self.colors.get(f'icon_{icon_key}_color', '#ffffff'))
+
+        # Normal icon button with its color
         normal_btn = QPushButton(icon_data.get('normal', '?'))
         normal_btn.setFixedSize(50, 30)
-        normal_btn.setToolTip("Ikona normalna")
+        normal_btn.setToolTip("Ikona normalna (kliknij aby zmienić)")
         normal_btn.setCursor(Qt.PointingHandCursor)
-        normal_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #4a1a3a;
-                color: #ffffff;
-                border: 1px solid #6a2a5a;
-                border-radius: 4px;
-                font-size: 16px;
-            }
-            QPushButton:hover {
-                background-color: #6a2a5a;
-            }
-        """)
+        normal_btn.setStyleSheet(self._get_icon_btn_style(normal_color))
         normal_btn.clicked.connect(lambda: self._edit_icon(icon_key, 'normal'))
         layout.addWidget(normal_btn, row, 1)
 
-        # Active icon button (if exists)
+        # Active icon button with its color
         active_btn = QPushButton(icon_data.get('active', icon_data.get('normal', '?')))
         active_btn.setFixedSize(50, 30)
-        active_btn.setToolTip("Ikona aktywna")
+        active_btn.setToolTip("Ikona aktywna (kliknij aby zmienić)")
         active_btn.setCursor(Qt.PointingHandCursor)
-        active_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #22c55e;
-                color: #000000;
-                border: 1px solid #16a34a;
-                border-radius: 4px;
-                font-size: 16px;
-            }
-            QPushButton:hover {
-                background-color: #16a34a;
-            }
-        """)
+        active_btn.setStyleSheet(self._get_icon_btn_style(active_color))
         active_btn.clicked.connect(lambda: self._edit_icon(icon_key, 'active'))
         layout.addWidget(active_btn, row, 2)
 
         self.icon_buttons[icon_key] = {'normal': normal_btn, 'active': active_btn}
 
+        # Processing icon button (only for icons that have processing state)
+        if 'processing' in default_icon_data:
+            processing_color = icon_data.get('processing_color', self.colors.get(f'icon_{icon_key}_color', '#ffffff'))
+            processing_btn = QPushButton(icon_data.get('processing', default_icon_data.get('processing', '⏳')))
+            processing_btn.setFixedSize(50, 30)
+            processing_btn.setToolTip("Ikona procesowania (kliknij aby zmienić)")
+            processing_btn.setCursor(Qt.PointingHandCursor)
+            processing_btn.setStyleSheet(self._get_icon_btn_style(processing_color))
+            processing_btn.clicked.connect(lambda: self._edit_icon(icon_key, 'processing'))
+            layout.addWidget(processing_btn, row, 3)
+            self.icon_buttons[icon_key]['processing'] = processing_btn
+
+    def _get_icon_btn_style(self, color: str) -> str:
+        """Get button style with specified icon color."""
+        return f"""
+            QPushButton {{
+                background-color: transparent;
+                color: {color};
+                border: 1px solid #6a2a5a;
+                border-radius: 4px;
+                font-size: 16px;
+            }}
+            QPushButton:hover {{
+                background-color: rgba(106, 42, 90, 0.5);
+            }}
+        """
+
     def _edit_icon(self, icon_key: str, state: str):
-        """Edit icon text/emoji."""
-        current = self.icons.get(icon_key, {}).get(state, '')
-        text, ok = QInputDialog.getText(
-            self,
-            f"Zmień ikonę: {SKIN_ICON_NAMES.get(icon_key, icon_key)}",
-            f"Wpisz emoji lub tekst dla stanu '{state}':\n(np. 🎤 lub tekst)",
-            QLineEdit.Normal,
-            current
-        )
-        if ok and text:
-            if icon_key not in self.icons:
-                self.icons[icon_key] = {}
-            self.icons[icon_key][state] = text
-            # Update button
-            if icon_key in self.icon_buttons and state in self.icon_buttons[icon_key]:
-                self.icon_buttons[icon_key][state].setText(text)
+        """Edit icon text/emoji with color picker."""
+        icon_data = self.icons.get(icon_key, {})
+        current_text = icon_data.get(state, '')
+        color_key = f'{state}_color'
+        current_color = icon_data.get(color_key, self.colors.get(f'icon_{icon_key}_color', '#ffffff'))
+
+        # Create custom dialog
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Zmień ikonę: {SKIN_ICON_NAMES.get(icon_key, icon_key)}")
+        dialog.setFixedWidth(300)
+        dialog.setStyleSheet("""
+            QDialog {
+                background-color: #2d1a2d;
+            }
+            QLabel {
+                color: #ffffff;
+            }
+            QLineEdit {
+                background-color: #1a0a1a;
+                color: #ffffff;
+                border: 1px solid #6a2a5a;
+                border-radius: 4px;
+                padding: 8px;
+                font-size: 18px;
+            }
+            QPushButton {
+                padding: 8px 16px;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+        """)
+
+        layout = QVBoxLayout(dialog)
+
+        # Label
+        label = QLabel(f"Wpisz emoji lub tekst dla stanu '{state}':\n(np. 🎤 lub tekst)")
+        layout.addWidget(label)
+
+        # Text input with color preview
+        input_layout = QHBoxLayout()
+
+        text_input = QLineEdit(current_text)
+        text_input.setFixedHeight(40)
+
+        # Color picker button
+        color_btn = QPushButton()
+        color_btn.setFixedSize(40, 40)
+        color_btn.setCursor(Qt.PointingHandCursor)
+        color_btn.setToolTip("Zmień kolor ikony")
+
+        selected_color = [current_color]  # Use list to allow modification in nested function
+
+        def update_color_btn():
+            qcolor = QColor(selected_color[0])
+            luminance = (0.299 * qcolor.red() + 0.587 * qcolor.green() + 0.114 * qcolor.blue()) / 255
+            text_color = "#000000" if luminance > 0.5 else "#ffffff"
+            color_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {selected_color[0]};
+                    color: {text_color};
+                    border: 2px solid #6a2a5a;
+                    border-radius: 4px;
+                }}
+                QPushButton:hover {{
+                    border: 2px solid #ffffff;
+                }}
+            """)
+            # Update text input color preview
+            text_input.setStyleSheet(f"""
+                QLineEdit {{
+                    background-color: #1a0a1a;
+                    color: {selected_color[0]};
+                    border: 1px solid #6a2a5a;
+                    border-radius: 4px;
+                    padding: 8px;
+                    font-size: 18px;
+                }}
+            """)
+
+        def pick_color():
+            color = QColorDialog.getColor(
+                QColor(selected_color[0]),
+                dialog,
+                "Wybierz kolor ikony",
+                QColorDialog.ShowAlphaChannel
+            )
+            if color.isValid():
+                selected_color[0] = color.name()
+                update_color_btn()
+
+        color_btn.clicked.connect(pick_color)
+        update_color_btn()
+
+        input_layout.addWidget(text_input, stretch=1)
+        input_layout.addWidget(color_btn)
+        layout.addLayout(input_layout)
+
+        # Buttons
+        buttons_layout = QHBoxLayout()
+
+        cancel_btn = QPushButton("✕ Cancel")
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4a1a3a;
+                color: #ffffff;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #6a2a5a;
+            }
+        """)
+        cancel_btn.clicked.connect(dialog.reject)
+
+        ok_btn = QPushButton("✓ OK")
+        ok_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #22c55e;
+                color: #000000;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #16a34a;
+            }
+        """)
+        ok_btn.clicked.connect(dialog.accept)
+        ok_btn.setDefault(True)
+
+        buttons_layout.addWidget(cancel_btn)
+        buttons_layout.addWidget(ok_btn)
+        layout.addLayout(buttons_layout)
+
+        # Show dialog
+        if dialog.exec_() == QDialog.Accepted:
+            text = text_input.text()
+            if text:
+                if icon_key not in self.icons:
+                    self.icons[icon_key] = {}
+                self.icons[icon_key][state] = text
+                self.icons[icon_key][color_key] = selected_color[0]
+
+                # Update button text and color
+                if icon_key in self.icon_buttons and state in self.icon_buttons[icon_key]:
+                    btn = self.icon_buttons[icon_key][state]
+                    btn.setText(text)
+                    btn.setStyleSheet(self._get_icon_btn_style(selected_color[0]))
 
     def _show_icons_help(self):
         """Show help dialog with instructions for icons."""
