@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
     QLabel, QLineEdit, QPushButton, QCheckBox, QComboBox,
     QTreeWidget, QTreeWidgetItem, QGroupBox, QFileDialog,
     QMessageBox, QListWidget, QListWidgetItem, QRadioButton,
-    QButtonGroup, QWidget, QSplitter, QFrame
+    QButtonGroup, QWidget, QSplitter, QFrame, QInputDialog
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
@@ -456,7 +456,9 @@ class AgentConfigDialog(QDialog):
 
         form.addRow("Katalog roboczy:", dir_layout)
 
-        # Memory project
+        # Memory project - combo + button to add new
+        memory_layout = QHBoxLayout()
+
         self.memory_combo = QComboBox()
         self.memory_combo.setStyleSheet("""
             QComboBox {
@@ -475,13 +477,16 @@ class AgentConfigDialog(QDialog):
                 selection-background-color: #6a2a5a;
             }
         """)
+        memory_layout.addWidget(self.memory_combo, stretch=1)
 
-        self.memory_combo.addItem("(Brak - nie wczytuj plików)", None)
-        for project in self.memory_projects:
-            self.memory_combo.addItem(
-                f"📁 {project.get('name', 'Bez nazwy')}",
-                project.get('id')
-            )
+        # Button to quickly add file as new memory project
+        add_memory_btn = QPushButton("➕")
+        add_memory_btn.setFixedWidth(40)
+        add_memory_btn.setToolTip("Dodaj plik jako nowy projekt pamięci")
+        add_memory_btn.clicked.connect(self._add_memory_file)
+        memory_layout.addWidget(add_memory_btn)
+
+        self._populate_memory_combo()
 
         # Select current project
         current_project_id = self.agent.get('memory_project_id')
@@ -491,7 +496,7 @@ class AgentConfigDialog(QDialog):
                     self.memory_combo.setCurrentIndex(i)
                     break
 
-        form.addRow("Projekt pamięci:", self.memory_combo)
+        form.addRow("Projekt pamięci:", memory_layout)
 
         layout.addLayout(form)
 
@@ -556,6 +561,76 @@ class AgentConfigDialog(QDialog):
             'auto_start': self.auto_start_checkbox.isChecked(),
             'send_memory_on_start': self.send_memory_checkbox.isChecked(),
         }
+
+    def _populate_memory_combo(self):
+        """Populate memory projects combo box."""
+        self.memory_combo.clear()
+        self.memory_combo.addItem("(Brak - nie wczytuj plików)", None)
+        for project in self.memory_projects:
+            self.memory_combo.addItem(
+                f"📁 {project.get('name', 'Bez nazwy')}",
+                project.get('id')
+            )
+
+    def _add_memory_file(self):
+        """Quick add file as new memory project."""
+        file_filter = "Pliki pamięci (*.md *.txt *.json);;Wszystkie pliki (*)"
+        files, _ = QFileDialog.getOpenFileNames(
+            self, "Wybierz pliki pamięci", str(Path.home()), file_filter
+        )
+
+        if not files:
+            return
+
+        # Create project name from first file's parent folder
+        first_file = Path(files[0])
+        project_name = first_file.parent.name or first_file.stem
+
+        # Ask user for project name
+        name, ok = QInputDialog.getText(
+            self, "Nazwa projektu",
+            "Podaj nazwę dla nowego projektu pamięci:",
+            text=project_name
+        )
+
+        if not ok or not name.strip():
+            return
+
+        # Create new memory project
+        new_project = {
+            'id': str(uuid.uuid4())[:8],
+            'name': name.strip(),
+            'enabled': True,
+            'files': [{'path': f, 'enabled': True} for f in files]
+        }
+
+        # Add to local list
+        self.memory_projects.append(new_project)
+
+        # Save to file
+        self._save_memory_projects()
+
+        # Refresh combo and select new project
+        self._populate_memory_combo()
+
+        # Select the new project
+        for i in range(self.memory_combo.count()):
+            if self.memory_combo.itemData(i) == new_project['id']:
+                self.memory_combo.setCurrentIndex(i)
+                break
+
+        QMessageBox.information(
+            self, "Projekt utworzony",
+            f"Utworzono projekt \"{name.strip()}\" z {len(files)} plikami."
+        )
+
+    def _save_memory_projects(self):
+        """Save memory projects to file."""
+        try:
+            with open(MEMORY_PROJECTS_FILE, 'w') as f:
+                json.dump(self.memory_projects, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            QMessageBox.warning(self, "Błąd", f"Nie można zapisać projektów pamięci: {e}")
 
 
 class AgentsManagerDialog(QDialog):

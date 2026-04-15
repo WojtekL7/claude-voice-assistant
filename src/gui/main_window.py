@@ -433,9 +433,8 @@ class MainWindow(QMainWindow):
         # Apply again after longer delay to ensure it takes effect
         QTimer.singleShot(1500, lambda: self._apply_terminal_colors(self.skin_colors))
 
-        # Auto-run Claude command after terminal is ready
-        if self.auto_run_claude and self.claude_command:
-            QTimer.singleShot(1000, self._auto_run_claude_command)
+        # NOTE: Claude jest teraz uruchamiany w _create_agent_tab() dla każdej zakładki
+        # Stare globalne wywołanie usunięte, bo powodowało podwójne uruchomienie
 
     def _setup_ui(self):
         """Setup user interface."""
@@ -640,9 +639,20 @@ class MainWindow(QMainWindow):
         # Apply styles
         agent_tab.apply_styles(self.skin_colors, self.skin_icons)
 
-        # Schedule memory files sending after Claude Code starts
-        if agent_config.get('send_memory_on_start', True):
-            QTimer.singleShot(3000, agent_tab.send_memory_files)
+        # KOLEJNOŚĆ: najpierw uruchom Claude Code, potem wyślij pliki pamięci
+        # Używamy SEKWENCYJNEGO wywołania - pliki pamięci są wysyłane
+        # dopiero PO wysłaniu komendy claude (nie równoległe timery)
+        def uruchom_claude_potem_pliki():
+            # 1. Wyślij komendę claude
+            if agent_config.get('auto_start', True) and self.claude_command:
+                self._run_claude_in_tab(agent_tab)
+
+            # 2. Po 8 sekundach wyślij pliki pamięci (daje Claude Code czas na start)
+            if agent_config.get('send_memory_on_start', True):
+                QTimer.singleShot(8000, agent_tab.send_memory_files)
+
+        # Uruchom wszystko po 500ms (gdy terminal będzie gotowy)
+        QTimer.singleShot(500, uruchom_claude_potem_pliki)
 
         return agent_tab
 
@@ -1040,7 +1050,11 @@ class MainWindow(QMainWindow):
             self._append_system_message("Błąd: Nie można uruchomić Claude Code. Upewnij się, że jest zainstalowany.")
 
     def _auto_run_claude_command(self):
-        """Auto-run Claude command in all terminals with auto_start enabled."""
+        """Auto-run Claude command in all terminals with auto_start enabled.
+
+        NOTE: Ta metoda jest używana tylko przy starcie aplikacji.
+        Dla nowych zakładek tworzonych później używamy _run_claude_in_tab().
+        """
         if not self.claude_command:
             return
 
@@ -1052,6 +1066,18 @@ class MainWindow(QMainWindow):
                 # Send the command followed by Enter
                 tab.terminal.sendText(self.claude_command + "\r")
                 self._update_status("Claude Code uruchomiony")
+
+    def _run_claude_in_tab(self, agent_tab):
+        """Run Claude command in a specific agent tab.
+
+        Używane przy tworzeniu nowych zakładek (po dialogu dodawania agenta).
+        """
+        if not self.claude_command:
+            return
+
+        if agent_tab.terminal and agent_tab.auto_start:
+            agent_tab.terminal.sendText(self.claude_command + "\r")
+            self._update_status(f"Claude Code uruchomiony w: {agent_tab.agent_name}")
 
     # ==================== Event Handlers ====================
 

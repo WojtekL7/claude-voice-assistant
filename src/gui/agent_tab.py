@@ -476,7 +476,7 @@ class AgentTab(QWidget):
     # ==================== Memory Files ====================
 
     def send_memory_files(self):
-        """Send memory files to terminal as context."""
+        """Send memory file paths to Claude Code (not full content)."""
         if self._memory_sent:
             return
 
@@ -507,30 +507,22 @@ class AgentTab(QWidget):
             self._memory_sent = True
             return
 
-        # Build context from enabled files
-        context_parts = []
+        # Collect paths of enabled files (not content!)
+        file_paths = []
         for file_info in project.get('files', []):
             if not file_info.get('enabled', True):
                 continue
 
             file_path = Path(file_info.get('path', ''))
-            if not file_path.exists():
-                continue
+            if file_path.exists():
+                file_paths.append(str(file_path))
 
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-
-                context_parts.append(f"--- {file_path.name} ---")
-                context_parts.append(content)
-                context_parts.append("")
-            except Exception as e:
-                print(f"Error reading memory file {file_path}: {e}")
-
-        if context_parts:
-            context_message = "Oto kontekst projektu:\n\n" + "\n".join(context_parts)
+        if file_paths:
+            # Send only paths - Claude Code will read them itself
+            paths_list = " ".join(file_paths)
+            context_message = f"Przeczytaj pliki pamięci projektu i zapamiętaj ich zawartość jako kontekst: {paths_list}"
             self.send_text_to_terminal(context_message)
-            self.status_changed.emit(f"Wysłano pliki pamięci dla: {project.get('name', 'projekt')}")
+            self.status_changed.emit(f"Wysłano ścieżki plików dla: {project.get('name', 'projekt')}")
 
         self._memory_sent = True
 
