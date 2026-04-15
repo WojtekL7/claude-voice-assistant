@@ -277,6 +277,7 @@ DEFAULT_SKIN_COLORS = {
     'icon_pause_color': '#a855f7',      # Kolor ikony pauzy (fioletowy)
     'icon_stop_color': '#ef4444',       # Kolor ikony stop (czerwony)
     'icon_copy_color': '#f59e0b',       # Kolor ikony kopiuj (pomarańczowy)
+    'icon_clear_input_color': '#ef4444',  # Kolor ikony wyczyść (czerwony)
     'icon_send_color': '#22c55e',       # Kolor ikony wyślij (zielony)
     'icon_quick_actions_color': '#facc15',  # Kolor ikony szybkich akcji (żółty)
     # === Kolory terminala ===
@@ -340,6 +341,7 @@ SKIN_COLOR_NAMES = {
     'icon_pause_color': 'Kolor ikony pauzy',
     'icon_stop_color': 'Kolor ikony stop',
     'icon_copy_color': 'Kolor ikony kopiuj',
+    'icon_clear_input_color': 'Kolor ikony wyczyść',
     'icon_send_color': 'Kolor ikony wyślij',
     'icon_quick_actions_color': 'Kolor ikony szybkich akcji',
 }
@@ -351,6 +353,7 @@ DEFAULT_SKIN_ICONS = {
     'pause': {'normal': '⏸', 'active': '▶'},
     'stop': {'normal': '⬜'},
     'copy': {'normal': '⧉', 'active': '✓'},
+    'clear_input': {'normal': '✕'},
     'send': {'normal': '↵'},
     'quick_actions': {'normal': '⚡▼'},
 }
@@ -362,6 +365,7 @@ SKIN_ICON_NAMES = {
     'pause': 'Pauza',
     'stop': 'Stop',
     'copy': 'Kopiuj',
+    'clear_input': 'Wyczyść pole',
     'send': 'Wyślij',
     'quick_actions': 'Szybkie akcje',
 }
@@ -1707,6 +1711,9 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'copy_btn'):
             self._apply_button_icon_style(self.copy_btn, 'icon_copy_color')
 
+        if hasattr(self, 'clear_input_btn'):
+            self._apply_button_icon_style(self.clear_input_btn, 'icon_clear_input_color')
+
         # Pause button - uses same style as other buttons but with disabled state
         if hasattr(self, 'pause_btn'):
             self._apply_button_icon_style(self.pause_btn, 'icon_pause_color', with_disabled=True)
@@ -2367,8 +2374,8 @@ class SkinSettingsDialog(QDialog):
         icon_colors_layout = QGridLayout(icon_colors_group)
 
         icon_color_keys = ['icon_dictate_color', 'icon_read_color', 'icon_pause_color',
-                           'icon_stop_color', 'icon_copy_color', 'icon_send_color',
-                           'icon_quick_actions_color']
+                           'icon_stop_color', 'icon_copy_color', 'icon_clear_input_color',
+                           'icon_send_color', 'icon_quick_actions_color']
         for i, key in enumerate(icon_color_keys):
             self._add_color_row(icon_colors_layout, i, key)
 
