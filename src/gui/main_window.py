@@ -696,6 +696,14 @@ class MainWindow(QMainWindow):
         # Style will be applied by _apply_button_icon_styles()
         layout.addWidget(self.copy_btn)
 
+        # Clear input button - X icon
+        self.clear_input_btn = QPushButton("✕")
+        self.clear_input_btn.setFixedSize(btn_size, btn_size)
+        self.clear_input_btn.setToolTip("Wyczyść pole tekstowe")
+        self.clear_input_btn.clicked.connect(self._clear_input_field)
+        # Style will be applied by _apply_button_icon_styles()
+        layout.addWidget(self.clear_input_btn)
+
         # Quick actions dropdown - lightning + arrow down
         self.quick_actions_btn = QToolButton()
         self.quick_actions_btn.setText("⚡▼")
@@ -992,6 +1000,7 @@ class MainWindow(QMainWindow):
         self.dictate_btn.setToolTip(self._get_text('dictate'))
         self.read_btn.setToolTip(self._get_text('read'))
         self.copy_btn.setToolTip(self._get_text('copy'))
+        self.clear_input_btn.setToolTip(self._get_text('clear_input'))
         self.pause_btn.setToolTip(self._get_text('pause'))
         self.stop_btn.setToolTip(self._get_text('stop'))
         self.send_btn.setToolTip(self._get_text('send'))
@@ -1447,6 +1456,11 @@ class MainWindow(QMainWindow):
                     self._flash_copy_success()
                 else:
                     self._update_status("Najpierw zaznacz tekst")
+
+    def _clear_input_field(self):
+        """Clear the input text field."""
+        self.input_field.clear()
+        self.input_field.setFocus()
 
     def _flash_copy_success(self):
         """Flash copy button green to indicate success."""
