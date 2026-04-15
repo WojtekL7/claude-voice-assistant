@@ -684,12 +684,13 @@ class MainWindow(QMainWindow):
         self._speaker_anim_state = 0
         self._speaker_icons = ["🔈", "🔉", "🔊"]
 
-        # Pause button - two bars
+        # Pause button - two bars (hidden by default, shown during TTS playback)
         self.pause_btn = QPushButton("⏸")
         self.pause_btn.setFixedSize(btn_size, btn_size)
         self.pause_btn.setToolTip("Pauza / Wznów")
         self.pause_btn.clicked.connect(self._toggle_pause)
         self.pause_btn.setEnabled(False)
+        self.pause_btn.setVisible(False)
         # Style will be applied by _apply_dark_theme()
         layout.addWidget(self.pause_btn)
 
@@ -698,11 +699,12 @@ class MainWindow(QMainWindow):
         self._pause_blink_timer.timeout.connect(self._animate_pause_blink)
         self._pause_blink_state = True
 
-        # Stop button - white square on red background
+        # Stop button - white square on red background (hidden by default, shown during TTS playback)
         self.stop_btn = QPushButton("⬜")
         self.stop_btn.setFixedSize(btn_size, btn_size)
         self.stop_btn.setToolTip("Zatrzymaj wszystko")
         self.stop_btn.clicked.connect(self._stop_all)
+        self.stop_btn.setVisible(False)
         # Style will be applied by _apply_button_icon_styles()
         layout.addWidget(self.stop_btn)
 
@@ -1154,6 +1156,9 @@ class MainWindow(QMainWindow):
     def _on_tts_state_changed(self, state: TTSState):
         """Handle TTS state change."""
         if state == TTSState.PLAYING:
+            # Show pause and stop buttons
+            self.pause_btn.setVisible(True)
+            self.stop_btn.setVisible(True)
             self.pause_btn.setEnabled(True)
             self.pause_btn.setText(self._get_icon('pause', 'normal'))
             # Start speaker animation
@@ -1162,6 +1167,9 @@ class MainWindow(QMainWindow):
             self._pause_blink_timer.stop()
             self._update_status("Czytam...")
         elif state == TTSState.PAUSED:
+            # Keep buttons visible during pause
+            self.pause_btn.setVisible(True)
+            self.stop_btn.setVisible(True)
             self.pause_btn.setText(self._get_icon('pause', 'active'))
             # Stop speaker animation
             self._speaker_anim_timer.stop()
@@ -1170,8 +1178,13 @@ class MainWindow(QMainWindow):
             self._pause_blink_timer.start(500)
             self._update_status("Wstrzymano")
         elif state == TTSState.GENERATING:
+            # Show stop button during generation (to allow cancel)
+            self.stop_btn.setVisible(True)
             self._update_status("Generowanie mowy...")
         else:
+            # Hide pause and stop buttons when idle
+            self.pause_btn.setVisible(False)
+            self.stop_btn.setVisible(False)
             self.pause_btn.setEnabled(False)
             self.pause_btn.setText(self._get_icon('pause', 'normal'))
             # Stop all animations
@@ -1182,6 +1195,9 @@ class MainWindow(QMainWindow):
 
     def _on_tts_finished(self):
         """Handle TTS finished."""
+        # Hide pause and stop buttons
+        self.pause_btn.setVisible(False)
+        self.stop_btn.setVisible(False)
         # Stop speaker animation
         self._speaker_anim_timer.stop()
         self.read_btn.setText(self._get_icon('read', 'normal'))
