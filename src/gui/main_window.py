@@ -278,6 +278,7 @@ DEFAULT_SKIN_COLORS = {
     'icon_stop_color': '#ef4444',       # Kolor ikony stop (czerwony)
     'icon_copy_color': '#f59e0b',       # Kolor ikony kopiuj (pomarańczowy)
     'icon_clear_input_color': '#ef4444',  # Kolor ikony wyczyść (czerwony)
+    'icon_add_media_color': '#3b82f6',  # Kolor ikony dodaj media (niebieski)
     'icon_send_color': '#22c55e',       # Kolor ikony wyślij (zielony)
     'icon_quick_actions_color': '#facc15',  # Kolor ikony szybkich akcji (żółty)
     # === Kolory terminala ===
@@ -342,6 +343,7 @@ SKIN_COLOR_NAMES = {
     'icon_stop_color': 'Kolor ikony stop',
     'icon_copy_color': 'Kolor ikony kopiuj',
     'icon_clear_input_color': 'Kolor ikony wyczyść',
+    'icon_add_media_color': 'Kolor ikony dodaj media',
     'icon_send_color': 'Kolor ikony wyślij',
     'icon_quick_actions_color': 'Kolor ikony szybkich akcji',
 }
@@ -354,6 +356,7 @@ DEFAULT_SKIN_ICONS = {
     'stop': {'normal': '⬜'},
     'copy': {'normal': '⧉', 'active': '✓'},
     'clear_input': {'normal': '✕'},
+    'add_media': {'normal': '📎'},
     'send': {'normal': '↵'},
     'quick_actions': {'normal': '⚡▼'},
 }
@@ -366,6 +369,7 @@ SKIN_ICON_NAMES = {
     'stop': 'Stop',
     'copy': 'Kopiuj',
     'clear_input': 'Wyczyść pole',
+    'add_media': 'Dodaj media',
     'send': 'Wyślij',
     'quick_actions': 'Szybkie akcje',
 }
@@ -390,6 +394,7 @@ class MainWindow(QMainWindow):
         self.current_language = "pl-PL"
         self.auto_read_responses = False
         self.quick_actions = self._load_quick_actions()
+        self.attached_files = []  # List of attached file paths
         self.skin_colors = DEFAULT_SKIN_COLORS.copy()  # Custom skin colors (interfejs + terminal)
         self.skin_icons = {k: v.copy() for k, v in DEFAULT_SKIN_ICONS.items()}  # Custom icons
 
@@ -547,6 +552,15 @@ class MainWindow(QMainWindow):
         # Input area
         input_area = self._create_input_area()
         bottom_layout.addLayout(input_area)
+
+        # Attachments area (hidden by default)
+        self.attachments_widget = QWidget()
+        self.attachments_layout = QHBoxLayout(self.attachments_widget)
+        self.attachments_layout.setContentsMargins(0, 0, 0, 0)
+        self.attachments_layout.setSpacing(8)
+        self.attachments_layout.addStretch()
+        self.attachments_widget.setVisible(False)
+        bottom_layout.addWidget(self.attachments_widget)
 
         # Control buttons
         control_area = self._create_control_area()
@@ -707,6 +721,14 @@ class MainWindow(QMainWindow):
         self.clear_input_btn.clicked.connect(self._clear_input_field)
         # Style will be applied by _apply_button_icon_styles()
         layout.addWidget(self.clear_input_btn)
+
+        # Add media button - paperclip icon
+        self.add_media_btn = QPushButton("📎")
+        self.add_media_btn.setFixedSize(btn_size, btn_size)
+        self.add_media_btn.setToolTip("Dodaj media (zdjęcia, dokumenty, pliki)")
+        self.add_media_btn.clicked.connect(self._add_media)
+        # Style will be applied by _apply_button_icon_styles()
+        layout.addWidget(self.add_media_btn)
 
         # Quick actions dropdown - lightning + arrow down
         self.quick_actions_btn = QToolButton()
@@ -1005,6 +1027,7 @@ class MainWindow(QMainWindow):
         self.read_btn.setToolTip(self._get_text('read'))
         self.copy_btn.setToolTip(self._get_text('copy'))
         self.clear_input_btn.setToolTip(self._get_text('clear_input'))
+        self.add_media_btn.setToolTip(self._get_text('add_media'))
         self.pause_btn.setToolTip(self._get_text('pause'))
         self.stop_btn.setToolTip(self._get_text('stop'))
         self.send_btn.setToolTip(self._get_text('send'))
@@ -1286,14 +1309,18 @@ class MainWindow(QMainWindow):
         """Send message to terminal or Claude."""
         text = self.input_field.text().strip()
 
+        # Build full message with attachments
+        full_message = self._build_message_with_attachments(text)
+
         if self.terminal and QTERMWIDGET_AVAILABLE:
-            if text:
+            if full_message:
                 # Send text + Enter (with delay for Claude Code)
-                self.terminal.sendText(text)
+                self.terminal.sendText(full_message)
                 QTimer.singleShot(50, lambda: self.terminal.sendText("\r"))
                 self.input_field.clear()
+                self._clear_attachments()
                 # Update context usage with user input
-                self._update_context_usage(len(text))
+                self._update_context_usage(len(full_message))
             else:
                 # Empty field - just send Enter (accept Claude Code proposal)
                 self.terminal.sendText("\r")
@@ -1310,16 +1337,44 @@ class MainWindow(QMainWindow):
             return
 
         # Fallback for non-terminal mode - require text
-        if not text:
+        if not full_message:
             return
 
         self.input_field.clear()
+        self._clear_attachments()
         # Fallback to Claude bridge
-        self._append_user_message(text)
-        self.claude.send(text)
+        self._append_user_message(full_message)
+        self.claude.send(full_message)
         # Update context usage with user input
-        self._update_context_usage(len(text))
+        self._update_context_usage(len(full_message))
         self._update_status("Wysłano...")
+
+    def _build_message_with_attachments(self, text: str) -> str:
+        """Build message with attached file paths."""
+        if not self.attached_files:
+            return text
+
+        # Create message with file references
+        parts = []
+
+        # Add file paths as references for Claude Code
+        if self.attached_files:
+            files_list = " ".join(self.attached_files)
+            if text:
+                # Combine files with message
+                parts.append(f"Przeanalizuj te pliki: {files_list}")
+                parts.append("")
+                parts.append(text)
+            else:
+                # Just files
+                parts.append(f"Przeanalizuj te pliki: {files_list}")
+
+        return "\n".join(parts) if parts else text
+
+    def _clear_attachments(self):
+        """Clear all attachments after sending."""
+        self.attached_files = []
+        self._update_attachments_display()
 
     def _toggle_dictation(self):
         """Toggle voice dictation."""
@@ -1465,6 +1520,123 @@ class MainWindow(QMainWindow):
         """Clear the input text field."""
         self.input_field.clear()
         self.input_field.setFocus()
+
+    def _add_media(self):
+        """Open file dialog to add media files."""
+        from PyQt5.QtWidgets import QFileDialog
+
+        file_filter = (
+            "Wszystkie obsługiwane (*.png *.jpg *.jpeg *.gif *.bmp *.webp *.pdf *.doc *.docx *.txt *.csv *.xlsx *.xls *.json *.xml *.zip *.tar *.gz);;"
+            "Obrazy (*.png *.jpg *.jpeg *.gif *.bmp *.webp);;"
+            "Dokumenty (*.pdf *.doc *.docx *.txt *.csv *.xlsx *.xls);;"
+            "Dane (*.json *.xml *.csv);;"
+            "Archiwa (*.zip *.tar *.gz);;"
+            "Wszystkie pliki (*.*)"
+        )
+
+        files, _ = QFileDialog.getOpenFileNames(
+            self,
+            "Dodaj media",
+            "",
+            file_filter
+        )
+
+        if files:
+            for file_path in files:
+                if file_path not in self.attached_files:
+                    self.attached_files.append(file_path)
+            self._update_attachments_display()
+            self._update_status(f"Dodano {len(files)} plik(ów)")
+
+    def _remove_attachment(self, file_path: str):
+        """Remove an attachment from the list."""
+        if file_path in self.attached_files:
+            self.attached_files.remove(file_path)
+            self._update_attachments_display()
+
+    def _update_attachments_display(self):
+        """Update the attachments display area."""
+        # Clear existing widgets (except stretch)
+        while self.attachments_layout.count() > 1:
+            item = self.attachments_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        # Add file chips
+        for file_path in self.attached_files:
+            chip = self._create_attachment_chip(file_path)
+            self.attachments_layout.insertWidget(self.attachments_layout.count() - 1, chip)
+
+        # Show/hide attachments area
+        self.attachments_widget.setVisible(len(self.attached_files) > 0)
+
+    def _create_attachment_chip(self, file_path: str) -> QWidget:
+        """Create a chip widget for an attachment."""
+        import os
+        from PyQt5.QtWidgets import QHBoxLayout, QLabel, QPushButton
+
+        chip = QWidget()
+        chip_layout = QHBoxLayout(chip)
+        chip_layout.setContentsMargins(8, 4, 4, 4)
+        chip_layout.setSpacing(4)
+
+        # Get file info
+        filename = os.path.basename(file_path)
+        ext = os.path.splitext(filename)[1].lower()
+
+        # Icon based on file type
+        if ext in ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp']:
+            icon = "🖼️"
+        elif ext == '.pdf':
+            icon = "📄"
+        elif ext in ['.doc', '.docx']:
+            icon = "📝"
+        elif ext in ['.xls', '.xlsx', '.csv']:
+            icon = "📊"
+        elif ext in ['.zip', '.tar', '.gz']:
+            icon = "📦"
+        else:
+            icon = "📁"
+
+        # File label
+        label = QLabel(f"{icon} {filename}")
+        label.setStyleSheet(f"""
+            QLabel {{
+                color: {self.skin_colors.get('text_color', '#ffffff')};
+                font-size: 11px;
+            }}
+        """)
+        label.setToolTip(file_path)
+        chip_layout.addWidget(label)
+
+        # Remove button
+        remove_btn = QPushButton("✕")
+        remove_btn.setFixedSize(20, 20)
+        remove_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: transparent;
+                color: #ef4444;
+                border: none;
+                font-size: 12px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                color: #ff6b6b;
+            }}
+        """)
+        remove_btn.clicked.connect(lambda: self._remove_attachment(file_path))
+        chip_layout.addWidget(remove_btn)
+
+        # Chip styling
+        chip.setStyleSheet(f"""
+            QWidget {{
+                background-color: {self.skin_colors.get('button_bg', '#4a1a3a')};
+                border: 1px solid {self.skin_colors.get('border_color', '#4a1a3a')};
+                border-radius: 12px;
+            }}
+        """)
+
+        return chip
 
     def _flash_copy_success(self):
         """Flash copy button green to indicate success."""
@@ -1713,6 +1885,9 @@ class MainWindow(QMainWindow):
 
         if hasattr(self, 'clear_input_btn'):
             self._apply_button_icon_style(self.clear_input_btn, 'icon_clear_input_color')
+
+        if hasattr(self, 'add_media_btn'):
+            self._apply_button_icon_style(self.add_media_btn, 'icon_add_media_color')
 
         # Pause button - uses same style as other buttons but with disabled state
         if hasattr(self, 'pause_btn'):
@@ -2375,7 +2550,7 @@ class SkinSettingsDialog(QDialog):
 
         icon_color_keys = ['icon_dictate_color', 'icon_read_color', 'icon_pause_color',
                            'icon_stop_color', 'icon_copy_color', 'icon_clear_input_color',
-                           'icon_send_color', 'icon_quick_actions_color']
+                           'icon_add_media_color', 'icon_send_color', 'icon_quick_actions_color']
         for i, key in enumerate(icon_color_keys):
             self._add_color_row(icon_colors_layout, i, key)
 
