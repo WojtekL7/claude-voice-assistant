@@ -18,6 +18,8 @@ CONFIG_DIR = Path.home() / ".claude-voice-assistant"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 QUICK_ACTIONS_FILE = CONFIG_DIR / "quick_actions.json"
 LICENSE_FILE = CONFIG_DIR / "license.key"
+AGENTS_FILE = CONFIG_DIR / "agents.json"
+MEMORY_PROJECTS_FILE = CONFIG_DIR / "memory_projects.json"
 
 # Ensure config directory exists
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
@@ -153,3 +155,20 @@ UI_TRANSLATIONS = {
         "license_expired": "Licence expired",
     },
 }
+
+# Default Agents Configuration
+DEFAULT_AGENTS = [
+    {
+        "id": "default-agent",
+        "name": "Główny",
+        "auto_start": True,
+        "memory_project_id": None,
+        "working_directory": str(Path.home()),
+    }
+]
+
+# Default Memory Projects Configuration
+DEFAULT_MEMORY_PROJECTS = []
+
+# Memory file extensions
+MEMORY_FILE_EXTENSIONS = [".md", ".txt", ".json"]

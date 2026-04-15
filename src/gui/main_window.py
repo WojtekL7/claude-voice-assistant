@@ -15,7 +15,8 @@ from PyQt5.QtWidgets import (
     QDialogButtonBox, QFormLayout, QMessageBox, QFrame,
     QToolButton, QSizePolicy, QApplication, QInputDialog,
     QColorDialog, QGridLayout, QGroupBox, QScrollArea, QFileDialog,
-    QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView
+    QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
+    QTabWidget, QTabBar
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QObject, QEvent, QPoint
 from PyQt5.QtGui import QFont, QTextCursor, QIcon, QKeySequence, QPalette, QColor, QTextCharFormat
@@ -249,13 +250,16 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import (
     APP_NAME, APP_VERSION, WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT,
     SUPPORTED_LANGUAGES, UI_TRANSLATIONS, DEFAULT_QUICK_ACTIONS,
-    CONFIG_FILE, QUICK_ACTIONS_FILE, CLAUDE_COMMAND, GROQ_API_KEY
+    CONFIG_FILE, QUICK_ACTIONS_FILE, CLAUDE_COMMAND, GROQ_API_KEY,
+    AGENTS_FILE, MEMORY_PROJECTS_FILE, DEFAULT_AGENTS, DEFAULT_MEMORY_PROJECTS
 )
 from core.claude_bridge import ClaudeBridgeAsync
 from core.tts_engine import TTSEngine, TTSState
 from core.stt_engine import STTEngine, STTState
 from core.license_manager import LicenseManager, LicenseStatus
 from core.text_cleaner import TextCleanerForTTS, extract_last_claude_response, fix_polish_encoding
+from gui.agent_tab import AgentTab
+from gui.dialogs import MemoryProjectsDialog, AgentConfigDialog, AgentsManagerDialog
 
 # Domyślne kolory skórki (motyw Ubuntu) - interfejs + terminal
 DEFAULT_SKIN_COLORS = {
@@ -398,6 +402,13 @@ class MainWindow(QMainWindow):
         self.attached_files = []  # List of attached file paths
         self.skin_colors = DEFAULT_SKIN_COLORS.copy()  # Custom skin colors (interfejs + terminal)
         self.skin_icons = {k: v.copy() for k, v in DEFAULT_SKIN_ICONS.items()}  # Custom icons
+        self.claude_command = "/usr/bin/claude"  # Command to run Claude Code
+        self.auto_run_claude = True  # Auto-run Claude command on startup
+
+        # Agents and memory projects
+        self.agents = self._load_agents()
+        self.memory_projects = self._load_memory_projects()
+        self.agent_tabs = {}  # Dict of agent_id -> AgentTab
 
         # Load settings
         self._load_settings()
@@ -417,6 +428,15 @@ class MainWindow(QMainWindow):
         # Start Claude Code
         self._start_claude()
 
+        # Apply terminal colors after a delay (terminal needs time to initialize)
+        QTimer.singleShot(500, lambda: self._apply_terminal_colors(self.skin_colors))
+        # Apply again after longer delay to ensure it takes effect
+        QTimer.singleShot(1500, lambda: self._apply_terminal_colors(self.skin_colors))
+
+        # Auto-run Claude command after terminal is ready
+        if self.auto_run_claude and self.claude_command:
+            QTimer.singleShot(1000, self._auto_run_claude_command)
+
     def _setup_ui(self):
         """Setup user interface."""
         self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}")
@@ -430,164 +450,94 @@ class MainWindow(QMainWindow):
         # Main layout
         main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(10, 10, 10, 10)
-        main_layout.setSpacing(0)  # Splitter handles spacing
+        main_layout.setSpacing(0)
 
-        # Create splitter for terminal and bottom panel (prevents scroll on resize)
-        self.main_splitter = QSplitter(Qt.Vertical)
-        self.main_splitter.setHandleWidth(6)
-        # Style will be applied by _apply_dark_theme()
+        # Tab widget for agents
+        self.tab_widget = QTabWidget()
+        self.tab_widget.setTabsClosable(True)
+        self.tab_widget.setMovable(True)
+        self.tab_widget.tabCloseRequested.connect(self._close_agent_tab)
+        self.tab_widget.currentChanged.connect(self._on_tab_changed)
 
-        # Terminal area - real terminal emulator using QTermWidget
-        if QTERMWIDGET_AVAILABLE:
-            self.terminal = QTermWidget(0)  # 0 = don't start shell yet
-            self.terminal.setShellProgram("/usr/bin/bash")
-            self.terminal.setWorkingDirectory(str(Path.home()))
+        # Style for tabs
+        self.tab_widget.setStyleSheet("""
+            QTabWidget::pane {
+                border: none;
+                background-color: transparent;
+            }
+            QTabBar::tab {
+                background-color: #2d0a1e;
+                color: #ffffff;
+                padding: 8px 16px;
+                margin-right: 2px;
+                border-top-left-radius: 6px;
+                border-top-right-radius: 6px;
+            }
+            QTabBar::tab:selected {
+                background-color: #4a1a3a;
+            }
+            QTabBar::tab:hover {
+                background-color: #6a2a5a;
+            }
+            QTabBar::close-button {
+                image: none;
+                subcontrol-position: right;
+            }
+            QTabBar::close-button:hover {
+                background-color: #ef4444;
+                border-radius: 2px;
+            }
+        """)
 
-            # Terminal font
-            terminal_font = QFont("Ubuntu Mono", 13)
-            terminal_font.setStyleHint(QFont.Monospace)
-            self.terminal.setTerminalFont(terminal_font)
+        # Add "+" button to create new tabs
+        self.add_tab_btn = QPushButton("+")
+        self.add_tab_btn.setFixedSize(30, 26)
+        self.add_tab_btn.setToolTip("Dodaj nowego agenta")
+        self.add_tab_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4a1a3a;
+                color: #22c55e;
+                border: none;
+                border-radius: 4px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #6a2a5a;
+            }
+        """)
+        self.add_tab_btn.clicked.connect(self._add_new_agent)
+        self.tab_widget.setCornerWidget(self.add_tab_btn, Qt.TopRightCorner)
 
-            # Terminal colors are applied later by _apply_terminal_colors() via apply_skin_colors()
+        # Create tabs for auto-start agents
+        self._create_agent_tabs()
 
-            # Terminal settings
-            self.terminal.setScrollBarPosition(QTermWidget.ScrollBarRight)
-            self.terminal.setTerminalOpacity(1.0)
-            self.terminal.setHistorySize(10000)
+        main_layout.addWidget(self.tab_widget)
 
-            # Disable flow control warning (prevents white rectangle flash)
-            self.terminal.setFlowControlEnabled(False)
-            self.terminal.setFlowControlWarningEnabled(False)
-
-            # Disable terminal size hint (prevents white rectangle when resizing)
-            self.terminal.setTerminalSizeHint(False)
-
-            # Scrollbar styling (Ubuntu terminal style - light gray)
-            self.terminal.setStyleSheet("""
-                QScrollBar:vertical {
-                    background: transparent;
-                    width: 12px;
-                    margin: 2px;
-                }
-                QScrollBar::handle:vertical {
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                        stop:0 #888888, stop:0.5 #aaaaaa, stop:1 #888888);
-                    border-radius: 5px;
-                    min-height: 30px;
-                }
-                QScrollBar::handle:vertical:hover {
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                        stop:0 #999999, stop:0.5 #bbbbbb, stop:1 #999999);
-                }
-                QScrollBar::add-line:vertical,
-                QScrollBar::sub-line:vertical {
-                    height: 0px;
-                }
-                QScrollBar::add-page:vertical,
-                QScrollBar::sub-page:vertical {
-                    background: transparent;
-                }
-            """)
-
-            # Connect signal for TTS (read terminal output)
-            self.terminal.receivedData.connect(self._on_terminal_output)
-            self.terminal.finished.connect(self._on_terminal_finished)
-
-            # Buffer for TTS
-            self._terminal_output_buffer = ""
-            self._tts_timer = QTimer()
-            self._tts_timer.setSingleShot(True)
-            self._tts_timer.timeout.connect(self._read_terminal_buffer)
-
-            # Start the shell
-            self.terminal.startShellProgram()
-
-            self.main_splitter.addWidget(self.terminal)
-
-            # Keep reference for compatibility
-            self.conversation_area = None
-        else:
-            # Fallback to QTextEdit if QTermWidget not available
-            self.terminal = None
-            self.conversation_area = QTextEdit()
-            self.conversation_area.setReadOnly(True)
-            terminal_font = QFont("Ubuntu Mono", 13)
-            terminal_font.setStyleHint(QFont.Monospace)
-            self.conversation_area.setFont(terminal_font)
-            self.conversation_area.setCursorWidth(8)
-            self.conversation_area.setStyleSheet("""
-                QTextEdit {
-                    background-color: #300A24;
-                    color: #ffffff;
-                    border: 1px solid #4a1a3a;
-                    border-radius: 8px;
-                    padding: 12px;
-                    selection-background-color: #6a2a5a;
-                }
-                QScrollBar:vertical {
-                    background-color: #300A24;
-                    width: 12px;
-                    border-radius: 6px;
-                }
-                QScrollBar::handle:vertical {
-                    background-color: #4a1a3a;
-                    border-radius: 6px;
-                    min-height: 30px;
-                }
-                QScrollBar::handle:vertical:hover {
-                    background-color: #6a2a5a;
-                }
-                QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                    height: 0px;
-                }
-            """)
-            self.main_splitter.addWidget(self.conversation_area)
-
-        # Bottom panel with dark background for buttons
-        self.bottom_panel = QFrame()
-        # Style will be applied by _apply_dark_theme()
-        bottom_layout = QVBoxLayout(self.bottom_panel)
-        bottom_layout.setContentsMargins(12, 12, 12, 12)
-        bottom_layout.setSpacing(10)
-
-        # Input area
-        input_area = self._create_input_area()
-        bottom_layout.addLayout(input_area)
-
-        # Attachments area (hidden by default)
-        self.attachments_widget = QWidget()
-        self.attachments_layout = QHBoxLayout(self.attachments_widget)
-        self.attachments_layout.setContentsMargins(0, 0, 0, 0)
-        self.attachments_layout.setSpacing(8)
-        self.attachments_layout.addStretch()
-        self.attachments_widget.setVisible(False)
-        bottom_layout.addWidget(self.attachments_widget)
-
-        # Control buttons
-        control_area = self._create_control_area()
-        bottom_layout.addLayout(control_area)
-
-        # Add bottom panel to splitter
-        self.main_splitter.addWidget(self.bottom_panel)
-
-        # Configure splitter behavior
-        self.main_splitter.setCollapsible(0, False)  # Terminal cannot be collapsed
-        self.main_splitter.setCollapsible(1, False)  # Bottom panel cannot be collapsed
-        self.main_splitter.setStretchFactor(0, 4)    # Terminal gets 80% of space
-        self.main_splitter.setStretchFactor(1, 0)    # Bottom panel: fixed size (no stretch)
-        self.main_splitter.setOpaqueResize(False)    # Prevents scroll flash during resize
-
-        # Setup centralized scroll manager for terminal
+        # Keep references for compatibility with existing code
+        self.terminal = None
+        self.conversation_area = None
+        self.bottom_panel = None
+        self.input_field = None
+        self._terminal_output_buffer = ""
         self._scroll_manager = None
-        if self.terminal:
-            self._scroll_manager = TerminalScrollManager(self.terminal, self)
-            # NOTE: Removed heightChanged and splitterMoved connections
-            # Terminal should only scroll when user sends a message, not during typing
-            # Initial scroll after UI is fully set up
-            QTimer.singleShot(500, self._scroll_manager.schedule_scroll)
 
-        # Add splitter to main layout
-        main_layout.addWidget(self.main_splitter)
+        # Animation timers (shared across all tabs)
+        self._mic_pulse_timer = QTimer()
+        self._mic_pulse_timer.timeout.connect(self._animate_mic_pulse)
+        self._mic_pulse_state = False
+
+        self._speaker_anim_timer = QTimer()
+        self._speaker_anim_timer.timeout.connect(self._animate_speaker)
+        self._speaker_anim_state = 0
+        self._speaker_icons = ["🔈", "🔉", "🔊"]
+
+        self._pause_blink_timer = QTimer()
+        self._pause_blink_timer.timeout.connect(self._animate_pause_blink)
+        self._pause_blink_state = True
+
+        # Update references to current tab
+        self._update_current_tab_references()
 
         # Status bar
         self.status_bar = QStatusBar()
@@ -620,139 +570,214 @@ class MainWindow(QMainWindow):
         # Apply dark theme (includes terminal colors via apply_skin_colors)
         self._apply_dark_theme()
 
-    def _create_input_area(self) -> QHBoxLayout:
-        """Create input area with text field and quick actions."""
-        layout = QHBoxLayout()
+    # ==================== Agent Management ====================
 
-        # Text input (auto-resize)
-        self.input_field = AutoResizeTextEdit()
-        self.input_field.setPlaceholderText("Wpisz polecenie lub użyj dyktowania... (Shift+Enter = nowa linia)")
-        input_font = QFont("Ubuntu Mono", 13)
-        input_font.setStyleHint(QFont.Monospace)
-        self.input_field.setFont(input_font)
-        self.input_field.setCursorWidth(8)
-        self.input_field.returnPressed.connect(self._send_message)
-        # Style will be applied by _apply_dark_theme()
-        layout.addWidget(self.input_field, stretch=1)
+    def _load_agents(self) -> list:
+        """Load agents from file."""
+        if AGENTS_FILE.exists():
+            try:
+                with open(AGENTS_FILE, 'r') as f:
+                    return json.load(f)
+            except:
+                pass
+        return [a.copy() for a in DEFAULT_AGENTS]
 
-        # Send button - Enter icon (wide rectangle = 2 buttons width)
-        send_btn_width = 100  # Width of ~2 buttons
-        send_btn_height = 48
-        input_icon_size = 20
+    def _save_agents(self):
+        """Save agents to file."""
+        try:
+            with open(AGENTS_FILE, 'w') as f:
+                json.dump(self.agents, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"Error saving agents: {e}")
 
-        self.send_btn = QPushButton("↵ Enter")
-        self.send_btn.setFixedSize(send_btn_width, send_btn_height)
-        self.send_btn.setToolTip("Wyślij (Enter)")
-        self.send_btn.clicked.connect(self._send_message)
-        # Style will be applied by _apply_button_icon_styles()
-        layout.addWidget(self.send_btn)
+    def _load_memory_projects(self) -> list:
+        """Load memory projects from file."""
+        if MEMORY_PROJECTS_FILE.exists():
+            try:
+                with open(MEMORY_PROJECTS_FILE, 'r') as f:
+                    return json.load(f)
+            except:
+                pass
+        return DEFAULT_MEMORY_PROJECTS.copy()
 
-        return layout
+    def _create_agent_tabs(self):
+        """Create tabs for all auto-start agents."""
+        for agent in self.agents:
+            if agent.get('auto_start', True):
+                self._create_agent_tab(agent)
 
-    def _create_control_area(self) -> QHBoxLayout:
-        """Create control buttons area with icon-only buttons."""
-        layout = QHBoxLayout()
+        # If no tabs created, create default one
+        if self.tab_widget.count() == 0:
+            default_agent = DEFAULT_AGENTS[0].copy()
+            self.agents = [default_agent]
+            self._create_agent_tab(default_agent)
 
-        # Common button size
-        btn_size = 48
-        icon_size = 22
+    def _create_agent_tab(self, agent_config: dict) -> AgentTab:
+        """Create a single agent tab."""
+        agent_tab = AgentTab(agent_config, self)
 
-        # Dictate button - microphone icon
-        self.dictate_btn = QPushButton("🎤")
-        self.dictate_btn.setFixedSize(btn_size, btn_size)
-        self.dictate_btn.setCheckable(True)
-        self.dictate_btn.setToolTip("Dyktuj (nagrywanie głosu)")
-        self.dictate_btn.clicked.connect(self._toggle_dictation)
-        # Style will be applied by _apply_button_icon_styles()
-        layout.addWidget(self.dictate_btn)
+        # Set shared state
+        agent_tab.set_shared_state(
+            self.skin_colors, self.skin_icons,
+            self.auto_read_responses, self.current_language
+        )
 
-        # Timer for microphone pulse animation
-        self._mic_pulse_timer = QTimer()
-        self._mic_pulse_timer.timeout.connect(self._animate_mic_pulse)
-        self._mic_pulse_state = False
+        # Connect signals
+        agent_tab.status_changed.connect(self._update_status)
+        agent_tab.request_tts.connect(self._handle_tts_request)
+        agent_tab.request_tts_stop.connect(self._stop_all)
+        agent_tab.request_dictation.connect(self._handle_dictation_request)
+        agent_tab.message_sent.connect(self._on_message_sent)
 
-        # Read button - speaker icon
-        self.read_btn = QPushButton("🔊")
-        self.read_btn.setFixedSize(btn_size, btn_size)
-        self.read_btn.setToolTip("Czytaj ostatnią odpowiedź")
-        self.read_btn.clicked.connect(self._read_last_response)
-        # Style will be applied by _apply_button_icon_styles()
-        layout.addWidget(self.read_btn)
+        # Add tab
+        agent_id = agent_config.get('id', 'unknown')
+        agent_name = agent_config.get('name', 'Agent')
+        self.agent_tabs[agent_id] = agent_tab
 
-        # Timer for speaker wave animation
-        self._speaker_anim_timer = QTimer()
-        self._speaker_anim_timer.timeout.connect(self._animate_speaker)
-        self._speaker_anim_state = 0
-        self._speaker_icons = ["🔈", "🔉", "🔊"]
+        index = self.tab_widget.addTab(agent_tab, f"🤖 {agent_name}")
+        self.tab_widget.setCurrentIndex(index)
 
-        # Pause button - two bars (hidden by default, shown during TTS playback)
-        self.pause_btn = QPushButton("⏸")
-        self.pause_btn.setFixedSize(btn_size, btn_size)
-        self.pause_btn.setToolTip("Pauza / Wznów")
-        self.pause_btn.clicked.connect(self._toggle_pause)
-        self.pause_btn.setEnabled(False)
-        self.pause_btn.setVisible(False)
-        # Style will be applied by _apply_dark_theme()
-        layout.addWidget(self.pause_btn)
+        # Apply styles
+        agent_tab.apply_styles(self.skin_colors, self.skin_icons)
 
-        # Timer for pause blink animation
-        self._pause_blink_timer = QTimer()
-        self._pause_blink_timer.timeout.connect(self._animate_pause_blink)
-        self._pause_blink_state = True
+        # Schedule memory files sending after Claude Code starts
+        if agent_config.get('send_memory_on_start', True):
+            QTimer.singleShot(3000, agent_tab.send_memory_files)
 
-        # Stop button - white square on red background (hidden by default, shown during TTS playback)
-        self.stop_btn = QPushButton("⬜")
-        self.stop_btn.setFixedSize(btn_size, btn_size)
-        self.stop_btn.setToolTip("Zatrzymaj wszystko")
-        self.stop_btn.clicked.connect(self._stop_all)
-        self.stop_btn.setVisible(False)
-        # Style will be applied by _apply_button_icon_styles()
-        layout.addWidget(self.stop_btn)
+        return agent_tab
 
-        # Copy button - two overlapping pages
-        self.copy_btn = QPushButton("⧉")
-        self.copy_btn.setFixedSize(btn_size, btn_size)
-        self.copy_btn.setToolTip("Kopiuj zaznaczony tekst")
-        self.copy_btn.clicked.connect(self._copy_selection)
-        # Style will be applied by _apply_button_icon_styles()
-        layout.addWidget(self.copy_btn)
+    def _add_new_agent(self):
+        """Add new agent via dialog."""
+        dialog = AgentConfigDialog(self, memory_projects=self.memory_projects)
+        if dialog.exec_() == QDialog.Accepted:
+            agent_config = dialog.get_data()
+            self.agents.append(agent_config)
+            self._save_agents()
+            self._create_agent_tab(agent_config)
 
-        # Clear input button - X icon
-        self.clear_input_btn = QPushButton("✕")
-        self.clear_input_btn.setFixedSize(btn_size, btn_size)
-        self.clear_input_btn.setToolTip("Wyczyść pole tekstowe")
-        self.clear_input_btn.clicked.connect(self._clear_input_field)
-        # Style will be applied by _apply_button_icon_styles()
-        layout.addWidget(self.clear_input_btn)
+    def _add_new_terminal(self):
+        """Add a plain Ubuntu terminal tab (no agent features)."""
+        # Generate unique terminal ID
+        terminal_count = sum(1 for agent_id in self.agent_tabs if agent_id.startswith('terminal-'))
+        terminal_id = f"terminal-{terminal_count + 1}"
 
-        # Add media button - paperclip icon
-        self.add_media_btn = QPushButton("📎")
-        self.add_media_btn.setFixedSize(btn_size, btn_size)
-        self.add_media_btn.setToolTip("Dodaj media (zdjęcia, dokumenty, pliki)")
-        self.add_media_btn.clicked.connect(self._add_media)
-        # Style will be applied by _apply_button_icon_styles()
-        layout.addWidget(self.add_media_btn)
+        # Create plain terminal config (no memory, no auto-start Claude)
+        terminal_config = {
+            'id': terminal_id,
+            'name': f"Terminal {terminal_count + 1}",
+            'working_directory': str(Path.home()),
+            'memory_project_id': None,
+            'auto_start': False,  # Don't auto-run Claude command
+            'send_memory_on_start': False,  # No memory files
+            'is_plain_terminal': True  # Flag for plain terminal
+        }
 
-        # Quick actions dropdown - lightning + arrow down
-        self.quick_actions_btn = QToolButton()
-        self.quick_actions_btn.setText("⚡▼")
-        self.quick_actions_btn.setToolTip("Szybkie akcje")
-        self.quick_actions_btn.setPopupMode(QToolButton.InstantPopup)
-        self.quick_actions_btn.setFixedSize(btn_size, btn_size)
-        # Style will be applied by _apply_button_icon_styles()
-        self._update_quick_actions_menu()
-        layout.addWidget(self.quick_actions_btn)
+        # Create tab (don't save to agents list - it's temporary)
+        agent_tab = AgentTab(terminal_config, self)
 
-        layout.addStretch()
+        # Set shared state
+        agent_tab.set_shared_state(
+            self.skin_colors, self.skin_icons,
+            self.auto_read_responses, self.current_language
+        )
 
-        # Auto-read checkbox
-        self.auto_read_checkbox = QCheckBox("Auto-czytaj odpowiedzi")
-        self.auto_read_checkbox.setChecked(self.auto_read_responses)
-        self.auto_read_checkbox.stateChanged.connect(self._on_auto_read_changed)
-        # Style will be applied by _apply_dark_theme()
-        layout.addWidget(self.auto_read_checkbox)
+        # Connect signals
+        agent_tab.status_changed.connect(self._update_status)
+        agent_tab.request_tts.connect(self._handle_tts_request)
+        agent_tab.request_tts_stop.connect(self._stop_all)
+        agent_tab.request_dictation.connect(self._handle_dictation_request)
+        agent_tab.message_sent.connect(self._on_message_sent)
 
-        return layout
+        # Add tab with terminal icon (🖥️ instead of 🤖)
+        self.agent_tabs[terminal_id] = agent_tab
+        index = self.tab_widget.addTab(agent_tab, f"🖥️ {terminal_config['name']}")
+        self.tab_widget.setCurrentIndex(index)
+
+        # Apply styles
+        agent_tab.apply_styles(self.skin_colors, self.skin_icons)
+
+        # Apply terminal color scheme (CustomSkin)
+        if agent_tab.terminal:
+            self._apply_terminal_colors(self.skin_colors, agent_tab.terminal)
+
+        # Apply button icon styles to new tab
+        self._apply_button_icon_styles()
+
+        self._update_status(f"Utworzono nowy terminal: {terminal_config['name']}")
+
+    def _close_agent_tab(self, index: int):
+        """Close agent tab."""
+        if self.tab_widget.count() <= 1:
+            QMessageBox.warning(self, "Nie można zamknąć",
+                "Musi pozostać co najmniej jedna zakładka.")
+            return
+
+        # Get agent tab and remove from dict
+        widget = self.tab_widget.widget(index)
+        if isinstance(widget, AgentTab):
+            agent_id = widget.agent_id
+            if agent_id in self.agent_tabs:
+                del self.agent_tabs[agent_id]
+
+        self.tab_widget.removeTab(index)
+        widget.deleteLater()
+
+    def _on_tab_changed(self, index: int):
+        """Handle tab change."""
+        self._update_current_tab_references()
+
+    def _update_current_tab_references(self):
+        """Update references to current tab's widgets."""
+        current_tab = self.tab_widget.currentWidget()
+        if isinstance(current_tab, AgentTab):
+            self.terminal = current_tab.terminal
+            self.conversation_area = current_tab.conversation_area
+            self.bottom_panel = current_tab.bottom_panel
+            self.input_field = current_tab.input_field
+            self._terminal_output_buffer = current_tab._terminal_output_buffer
+
+    def _get_current_agent_tab(self) -> Optional[AgentTab]:
+        """Get current agent tab."""
+        current = self.tab_widget.currentWidget()
+        if isinstance(current, AgentTab):
+            return current
+        return None
+
+    def _handle_tts_request(self, text: str):
+        """Handle TTS request from agent tab."""
+        if text.strip():
+            # Clean text for TTS
+            text_cleaner = TextCleanerForTTS(self.current_language)
+            cleaned_text = text_cleaner.clean(text, use_dictionary=False)
+            if cleaned_text:
+                self.tts.speak(cleaned_text)
+                self._update_status("Czytam...")
+
+    def _handle_dictation_request(self, start: bool):
+        """Handle dictation request from agent tab."""
+        if start:
+            self._toggle_dictation()
+        else:
+            self._toggle_dictation()
+
+    def _on_message_sent(self, message: str):
+        """Handle message sent from agent tab."""
+        self._update_context_usage(len(message))
+
+    def _show_memory_projects_dialog(self):
+        """Show memory projects management dialog."""
+        dialog = MemoryProjectsDialog(self)
+        if dialog.exec_() == QDialog.Accepted:
+            self.memory_projects = dialog.get_memory_projects()
+
+    def _show_agents_manager_dialog(self):
+        """Show agents manager dialog."""
+        dialog = AgentsManagerDialog(self, self.agents, self.memory_projects)
+        if dialog.exec_() == QDialog.Accepted:
+            self.agents = dialog.get_agents()
+            self._save_agents()
+            QMessageBox.information(self, "Zapisano",
+                "Zmiany zostaną zastosowane po restarcie aplikacji.")
 
     def _create_menu_bar(self):
         """Create menu bar."""
@@ -787,6 +812,29 @@ class MainWindow(QMainWindow):
         skin_colors_action.triggered.connect(self._show_skin_settings)
         edit_menu.addAction(skin_colors_action)
 
+        # Agents menu
+        agents_menu = menubar.addMenu("Zakładki")
+
+        new_agent_action = QAction("➕ Nowy agent...", self)
+        new_agent_action.setShortcut("Ctrl+T")
+        new_agent_action.triggered.connect(self._add_new_agent)
+        agents_menu.addAction(new_agent_action)
+
+        new_terminal_action = QAction("🖥️ Nowy terminal", self)
+        new_terminal_action.setShortcut("Ctrl+Shift+T")
+        new_terminal_action.triggered.connect(self._add_new_terminal)
+        agents_menu.addAction(new_terminal_action)
+
+        agents_menu.addSeparator()
+
+        manage_agents_action = QAction("Zarządzaj agentami...", self)
+        manage_agents_action.triggered.connect(self._show_agents_manager_dialog)
+        agents_menu.addAction(manage_agents_action)
+
+        memory_projects_action = QAction("📁 Pliki pamięci projektów...", self)
+        memory_projects_action.triggered.connect(self._show_memory_projects_dialog)
+        agents_menu.addAction(memory_projects_action)
+
         # Language menu
         self.language_menu = menubar.addMenu("Język")
         self.language_actions = {}
@@ -809,6 +857,12 @@ class MainWindow(QMainWindow):
         anthropic_api_action = QAction("Klucz API Anthropic...", self)
         anthropic_api_action.triggered.connect(self._show_anthropic_api_dialog)
         settings_menu.addAction(anthropic_api_action)
+
+        settings_menu.addSeparator()
+
+        claude_command_action = QAction("Komenda Claude Code...", self)
+        claude_command_action.triggered.connect(self._show_claude_command_dialog)
+        settings_menu.addAction(claude_command_action)
 
         # Help menu
         help_menu = menubar.addMenu("Pomoc")
@@ -901,6 +955,10 @@ class MainWindow(QMainWindow):
                     # Set Anthropic API key
                     self.anthropic_api_key = settings.get('anthropic_api_key', '')
 
+                    # Load Claude command settings
+                    self.claude_command = settings.get('claude_command', '/usr/bin/claude')
+                    self.auto_run_claude = settings.get('auto_run_claude', True)
+
                     # Load last session tokens (popup removed)
                     last_tokens = settings.get('last_session_tokens', 0)
 
@@ -916,7 +974,9 @@ class MainWindow(QMainWindow):
             'anthropic_api_key': getattr(self, 'anthropic_api_key', ''),
             'skin_colors': self.skin_colors,  # Zawiera kolory interfejsu + terminala
             'skin_icons': self.skin_icons,    # Zawiera ikony przycisków
-            'last_session_tokens': self._total_context_tokens
+            'last_session_tokens': self._total_context_tokens,
+            'claude_command': self.claude_command,
+            'auto_run_claude': self.auto_run_claude,
         }
         try:
             with open(CONFIG_FILE, 'w') as f:
@@ -943,21 +1003,23 @@ class MainWindow(QMainWindow):
             print(f"Error saving quick actions: {e}")
 
     def _update_quick_actions_menu(self):
-        """Update quick actions dropdown menu."""
-        menu = QMenu(self.quick_actions_btn)
+        """Update quick actions dropdown menu in all tabs."""
+        for agent_id, tab in self.agent_tabs.items():
+            if hasattr(tab, 'quick_actions_btn'):
+                menu = QMenu(tab.quick_actions_btn)
 
-        for action in self.quick_actions:
-            item = QAction(action['label'], self)
-            item.triggered.connect(lambda checked, cmd=action['command']: self._insert_quick_action(cmd))
-            menu.addAction(item)
+                for action in self.quick_actions:
+                    item = QAction(action['label'], self)
+                    item.triggered.connect(lambda checked, cmd=action['command']: self._insert_quick_action(cmd))
+                    menu.addAction(item)
 
-        menu.addSeparator()
+                menu.addSeparator()
 
-        add_action = QAction("➕ Dodaj własną...", self)
-        add_action.triggered.connect(self._add_quick_action)
-        menu.addAction(add_action)
+                add_action = QAction("➕ Dodaj własną...", self)
+                add_action.triggered.connect(self._add_quick_action)
+                menu.addAction(add_action)
 
-        self.quick_actions_btn.setMenu(menu)
+                tab.quick_actions_btn.setMenu(menu)
 
     def _check_license(self):
         """Check license status (silent - no popups)."""
@@ -966,7 +1028,7 @@ class MainWindow(QMainWindow):
         pass
 
     def _start_claude(self):
-        """Start Claude Code process."""
+        """Start Claude Code process (legacy - not used with QTermWidget)."""
         self._update_status("Uruchamianie Claude Code...")
         self._append_system_message("Uruchamianie Claude Code...")
 
@@ -976,6 +1038,20 @@ class MainWindow(QMainWindow):
         else:
             self._update_status("Błąd uruchamiania Claude Code")
             self._append_system_message("Błąd: Nie można uruchomić Claude Code. Upewnij się, że jest zainstalowany.")
+
+    def _auto_run_claude_command(self):
+        """Auto-run Claude command in all terminals with auto_start enabled."""
+        if not self.claude_command:
+            return
+
+        self._update_status(f"Uruchamianie: {self.claude_command}")
+
+        # Send command to all auto-start agent terminals
+        for agent_id, tab in self.agent_tabs.items():
+            if tab.terminal and tab.auto_start:
+                # Send the command followed by Enter
+                tab.terminal.sendText(self.claude_command + "\r")
+                self._update_status("Claude Code uruchomiony")
 
     # ==================== Event Handlers ====================
 
@@ -1025,23 +1101,23 @@ class MainWindow(QMainWindow):
 
     def _update_ui_language(self):
         """Update all UI elements to current language."""
-        # Buttons are icon-only, update only tooltips
-        self.dictate_btn.setToolTip(self._get_text('dictate'))
-        self.read_btn.setToolTip(self._get_text('read'))
-        self.copy_btn.setToolTip(self._get_text('copy'))
-        self.clear_input_btn.setToolTip(self._get_text('clear_input'))
-        self.add_media_btn.setToolTip(self._get_text('add_media'))
-        self.pause_btn.setToolTip(self._get_text('pause'))
-        self.stop_btn.setToolTip(self._get_text('stop'))
-        self.send_btn.setToolTip(self._get_text('send'))
-        self.quick_actions_btn.setToolTip(self._get_text('quick_actions'))
+        # Update tooltips in current tab
+        tab = self._get_current_agent_tab()
+        if tab:
+            # Buttons are icon-only, update only tooltips
+            tab.dictate_btn.setToolTip(self._get_text('dictate'))
+            tab.read_btn.setToolTip(self._get_text('read'))
+            tab.copy_btn.setToolTip(self._get_text('copy'))
+            tab.clear_input_btn.setToolTip(self._get_text('clear_input'))
+            tab.add_media_btn.setToolTip(self._get_text('add_media'))
+            tab.pause_btn.setToolTip(self._get_text('pause'))
+            tab.stop_btn.setToolTip(self._get_text('stop'))
+            tab.send_btn.setToolTip(self._get_text('send'))
+            tab.auto_read_checkbox.setText(self._get_text('auto_read'))
 
-        # Update checkbox
-        self.auto_read_checkbox.setText(self._get_text('auto_read'))
-
-        # Update input placeholder
-        placeholder = "Type a command or use dictation..." if self.current_language.startswith("en") else "Wpisz polecenie lub użyj dyktowania..."
-        self.input_field.setPlaceholderText(placeholder)
+            # Update input placeholder
+            placeholder = "Type a command or use dictation..." if self.current_language.startswith("en") else "Wpisz polecenie lub użyj dyktowania..."
+            tab.input_field.setPlaceholderText(placeholder)
 
         # Update window title
         self.setWindowTitle(f"{self._get_text('app_title')} v{APP_VERSION}")
@@ -1156,12 +1232,16 @@ class MainWindow(QMainWindow):
 
     def _on_tts_state_changed(self, state: TTSState):
         """Handle TTS state change."""
+        tab = self._get_current_agent_tab()
+        if not tab:
+            return
+
         if state == TTSState.PLAYING:
             # Show pause and stop buttons
-            self.pause_btn.setVisible(True)
-            self.stop_btn.setVisible(True)
-            self.pause_btn.setEnabled(True)
-            self.pause_btn.setText(self._get_icon('pause', 'normal'))
+            tab.pause_btn.setVisible(True)
+            tab.stop_btn.setVisible(True)
+            tab.pause_btn.setEnabled(True)
+            tab.pause_btn.setText(self._get_icon('pause', 'normal'))
             # Start speaker animation
             self._speaker_anim_timer.start(300)
             # Stop pause blink if running
@@ -1169,56 +1249,64 @@ class MainWindow(QMainWindow):
             self._update_status("Czytam...")
         elif state == TTSState.PAUSED:
             # Keep buttons visible during pause
-            self.pause_btn.setVisible(True)
-            self.stop_btn.setVisible(True)
-            self.pause_btn.setText(self._get_icon('pause', 'active'))
+            tab.pause_btn.setVisible(True)
+            tab.stop_btn.setVisible(True)
+            tab.pause_btn.setText(self._get_icon('pause', 'active'))
             # Stop speaker animation
             self._speaker_anim_timer.stop()
-            self.read_btn.setText(self._get_icon('read', 'normal'))
+            tab.read_btn.setText(self._get_icon('read', 'normal'))
             # Start pause blink animation
             self._pause_blink_timer.start(500)
             self._update_status("Wstrzymano")
         elif state == TTSState.GENERATING:
             # Show stop button during generation (to allow cancel)
-            self.stop_btn.setVisible(True)
+            tab.stop_btn.setVisible(True)
             self._update_status("Generowanie mowy...")
         else:
             # Hide pause and stop buttons when idle
-            self.pause_btn.setVisible(False)
-            self.stop_btn.setVisible(False)
-            self.pause_btn.setEnabled(False)
-            self.pause_btn.setText(self._get_icon('pause', 'normal'))
+            tab.pause_btn.setVisible(False)
+            tab.stop_btn.setVisible(False)
+            tab.pause_btn.setEnabled(False)
+            tab.pause_btn.setText(self._get_icon('pause', 'normal'))
             # Stop all animations
             self._speaker_anim_timer.stop()
             self._pause_blink_timer.stop()
-            self.read_btn.setText(self._get_icon('read', 'normal'))
+            tab.read_btn.setText(self._get_icon('read', 'normal'))
             self._update_status("Gotowy")
 
     def _on_tts_finished(self):
         """Handle TTS finished."""
+        tab = self._get_current_agent_tab()
+        if not tab:
+            return
+
         # Hide pause and stop buttons
-        self.pause_btn.setVisible(False)
-        self.stop_btn.setVisible(False)
+        tab.pause_btn.setVisible(False)
+        tab.stop_btn.setVisible(False)
         # Stop speaker animation
         self._speaker_anim_timer.stop()
-        self.read_btn.setText(self._get_icon('read', 'normal'))
+        tab.read_btn.setText(self._get_icon('read', 'normal'))
         self._update_status("Gotowy")
 
     def _on_stt_state_changed(self, state: STTState):
         """Handle STT state change."""
+        tab = self._get_current_agent_tab()
+        if not tab:
+            return
+
         if state == STTState.RECORDING:
-            self.dictate_btn.setChecked(True)
+            tab.dictate_btn.setChecked(True)
             # Start microphone pulse animation
             self._mic_pulse_timer.start(400)
             self._update_status("Nagrywanie... (kliknij ponownie aby zakończyć)")
         elif state == STTState.PROCESSING:
-            self.dictate_btn.setText(self._get_icon('dictate', 'processing'))
+            tab.dictate_btn.setText(self._get_icon('dictate', 'processing'))
             # Stop pulse animation
             self._mic_pulse_timer.stop()
             self._update_status("Przetwarzanie mowy...")
         else:
-            self.dictate_btn.setText(self._get_icon('dictate', 'normal'))
-            self.dictate_btn.setChecked(False)
+            tab.dictate_btn.setText(self._get_icon('dictate', 'normal'))
+            tab.dictate_btn.setChecked(False)
             # Stop pulse animation and reset style
             self._mic_pulse_timer.stop()
             self._reset_mic_style()
@@ -1228,12 +1316,16 @@ class MainWindow(QMainWindow):
 
     def _animate_mic_pulse(self):
         """Animate microphone button pulsing when recording."""
+        tab = self._get_current_agent_tab()
+        if not tab:
+            return
+
         self._mic_pulse_state = not self._mic_pulse_state
         mic_icon = self._get_icon('dictate', 'active')
         border_color = self.skin_colors.get('border_color', '#4a1a3a')
         if self._mic_pulse_state:
             # Bright recording state - red color, larger
-            self.dictate_btn.setStyleSheet(f"""
+            tab.dictate_btn.setStyleSheet(f"""
                 QPushButton {{
                     background-color: transparent;
                     color: #ff0000;
@@ -1242,10 +1334,10 @@ class MainWindow(QMainWindow):
                     font-size: 24px;
                 }}
             """)
-            self.dictate_btn.setText(mic_icon)
+            tab.dictate_btn.setText(mic_icon)
         else:
             # Darker recording state
-            self.dictate_btn.setStyleSheet(f"""
+            tab.dictate_btn.setStyleSheet(f"""
                 QPushButton {{
                     background-color: transparent;
                     color: #b91c1c;
@@ -1254,26 +1346,36 @@ class MainWindow(QMainWindow):
                     font-size: 22px;
                 }}
             """)
-            self.dictate_btn.setText(mic_icon)
+            tab.dictate_btn.setText(mic_icon)
 
     def _reset_mic_style(self):
         """Reset microphone button to default style."""
-        self._apply_button_icon_style(self.dictate_btn, 'icon_dictate_color')
+        tab = self._get_current_agent_tab()
+        if tab:
+            self._apply_button_icon_style(tab.dictate_btn, 'icon_dictate_color')
 
     def _animate_speaker(self):
         """Animate speaker icon showing sound waves."""
+        tab = self._get_current_agent_tab()
+        if not tab:
+            return
+
         self._speaker_anim_state = (self._speaker_anim_state + 1) % 3
-        self.read_btn.setText(self._speaker_icons[self._speaker_anim_state])
+        tab.read_btn.setText(self._speaker_icons[self._speaker_anim_state])
 
     def _animate_pause_blink(self):
         """Animate pause button blinking - icon only, button stays in place."""
+        tab = self._get_current_agent_tab()
+        if not tab:
+            return
+
         self._pause_blink_state = not self._pause_blink_state
         pause_active = self._get_icon('pause', 'active')
         if self._pause_blink_state:
-            self.pause_btn.setText(pause_active)  # Play icon visible
+            tab.pause_btn.setText(pause_active)  # Play icon visible
         else:
             # Slightly dimmed version (use same icon or fallback)
-            self.pause_btn.setText(pause_active)
+            tab.pause_btn.setText(pause_active)
 
     def _on_transcription(self, text: str):
         """Handle transcription result - inserts at cursor position."""
@@ -1657,10 +1759,14 @@ class MainWindow(QMainWindow):
 
     def _flash_copy_success(self):
         """Flash copy button green to indicate success."""
+        tab = self._get_current_agent_tab()
+        if not tab:
+            return
+
         # Change to green with checkmark
         border_color = self.skin_colors.get('border_color', '#4a1a3a')
-        self.copy_btn.setText(self._get_icon('copy', 'active'))
-        self.copy_btn.setStyleSheet(f"""
+        tab.copy_btn.setText(self._get_icon('copy', 'active'))
+        tab.copy_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: transparent;
                 color: #22c55e;
@@ -1674,8 +1780,10 @@ class MainWindow(QMainWindow):
 
     def _reset_copy_style(self):
         """Reset copy button to default style."""
-        self.copy_btn.setText(self._get_icon('copy', 'normal'))
-        self._apply_button_icon_style(self.copy_btn, 'icon_copy_color')
+        tab = self._get_current_agent_tab()
+        if tab:
+            tab.copy_btn.setText(self._get_icon('copy', 'normal'))
+            self._apply_button_icon_style(tab.copy_btn, 'icon_copy_color')
 
     def _toggle_pause(self):
         """Toggle TTS pause/resume."""
@@ -1859,43 +1967,45 @@ class MainWindow(QMainWindow):
             self._apply_skin_icons()
 
     def _apply_skin_icons(self):
-        """Apply skin icons to all buttons."""
+        """Apply skin icons to all buttons in all tabs."""
         icons = self.skin_icons
 
-        # Dictate button (mikrofon)
-        if hasattr(self, 'dictate_btn'):
-            dictate_icons = icons.get('dictate', {})
-            self.dictate_btn.setText(dictate_icons.get('normal', '🎤'))
+        # Apply to all agent tabs
+        for agent_id, tab in self.agent_tabs.items():
+            # Dictate button (mikrofon)
+            if hasattr(tab, 'dictate_btn'):
+                dictate_icons = icons.get('dictate', {})
+                tab.dictate_btn.setText(dictate_icons.get('normal', '🎤'))
 
-        # Read button (głośnik)
-        if hasattr(self, 'read_btn'):
-            read_icons = icons.get('read', {})
-            self.read_btn.setText(read_icons.get('normal', '🔊'))
+            # Read button (głośnik)
+            if hasattr(tab, 'read_btn'):
+                read_icons = icons.get('read', {})
+                tab.read_btn.setText(read_icons.get('normal', '🔊'))
 
-        # Pause button
-        if hasattr(self, 'pause_btn'):
-            pause_icons = icons.get('pause', {})
-            self.pause_btn.setText(pause_icons.get('normal', '⏸'))
+            # Pause button
+            if hasattr(tab, 'pause_btn'):
+                pause_icons = icons.get('pause', {})
+                tab.pause_btn.setText(pause_icons.get('normal', '⏸'))
 
-        # Stop button
-        if hasattr(self, 'stop_btn'):
-            stop_icons = icons.get('stop', {})
-            self.stop_btn.setText(stop_icons.get('normal', '⬜'))
+            # Stop button
+            if hasattr(tab, 'stop_btn'):
+                stop_icons = icons.get('stop', {})
+                tab.stop_btn.setText(stop_icons.get('normal', '⬜'))
 
-        # Copy button
-        if hasattr(self, 'copy_btn'):
-            copy_icons = icons.get('copy', {})
-            self.copy_btn.setText(copy_icons.get('normal', '⧉'))
+            # Copy button
+            if hasattr(tab, 'copy_btn'):
+                copy_icons = icons.get('copy', {})
+                tab.copy_btn.setText(copy_icons.get('normal', '⧉'))
 
-        # Send button
-        if hasattr(self, 'send_btn'):
-            send_icons = icons.get('send', {})
-            self.send_btn.setText(send_icons.get('normal', '↵'))
+            # Send button
+            if hasattr(tab, 'send_btn'):
+                send_icons = icons.get('send', {})
+                tab.send_btn.setText(send_icons.get('normal', '↵'))
 
-        # Quick actions button
-        if hasattr(self, 'quick_actions_btn'):
-            qa_icons = icons.get('quick_actions', {})
-            self.quick_actions_btn.setText(qa_icons.get('normal', '⚡▼'))
+            # Quick actions button
+            if hasattr(tab, 'quick_actions_btn'):
+                qa_icons = icons.get('quick_actions', {})
+                tab.quick_actions_btn.setText(qa_icons.get('normal', '⚡▼'))
 
     def _get_icon(self, button_name: str, state: str = 'normal') -> str:
         """Get icon for a button from skin_icons."""
@@ -1941,61 +2051,64 @@ class MainWindow(QMainWindow):
         """)
 
     def _apply_button_icon_styles(self):
-        """Apply transparent styles with colored icons to all main buttons."""
-        if hasattr(self, 'dictate_btn'):
-            self._apply_button_icon_style(self.dictate_btn, 'icon_dictate_color')
+        """Apply transparent styles with colored icons to all main buttons in all tabs."""
+        # Apply to all agent tabs
+        for agent_id, tab in self.agent_tabs.items():
+            if hasattr(tab, 'dictate_btn'):
+                self._apply_button_icon_style(tab.dictate_btn, 'icon_dictate_color')
 
-        if hasattr(self, 'read_btn'):
-            self._apply_button_icon_style(self.read_btn, 'icon_read_color')
+            if hasattr(tab, 'read_btn'):
+                self._apply_button_icon_style(tab.read_btn, 'icon_read_color')
 
-        if hasattr(self, 'stop_btn'):
-            self._apply_button_icon_style(self.stop_btn, 'icon_stop_color')
+            if hasattr(tab, 'stop_btn'):
+                self._apply_button_icon_style(tab.stop_btn, 'icon_stop_color')
 
-        if hasattr(self, 'copy_btn'):
-            self._apply_button_icon_style(self.copy_btn, 'icon_copy_color')
+            if hasattr(tab, 'copy_btn'):
+                self._apply_button_icon_style(tab.copy_btn, 'icon_copy_color')
 
-        if hasattr(self, 'clear_input_btn'):
-            self._apply_button_icon_style(self.clear_input_btn, 'icon_clear_input_color')
+            if hasattr(tab, 'clear_input_btn'):
+                self._apply_button_icon_style(tab.clear_input_btn, 'icon_clear_input_color')
 
-        if hasattr(self, 'add_media_btn'):
-            self._apply_button_icon_style(self.add_media_btn, 'icon_add_media_color')
+            if hasattr(tab, 'add_media_btn'):
+                self._apply_button_icon_style(tab.add_media_btn, 'icon_add_media_color')
 
-        # Pause button - uses same style as other buttons but with disabled state
-        if hasattr(self, 'pause_btn'):
-            self._apply_button_icon_style(self.pause_btn, 'icon_pause_color', with_disabled=True)
+            # Pause button - uses same style as other buttons but with disabled state
+            if hasattr(tab, 'pause_btn'):
+                self._apply_button_icon_style(tab.pause_btn, 'icon_pause_color', with_disabled=True)
 
-        # Send button - transparent style like other buttons
-        if hasattr(self, 'send_btn'):
-            self._apply_button_icon_style(self.send_btn, 'icon_send_color', font_size=16)
+            # Send button - transparent style like other buttons
+            if hasattr(tab, 'send_btn'):
+                self._apply_button_icon_style(tab.send_btn, 'icon_send_color', font_size=16)
 
-        # Quick actions button (QToolButton - needs different selector)
-        if hasattr(self, 'quick_actions_btn'):
-            icon_color = self.skin_colors.get('icon_quick_actions_color', '#facc15')
-            border_color = self.skin_colors.get('border_color', '#4a1a3a')
-            hover_color = self.skin_colors.get('hover_color', '#6a2a5a')
+            # Quick actions button (QToolButton - needs different selector)
+            if hasattr(tab, 'quick_actions_btn'):
+                icon_color = self.skin_colors.get('icon_quick_actions_color', '#facc15')
+                border_color = self.skin_colors.get('border_color', '#4a1a3a')
+                hover_color = self.skin_colors.get('hover_color', '#6a2a5a')
 
-            self.quick_actions_btn.setStyleSheet(f"""
-                QToolButton {{
-                    background-color: transparent;
-                    color: {icon_color};
-                    border: 1px solid {border_color};
-                    border-radius: 12px;
-                    font-size: 20px;
-                }}
-                QToolButton:hover {{
-                    background-color: {hover_color};
-                }}
-                QToolButton::menu-indicator {{
-                    image: none;
-                }}
-            """)
+                tab.quick_actions_btn.setStyleSheet(f"""
+                    QToolButton {{
+                        background-color: transparent;
+                        color: {icon_color};
+                        border: 1px solid {border_color};
+                        border-radius: 12px;
+                        font-size: 20px;
+                    }}
+                    QToolButton:hover {{
+                        background-color: {hover_color};
+                    }}
+                    QToolButton::menu-indicator {{
+                        image: none;
+                    }}
+                """)
 
-    def _apply_terminal_colors(self, colors: dict = None):
+    def _apply_terminal_colors(self, colors: dict = None, terminal=None):
         """Apply terminal colors by creating a custom color scheme.
 
         This generates a .colorscheme file and loads it into QTermWidget.
+        If terminal is None, applies to all terminals in all tabs.
         """
-        if not self.terminal or not QTERMWIDGET_AVAILABLE:
+        if not QTERMWIDGET_AVAILABLE:
             return
 
         if colors is None:
@@ -2085,9 +2198,20 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         with open(scheme_file, 'w') as f:
             f.write(scheme_content)
 
-        # Add custom directory and apply scheme
-        self.terminal.addCustomColorSchemeDir(str(custom_scheme_dir))
-        self.terminal.setColorScheme('CustomSkin')
+        # Apply scheme to specific terminal or all terminals in all tabs
+        scheme_name = 'CustomSkin'
+
+        if terminal:
+            terminal.addCustomColorSchemeDir(str(custom_scheme_dir))
+            terminal.setColorScheme(scheme_name)
+        else:
+            # Apply to all terminals in all agent tabs
+            for agent_id, tab in self.agent_tabs.items():
+                if tab.terminal:
+                    tab.terminal.addCustomColorSchemeDir(str(custom_scheme_dir))
+                    tab.terminal.setColorScheme(scheme_name)
+                    # Force terminal to update/refresh
+                    tab.terminal.update()
 
     def apply_skin_colors(self, colors: dict = None):
         """Apply skin colors to all UI elements.
@@ -2195,74 +2319,40 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
             }}
         """)
 
-        # Bottom panel
-        self.bottom_panel.setStyleSheet(f"""
-            QFrame {{
-                background-color: {colors['bottom_panel_bg']};
-                border-radius: 10px;
-                padding: 5px;
-            }}
-        """)
+        # Apply styles to all agent tabs
+        for agent_tab in self.agent_tabs.values():
+            agent_tab.apply_styles(colors, self.skin_icons)
 
-        # Splitter
-        self.main_splitter.setStyleSheet(f"""
-            QSplitter::handle:vertical {{
-                background-color: {colors['splitter_color']};
-                height: 6px;
-                border-radius: 3px;
-                margin: 2px 50px;
-            }}
-            QSplitter::handle:vertical:hover {{
-                background-color: {colors['hover_color']};
-            }}
-        """)
-
-        # Input field
-        border_focus = QColor(colors['border_color']).lighter(150).name()
-        self.input_field.setStyleSheet(f"""
-            QTextEdit {{
-                background-color: {colors['input_bg']};
-                color: {colors['text_color']};
-                border: 1px solid {colors['border_color']};
-                border-radius: 8px;
-            }}
-            QTextEdit:focus {{
-                border-color: {border_focus};
-            }}
-        """)
+        # Tab widget styling
+        if hasattr(self, 'tab_widget'):
+            self.tab_widget.setStyleSheet(f"""
+                QTabWidget::pane {{
+                    border: none;
+                    background-color: transparent;
+                }}
+                QTabBar::tab {{
+                    background-color: {colors.get('button_bg', '#2d0a1e')};
+                    color: {colors.get('text_color', '#ffffff')};
+                    padding: 8px 16px;
+                    margin-right: 2px;
+                    border-top-left-radius: 6px;
+                    border-top-right-radius: 6px;
+                }}
+                QTabBar::tab:selected {{
+                    background-color: {colors.get('hover_color', '#4a1a3a')};
+                }}
+                QTabBar::tab:hover {{
+                    background-color: {colors.get('hover_color', '#6a2a5a')};
+                }}
+            """)
 
         # Button icon styles (transparent with colored icons)
         self._apply_button_icon_styles()
 
-        # Update context label color (keep green for now)
-        # Auto-read checkbox
-        checkmark_path = Path(__file__).parent / "checkmark.svg"
-        self.auto_read_checkbox.setStyleSheet(f"""
-            QCheckBox {{
-                color: {colors['text_color']};
-                spacing: 8px;
-            }}
-            QCheckBox::indicator {{
-                width: 18px;
-                height: 18px;
-                border: 2px solid #6b7280;
-                border-radius: 4px;
-                background-color: #374151;
-            }}
-            QCheckBox::indicator:checked {{
-                background-color: #10b981;
-                border-color: #10b981;
-                image: url({checkmark_path});
-            }}
-            QCheckBox::indicator:hover {{
-                border-color: #9ca3af;
-            }}
-        """)
-
         # Store inactive panel color for changeEvent
         self._inactive_panel_bg = colors['inactive_panel_bg']
 
-        # Apply terminal colors
+        # Apply terminal colors to all tabs
         self._apply_terminal_colors(colors)
 
     def _show_groq_api_dialog(self):
@@ -2296,6 +2386,89 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
             self._save_settings()
             QMessageBox.information(self, "Zapisano",
                 "Klucz API Anthropic został zapisany.")
+
+    def _show_claude_command_dialog(self):
+        """Show dialog to configure Claude Code command."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Komenda Claude Code")
+        dialog.setMinimumWidth(500)
+
+        layout = QVBoxLayout(dialog)
+
+        # Description
+        desc_label = QLabel(
+            "Podaj komendę uruchamiającą Claude Code w terminalu.\n"
+            "Ta komenda zostanie automatycznie wpisana po uruchomieniu programu."
+        )
+        desc_label.setWordWrap(True)
+        layout.addWidget(desc_label)
+
+        # Command input
+        cmd_layout = QHBoxLayout()
+        cmd_label = QLabel("Komenda:")
+        cmd_input = QLineEdit(self.claude_command)
+        cmd_input.setPlaceholderText("/usr/bin/claude")
+        cmd_layout.addWidget(cmd_label)
+        cmd_layout.addWidget(cmd_input, stretch=1)
+        layout.addLayout(cmd_layout)
+
+        # Auto-run checkbox
+        auto_run_checkbox = QCheckBox("Automatycznie uruchom po starcie programu")
+        auto_run_checkbox.setChecked(self.auto_run_claude)
+        layout.addWidget(auto_run_checkbox)
+
+        # Buttons
+        button_layout = QHBoxLayout()
+        cancel_btn = QPushButton("Anuluj")
+        cancel_btn.clicked.connect(dialog.reject)
+        save_btn = QPushButton("Zapisz")
+        save_btn.clicked.connect(dialog.accept)
+        save_btn.setDefault(True)
+        button_layout.addStretch()
+        button_layout.addWidget(cancel_btn)
+        button_layout.addWidget(save_btn)
+        layout.addLayout(button_layout)
+
+        # Apply dark theme to dialog
+        dialog.setStyleSheet(f"""
+            QDialog {{
+                background-color: {self.skin_colors.get('main_window_bg', '#300A24')};
+                color: {self.skin_colors.get('text_color', '#ffffff')};
+            }}
+            QLabel {{
+                color: {self.skin_colors.get('text_color', '#ffffff')};
+            }}
+            QLineEdit {{
+                background-color: {self.skin_colors.get('input_bg', '#300A24')};
+                color: {self.skin_colors.get('text_color', '#ffffff')};
+                border: 1px solid {self.skin_colors.get('border_color', '#4a1a3a')};
+                border-radius: 5px;
+                padding: 8px;
+            }}
+            QCheckBox {{
+                color: {self.skin_colors.get('text_color', '#ffffff')};
+            }}
+            QPushButton {{
+                background-color: {self.skin_colors.get('button_bg', '#4a1a3a')};
+                color: {self.skin_colors.get('text_color', '#ffffff')};
+                border: 1px solid {self.skin_colors.get('border_color', '#4a1a3a')};
+                border-radius: 5px;
+                padding: 8px 16px;
+                min-width: 80px;
+            }}
+            QPushButton:hover {{
+                background-color: {self.skin_colors.get('button_hover', '#6a2a5a')};
+            }}
+        """)
+
+        if dialog.exec_() == QDialog.Accepted:
+            self.claude_command = cmd_input.text().strip() or "/usr/bin/claude"
+            self.auto_run_claude = auto_run_checkbox.isChecked()
+            self._save_settings()
+            QMessageBox.information(self, "Zapisano",
+                f"Komenda Claude Code została zapisana.\n\n"
+                f"Komenda: {self.claude_command}\n"
+                f"Auto-uruchomienie: {'Tak' if self.auto_run_claude else 'Nie'}")
 
     # ==================== Helpers ====================
 
