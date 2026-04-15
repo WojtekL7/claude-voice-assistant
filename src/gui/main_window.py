@@ -14,7 +14,8 @@ from PyQt5.QtWidgets import (
     QCheckBox, QMenuBar, QMenu, QAction, QStatusBar, QDialog,
     QDialogButtonBox, QFormLayout, QMessageBox, QFrame,
     QToolButton, QSizePolicy, QApplication, QInputDialog,
-    QColorDialog, QGridLayout, QGroupBox, QScrollArea, QFileDialog
+    QColorDialog, QGridLayout, QGroupBox, QScrollArea, QFileDialog,
+    QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QObject, QEvent, QPoint
 from PyQt5.QtGui import QFont, QTextCursor, QIcon, QKeySequence, QPalette, QColor, QTextCharFormat
@@ -1701,20 +1702,74 @@ class MainWindow(QMainWindow):
         self.input_field.setFocus()
 
     def _add_quick_action(self):
-        """Add new quick action."""
-        label, ok1 = QInputDialog.getText(self, "Nowa akcja", "Nazwa akcji:")
-        if ok1 and label:
-            command, ok2 = QInputDialog.getText(self, "Nowa akcja", "Polecenie:")
-            if ok2 and command:
-                self.quick_actions.append({'label': label, 'command': command})
-                self._save_quick_actions()
-                self._update_quick_actions_menu()
+        """Add new quick action via dialog with both fields."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Dodaj szybką akcję")
+        dialog.setMinimumWidth(400)
+
+        layout = QVBoxLayout(dialog)
+
+        # Form with two fields
+        form_layout = QFormLayout()
+
+        label_input = QLineEdit()
+        label_input.setPlaceholderText("np. Sprawdź błędy")
+        label_input.setStyleSheet("""
+            QLineEdit {
+                background-color: #2d0a1e;
+                color: #ffffff;
+                border: 1px solid #4a1a3a;
+                border-radius: 4px;
+                padding: 8px;
+            }
+        """)
+        form_layout.addRow("Nazwa akcji:", label_input)
+
+        command_input = QLineEdit()
+        command_input.setPlaceholderText("np. Sprawdź czy w kodzie są błędy i je napraw")
+        command_input.setStyleSheet("""
+            QLineEdit {
+                background-color: #2d0a1e;
+                color: #ffffff;
+                border: 1px solid #4a1a3a;
+                border-radius: 4px;
+                padding: 8px;
+            }
+        """)
+        form_layout.addRow("Komenda:", command_input)
+
+        layout.addLayout(form_layout)
+
+        # Buttons
+        btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btn_box.accepted.connect(dialog.accept)
+        btn_box.rejected.connect(dialog.reject)
+        layout.addWidget(btn_box)
+
+        if dialog.exec_() == QDialog.Accepted:
+            label = label_input.text().strip()
+            command = command_input.text().strip()
+
+            if not label:
+                QMessageBox.warning(self, "Brak nazwy", "Podaj nazwę akcji.")
+                return
+            if not command:
+                QMessageBox.warning(self, "Brak komendy", "Podaj komendę.")
+                return
+
+            self.quick_actions.append({'label': label, 'command': command})
+            self._save_quick_actions()
+            self._update_quick_actions_menu()
 
     def _manage_quick_actions(self):
         """Show quick actions manager dialog."""
-        # TODO: Implement full manager dialog
-        QMessageBox.information(self, "Szybkie akcje",
-            "Edytuj plik:\n" + str(QUICK_ACTIONS_FILE))
+        dialog = QuickActionsDialog(self, self.quick_actions)
+
+        if dialog.exec_() == QDialog.Accepted:
+            self.quick_actions = dialog.get_quick_actions()
+            self._save_quick_actions()
+            self._update_quick_actions_menu()
+            self._update_status("Szybkie akcje zostały zapisane")
 
     def _new_session(self):
         """Start new terminal/Claude session."""
@@ -2387,6 +2442,278 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
                     }}
                 """)
         super().changeEvent(event)
+
+
+class QuickActionsDialog(QDialog):
+    """Dialog do zarządzania szybkimi akcjami."""
+
+    def __init__(self, parent, quick_actions: list):
+        super().__init__(parent)
+        self.setWindowTitle("Zarządzaj szybkimi akcjami")
+        self.setMinimumSize(500, 450)
+        self.quick_actions = [a.copy() for a in quick_actions]  # Deep copy
+        self._setup_ui()
+
+    def _setup_ui(self):
+        """Setup dialog UI."""
+        layout = QVBoxLayout(self)
+        layout.setSpacing(10)
+
+        # Header
+        header = QLabel("Zarządzaj swoimi szybkimi akcjami")
+        header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
+        layout.addWidget(header)
+
+        # List of actions
+        list_layout = QHBoxLayout()
+
+        # Table-like list with two columns
+        self.table = QTableWidget()
+        self.table.setColumnCount(2)
+        self.table.setHorizontalHeaderLabels(["Etykieta", "Komenda"])
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table.verticalHeader().setVisible(False)
+        self.table.setStyleSheet("""
+            QTableWidget {
+                background-color: #2d0a1e;
+                color: #ffffff;
+                border: 1px solid #4a1a3a;
+                border-radius: 4px;
+                gridline-color: #4a1a3a;
+            }
+            QTableWidget::item {
+                padding: 5px;
+            }
+            QTableWidget::item:selected {
+                background-color: #6a2a5a;
+            }
+            QHeaderView::section {
+                background-color: #4a1a3a;
+                color: #ffffff;
+                padding: 5px;
+                border: none;
+                font-weight: bold;
+            }
+        """)
+        self._populate_table()
+        list_layout.addWidget(self.table, 1)
+
+        # Buttons on the right side
+        btn_layout = QVBoxLayout()
+        btn_layout.setSpacing(5)
+
+        self.up_btn = QPushButton("▲ W górę")
+        self.up_btn.clicked.connect(self._move_up)
+        btn_layout.addWidget(self.up_btn)
+
+        self.down_btn = QPushButton("▼ W dół")
+        self.down_btn.clicked.connect(self._move_down)
+        btn_layout.addWidget(self.down_btn)
+
+        btn_layout.addSpacing(10)
+
+        self.edit_btn = QPushButton("✏️ Edytuj")
+        self.edit_btn.clicked.connect(self._edit_action)
+        btn_layout.addWidget(self.edit_btn)
+
+        self.delete_btn = QPushButton("🗑️ Usuń")
+        self.delete_btn.clicked.connect(self._delete_action)
+        self.delete_btn.setStyleSheet("QPushButton { color: #ef4444; }")
+        btn_layout.addWidget(self.delete_btn)
+
+        btn_layout.addStretch()
+        list_layout.addLayout(btn_layout)
+        layout.addLayout(list_layout)
+
+        # Add new action section
+        add_group = QGroupBox("Dodaj nową akcję")
+        add_group.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                color: #ffffff;
+                border: 1px solid #4a1a3a;
+                border-radius: 4px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+            }
+        """)
+        add_layout = QFormLayout(add_group)
+
+        self.label_input = QLineEdit()
+        self.label_input.setPlaceholderText("np. Sprawdź błędy")
+        self.label_input.setStyleSheet("""
+            QLineEdit {
+                background-color: #2d0a1e;
+                color: #ffffff;
+                border: 1px solid #4a1a3a;
+                border-radius: 4px;
+                padding: 5px;
+            }
+        """)
+        add_layout.addRow("Etykieta:", self.label_input)
+
+        self.command_input = QLineEdit()
+        self.command_input.setPlaceholderText("np. Sprawdź czy w kodzie są błędy i je napraw")
+        self.command_input.setStyleSheet("""
+            QLineEdit {
+                background-color: #2d0a1e;
+                color: #ffffff;
+                border: 1px solid #4a1a3a;
+                border-radius: 4px;
+                padding: 5px;
+            }
+        """)
+        add_layout.addRow("Komenda:", self.command_input)
+
+        add_btn_layout = QHBoxLayout()
+        add_btn_layout.addStretch()
+        self.add_btn = QPushButton("➕ Dodaj")
+        self.add_btn.clicked.connect(self._add_action)
+        self.add_btn.setStyleSheet("QPushButton { color: #22c55e; font-weight: bold; }")
+        add_btn_layout.addWidget(self.add_btn)
+        add_layout.addRow("", add_btn_layout)
+
+        layout.addWidget(add_group)
+
+        # Bottom buttons
+        bottom_layout = QHBoxLayout()
+
+        restore_btn = QPushButton("Przywróć domyślne")
+        restore_btn.clicked.connect(self._restore_defaults)
+        bottom_layout.addWidget(restore_btn)
+
+        bottom_layout.addStretch()
+
+        close_btn = QPushButton("Zamknij")
+        close_btn.clicked.connect(self.accept)
+        bottom_layout.addWidget(close_btn)
+
+        layout.addLayout(bottom_layout)
+
+    def _populate_table(self):
+        """Fill table with quick actions."""
+        self.table.setRowCount(len(self.quick_actions))
+        for i, action in enumerate(self.quick_actions):
+            label_item = QTableWidgetItem(action['label'])
+            command_item = QTableWidgetItem(action['command'])
+            self.table.setItem(i, 0, label_item)
+            self.table.setItem(i, 1, command_item)
+
+    def _get_selected_row(self) -> int:
+        """Get currently selected row index, or -1 if none."""
+        selected = self.table.selectedItems()
+        if selected:
+            return selected[0].row()
+        return -1
+
+    def _move_up(self):
+        """Move selected action up."""
+        row = self._get_selected_row()
+        if row > 0:
+            self.quick_actions[row], self.quick_actions[row - 1] = \
+                self.quick_actions[row - 1], self.quick_actions[row]
+            self._populate_table()
+            self.table.selectRow(row - 1)
+
+    def _move_down(self):
+        """Move selected action down."""
+        row = self._get_selected_row()
+        if 0 <= row < len(self.quick_actions) - 1:
+            self.quick_actions[row], self.quick_actions[row + 1] = \
+                self.quick_actions[row + 1], self.quick_actions[row]
+            self._populate_table()
+            self.table.selectRow(row + 1)
+
+    def _edit_action(self):
+        """Edit selected action."""
+        row = self._get_selected_row()
+        if row < 0:
+            QMessageBox.warning(self, "Brak wyboru", "Wybierz akcję do edycji.")
+            return
+
+        action = self.quick_actions[row]
+
+        label, ok1 = QInputDialog.getText(
+            self, "Edytuj akcję", "Etykieta:",
+            text=action['label']
+        )
+        if ok1 and label:
+            command, ok2 = QInputDialog.getText(
+                self, "Edytuj akcję", "Komenda:",
+                text=action['command']
+            )
+            if ok2 and command:
+                self.quick_actions[row] = {'label': label, 'command': command}
+                self._populate_table()
+                self.table.selectRow(row)
+
+    def _delete_action(self):
+        """Delete selected action."""
+        row = self._get_selected_row()
+        if row < 0:
+            QMessageBox.warning(self, "Brak wyboru", "Wybierz akcję do usunięcia.")
+            return
+
+        action = self.quick_actions[row]
+        reply = QMessageBox.question(
+            self, "Potwierdź usunięcie",
+            f"Czy na pewno usunąć akcję \"{action['label']}\"?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            del self.quick_actions[row]
+            self._populate_table()
+
+    def _add_action(self):
+        """Add new action from input fields."""
+        label = self.label_input.text().strip()
+        command = self.command_input.text().strip()
+
+        if not label:
+            QMessageBox.warning(self, "Brak etykiety", "Podaj etykietę dla akcji.")
+            self.label_input.setFocus()
+            return
+
+        if not command:
+            QMessageBox.warning(self, "Brak komendy", "Podaj komendę dla akcji.")
+            self.command_input.setFocus()
+            return
+
+        self.quick_actions.append({'label': label, 'command': command})
+        self._populate_table()
+
+        # Clear inputs
+        self.label_input.clear()
+        self.command_input.clear()
+        self.label_input.setFocus()
+
+        # Select newly added row
+        self.table.selectRow(len(self.quick_actions) - 1)
+
+    def _restore_defaults(self):
+        """Restore default quick actions."""
+        reply = QMessageBox.question(
+            self, "Przywróć domyślne",
+            "Czy na pewno przywrócić domyślne akcje?\nWszystkie Twoje akcje zostaną usunięte.",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            from ..config import DEFAULT_QUICK_ACTIONS
+            self.quick_actions = [a.copy() for a in DEFAULT_QUICK_ACTIONS]
+            self._populate_table()
+
+    def get_quick_actions(self) -> list:
+        """Return the modified quick actions list."""
+        return self.quick_actions
 
 
 class SkinSettingsDialog(QDialog):
