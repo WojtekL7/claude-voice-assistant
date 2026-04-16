@@ -653,6 +653,13 @@ class MainWindow(QMainWindow):
         # Apply styles
         agent_tab.apply_styles(self.skin_colors, self.skin_icons)
 
+        # Apply terminal color scheme (CustomSkin)
+        if agent_tab.terminal:
+            self._apply_terminal_colors(self.skin_colors, agent_tab.terminal)
+
+        # Apply button icon styles to new tab
+        self._apply_button_icon_styles()
+
         # KOLEJNOŚĆ: najpierw uruchom Claude Code, potem wyślij pliki pamięci
         # Używamy SEKWENCYJNEGO wywołania - pliki pamięci są wysyłane
         # dopiero PO wysłaniu komendy claude (nie równoległe timery)
@@ -677,7 +684,10 @@ class MainWindow(QMainWindow):
             agent_config = dialog.get_data()
             self.agents.append(agent_config)
             self._save_agents()
-            self._create_agent_tab(agent_config)
+            agent_tab = self._create_agent_tab(agent_config)
+            # Switch to new tab if "Save and run" was clicked
+            if dialog.get_run_immediately():
+                self.tab_widget.setCurrentWidget(agent_tab)
 
     def _add_new_terminal(self):
         """Add a plain Ubuntu terminal tab (no agent features)."""
@@ -801,9 +811,25 @@ class MainWindow(QMainWindow):
         dialog = AgentsManagerDialog(self, self.agents, self.memory_projects)
         if dialog.exec_() == QDialog.Accepted:
             self.agents = dialog.get_agents()
+            agents_to_run = dialog.get_agents_to_run()
+
+            # Create tabs for agents marked for immediate run
+            last_tab = None
+            for agent in agents_to_run:
+                # Remove temporary flag
+                agent.pop('_run_immediately', None)
+                # Create tab and switch to it
+                last_tab = self._create_agent_tab(agent)
+
             self._save_agents()
-            QMessageBox.information(self, "Zapisano",
-                "Zmiany zostaną zastosowane po restarcie aplikacji.")
+
+            # Show appropriate message
+            if agents_to_run:
+                if last_tab:
+                    self.tab_widget.setCurrentWidget(last_tab)
+            else:
+                QMessageBox.information(self, "Zapisano",
+                    "Zmiany zostaną zastosowane po restarcie aplikacji.")
 
     def _create_menu_bar(self):
         """Create menu bar."""

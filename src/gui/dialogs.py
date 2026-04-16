@@ -425,6 +425,7 @@ class AgentConfigDialog(QDialog):
         self.agent = agent or {}
         self.memory_projects = memory_projects or []  # kept for compatibility but not used
         self.memory_files = list(self.agent.get('memory_files', []))  # list of file paths
+        self.run_immediately = False  # Flag: should open tab immediately after save
         self._setup_ui()
 
     def _setup_ui(self):
@@ -562,6 +563,11 @@ class AgentConfigDialog(QDialog):
         save_btn.setStyleSheet("QPushButton { color: #22c55e; font-weight: bold; }")
         btn_layout.addWidget(save_btn)
 
+        save_run_btn = QPushButton("Zapisz i uruchom")
+        save_run_btn.clicked.connect(self._save_and_run)
+        save_run_btn.setStyleSheet("QPushButton { color: #22c55e; font-weight: bold; }")
+        btn_layout.addWidget(save_run_btn)
+
         layout.addLayout(btn_layout)
 
     def _browse_directory(self):
@@ -586,6 +592,25 @@ class AgentConfigDialog(QDialog):
             return
 
         self.accept()
+
+    def _save_and_run(self):
+        """Validate, save and mark for immediate run."""
+        name = self.name_input.text().strip()
+        if not name:
+            QMessageBox.warning(self, "Brak nazwy", "Podaj nazwę agenta.")
+            return
+
+        directory = self.dir_input.text().strip()
+        if not Path(directory).is_dir():
+            QMessageBox.warning(self, "Nieprawidłowy katalog", "Podany katalog nie istnieje.")
+            return
+
+        self.run_immediately = True
+        self.accept()
+
+    def get_run_immediately(self) -> bool:
+        """Return whether agent should be run immediately after save."""
+        return self.run_immediately
 
     def get_data(self) -> dict:
         """Return agent configuration."""
@@ -811,6 +836,9 @@ class AgentsManagerDialog(QDialog):
         dialog = AgentConfigDialog(self, memory_projects=self.memory_projects)
         if dialog.exec_() == QDialog.Accepted:
             agent_data = dialog.get_data()
+            # Mark agent for immediate run if requested
+            if dialog.get_run_immediately():
+                agent_data['_run_immediately'] = True
             self.agents.append(agent_data)
             self._populate_list()
             self.list_widget.setCurrentRow(len(self.agents) - 1)
@@ -867,3 +895,7 @@ class AgentsManagerDialog(QDialog):
     def get_agents(self) -> list:
         """Return agents list."""
         return self.agents
+
+    def get_agents_to_run(self) -> list:
+        """Return list of agents marked for immediate run."""
+        return [a for a in self.agents if a.get('_run_immediately', False)]
