@@ -90,7 +90,7 @@ class AgentTab(QWidget):
         self.agent_id = agent_config.get('id', 'unknown')
         self.agent_name = agent_config.get('name', 'Agent')
         self.working_directory = agent_config.get('working_directory', str(Path.home()))
-        self.memory_project_id = agent_config.get('memory_project_id')
+        self.memory_files = agent_config.get('memory_files', [])  # list of file paths
         self.auto_start = agent_config.get('auto_start', True)
         self.splitter_sizes = agent_config.get('splitter_sizes', [600, 150])
 
@@ -485,49 +485,22 @@ class AgentTab(QWidget):
         if self._memory_sent:
             return
 
-        if not self.memory_project_id:
+        if not self.memory_files:
             self._memory_sent = True
             return
 
-        # Load memory projects
-        if not MEMORY_PROJECTS_FILE.exists():
-            self._memory_sent = True
-            return
+        # Collect paths of existing files
+        valid_paths = []
+        for file_path in self.memory_files:
+            if Path(file_path).exists():
+                valid_paths.append(file_path)
 
-        try:
-            with open(MEMORY_PROJECTS_FILE, 'r') as f:
-                memory_projects = json.load(f)
-        except:
-            self._memory_sent = True
-            return
-
-        # Find matching project
-        project = None
-        for p in memory_projects:
-            if p.get('id') == self.memory_project_id:
-                project = p
-                break
-
-        if not project:
-            self._memory_sent = True
-            return
-
-        # Collect paths of enabled files (not content!)
-        file_paths = []
-        for file_info in project.get('files', []):
-            if not file_info.get('enabled', True):
-                continue
-
-            file_path = Path(file_info.get('path', ''))
-            if file_path.exists():
-                file_paths.append(str(file_path))
-
-        if file_paths:
+        if valid_paths:
             # Send only paths - Claude Code will read them itself
-            paths_list = " ".join(file_paths)
+            paths_list = " ".join(valid_paths)
             context_message = f"Przeczytaj pliki pamięci projektu i zapamiętaj ich zawartość jako kontekst: {paths_list}"
             self.send_text_to_terminal(context_message)
-            self.status_changed.emit(f"Wysłano ścieżki plików dla: {project.get('name', 'projekt')}")
+            self.status_changed.emit(f"Wysłano {len(valid_paths)} plików pamięci")
 
         self._memory_sent = True
 
@@ -730,7 +703,7 @@ class AgentTab(QWidget):
             'id': self.agent_id,
             'name': self.agent_name,
             'auto_start': self.auto_start,
-            'memory_project_id': self.memory_project_id,
+            'memory_files': self.memory_files,
             'working_directory': self.working_directory,
             'splitter_sizes': self.splitter_sizes,
         }
@@ -741,7 +714,7 @@ class AgentTab(QWidget):
         self.agent_id = config.get('id', self.agent_id)
         self.agent_name = config.get('name', self.agent_name)
         self.auto_start = config.get('auto_start', self.auto_start)
-        self.memory_project_id = config.get('memory_project_id')
+        self.memory_files = config.get('memory_files', [])
 
         new_working_dir = config.get('working_directory', self.working_directory)
         if new_working_dir != self.working_directory:

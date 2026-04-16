@@ -162,7 +162,7 @@ DEFAULT_AGENTS = [
         "id": "default-agent",
         "name": "Główny",
         "auto_start": True,
-        "memory_project_id": None,
+        "memory_files": [],  # list of file paths to load as context
         "working_directory": str(Path.home()),
         "splitter_sizes": [600, 150],  # [terminal_height, bottom_panel_height]
     }

@@ -857,9 +857,10 @@ class MainWindow(QMainWindow):
         manage_agents_action.triggered.connect(self._show_agents_manager_dialog)
         agents_menu.addAction(manage_agents_action)
 
-        memory_projects_action = QAction("📁 Pliki pamięci projektów...", self)
-        memory_projects_action.triggered.connect(self._show_memory_projects_dialog)
-        agents_menu.addAction(memory_projects_action)
+        # Memory projects menu hidden - files are now managed directly in agent config
+        # memory_projects_action = QAction("📁 Pliki pamięci projektów...", self)
+        # memory_projects_action.triggered.connect(self._show_memory_projects_dialog)
+        # agents_menu.addAction(memory_projects_action)
 
         # Language menu
         self.language_menu = menubar.addMenu("Język")

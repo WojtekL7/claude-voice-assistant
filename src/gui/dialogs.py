@@ -423,7 +423,8 @@ class AgentConfigDialog(QDialog):
         self.setMinimumWidth(500)
 
         self.agent = agent or {}
-        self.memory_projects = memory_projects or []
+        self.memory_projects = memory_projects or []  # kept for compatibility but not used
+        self.memory_files = list(self.agent.get('memory_files', []))  # list of file paths
         self._setup_ui()
 
     def _setup_ui(self):
@@ -478,49 +479,39 @@ class AgentConfigDialog(QDialog):
 
         form.addRow("Katalog roboczy:", dir_layout)
 
-        # Memory project - combo + button to add new
-        memory_layout = QHBoxLayout()
+        # Memory files section - list of file paths
+        layout.addLayout(form)
 
-        self.memory_combo = QComboBox()
-        self.memory_combo.setStyleSheet("""
-            QComboBox {
+        memory_label = QLabel("Pliki pamięci:")
+        memory_label.setStyleSheet("color: #ffffff; margin-top: 10px;")
+        layout.addWidget(memory_label)
+
+        # Container for memory files list
+        self.memory_files_container = QVBoxLayout()
+        self.memory_files_container.setSpacing(5)
+
+        # Add existing files
+        for file_path in self.memory_files:
+            self._add_memory_file_chip(file_path)
+
+        layout.addLayout(self.memory_files_container)
+
+        # Add file button
+        add_file_btn = QPushButton("+ Dodaj plik")
+        add_file_btn.setStyleSheet("""
+            QPushButton {
                 background-color: #2d0a1e;
-                color: #ffffff;
-                border: 1px solid #4a1a3a;
+                color: #22c55e;
+                border: 1px dashed #4a1a3a;
                 border-radius: 4px;
                 padding: 8px;
             }
-            QComboBox::drop-down {
-                border: none;
-            }
-            QComboBox QAbstractItemView {
-                background-color: #2d0a1e;
-                color: #ffffff;
-                selection-background-color: #6a2a5a;
+            QPushButton:hover {
+                border-color: #22c55e;
             }
         """)
-        memory_layout.addWidget(self.memory_combo, stretch=1)
-
-        # Button to quickly add file as new memory project
-        add_memory_btn = QPushButton("➕")
-        add_memory_btn.setFixedWidth(40)
-        add_memory_btn.setToolTip("Dodaj plik jako nowy projekt pamięci")
-        add_memory_btn.clicked.connect(self._add_memory_file)
-        memory_layout.addWidget(add_memory_btn)
-
-        self._populate_memory_combo()
-
-        # Select current project
-        current_project_id = self.agent.get('memory_project_id')
-        if current_project_id:
-            for i in range(self.memory_combo.count()):
-                if self.memory_combo.itemData(i) == current_project_id:
-                    self.memory_combo.setCurrentIndex(i)
-                    break
-
-        form.addRow("Projekt pamięci:", memory_layout)
-
-        layout.addLayout(form)
+        add_file_btn.clicked.connect(self._add_memory_file)
+        layout.addWidget(add_file_btn)
 
         # Checkboxes - style with checkmark icon
         checkbox_style = f"""
@@ -602,23 +593,55 @@ class AgentConfigDialog(QDialog):
             'id': self.agent.get('id', str(uuid.uuid4())[:8]),
             'name': self.name_input.text().strip(),
             'working_directory': self.dir_input.text().strip(),
-            'memory_project_id': self.memory_combo.currentData(),
+            'memory_files': self.memory_files,
             'auto_start': self.auto_start_checkbox.isChecked(),
             'send_memory_on_start': self.send_memory_checkbox.isChecked(),
         }
 
-    def _populate_memory_combo(self):
-        """Populate memory projects combo box."""
-        self.memory_combo.clear()
-        self.memory_combo.addItem("(Brak - nie wczytuj plików)", None)
-        for project in self.memory_projects:
-            self.memory_combo.addItem(
-                f"📁 {project.get('name', 'Bez nazwy')}",
-                project.get('id')
-            )
+    def _add_memory_file_chip(self, file_path: str):
+        """Add a file chip to the memory files list."""
+        chip = QFrame()
+        chip.setStyleSheet("""
+            QFrame {
+                background-color: #2d0a1e;
+                border: 1px solid #4a1a3a;
+                border-radius: 4px;
+            }
+        """)
+        chip_layout = QHBoxLayout(chip)
+        chip_layout.setContentsMargins(8, 4, 4, 4)
+        chip_layout.setSpacing(8)
+
+        # File icon and name
+        file_name = Path(file_path).name
+        label = QLabel(f"📄 {file_name}")
+        label.setStyleSheet("color: #ffffff; font-size: 12px; border: none;")
+        label.setToolTip(file_path)  # Show full path on hover
+        chip_layout.addWidget(label, stretch=1)
+
+        # Remove button
+        remove_btn = QPushButton("✕")
+        remove_btn.setFixedSize(24, 24)
+        remove_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: #ef4444;
+                border: none;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                color: #ffffff;
+                background-color: #ef4444;
+                border-radius: 12px;
+            }
+        """)
+        remove_btn.clicked.connect(lambda: self._remove_memory_file(file_path, chip))
+        chip_layout.addWidget(remove_btn)
+
+        self.memory_files_container.addWidget(chip)
 
     def _add_memory_file(self):
-        """Quick add file as new memory project."""
+        """Open file dialog to add memory files."""
         file_filter = "Pliki pamięci (*.md *.txt *.json);;Wszystkie pliki (*)"
         files, _ = QFileDialog.getOpenFileNames(
             self, "Wybierz pliki pamięci", str(Path.home()), file_filter
@@ -627,55 +650,16 @@ class AgentConfigDialog(QDialog):
         if not files:
             return
 
-        # Create project name from first file's parent folder
-        first_file = Path(files[0])
-        project_name = first_file.parent.name or first_file.stem
+        for file_path in files:
+            if file_path not in self.memory_files:
+                self.memory_files.append(file_path)
+                self._add_memory_file_chip(file_path)
 
-        # Ask user for project name
-        name, ok = QInputDialog.getText(
-            self, "Nazwa projektu",
-            "Podaj nazwę dla nowego projektu pamięci:",
-            text=project_name
-        )
-
-        if not ok or not name.strip():
-            return
-
-        # Create new memory project
-        new_project = {
-            'id': str(uuid.uuid4())[:8],
-            'name': name.strip(),
-            'enabled': True,
-            'files': [{'path': f, 'enabled': True} for f in files]
-        }
-
-        # Add to local list
-        self.memory_projects.append(new_project)
-
-        # Save to file
-        self._save_memory_projects()
-
-        # Refresh combo and select new project
-        self._populate_memory_combo()
-
-        # Select the new project
-        for i in range(self.memory_combo.count()):
-            if self.memory_combo.itemData(i) == new_project['id']:
-                self.memory_combo.setCurrentIndex(i)
-                break
-
-        QMessageBox.information(
-            self, "Projekt utworzony",
-            f"Utworzono projekt \"{name.strip()}\" z {len(files)} plikami."
-        )
-
-    def _save_memory_projects(self):
-        """Save memory projects to file."""
-        try:
-            with open(MEMORY_PROJECTS_FILE, 'w') as f:
-                json.dump(self.memory_projects, f, indent=2, ensure_ascii=False)
-        except Exception as e:
-            QMessageBox.warning(self, "Błąd", f"Nie można zapisać projektów pamięci: {e}")
+    def _remove_memory_file(self, file_path: str, chip: QFrame):
+        """Remove a memory file from the list."""
+        if file_path in self.memory_files:
+            self.memory_files.remove(file_path)
+        chip.deleteLater()
 
 
 class AgentsManagerDialog(QDialog):
