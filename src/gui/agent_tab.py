@@ -506,6 +506,17 @@ class AgentTab(QWidget):
 
     # ==================== UI Actions ====================
 
+    def showEvent(self, event):
+        """Apply splitter sizes after widget is shown."""
+        super().showEvent(event)
+        # Delay to let Qt finish layout calculations
+        QTimer.singleShot(50, self._apply_saved_splitter_sizes)
+
+    def _apply_saved_splitter_sizes(self):
+        """Apply saved splitter sizes after widget is visible."""
+        if self.splitter_sizes and hasattr(self, 'main_splitter'):
+            self.main_splitter.setSizes(self.splitter_sizes)
+
     def _on_splitter_moved(self, pos: int, index: int):
         """Handle splitter position change - save new sizes."""
         self.splitter_sizes = self.main_splitter.sizes()
