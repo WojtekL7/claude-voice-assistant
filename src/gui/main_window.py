@@ -251,7 +251,8 @@ from config import (
     APP_NAME, APP_VERSION, WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT,
     SUPPORTED_LANGUAGES, UI_TRANSLATIONS, DEFAULT_QUICK_ACTIONS,
     CONFIG_FILE, QUICK_ACTIONS_FILE, CLAUDE_COMMAND, GROQ_API_KEY,
-    AGENTS_FILE, MEMORY_PROJECTS_FILE, DEFAULT_AGENTS, DEFAULT_MEMORY_PROJECTS
+    AGENTS_FILE, MEMORY_PROJECTS_FILE, DEFAULT_AGENTS, DEFAULT_MEMORY_PROJECTS,
+    ASSETS_DIR
 )
 from core.claude_bridge import ClaudeBridgeAsync
 from core.tts_engine import TTSEngine, TTSState
@@ -2248,6 +2249,9 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         if colors is None:
             colors = self.skin_colors
 
+        # Path to checkmark icon for checkboxes
+        checkmark_path = str(ASSETS_DIR / "checkmark.png").replace("\\", "/")
+
         # Main window
         self.setStyleSheet(f"""
             QMainWindow {{
@@ -2279,14 +2283,23 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
             }}
             QCheckBox {{
                 color: {colors['text_color']};
+                spacing: 8px;
             }}
             QCheckBox::indicator {{
                 width: 18px;
                 height: 18px;
+                border: 2px solid {colors['border_color']};
+                border-radius: 3px;
+                background-color: transparent;
+            }}
+            QCheckBox::indicator:hover {{
+                border-color: #22c55e;
             }}
             QCheckBox::indicator:checked {{
                 background-color: #22c55e;
+                border-color: #22c55e;
                 border-radius: 3px;
+                image: url("{checkmark_path}");
             }}
             QMessageBox {{
                 background-color: {colors['main_window_bg']};
@@ -2419,6 +2432,9 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         dialog.setWindowTitle("Komenda Claude Code")
         dialog.setMinimumWidth(500)
 
+        # Path to checkmark icon
+        checkmark_path = str(ASSETS_DIR / "checkmark.png").replace("\\", "/")
+
         layout = QVBoxLayout(dialog)
 
         # Description
@@ -2473,6 +2489,23 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
             }}
             QCheckBox {{
                 color: {self.skin_colors.get('text_color', '#ffffff')};
+                spacing: 8px;
+            }}
+            QCheckBox::indicator {{
+                width: 18px;
+                height: 18px;
+                border: 2px solid {self.skin_colors.get('border_color', '#4a1a3a')};
+                border-radius: 3px;
+                background-color: transparent;
+            }}
+            QCheckBox::indicator:hover {{
+                border-color: #22c55e;
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: #22c55e;
+                border-color: #22c55e;
+                border-radius: 3px;
+                image: url("{checkmark_path}");
             }}
             QPushButton {{
                 background-color: {self.skin_colors.get('button_bg', '#4a1a3a')};

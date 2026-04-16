@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config import (
     MEMORY_PROJECTS_FILE, AGENTS_FILE, MEMORY_FILE_EXTENSIONS,
-    DEFAULT_AGENTS, DEFAULT_MEMORY_PROJECTS
+    DEFAULT_AGENTS, DEFAULT_MEMORY_PROJECTS, ASSETS_DIR
 )
 
 
@@ -61,6 +61,9 @@ class MemoryProjectsDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
 
+        # Path to checkmark icon
+        checkmark_path = str(ASSETS_DIR / "checkmark.png").replace("\\", "/")
+
         # Header
         header = QLabel("Zarządzaj projektami i ich plikami pamięci")
         header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
@@ -76,36 +79,52 @@ class MemoryProjectsDialog(QDialog):
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels(["Nazwa", "Ścieżka"])
         self.tree.setColumnWidth(0, 250)
-        self.tree.setStyleSheet("""
-            QTreeWidget {
+        self.tree.setStyleSheet(f"""
+            QTreeWidget {{
                 background-color: #2d0a1e;
                 color: #ffffff;
                 border: 1px solid #4a1a3a;
                 border-radius: 4px;
-            }
-            QTreeWidget::item {
+            }}
+            QTreeWidget::item {{
                 padding: 5px;
-            }
-            QTreeWidget::item:selected {
+            }}
+            QTreeWidget::item:selected {{
                 background-color: #6a2a5a;
-            }
+            }}
+            QTreeWidget::indicator {{
+                width: 18px;
+                height: 18px;
+                border: 2px solid #4a1a3a;
+                border-radius: 3px;
+                background-color: transparent;
+            }}
+            QTreeWidget::indicator:hover {{
+                border-color: #22c55e;
+            }}
+            QTreeWidget::indicator:checked {{
+                background-color: #22c55e;
+                border-color: #22c55e;
+                border-radius: 3px;
+                image: url("{checkmark_path}");
+            }}
             QTreeWidget::branch:has-children:!has-siblings:closed,
-            QTreeWidget::branch:closed:has-children:has-siblings {
+            QTreeWidget::branch:closed:has-children:has-siblings {{
                 border-image: none;
                 image: none;
-            }
+            }}
             QTreeWidget::branch:open:has-children:!has-siblings,
-            QTreeWidget::branch:open:has-children:has-siblings {
+            QTreeWidget::branch:open:has-children:has-siblings {{
                 border-image: none;
                 image: none;
-            }
-            QHeaderView::section {
+            }}
+            QHeaderView::section {{
                 background-color: #4a1a3a;
                 color: #ffffff;
                 padding: 5px;
                 border: none;
                 font-weight: bold;
-            }
+            }}
         """)
         self._populate_tree()
         layout.addWidget(self.tree, stretch=1)
@@ -412,6 +431,9 @@ class AgentConfigDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(15)
 
+        # Path to checkmark icon
+        checkmark_path = str(ASSETS_DIR / "checkmark.png").replace("\\", "/")
+
         # Header
         header = QLabel("Konfiguracja agenta")
         header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
@@ -500,15 +522,38 @@ class AgentConfigDialog(QDialog):
 
         layout.addLayout(form)
 
-        # Checkboxes
+        # Checkboxes - style with checkmark icon
+        checkbox_style = f"""
+            QCheckBox {{
+                color: #ffffff;
+                spacing: 8px;
+            }}
+            QCheckBox::indicator {{
+                width: 18px;
+                height: 18px;
+                border: 2px solid #4a1a3a;
+                border-radius: 3px;
+                background-color: transparent;
+            }}
+            QCheckBox::indicator:hover {{
+                border-color: #22c55e;
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: #22c55e;
+                border-color: #22c55e;
+                border-radius: 3px;
+                image: url("{checkmark_path}");
+            }}
+        """
+
         self.auto_start_checkbox = QCheckBox("Uruchamiaj automatycznie przy starcie aplikacji")
         self.auto_start_checkbox.setChecked(self.agent.get('auto_start', True))
-        self.auto_start_checkbox.setStyleSheet("color: #ffffff;")
+        self.auto_start_checkbox.setStyleSheet(checkbox_style)
         layout.addWidget(self.auto_start_checkbox)
 
         self.send_memory_checkbox = QCheckBox("Wczytaj pliki pamięci po starcie Claude Code")
         self.send_memory_checkbox.setChecked(self.agent.get('send_memory_on_start', True))
-        self.send_memory_checkbox.setStyleSheet("color: #ffffff;")
+        self.send_memory_checkbox.setStyleSheet(checkbox_style)
         layout.addWidget(self.send_memory_checkbox)
 
         layout.addStretch()
