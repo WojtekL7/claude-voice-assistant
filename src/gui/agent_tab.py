@@ -80,6 +80,7 @@ class AgentTab(QWidget):
     request_tts = pyqtSignal(str)  # Request TTS to speak text
     request_tts_stop = pyqtSignal()  # Request TTS to stop
     request_dictation = pyqtSignal(bool)  # Request dictation start/stop
+    add_quick_action_requested = pyqtSignal()  # Request to add new quick action
 
     def __init__(self, agent_config: dict, parent=None):
         super().__init__(parent)
@@ -377,9 +378,8 @@ class AgentTab(QWidget):
         self.input_field.setFocus()
 
     def _add_quick_action(self):
-        """Add new quick action - delegate to MainWindow."""
-        # This will be connected to MainWindow's method
-        pass
+        """Add new quick action - delegate to MainWindow via signal."""
+        self.add_quick_action_requested.emit()
 
     # ==================== Terminal Handling ====================
 

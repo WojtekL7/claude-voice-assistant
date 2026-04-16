@@ -628,6 +628,7 @@ class MainWindow(QMainWindow):
         agent_tab.request_tts_stop.connect(self._stop_all)
         agent_tab.request_dictation.connect(self._handle_dictation_request)
         agent_tab.message_sent.connect(self._on_message_sent)
+        agent_tab.add_quick_action_requested.connect(self._add_quick_action)
 
         # Add tab
         agent_id = agent_config.get('id', 'unknown')
@@ -698,6 +699,7 @@ class MainWindow(QMainWindow):
         agent_tab.request_tts_stop.connect(self._stop_all)
         agent_tab.request_dictation.connect(self._handle_dictation_request)
         agent_tab.message_sent.connect(self._on_message_sent)
+        agent_tab.add_quick_action_requested.connect(self._add_quick_action)
 
         # Add tab with terminal icon (🖥️ instead of 🤖)
         self.agent_tabs[terminal_id] = agent_tab
