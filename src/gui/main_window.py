@@ -590,6 +590,17 @@ class MainWindow(QMainWindow):
         except Exception as e:
             print(f"Error saving agents: {e}")
 
+    def _on_splitter_changed(self, agent_tab, sizes: list):
+        """Handle splitter position change - update agent config and save."""
+        agent_id = agent_tab.agent_id
+
+        # Update agent in self.agents list
+        for agent in self.agents:
+            if agent.get('id') == agent_id:
+                agent['splitter_sizes'] = sizes
+                self._save_agents()
+                return
+
     def _load_memory_projects(self) -> list:
         """Load memory projects from file."""
         if MEMORY_PROJECTS_FILE.exists():
@@ -629,6 +640,7 @@ class MainWindow(QMainWindow):
         agent_tab.request_dictation.connect(self._handle_dictation_request)
         agent_tab.message_sent.connect(self._on_message_sent)
         agent_tab.add_quick_action_requested.connect(self._add_quick_action)
+        agent_tab.splitter_changed.connect(lambda sizes, tab=agent_tab: self._on_splitter_changed(tab, sizes))
 
         # Add tab
         agent_id = agent_config.get('id', 'unknown')
@@ -700,6 +712,7 @@ class MainWindow(QMainWindow):
         agent_tab.request_dictation.connect(self._handle_dictation_request)
         agent_tab.message_sent.connect(self._on_message_sent)
         agent_tab.add_quick_action_requested.connect(self._add_quick_action)
+        agent_tab.splitter_changed.connect(lambda sizes, tab=agent_tab: self._on_splitter_changed(tab, sizes))
 
         # Add tab with terminal icon (🖥️ instead of 🤖)
         self.agent_tabs[terminal_id] = agent_tab

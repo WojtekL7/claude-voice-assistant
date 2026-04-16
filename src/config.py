@@ -164,6 +164,7 @@ DEFAULT_AGENTS = [
         "auto_start": True,
         "memory_project_id": None,
         "working_directory": str(Path.home()),
+        "splitter_sizes": [600, 150],  # [terminal_height, bottom_panel_height]
     }
 ]
 

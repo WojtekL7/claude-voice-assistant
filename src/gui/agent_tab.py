@@ -81,6 +81,7 @@ class AgentTab(QWidget):
     request_tts_stop = pyqtSignal()  # Request TTS to stop
     request_dictation = pyqtSignal(bool)  # Request dictation start/stop
     add_quick_action_requested = pyqtSignal()  # Request to add new quick action
+    splitter_changed = pyqtSignal(list)  # Emitted when splitter position changes
 
     def __init__(self, agent_config: dict, parent=None):
         super().__init__(parent)
@@ -91,6 +92,7 @@ class AgentTab(QWidget):
         self.working_directory = agent_config.get('working_directory', str(Path.home()))
         self.memory_project_id = agent_config.get('memory_project_id')
         self.auto_start = agent_config.get('auto_start', True)
+        self.splitter_sizes = agent_config.get('splitter_sizes', [600, 150])
 
         # State
         self.terminal = None
@@ -136,7 +138,10 @@ class AgentTab(QWidget):
         self._setup_bottom_panel()
 
         self.main_splitter.addWidget(self.bottom_panel)
-        self.main_splitter.setSizes([600, 150])
+        self.main_splitter.setSizes(self.splitter_sizes)
+
+        # Connect splitter moved signal to save position
+        self.main_splitter.splitterMoved.connect(self._on_splitter_moved)
 
         layout.addWidget(self.main_splitter)
 
@@ -528,6 +533,11 @@ class AgentTab(QWidget):
 
     # ==================== UI Actions ====================
 
+    def _on_splitter_moved(self, pos: int, index: int):
+        """Handle splitter position change - save new sizes."""
+        self.splitter_sizes = self.main_splitter.sizes()
+        self.splitter_changed.emit(self.splitter_sizes)
+
     def _toggle_dictation(self, checked: bool):
         """Toggle dictation mode."""
         self.request_dictation.emit(checked)
@@ -722,6 +732,7 @@ class AgentTab(QWidget):
             'auto_start': self.auto_start,
             'memory_project_id': self.memory_project_id,
             'working_directory': self.working_directory,
+            'splitter_sizes': self.splitter_sizes,
         }
 
     def update_config(self, config: dict):
@@ -737,3 +748,9 @@ class AgentTab(QWidget):
             self.working_directory = new_working_dir
             if self.terminal and QTERMWIDGET_AVAILABLE:
                 self.terminal.sendText(f"cd {new_working_dir}\r")
+
+        # Update splitter sizes if provided
+        new_splitter_sizes = config.get('splitter_sizes')
+        if new_splitter_sizes and new_splitter_sizes != self.splitter_sizes:
+            self.splitter_sizes = new_splitter_sizes
+            self.main_splitter.setSizes(new_splitter_sizes)
