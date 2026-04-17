@@ -492,28 +492,52 @@ class MainWindow(QMainWindow):
             }
         """)
 
-        # Add "+" button to create new tabs
-        self.add_tab_btn = QPushButton("+")
-        self.add_tab_btn.setFixedSize(30, 26)
-        self.add_tab_btn.setToolTip("Dodaj nowego agenta")
-        self.add_tab_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #4a1a3a;
-                color: #22c55e;
-                border: none;
-                border-radius: 4px;
-                font-size: 16px;
-                font-weight: bold;
+        # Create dropdown menu for "+" tab
+        self._add_tab_menu = QMenu(self)
+        self._add_tab_menu.setStyleSheet("""
+            QMenu {
+                background-color: #1e1e1e;
+                color: #ffffff;
+                border: 1px solid #4a1a3a;
+                padding: 5px;
             }
-            QPushButton:hover {
-                background-color: #6a2a5a;
+            QMenu::item {
+                padding: 8px 25px;
+            }
+            QMenu::item:selected {
+                background-color: #4a1a3a;
+            }
+            QMenu::separator {
+                height: 1px;
+                background-color: #4a1a3a;
+                margin: 5px 10px;
             }
         """)
-        self.add_tab_btn.clicked.connect(self._add_new_agent)
-        self.tab_widget.setCornerWidget(self.add_tab_btn, Qt.TopRightCorner)
+
+        new_agent_action = QAction("🤖 Nowy agent...", self)
+        new_agent_action.setShortcut(QKeySequence("Ctrl+T"))
+        new_agent_action.triggered.connect(self._add_new_agent)
+        self._add_tab_menu.addAction(new_agent_action)
+
+        new_terminal_action = QAction("🖥️ Nowy terminal", self)
+        new_terminal_action.setShortcut(QKeySequence("Ctrl+Shift+T"))
+        new_terminal_action.triggered.connect(self._add_new_terminal)
+        self._add_tab_menu.addAction(new_terminal_action)
+
+        self._add_tab_menu.addSeparator()
+
+        manage_agents_action = QAction("Zarządzaj agentami...", self)
+        manage_agents_action.triggered.connect(self._show_agents_manager_dialog)
+        self._add_tab_menu.addAction(manage_agents_action)
+
+        # Connect tab bar click to handle "+" tab
+        self.tab_widget.tabBarClicked.connect(self._on_tab_bar_clicked)
 
         # Create tabs for auto-start agents
         self._create_agent_tabs()
+
+        # Add "+" tab at the end (must be after creating agent tabs)
+        self._add_plus_tab()
 
         main_layout.addWidget(self.tab_widget)
 
@@ -614,6 +638,47 @@ class MainWindow(QMainWindow):
                 pass
         return DEFAULT_MEMORY_PROJECTS.copy()
 
+    def _add_plus_tab(self):
+        """Add '+' tab at the end for creating new tabs."""
+        # Add empty widget as placeholder
+        plus_widget = QWidget()
+        self._plus_tab_index = self.tab_widget.addTab(plus_widget, "+")
+
+        # Style the "+" tab to look like a button
+        self.tab_widget.tabBar().setTabToolTip(self._plus_tab_index, "Nowa zakładka")
+
+        # Make "+" tab non-closable (hide close button)
+        self.tab_widget.tabBar().setTabButton(self._plus_tab_index, QTabBar.RightSide, None)
+        self.tab_widget.tabBar().setTabButton(self._plus_tab_index, QTabBar.LeftSide, None)
+
+    def _on_tab_bar_clicked(self, index: int):
+        """Handle click on tab bar - show menu for '+' tab."""
+        # Check if clicked on "+" tab (always last)
+        if index == self.tab_widget.count() - 1:
+            # Get tab bar position for menu
+            tab_bar = self.tab_widget.tabBar()
+            tab_rect = tab_bar.tabRect(index)
+            global_pos = tab_bar.mapToGlobal(tab_rect.bottomLeft())
+
+            # Show menu below the "+" tab
+            self._add_tab_menu.exec_(global_pos)
+
+            # Prevent switching to "+" tab - go back to previous
+            if self.tab_widget.count() > 1:
+                self.tab_widget.setCurrentIndex(max(0, index - 1))
+
+    def _move_plus_tab_to_end(self):
+        """Move '+' tab to the end after adding new tabs."""
+        plus_index = self.tab_widget.count() - 1
+        # The "+" tab should always be last, so we check if it's not
+        # and move it if necessary
+        for i in range(self.tab_widget.count()):
+            if self.tab_widget.tabText(i) == "+":
+                if i != self.tab_widget.count() - 1:
+                    # Move to end
+                    self.tab_widget.tabBar().moveTab(i, self.tab_widget.count() - 1)
+                break
+
     def _create_agent_tabs(self):
         """Create tabs for all auto-start agents."""
         for agent in self.agents:
@@ -644,13 +709,20 @@ class MainWindow(QMainWindow):
         agent_tab.message_sent.connect(self._on_message_sent)
         agent_tab.add_quick_action_requested.connect(self._add_quick_action)
         agent_tab.splitter_changed.connect(lambda sizes, tab=agent_tab: self._on_splitter_changed(tab, sizes))
+        agent_tab.terminal_output.connect(self._on_terminal_output)
 
-        # Add tab
+        # Add tab (insert before "+" tab which is always last)
         agent_id = agent_config.get('id', 'unknown')
         agent_name = agent_config.get('name', 'Agent')
         self.agent_tabs[agent_id] = agent_tab
 
-        index = self.tab_widget.addTab(agent_tab, f"🤖 {agent_name}")
+        # Insert before "+" tab (if exists), otherwise add at end
+        insert_index = max(0, self.tab_widget.count() - 1) if self.tab_widget.count() > 0 else 0
+        # Check if last tab is "+" tab
+        if self.tab_widget.count() > 0 and self.tab_widget.tabText(self.tab_widget.count() - 1) == "+":
+            index = self.tab_widget.insertTab(insert_index, agent_tab, f"🤖 {agent_name}")
+        else:
+            index = self.tab_widget.addTab(agent_tab, f"🤖 {agent_name}")
         self.tab_widget.setCurrentIndex(index)
 
         # Apply styles
@@ -739,9 +811,14 @@ class MainWindow(QMainWindow):
         agent_tab.add_quick_action_requested.connect(self._add_quick_action)
         agent_tab.splitter_changed.connect(lambda sizes, tab=agent_tab: self._on_splitter_changed(tab, sizes))
 
-        # Add tab with terminal icon (🖥️ instead of 🤖)
+        # Add tab with terminal icon (🖥️ instead of 🤖) - insert before "+" tab
         self.agent_tabs[terminal_id] = agent_tab
-        index = self.tab_widget.addTab(agent_tab, f"🖥️ {terminal_config['name']}")
+        # Insert before "+" tab (if exists)
+        if self.tab_widget.count() > 0 and self.tab_widget.tabText(self.tab_widget.count() - 1) == "+":
+            insert_index = self.tab_widget.count() - 1
+            index = self.tab_widget.insertTab(insert_index, agent_tab, f"🖥️ {terminal_config['name']}")
+        else:
+            index = self.tab_widget.addTab(agent_tab, f"🖥️ {terminal_config['name']}")
         self.tab_widget.setCurrentIndex(index)
 
         # Apply styles
@@ -758,7 +835,12 @@ class MainWindow(QMainWindow):
 
     def _close_agent_tab(self, index: int):
         """Close agent tab."""
-        if self.tab_widget.count() <= 1:
+        # Don't allow closing "+" tab
+        if self.tab_widget.tabText(index) == "+":
+            return
+
+        # Must keep at least one real tab (+ doesn't count)
+        if self.tab_widget.count() <= 2:
             QMessageBox.warning(self, "Nie można zamknąć",
                 "Musi pozostać co najmniej jedna zakładka.")
             return
@@ -1249,10 +1331,7 @@ class MainWindow(QMainWindow):
     # ==================== Terminal Handlers ====================
 
     def _on_terminal_output(self, data):
-        """Handle data received from terminal (for TTS)."""
-        if not self.terminal:
-            return
-
+        """Handle data received from terminal (for TTS and token counting)."""
         # Decode bytes to string
         try:
             text = data.data().decode('utf-8', errors='ignore')
