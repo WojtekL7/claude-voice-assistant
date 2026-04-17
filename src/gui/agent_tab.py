@@ -30,6 +30,7 @@ from config import (
     MEMORY_PROJECTS_FILE, MEMORY_FILE_EXTENSIONS,
     DEFAULT_QUICK_ACTIONS, QUICK_ACTIONS_FILE
 )
+from gui.dialogs import styled_get_open_file_names
 
 
 class AutoResizeTextEdit(QTextEdit):
@@ -567,7 +568,7 @@ class AgentTab(QWidget):
             "Wszystkie pliki (*)"
         )
 
-        files, _ = QFileDialog.getOpenFileNames(
+        files, _ = styled_get_open_file_names(
             self, "Dodaj pliki", str(Path.home()), file_filter
         )
 

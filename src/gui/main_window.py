@@ -260,7 +260,10 @@ from core.stt_engine import STTEngine, STTState
 from core.license_manager import LicenseManager, LicenseStatus
 from core.text_cleaner import TextCleanerForTTS, extract_last_claude_response, fix_polish_encoding
 from gui.agent_tab import AgentTab
-from gui.dialogs import MemoryProjectsDialog, AgentConfigDialog, AgentsManagerDialog
+from gui.dialogs import (
+    MemoryProjectsDialog, AgentConfigDialog, AgentsManagerDialog,
+    styled_get_open_file_names, styled_get_open_file_name, styled_get_save_file_name
+)
 
 # Domyślne kolory skórki (motyw Ubuntu) - interfejs + terminal
 DEFAULT_SKIN_COLORS = {
@@ -664,12 +667,16 @@ class MainWindow(QMainWindow):
         # Używamy SEKWENCYJNEGO wywołania - pliki pamięci są wysyłane
         # dopiero PO wysłaniu komendy claude (nie równoległe timery)
         def uruchom_claude_potem_pliki():
-            # 1. Wyślij komendę claude
-            if agent_config.get('auto_start', True) and self.claude_command:
-                self._run_claude_in_tab(agent_tab)
+            # 1. Wyślij komendę claude (jeśli auto_start = True LUB _force_start = True)
+            claude_started = False
+            force_start = agent_config.pop('_force_start', False)  # usuń flagę tymczasową
+            if (agent_config.get('auto_start', True) or force_start) and self.claude_command:
+                self._run_claude_in_tab(agent_tab, force=force_start)
+                claude_started = True
 
-            # 2. Po 8 sekundach wyślij pliki pamięci (daje Claude Code czas na start)
-            if agent_config.get('send_memory_on_start', True):
+            # 2. Po 8 sekundach wyślij pliki pamięci (tylko jeśli Claude Code został uruchomiony!)
+            # NIE wysyłaj do czystego bash - spowoduje błąd "command not found"
+            if claude_started and agent_config.get('send_memory_on_start', True):
                 QTimer.singleShot(8000, agent_tab.send_memory_files)
 
         # Uruchom wszystko po 500ms (gdy terminal będzie gotowy)
@@ -684,10 +691,18 @@ class MainWindow(QMainWindow):
             agent_config = dialog.get_data()
             self.agents.append(agent_config)
             self._save_agents()
-            agent_tab = self._create_agent_tab(agent_config)
-            # Switch to new tab if "Save and run" was clicked
+
+            # Only create tab if "Save and run" was clicked
             if dialog.get_run_immediately():
+                agent_tab = self._create_agent_tab(agent_config)
                 self.tab_widget.setCurrentWidget(agent_tab)
+            else:
+                # Just saved - will be available after restart
+                QMessageBox.information(
+                    self, "Zapisano",
+                    f"Agent \"{agent_config.get('name')}\" został zapisany.\n"
+                    "Zakładka pojawi się po restarcie aplikacji lub użyj 'Zarządzaj agentami'."
+                )
 
     def _add_new_terminal(self):
         """Add a plain Ubuntu terminal tab (no agent features)."""
@@ -1110,15 +1125,18 @@ class MainWindow(QMainWindow):
                 tab.terminal.sendText(self.claude_command + "\r")
                 self._update_status("Claude Code uruchomiony")
 
-    def _run_claude_in_tab(self, agent_tab):
+    def _run_claude_in_tab(self, agent_tab, force=False):
         """Run Claude command in a specific agent tab.
 
         Używane przy tworzeniu nowych zakładek (po dialogu dodawania agenta).
+        Args:
+            agent_tab: Zakładka agenta
+            force: Wymuś uruchomienie nawet jeśli auto_start=False
         """
         if not self.claude_command:
             return
 
-        if agent_tab.terminal and agent_tab.auto_start:
+        if agent_tab.terminal and (agent_tab.auto_start or force):
             agent_tab.terminal.sendText(self.claude_command + "\r")
             self._update_status(f"Claude Code uruchomiony w: {agent_tab.agent_name}")
 
@@ -1711,8 +1729,6 @@ class MainWindow(QMainWindow):
 
     def _add_media(self):
         """Open file dialog to add media files."""
-        from PyQt5.QtWidgets import QFileDialog
-
         file_filter = (
             "Wszystkie obsługiwane (*.png *.jpg *.jpeg *.gif *.bmp *.webp *.pdf *.doc *.docx *.txt *.csv *.xlsx *.xls *.json *.xml *.zip *.tar *.gz);;"
             "Obrazy (*.png *.jpg *.jpeg *.gif *.bmp *.webp);;"
@@ -1722,7 +1738,7 @@ class MainWindow(QMainWindow):
             "Wszystkie pliki (*.*)"
         )
 
-        files, _ = QFileDialog.getOpenFileNames(
+        files, _ = styled_get_open_file_names(
             self,
             "Dodaj media",
             "",
@@ -3604,7 +3620,7 @@ lub wczytać skórkę od kogoś innego.</p>
 
     def _import_skin(self):
         """Import skin from JSON file."""
-        file_path, _ = QFileDialog.getOpenFileName(
+        file_path, _ = styled_get_open_file_name(
             self,
             "Importuj skórkę",
             str(Path.home()),
@@ -3646,7 +3662,7 @@ lub wczytać skórkę od kogoś innego.</p>
 
     def _export_skin(self):
         """Export skin to JSON file."""
-        file_path, _ = QFileDialog.getSaveFileName(
+        file_path, _ = styled_get_save_file_name(
             self,
             "Eksportuj skórkę",
             str(Path.home() / "moja_skorka.skin.json"),

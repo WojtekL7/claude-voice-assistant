@@ -27,6 +27,198 @@ from config import (
 )
 
 
+# === Stylizowane dialogi plików ===
+
+# Domyślne kolory dla dialogów (ciemny motyw)
+DIALOG_COLORS = {
+    'bg': '#300A24',
+    'text': '#ffffff',
+    'input_bg': '#4a1a3a',
+    'border': '#6a2a5a',
+    'hover': '#7a3a6a',
+    'selection': '#8a4a7a',
+}
+
+
+def get_file_dialog_stylesheet() -> str:
+    """Zwraca stylesheet dla stylizowanych dialogów plików."""
+    c = DIALOG_COLORS
+    return f"""
+        QFileDialog {{
+            background-color: {c['bg']};
+            color: {c['text']};
+        }}
+        QFileDialog QLabel {{
+            color: {c['text']};
+        }}
+        QFileDialog QLineEdit {{
+            background-color: {c['input_bg']};
+            color: {c['text']};
+            border: 1px solid {c['border']};
+            border-radius: 4px;
+            padding: 4px 8px;
+        }}
+        QFileDialog QComboBox {{
+            background-color: {c['input_bg']};
+            color: {c['text']};
+            border: 1px solid {c['border']};
+            border-radius: 4px;
+            padding: 4px 8px;
+        }}
+        QFileDialog QComboBox::drop-down {{
+            border: none;
+        }}
+        QFileDialog QComboBox QAbstractItemView {{
+            background-color: {c['input_bg']};
+            color: {c['text']};
+            selection-background-color: {c['selection']};
+        }}
+        QFileDialog QPushButton {{
+            background-color: {c['input_bg']};
+            color: {c['text']};
+            border: 1px solid {c['border']};
+            border-radius: 4px;
+            padding: 6px 16px;
+            min-width: 80px;
+        }}
+        QFileDialog QPushButton:hover {{
+            background-color: {c['hover']};
+        }}
+        QFileDialog QPushButton:pressed {{
+            background-color: {c['selection']};
+        }}
+        QFileDialog QTreeView, QFileDialog QListView {{
+            background-color: {c['input_bg']};
+            color: {c['text']};
+            border: 1px solid {c['border']};
+            border-radius: 4px;
+        }}
+        QFileDialog QTreeView::item:hover, QFileDialog QListView::item:hover {{
+            background-color: {c['hover']};
+        }}
+        QFileDialog QTreeView::item:selected, QFileDialog QListView::item:selected {{
+            background-color: {c['selection']};
+        }}
+        QFileDialog QHeaderView::section {{
+            background-color: {c['input_bg']};
+            color: {c['text']};
+            border: 1px solid {c['border']};
+            padding: 4px;
+        }}
+        QFileDialog QToolButton {{
+            background-color: {c['input_bg']};
+            color: {c['text']};
+            border: 1px solid {c['border']};
+            border-radius: 4px;
+            padding: 4px;
+        }}
+        QFileDialog QToolButton:hover {{
+            background-color: {c['hover']};
+        }}
+        QFileDialog QSplitter::handle {{
+            background-color: {c['border']};
+        }}
+        QFileDialog QScrollBar:vertical {{
+            background-color: {c['bg']};
+            width: 12px;
+            border-radius: 6px;
+        }}
+        QFileDialog QScrollBar::handle:vertical {{
+            background-color: {c['border']};
+            border-radius: 6px;
+            min-height: 20px;
+        }}
+        QFileDialog QScrollBar::handle:vertical:hover {{
+            background-color: {c['hover']};
+        }}
+        QFileDialog QScrollBar:horizontal {{
+            background-color: {c['bg']};
+            height: 12px;
+            border-radius: 6px;
+        }}
+        QFileDialog QScrollBar::handle:horizontal {{
+            background-color: {c['border']};
+            border-radius: 6px;
+            min-width: 20px;
+        }}
+        QFileDialog QScrollBar::add-line, QFileDialog QScrollBar::sub-line {{
+            width: 0px;
+            height: 0px;
+        }}
+    """
+
+
+def setup_file_dialog_labels(dialog: QFileDialog):
+    """Ustawia polskie etykiety dla dialogu plików."""
+    dialog.setLabelText(QFileDialog.LookIn, "Szukaj w:")
+    dialog.setLabelText(QFileDialog.FileName, "Nazwa:")
+    dialog.setLabelText(QFileDialog.FileType, "Typ plików:")
+    dialog.setLabelText(QFileDialog.Accept, "Wybierz")
+    dialog.setLabelText(QFileDialog.Reject, "Anuluj")
+
+
+def styled_get_existing_directory(parent, title: str, directory: str = "") -> str:
+    """Stylizowany dialog wyboru katalogu z polskimi etykietami."""
+    dialog = QFileDialog(parent, title, directory or str(Path.home()))
+    dialog.setFileMode(QFileDialog.Directory)
+    dialog.setOption(QFileDialog.ShowDirsOnly, True)
+    dialog.setOption(QFileDialog.DontUseNativeDialog, True)
+    dialog.setStyleSheet(get_file_dialog_stylesheet())
+    setup_file_dialog_labels(dialog)
+
+    if dialog.exec_() == QFileDialog.Accepted:
+        selected = dialog.selectedFiles()
+        return selected[0] if selected else ""
+    return ""
+
+
+def styled_get_open_file_names(parent, title: str, directory: str = "",
+                                file_filter: str = "") -> tuple:
+    """Stylizowany dialog wyboru wielu plików z polskimi etykietami."""
+    dialog = QFileDialog(parent, title, directory or str(Path.home()), file_filter)
+    dialog.setFileMode(QFileDialog.ExistingFiles)
+    dialog.setOption(QFileDialog.DontUseNativeDialog, True)
+    dialog.setStyleSheet(get_file_dialog_stylesheet())
+    setup_file_dialog_labels(dialog)
+
+    if dialog.exec_() == QFileDialog.Accepted:
+        return dialog.selectedFiles(), dialog.selectedNameFilter()
+    return [], ""
+
+
+def styled_get_open_file_name(parent, title: str, directory: str = "",
+                               file_filter: str = "") -> tuple:
+    """Stylizowany dialog wyboru pojedynczego pliku z polskimi etykietami."""
+    dialog = QFileDialog(parent, title, directory or str(Path.home()), file_filter)
+    dialog.setFileMode(QFileDialog.ExistingFile)
+    dialog.setOption(QFileDialog.DontUseNativeDialog, True)
+    dialog.setStyleSheet(get_file_dialog_stylesheet())
+    setup_file_dialog_labels(dialog)
+
+    if dialog.exec_() == QFileDialog.Accepted:
+        selected = dialog.selectedFiles()
+        return (selected[0] if selected else "", dialog.selectedNameFilter())
+    return "", ""
+
+
+def styled_get_save_file_name(parent, title: str, directory: str = "",
+                               file_filter: str = "") -> tuple:
+    """Stylizowany dialog zapisu pliku z polskimi etykietami."""
+    dialog = QFileDialog(parent, title, directory or str(Path.home()), file_filter)
+    dialog.setFileMode(QFileDialog.AnyFile)
+    dialog.setAcceptMode(QFileDialog.AcceptSave)
+    dialog.setOption(QFileDialog.DontUseNativeDialog, True)
+    dialog.setStyleSheet(get_file_dialog_stylesheet())
+    setup_file_dialog_labels(dialog)
+    # Zmień etykietę "Wybierz" na "Zapisz" dla dialogu zapisu
+    dialog.setLabelText(QFileDialog.Accept, "Zapisz")
+
+    if dialog.exec_() == QFileDialog.Accepted:
+        selected = dialog.selectedFiles()
+        return (selected[0] if selected else "", dialog.selectedNameFilter())
+    return "", ""
+
+
 class MemoryProjectsDialog(QDialog):
     """Dialog for managing memory projects and their files."""
 
@@ -224,9 +416,9 @@ class MemoryProjectsDialog(QDialog):
         else:
             project = item_data['data']
 
-        # File dialog
+        # File dialog (stylizowany)
         file_filter = "Pliki pamięci (*.md *.txt *.json);;Wszystkie pliki (*)"
-        files, _ = QFileDialog.getOpenFileNames(
+        files, _ = styled_get_open_file_names(
             self, "Wybierz pliki pamięci", str(Path.home()), file_filter
         )
 
@@ -256,8 +448,8 @@ class MemoryProjectsDialog(QDialog):
         else:
             project = item_data['data']
 
-        # Folder dialog
-        folder = QFileDialog.getExistingDirectory(
+        # Folder dialog (stylizowany)
+        folder = styled_get_existing_directory(
             self, "Wybierz folder z plikami", str(Path.home())
         )
 
@@ -572,7 +764,7 @@ class AgentConfigDialog(QDialog):
 
     def _browse_directory(self):
         """Browse for working directory."""
-        directory = QFileDialog.getExistingDirectory(
+        directory = styled_get_existing_directory(
             self, "Wybierz katalog roboczy",
             self.dir_input.text() or str(Path.home())
         )
@@ -621,6 +813,7 @@ class AgentConfigDialog(QDialog):
             'memory_files': self.memory_files,
             'auto_start': self.auto_start_checkbox.isChecked(),
             'send_memory_on_start': self.send_memory_checkbox.isChecked(),
+            'splitter_sizes': self.agent.get('splitter_sizes', [600, 150]),  # domyślne proporcje
         }
 
     def _add_memory_file_chip(self, file_path: str):
@@ -668,7 +861,7 @@ class AgentConfigDialog(QDialog):
     def _add_memory_file(self):
         """Open file dialog to add memory files."""
         file_filter = "Pliki pamięci (*.md *.txt *.json);;Wszystkie pliki (*)"
-        files, _ = QFileDialog.getOpenFileNames(
+        files, _ = styled_get_open_file_names(
             self, "Wybierz pliki pamięci", str(Path.home()), file_filter
         )
 
@@ -752,6 +945,13 @@ class AgentsManagerDialog(QDialog):
 
         btn_layout.addSpacing(15)
 
+        self.run_btn = QPushButton("▶️ Uruchom")
+        self.run_btn.clicked.connect(self._run_agent)
+        self.run_btn.setStyleSheet("QPushButton { color: #3b82f6; }")
+        btn_layout.addWidget(self.run_btn)
+
+        btn_layout.addSpacing(15)
+
         self.add_btn = QPushButton("➕ Dodaj")
         self.add_btn.clicked.connect(self._add_agent)
         self.add_btn.setStyleSheet("QPushButton { color: #22c55e; }")
@@ -795,16 +995,16 @@ class AgentsManagerDialog(QDialog):
         self.list_widget.clear()
 
         for agent in self.agents:
-            # Find memory project name
-            memory_name = "(Brak)"
-            if agent.get('memory_project_id'):
-                for project in self.memory_projects:
-                    if project.get('id') == agent.get('memory_project_id'):
-                        memory_name = project.get('name', 'Bez nazwy')
-                        break
+            # Count memory files (new system uses memory_files list)
+            memory_files = agent.get('memory_files', [])
+            if memory_files:
+                file_count = len(memory_files)
+                memory_info = f"{file_count} plik{'ów' if file_count > 4 else 'i' if file_count > 1 else ''}"
+            else:
+                memory_info = "(Brak)"
 
             auto_icon = "🟢" if agent.get('auto_start', True) else "⚪"
-            item_text = f"{auto_icon} {agent.get('name', 'Bez nazwy')}\n   📁 {memory_name}"
+            item_text = f"{auto_icon} {agent.get('name', 'Bez nazwy')}\n   📁 {memory_info}"
 
             item = QListWidgetItem(item_text)
             item.setData(Qt.UserRole, agent)
@@ -830,6 +1030,19 @@ class AgentsManagerDialog(QDialog):
             self.agents[row], self.agents[row + 1] = self.agents[row + 1], self.agents[row]
             self._populate_list()
             self.list_widget.setCurrentRow(row + 1)
+
+    def _run_agent(self):
+        """Run selected agent (open tab immediately)."""
+        row = self._get_selected_index()
+        if row < 0:
+            QMessageBox.warning(self, "Brak wyboru", "Wybierz agenta do uruchomienia.")
+            return
+
+        # Mark agent for immediate run and force Claude start
+        self.agents[row]['_run_immediately'] = True
+        self.agents[row]['_force_start'] = True
+        # Close dialog and apply changes
+        self.accept()
 
     def _add_agent(self):
         """Add new agent."""
