@@ -67,6 +67,25 @@ class MenuPositionFixer(QObject):
         if self._fixing:
             return
 
+        # Check if menu has intended position set (for popup menus like "+" tab)
+        if hasattr(menu, '_intended_pos') and menu._intended_pos is not None:
+            intended_pos = menu._intended_pos
+            current_pos = menu.pos()
+
+            # Check if position is significantly wrong (more than 50px off)
+            dx = abs(current_pos.x() - intended_pos.x())
+            dy = abs(current_pos.y() - intended_pos.y())
+
+            if dx > 50 or dy > 50:
+                # Position is wrong - fix it
+                self._fixing = True
+                menu.move(intended_pos)
+                self._fixing = False
+
+            # Clear after use
+            menu._intended_pos = None
+            return
+
         # Find the parent menubar and active action
         parent = menu.parent()
 
@@ -659,6 +678,9 @@ class MainWindow(QMainWindow):
             tab_bar = self.tab_widget.tabBar()
             tab_rect = tab_bar.tabRect(index)
             global_pos = tab_bar.mapToGlobal(tab_rect.bottomLeft())
+
+            # Store intended position for MenuPositionFixer (fixes rotated monitors)
+            self._add_tab_menu._intended_pos = global_pos
 
             # Show menu below the "+" tab
             self._add_tab_menu.exec_(global_pos)
