@@ -5,6 +5,7 @@ Main entry point for the application.
 """
 import sys
 import os
+import traceback
 from pathlib import Path
 
 # Force X11 backend to fix menu positioning on Wayland
@@ -22,8 +23,20 @@ from gui.main_window import MainWindow
 from config import APP_NAME, ASSETS_DIR
 
 
+def _excepthook(exc_type, exc_value, exc_tb):
+    """Log unhandled exceptions instead of letting Qt silently kill the app.
+
+    Without this, a Python exception from a PyQt slot takes down the process
+    without a visible traceback, making crashes feel like "app closed itself".
+    """
+    traceback.print_exception(exc_type, exc_value, exc_tb, file=sys.stderr)
+    sys.stderr.flush()
+
+
 def main():
     """Main entry point."""
+    sys.excepthook = _excepthook
+
     # Enable high DPI scaling
     QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
     QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)

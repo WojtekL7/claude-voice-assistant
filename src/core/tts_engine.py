@@ -102,18 +102,32 @@ class TTSEngine:
             self._set_state(TTSState.PLAYING)
 
     def stop(self):
-        """Stop playback completely."""
+        """Stop playback completely.
+
+        Defensive: pygame/SDL can segfault or raise when stop() is called on a
+        corrupted mixer state (e.g. after loading malformed MP3). We never let
+        an exception here propagate — it would kill the whole GUI process.
+        """
         self._stop_event.set()
         self._pause_event.set()  # Unblock if paused
 
-        pygame.mixer.music.stop()
+        try:
+            pygame.mixer.music.stop()
+        except Exception:
+            pass
+        try:
+            pygame.mixer.music.unload()
+        except Exception:
+            pass
 
-        # Wait for thread to finish
+        # Short join so the GUI never freezes waiting for an edge-tts network call.
         if self._play_thread and self._play_thread.is_alive():
-            self._play_thread.join(timeout=2)
+            self._play_thread.join(timeout=1)
 
-        # Clean up temp files
-        self._cleanup_temp_files()
+        try:
+            self._cleanup_temp_files()
+        except Exception:
+            pass
 
         self._set_state(TTSState.IDLE)
 
@@ -242,13 +256,20 @@ class TTSEngine:
         await communicate.save(output_path)
 
     def _play_audio_file(self, file_path: str):
-        """Play audio file using pygame."""
+        """Play audio file using pygame.
+
+        Defensive: malformed MP3 (e.g. from edge-tts fed garbage text) leaves
+        pygame's mixer in an inconsistent state that can segfault on a later
+        stop(). Swallow the error so we skip the bad sentence instead of
+        crashing the whole app.
+        """
         try:
             pygame.mixer.music.load(file_path)
             pygame.mixer.music.play()
         except Exception as e:
             if self.on_error:
                 self.on_error(f"Playback failed: {str(e)}")
+            self._stop_event.set()
 
     def _cleanup_temp_files(self):
         """Remove temporary audio files."""

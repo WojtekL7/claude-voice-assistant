@@ -241,6 +241,16 @@ class AutoResizeTextEdit(QTextEdit):
         else:
             super().keyPressEvent(event)
 
+    def insertFromMimeData(self, source):
+        """Paste as plain text — drop colors, fonts, underlines from the source.
+
+        Covers Ctrl+V, Shift+Insert, context-menu Paste, and text drag&drop.
+        """
+        if source.hasText():
+            self.textCursor().insertText(source.text())
+        else:
+            super().insertFromMimeData(source)
+
     def text(self):
         """Return plain text (compatibility with QLineEdit)."""
         return self.toPlainText()
@@ -727,6 +737,7 @@ class MainWindow(QMainWindow):
         agent_tab.status_changed.connect(self._update_status)
         agent_tab.request_tts.connect(self._handle_tts_request)
         agent_tab.request_tts_stop.connect(self._stop_all)
+        agent_tab.request_read_last.connect(self._read_last_response)
         agent_tab.request_dictation.connect(self._handle_dictation_request)
         agent_tab.message_sent.connect(self._on_message_sent)
         agent_tab.add_quick_action_requested.connect(self._add_quick_action)
@@ -828,6 +839,7 @@ class MainWindow(QMainWindow):
         agent_tab.status_changed.connect(self._update_status)
         agent_tab.request_tts.connect(self._handle_tts_request)
         agent_tab.request_tts_stop.connect(self._stop_all)
+        agent_tab.request_read_last.connect(self._read_last_response)
         agent_tab.request_dictation.connect(self._handle_dictation_request)
         agent_tab.message_sent.connect(self._on_message_sent)
         agent_tab.add_quick_action_requested.connect(self._add_quick_action)
@@ -1378,7 +1390,7 @@ class MainWindow(QMainWindow):
                 self._terminal_output_buffer = self._terminal_output_buffer[-5000:]
 
             # Reset timer - wait 2 seconds after last output before auto-reading
-            if self.auto_read_responses:
+            if self.auto_read_responses and hasattr(self, '_tts_timer') and self._tts_timer is not None:
                 self._tts_timer.stop()
                 self._tts_timer.start(2000)
 
@@ -1715,49 +1727,19 @@ class MainWindow(QMainWindow):
                     self._update_status("Zaznaczony tekst nie zawiera treści do odczytania")
                 return
 
-            # DEBUG: Save buffer to file for analysis
-            debug_file = Path.home() / ".claude-voice-assistant" / "debug_buffer.txt"
-            try:
-                with open(debug_file, 'w') as f:
-                    f.write("=== RAW BUFFER ===\n")
-                    f.write(self._terminal_output_buffer)
-                    f.write("\n\n=== BUFFER LENGTH ===\n")
-                    f.write(str(len(self._terminal_output_buffer)))
-            except:
-                pass
-
             # No selection - extract last Claude response from buffer
             if self._terminal_output_buffer.strip():
-                # Extract only the last response
+                # Extract only the last response (strips UI frames, spinners, user prompts)
                 last_response = extract_last_claude_response(self._terminal_output_buffer)
 
-                # DEBUG: Save extracted response
-                try:
-                    with open(debug_file, 'a') as f:
-                        f.write("\n\n=== EXTRACTED RESPONSE ===\n")
-                        f.write(last_response if last_response else "(empty)")
-                except:
-                    pass
-
                 if last_response:
-                    # Fix Polish encoding first (UTF-8/Latin-1 issues from terminal)
                     last_response = fix_polish_encoding(last_response)
-
-                    # Clean the response for TTS
-                    # use_dictionary=False because terminal encoding may corrupt Polish chars
                     cleaned_text = text_cleaner.clean(last_response, use_dictionary=False)
-
-                    # DEBUG: Save cleaned text
-                    try:
-                        with open(debug_file, 'a') as f:
-                            f.write("\n\n=== CLEANED TEXT ===\n")
-                            f.write(cleaned_text if cleaned_text else "(empty)")
-                    except:
-                        pass
 
                     if cleaned_text:
                         # Stop auto-read timer to prevent double reading
-                        self._tts_timer.stop()
+                        if hasattr(self, '_tts_timer') and self._tts_timer is not None:
+                            self._tts_timer.stop()
                         self.tts.speak(cleaned_text)
                         self._update_status("Czytam ostatnią odpowiedź...")
                         # Clear buffer after reading
@@ -1976,19 +1958,25 @@ class MainWindow(QMainWindow):
         self.tts.toggle_pause()
 
     def _stop_all(self):
-        """Stop all operations."""
-        self.tts.stop()
-        self.stt.cancel_recording()
+        """Stop TTS and STT only. Does NOT interrupt Claude Code in the terminal.
 
-        if self.terminal and QTERMWIDGET_AVAILABLE:
-            # Send Ctrl+C to terminal
-            self.terminal.sendText("\x03")  # Ctrl+C
-            self._terminal_output_buffer = ""
+        Each sub-stop is isolated — a pygame/SDL segfault in TTS must not prevent
+        STT/timer cleanup and must not bubble up to kill the GUI process.
+        """
+        try:
+            self.tts.stop()
+        except Exception as e:
+            print(f"[_stop_all] TTS stop failed: {e}", file=sys.stderr)
+        try:
+            self.stt.cancel_recording()
+        except Exception as e:
+            print(f"[_stop_all] STT cancel failed: {e}", file=sys.stderr)
+
+        self._terminal_output_buffer = ""
+        if hasattr(self, '_tts_timer') and self._tts_timer is not None:
             self._tts_timer.stop()
-        else:
-            self.claude.send_interrupt()
 
-        self._update_status("Zatrzymano")
+        self._update_status("Zatrzymano czytanie")
 
     def _insert_quick_action(self, command: str):
         """Insert quick action command."""

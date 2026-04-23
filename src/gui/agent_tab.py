@@ -62,6 +62,16 @@ class AutoResizeTextEdit(QTextEdit):
             return
         super().keyPressEvent(event)
 
+    def insertFromMimeData(self, source):
+        """Paste as plain text — drop colors, fonts, underlines from the source.
+
+        Covers Ctrl+V, Shift+Insert, context-menu Paste, and text drag&drop.
+        """
+        if source.hasText():
+            self.textCursor().insertText(source.text())
+        else:
+            super().insertFromMimeData(source)
+
     def text(self):
         """Get plain text content."""
         return self.toPlainText()
@@ -80,6 +90,7 @@ class AgentTab(QWidget):
     status_changed = pyqtSignal(str)  # Emitted to update status bar
     request_tts = pyqtSignal(str)  # Request TTS to speak text
     request_tts_stop = pyqtSignal()  # Request TTS to stop
+    request_read_last = pyqtSignal()  # Request MainWindow to read last Claude response (with extraction)
     request_dictation = pyqtSignal(bool)  # Request dictation start/stop
     add_quick_action_requested = pyqtSignal()  # Request to add new quick action
     splitter_changed = pyqtSignal(list)  # Emitted when splitter position changes
@@ -528,10 +539,12 @@ class AgentTab(QWidget):
         self.request_dictation.emit(checked)
 
     def _read_last_response(self):
-        """Request TTS to read last response."""
-        if self._terminal_output_buffer.strip():
-            self.request_tts.emit(self._terminal_output_buffer)
-            self._terminal_output_buffer = ""
+        """Request MainWindow to read last Claude response.
+
+        Delegates to MainWindow which extracts the last response from the buffer
+        (filtering out UI frames, spinners, user prompts) and handles selected text.
+        """
+        self.request_read_last.emit()
 
     def _toggle_pause(self):
         """Toggle TTS pause."""
