@@ -12,9 +12,10 @@ from PyQt5.QtWidgets import (
     QLabel, QLineEdit, QPushButton, QCheckBox, QComboBox,
     QTreeWidget, QTreeWidgetItem, QGroupBox, QFileDialog,
     QMessageBox, QListWidget, QListWidgetItem, QRadioButton,
-    QButtonGroup, QWidget, QSplitter, QFrame, QInputDialog
+    QButtonGroup, QWidget, QSplitter, QFrame, QInputDialog,
+    QListView
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QFont
 
 import sys
@@ -23,7 +24,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config import (
     MEMORY_PROJECTS_FILE, AGENTS_FILE, MEMORY_FILE_EXTENSIONS,
-    DEFAULT_AGENTS, DEFAULT_MEMORY_PROJECTS, ASSETS_DIR
+    DEFAULT_AGENTS, DEFAULT_MEMORY_PROJECTS, ASSETS_DIR,
+    CLAUDE_MODELS, CLAUDE_MODELS_SHORT, DEFAULT_AGENT_MODEL,
+    NEW_AGENT_DEFAULT_MODEL
 )
 
 
@@ -606,6 +609,25 @@ class ProjectEditDialog(QDialog):
         }
 
 
+class _StyledComboBox(QComboBox):
+    """ComboBox with a popup container styled to match the dark theme.
+    Without this override, the popup window's outer frame stays in the
+    system default colors and shows as white strips above/below the items.
+    """
+
+    _POPUP_CONTAINER_STYLE = (
+        "background-color: #2d0a1e;"
+        "border: 1px solid #4a1a3a;"
+        "border-radius: 4px;"
+    )
+
+    def showPopup(self):
+        super().showPopup()
+        container = self.view().parentWidget()
+        if container is not None:
+            container.setStyleSheet(self._POPUP_CONTAINER_STYLE)
+
+
 class AgentConfigDialog(QDialog):
     """Dialog for configuring a single agent."""
 
@@ -614,6 +636,7 @@ class AgentConfigDialog(QDialog):
         self.setWindowTitle("Edytuj agenta" if agent else "Nowy agent")
         self.setMinimumWidth(500)
 
+        self.is_new_agent = agent is None
         self.agent = agent or {}
         self.memory_projects = memory_projects or []  # kept for compatibility but not used
         self.memory_files = list(self.agent.get('memory_files', []))  # list of file paths
@@ -671,6 +694,84 @@ class AgentConfigDialog(QDialog):
         dir_layout.addWidget(browse_btn)
 
         form.addRow("Katalog roboczy:", dir_layout)
+
+        # Model Claude Code
+        chevron_path = str(ASSETS_DIR / "chevron-down.svg").replace("\\", "/")
+        self.model_combo = _StyledComboBox()
+        self.model_combo.setMinimumHeight(36)
+
+        # Use an explicit QListView for the popup so we control its frame and
+        # can react to mouse hover (highlights item under cursor as :selected).
+        model_view = QListView()
+        model_view.setMouseTracking(True)
+        model_view.setFrameShape(QFrame.NoFrame)
+        self.model_combo.setView(model_view)
+
+        self.model_combo.setStyleSheet(f"""
+            QComboBox {{
+                background-color: #2d0a1e;
+                color: #ffffff;
+                border: 1px solid #4a1a3a;
+                border-radius: 4px;
+                padding: 6px 36px 6px 10px;
+                combobox-popup: 0;
+            }}
+            QComboBox:hover {{
+                border-color: #22c55e;
+            }}
+            QComboBox:on {{
+                border-color: #22c55e;
+            }}
+            QComboBox::drop-down {{
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 28px;
+                border-left: 1px solid #4a1a3a;
+                background-color: #3a0f28;
+                border-top-right-radius: 4px;
+                border-bottom-right-radius: 4px;
+            }}
+            QComboBox::drop-down:hover {{
+                background-color: #4a1a3a;
+            }}
+            QComboBox::down-arrow {{
+                image: url("{chevron_path}");
+                width: 10px;
+                height: 6px;
+            }}
+            QComboBox QListView {{
+                background-color: #2d0a1e;
+                color: #ffffff;
+                border: none;
+                outline: 0;
+                padding: 0;
+            }}
+            QComboBox QListView::item {{
+                padding: 8px 12px;
+                min-height: 26px;
+                border: none;
+            }}
+            QComboBox QListView::item:selected {{
+                background-color: #4a1a3a;
+                color: #ffffff;
+            }}
+        """)
+        for key, label in CLAUDE_MODELS.items():
+            self.model_combo.addItem(label, key)
+
+        if self.is_new_agent:
+            current_model = NEW_AGENT_DEFAULT_MODEL
+        else:
+            current_model = self.agent.get('model', DEFAULT_AGENT_MODEL)
+        idx = self.model_combo.findData(current_model)
+        if idx >= 0:
+            self.model_combo.setCurrentIndex(idx)
+
+        form.addRow("Model Claude Code:", self.model_combo)
+
+        model_hint = QLabel("Zmiana modelu wymaga restartu agenta (Stop → Uruchom).")
+        model_hint.setStyleSheet("color: #888888; font-size: 11px;")
+        form.addRow("", model_hint)
 
         # Memory files section - list of file paths
         layout.addLayout(form)
@@ -813,6 +914,7 @@ class AgentConfigDialog(QDialog):
             'memory_files': self.memory_files,
             'auto_start': self.auto_start_checkbox.isChecked(),
             'send_memory_on_start': self.send_memory_checkbox.isChecked(),
+            'model': self.model_combo.currentData() or DEFAULT_AGENT_MODEL,
             'splitter_sizes': self.agent.get('splitter_sizes', [600, 150]),  # domyślne proporcje
         }
 
@@ -913,6 +1015,11 @@ class AgentsManagerDialog(QDialog):
 
         # Agents list
         self.list_widget = QListWidget()
+        # Enable word wrap so the per-item second line (file count + model)
+        # is rendered. Without this, QListWidget collapses '\n' and elides
+        # long names with "...", hiding the second line entirely.
+        self.list_widget.setWordWrap(True)
+        self.list_widget.setTextElideMode(Qt.ElideNone)
         self.list_widget.setStyleSheet("""
             QListWidget {
                 background-color: #2d0a1e;
@@ -991,24 +1098,61 @@ class AgentsManagerDialog(QDialog):
         layout.addLayout(bottom_layout)
 
     def _populate_list(self):
-        """Populate list with agents."""
+        """Populate list with agents.
+
+        Uses setItemWidget with a real QWidget per row so that the second
+        line (file count + model) reliably renders for every agent.
+        QListWidget's default text rendering does not handle '\n' across
+        items consistently — a custom widget bypasses that limitation.
+        """
         self.list_widget.clear()
 
         for agent in self.agents:
-            # Count memory files (new system uses memory_files list)
+            # Memory files count (always shown, even when zero)
             memory_files = agent.get('memory_files', [])
-            if memory_files:
-                file_count = len(memory_files)
-                memory_info = f"{file_count} plik{'ów' if file_count > 4 else 'i' if file_count > 1 else ''}"
+            file_count = len(memory_files)
+            if file_count == 0:
+                memory_info = "Brak plików"
+            elif file_count == 1:
+                memory_info = "1 plik"
+            elif file_count < 5:
+                memory_info = f"{file_count} pliki"
             else:
-                memory_info = "(Brak)"
+                memory_info = f"{file_count} plików"
+
+            # Model used by this agent
+            model_key = agent.get('model', DEFAULT_AGENT_MODEL)
+            model_label = CLAUDE_MODELS_SHORT.get(model_key, model_key)
 
             auto_icon = "🟢" if agent.get('auto_start', True) else "⚪"
-            item_text = f"{auto_icon} {agent.get('name', 'Bez nazwy')}\n   📁 {memory_info}"
+            agent_name = agent.get('name', 'Bez nazwy')
 
-            item = QListWidgetItem(item_text)
+            # Empty list item — visual content lives in the attached widget.
+            item = QListWidgetItem()
             item.setData(Qt.UserRole, agent)
+            item.setSizeHint(QSize(0, 56))
             self.list_widget.addItem(item)
+
+            # Custom widget for this row.
+            row_widget = QWidget()
+            row_widget.setAttribute(Qt.WA_TranslucentBackground)
+            row_layout = QVBoxLayout(row_widget)
+            row_layout.setContentsMargins(4, 4, 4, 4)
+            row_layout.setSpacing(2)
+
+            name_label = QLabel(f"{auto_icon} {agent_name}")
+            name_label.setStyleSheet(
+                "color: #ffffff; font-size: 13px; background: transparent; border: none;"
+            )
+            row_layout.addWidget(name_label)
+
+            info_label = QLabel(f"   📁 {memory_info}  •  🤖 {model_label}")
+            info_label.setStyleSheet(
+                "color: #aaaaaa; font-size: 11px; background: transparent; border: none;"
+            )
+            row_layout.addWidget(info_label)
+
+            self.list_widget.setItemWidget(item, row_widget)
 
     def _get_selected_index(self) -> int:
         """Get selected item index."""

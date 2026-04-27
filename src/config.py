@@ -31,6 +31,29 @@ TRIAL_DAYS = 30
 # Claude Code
 CLAUDE_COMMAND = "/usr/bin/claude"  # Full path to Claude Code CLI
 
+# Claude Code models available for selection per agent.
+# Key is passed to `claude --model <key>`. "default" means: launch without --model
+# (Claude Code uses its own configured default).
+# Version numbers in labels are informational — aliases (sonnet/opus/haiku)
+# always resolve to the newest available version on Claude Code's side.
+CLAUDE_MODELS = {
+    "default": "Domyślny — Opus 4.7 (z konfiguracji Claude Code)",
+    "sonnet": "Sonnet 4.6 (szybki, zbalansowany)",
+    "opus": "Opus 4.7 (najbardziej zdolny)",
+    "haiku": "Haiku 4.5 (najszybszy)",
+}
+# Short labels used in compact lists (e.g. agent manager).
+CLAUDE_MODELS_SHORT = {
+    "default": "Domyślny — Opus 4.7",
+    "sonnet": "Sonnet 4.6",
+    "opus": "Opus 4.7",
+    "haiku": "Haiku 4.5",
+}
+# Fallback for agents that don't have a `model` field saved (backward compat).
+DEFAULT_AGENT_MODEL = "default"
+# Pre-selected model when the user creates a NEW agent.
+NEW_AGENT_DEFAULT_MODEL = "opus"
+
 # Groq API (for Speech-to-Text)
 GROQ_API_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")

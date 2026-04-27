@@ -1223,6 +1223,16 @@ class MainWindow(QMainWindow):
             self._update_status("Błąd uruchamiania Claude Code")
             self._append_system_message("Błąd: Nie można uruchomić Claude Code. Upewnij się, że jest zainstalowany.")
 
+    def _build_claude_command(self, agent_tab) -> str:
+        """Build the claude launch command for a given agent tab,
+        appending --model when the agent has a non-default model selected.
+        """
+        cmd = self.claude_command
+        model = getattr(agent_tab, 'model', 'default')
+        if model and model != 'default':
+            cmd = f"{cmd} --model {model}"
+        return cmd
+
     def _auto_run_claude_command(self):
         """Auto-run Claude command in all terminals with auto_start enabled.
 
@@ -1237,8 +1247,8 @@ class MainWindow(QMainWindow):
         # Send command to all auto-start agent terminals
         for agent_id, tab in self.agent_tabs.items():
             if tab.terminal and tab.auto_start:
-                # Send the command followed by Enter
-                tab.terminal.sendText(self.claude_command + "\r")
+                cmd = self._build_claude_command(tab)
+                tab.terminal.sendText(cmd + "\r")
                 self._update_status("Claude Code uruchomiony")
 
     def _run_claude_in_tab(self, agent_tab, force=False):
@@ -1253,7 +1263,8 @@ class MainWindow(QMainWindow):
             return
 
         if agent_tab.terminal and (agent_tab.auto_start or force):
-            agent_tab.terminal.sendText(self.claude_command + "\r")
+            cmd = self._build_claude_command(agent_tab)
+            agent_tab.terminal.sendText(cmd + "\r")
             self._update_status(f"Claude Code uruchomiony w: {agent_tab.agent_name}")
 
     # ==================== Event Handlers ====================

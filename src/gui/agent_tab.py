@@ -104,6 +104,7 @@ class AgentTab(QWidget):
         self.working_directory = agent_config.get('working_directory', str(Path.home()))
         self.memory_files = agent_config.get('memory_files', [])  # list of file paths
         self.auto_start = agent_config.get('auto_start', True)
+        self.model = agent_config.get('model', 'default')
         self.splitter_sizes = agent_config.get('splitter_sizes', [600, 150])
 
         # State
@@ -730,6 +731,7 @@ class AgentTab(QWidget):
             'auto_start': self.auto_start,
             'memory_files': self.memory_files,
             'working_directory': self.working_directory,
+            'model': self.model,
             'splitter_sizes': self.splitter_sizes,
         }
 
@@ -740,6 +742,7 @@ class AgentTab(QWidget):
         self.agent_name = config.get('name', self.agent_name)
         self.auto_start = config.get('auto_start', self.auto_start)
         self.memory_files = config.get('memory_files', [])
+        self.model = config.get('model', self.model)
 
         new_working_dir = config.get('working_directory', self.working_directory)
         if new_working_dir != self.working_directory:
