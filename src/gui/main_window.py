@@ -291,6 +291,7 @@ from core.text_cleaner import TextCleanerForTTS, extract_last_claude_response, f
 from gui.agent_tab import AgentTab
 from gui.dialogs import (
     MemoryProjectsDialog, AgentConfigDialog, AgentsManagerDialog,
+    SkillsManagerDialog,
     styled_get_open_file_names, styled_get_open_file_name, styled_get_save_file_name
 )
 
@@ -937,6 +938,11 @@ class MainWindow(QMainWindow):
         if dialog.exec_() == QDialog.Accepted:
             self.memory_projects = dialog.get_memory_projects()
 
+    def _show_skills_manager_dialog(self):
+        """Show skills manager dialog (Claude Code skills in ~/.claude/skills/)."""
+        dialog = SkillsManagerDialog(self)
+        dialog.exec_()
+
     def _show_agents_manager_dialog(self):
         """Show agents manager dialog."""
         dialog = AgentsManagerDialog(self, self.agents, self.memory_projects)
@@ -994,6 +1000,13 @@ class MainWindow(QMainWindow):
         skin_colors_action = QAction("🎨 Zmień kolory skórki...", self)
         skin_colors_action.triggered.connect(self._show_skin_settings)
         edit_menu.addAction(skin_colors_action)
+
+        # Extensions menu (Skills, MCP — extensions to Claude Code itself)
+        extensions_menu = menubar.addMenu("Rozszerzenia")
+
+        skills_action = QAction("🧩 Umiejętności (Skills)...", self)
+        skills_action.triggered.connect(self._show_skills_manager_dialog)
+        extensions_menu.addAction(skills_action)
 
         # Agents menu
         agents_menu = menubar.addMenu("Zakładki")

@@ -15,8 +15,8 @@ from PyQt5.QtWidgets import (
     QButtonGroup, QWidget, QSplitter, QFrame, QInputDialog,
     QListView
 )
-from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtGui import QFont
+from PyQt5.QtCore import Qt, QSize, QUrl
+from PyQt5.QtGui import QFont, QDesktopServices
 
 import sys
 from pathlib import Path
@@ -28,6 +28,7 @@ from config import (
     CLAUDE_MODELS, CLAUDE_MODELS_SHORT, DEFAULT_AGENT_MODEL,
     NEW_AGENT_DEFAULT_MODEL
 )
+from core.skills_manager import SkillsManager, Skill, SkillInstallError
 
 
 # === Stylizowane dialogi plików ===
@@ -1256,3 +1257,265 @@ class AgentsManagerDialog(QDialog):
     def get_agents_to_run(self) -> list:
         """Return list of agents marked for immediate run."""
         return [a for a in self.agents if a.get('_run_immediately', False)]
+
+
+class SkillsManagerDialog(QDialog):
+    """Dialog for managing locally installed Claude Code skills."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Umiejętności (Skills)")
+        self.setMinimumSize(700, 500)
+        self.skills_manager = SkillsManager()
+        self._skills: list = []
+        self._setup_ui()
+        self._populate_list()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(10)
+
+        header = QLabel("Umiejętności (Skills)")
+        header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
+        layout.addWidget(header)
+
+        desc = QLabel(
+            "Skille rozszerzają możliwości Claude Code o gotowe procedury "
+            "(np. analiza PDF, tworzenie dokumentów). Claude sam je aktywuje "
+            "gdy ich opis pasuje do treści rozmowy."
+        )
+        desc.setStyleSheet("color: #cccccc; font-size: 13px;")
+        desc.setWordWrap(True)
+        layout.addWidget(desc)
+
+        path_label = QLabel(f"📂 Lokalizacja: {self.skills_manager.skills_dir}")
+        path_label.setStyleSheet("color: #aaaaaa; font-size: 12px;")
+        layout.addWidget(path_label)
+
+        list_layout = QHBoxLayout()
+
+        self.list_widget = QListWidget()
+        self.list_widget.setWordWrap(True)
+        self.list_widget.setTextElideMode(Qt.ElideNone)
+        self.list_widget.setStyleSheet("""
+            QListWidget {
+                background-color: #2d0a1e;
+                color: #ffffff;
+                border: 1px solid #4a1a3a;
+                border-radius: 4px;
+            }
+            QListWidget::item {
+                padding: 10px;
+                border-bottom: 1px solid #4a1a3a;
+            }
+            QListWidget::item:selected {
+                background-color: #6a2a5a;
+            }
+        """)
+        list_layout.addWidget(self.list_widget, stretch=1)
+
+        btn_layout = QVBoxLayout()
+        btn_layout.setSpacing(5)
+
+        self.add_zip_btn = QPushButton("📦 Dodaj z ZIP")
+        self.add_zip_btn.clicked.connect(self._add_from_zip)
+        self.add_zip_btn.setStyleSheet("QPushButton { color: #22c55e; }")
+        btn_layout.addWidget(self.add_zip_btn)
+
+        self.add_folder_btn = QPushButton("📂 Dodaj z folderu")
+        self.add_folder_btn.clicked.connect(self._add_from_folder)
+        self.add_folder_btn.setStyleSheet("QPushButton { color: #22c55e; }")
+        btn_layout.addWidget(self.add_folder_btn)
+
+        btn_layout.addSpacing(15)
+
+        self.open_folder_btn = QPushButton("📁 Pokaż folder")
+        self.open_folder_btn.clicked.connect(self._open_folder)
+        btn_layout.addWidget(self.open_folder_btn)
+
+        self.refresh_btn = QPushButton("🔄 Odśwież")
+        self.refresh_btn.clicked.connect(self._populate_list)
+        btn_layout.addWidget(self.refresh_btn)
+
+        btn_layout.addSpacing(15)
+
+        self.delete_btn = QPushButton("🗑️ Usuń")
+        self.delete_btn.clicked.connect(self._delete_skill)
+        self.delete_btn.setStyleSheet("QPushButton { color: #ef4444; }")
+        btn_layout.addWidget(self.delete_btn)
+
+        btn_layout.addStretch()
+
+        list_layout.addLayout(btn_layout)
+        layout.addLayout(list_layout, stretch=1)
+
+        bottom_layout = QHBoxLayout()
+        bottom_layout.addStretch()
+
+        close_btn = QPushButton("Zamknij")
+        close_btn.clicked.connect(self.accept)
+        bottom_layout.addWidget(close_btn)
+
+        layout.addLayout(bottom_layout)
+
+    def _populate_list(self):
+        self.list_widget.clear()
+        self._skills = self.skills_manager.list_skills()
+
+        if not self._skills:
+            placeholder = QListWidgetItem()
+            placeholder.setFlags(Qt.NoItemFlags)
+            placeholder.setSizeHint(QSize(0, 70))
+            self.list_widget.addItem(placeholder)
+
+            placeholder_widget = QWidget()
+            placeholder_widget.setAttribute(Qt.WA_TranslucentBackground)
+            placeholder_layout = QVBoxLayout(placeholder_widget)
+            placeholder_layout.setContentsMargins(16, 8, 16, 8)
+            placeholder_layout.setSpacing(4)
+            empty_label = QLabel(
+                "Brak zainstalowanych skilli.\n"
+                "Użyj „Dodaj z ZIP\" lub „Dodaj z folderu\" żeby zainstalować pierwszy."
+            )
+            empty_label.setStyleSheet(
+                "color: #cccccc; font-size: 14px; background: transparent;"
+            )
+            empty_label.setWordWrap(True)
+            empty_label.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+            placeholder_layout.addWidget(empty_label)
+            self.list_widget.setItemWidget(placeholder, placeholder_widget)
+            return
+
+        for skill in self._skills:
+            item = QListWidgetItem()
+            item.setData(Qt.UserRole, skill)
+            item.setSizeHint(QSize(0, 64))
+            self.list_widget.addItem(item)
+
+            row_widget = QWidget()
+            row_widget.setAttribute(Qt.WA_TranslucentBackground)
+            row_layout = QVBoxLayout(row_widget)
+            row_layout.setContentsMargins(4, 4, 4, 4)
+            row_layout.setSpacing(2)
+
+            icon = "🧩" if skill.has_metadata else "⚠️"
+            name_label = QLabel(f"{icon} {skill.name}")
+            name_label.setStyleSheet(
+                "color: #ffffff; font-size: 13px; font-weight: bold; "
+                "background: transparent; border: none;"
+            )
+            row_layout.addWidget(name_label)
+
+            description = skill.description or "(brak opisu)"
+            desc_label = QLabel(f"   {description}")
+            desc_label.setStyleSheet(
+                "color: #aaaaaa; font-size: 11px; background: transparent; border: none;"
+            )
+            desc_label.setWordWrap(True)
+            row_layout.addWidget(desc_label)
+
+            self.list_widget.setItemWidget(item, row_widget)
+
+    def _selected_skill(self) -> Optional[Skill]:
+        item = self.list_widget.currentItem()
+        if item is None:
+            return None
+        data = item.data(Qt.UserRole)
+        return data if isinstance(data, Skill) else None
+
+    def _add_from_zip(self):
+        file_filter = "Plik ZIP (*.zip);;Wszystkie pliki (*)"
+        zip_path, _ = styled_get_open_file_name(
+            self, "Wybierz plik ZIP ze skillem", str(Path.home()), file_filter
+        )
+        if not zip_path:
+            return
+
+        self._install_with_overwrite_prompt(
+            install_fn=lambda overwrite: self.skills_manager.install_from_zip(
+                Path(zip_path), overwrite=overwrite
+            ),
+        )
+
+    def _add_from_folder(self):
+        folder = styled_get_existing_directory(
+            self, "Wybierz folder ze skillem", str(Path.home())
+        )
+        if not folder:
+            return
+
+        self._install_with_overwrite_prompt(
+            install_fn=lambda overwrite: self.skills_manager.install_from_folder(
+                Path(folder), overwrite=overwrite
+            ),
+        )
+
+    def _install_with_overwrite_prompt(self, install_fn):
+        try:
+            skill = install_fn(False)
+        except SkillInstallError as exc:
+            msg = str(exc)
+            if "już istnieje" in msg:
+                reply = QMessageBox.question(
+                    self,
+                    "Skill już istnieje",
+                    f"{msg}\n\nNadpisać istniejącego skilla?",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No,
+                )
+                if reply != QMessageBox.Yes:
+                    return
+                try:
+                    skill = install_fn(True)
+                except SkillInstallError as exc2:
+                    QMessageBox.warning(self, "Błąd instalacji", str(exc2))
+                    return
+            else:
+                QMessageBox.warning(self, "Błąd instalacji", msg)
+                return
+        except Exception as exc:
+            QMessageBox.warning(self, "Błąd instalacji", f"Nieoczekiwany błąd: {exc}")
+            return
+
+        QMessageBox.information(
+            self, "Zainstalowano", f"Skill „{skill.name}\" został zainstalowany."
+        )
+        self._populate_list()
+
+    def _open_folder(self):
+        skill = self._selected_skill()
+        target = skill.folder_path if skill else self.skills_manager.skills_dir
+
+        if not target.exists():
+            self.skills_manager.ensure_dir()
+
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(target)))
+
+    def _delete_skill(self):
+        skill = self._selected_skill()
+        if skill is None:
+            QMessageBox.warning(self, "Brak wyboru", "Wybierz skill do usunięcia.")
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "Potwierdź usunięcie",
+            f"Czy na pewno usunąć skill „{skill.name}\"?\n"
+            f"Folder zostanie nieodwracalnie usunięty:\n{skill.folder_path}",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        try:
+            removed = self.skills_manager.remove(skill.folder_name)
+        except SkillInstallError as exc:
+            QMessageBox.warning(self, "Błąd usuwania", str(exc))
+            return
+
+        if removed:
+            QMessageBox.information(self, "Usunięto", f"Skill „{skill.name}\" został usunięty.")
+        else:
+            QMessageBox.warning(self, "Nie znaleziono", "Folder skilla już nie istniał.")
+        self._populate_list()
