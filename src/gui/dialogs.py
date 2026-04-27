@@ -808,6 +808,42 @@ class AgentConfigDialog(QDialog):
         add_file_btn.clicked.connect(self._add_memory_file)
         layout.addWidget(add_file_btn)
 
+        # === Skille tego agenta (lokalne projektu) ===
+        skills_label = QLabel("🧩 Skille tego agenta:")
+        skills_label.setStyleSheet("color: #ffffff; margin-top: 10px;")
+        layout.addWidget(skills_label)
+
+        skills_info = QLabel(
+            "ℹ️ Każdy agent dziedziczy globalne skille z menu Rozszerzenia. "
+            "Tutaj możesz dodać dodatkowe — widoczne tylko dla tego agenta."
+        )
+        skills_info.setStyleSheet("color: #aaaaaa; font-size: 11px;")
+        skills_info.setWordWrap(True)
+        layout.addWidget(skills_info)
+
+        self.manage_agent_skills_btn = QPushButton()
+        self.manage_agent_skills_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2d0a1e;
+                color: #ffffff;
+                border: 1px solid #4a1a3a;
+                border-radius: 4px;
+                padding: 8px;
+                text-align: left;
+            }
+            QPushButton:hover:enabled {
+                border-color: #22c55e;
+            }
+            QPushButton:disabled {
+                color: #777777;
+            }
+        """)
+        self.manage_agent_skills_btn.clicked.connect(self._open_agent_skills)
+        layout.addWidget(self.manage_agent_skills_btn)
+        self._update_agent_skills_button()
+        # Refresh button label whenever working directory changes
+        self.dir_input.textChanged.connect(self._update_agent_skills_button)
+
         # Checkboxes - style with checkmark icon
         checkbox_style = f"""
             QCheckBox {{
@@ -918,6 +954,70 @@ class AgentConfigDialog(QDialog):
             'model': self.model_combo.currentData() or DEFAULT_AGENT_MODEL,
             'splitter_sizes': self.agent.get('splitter_sizes', [600, 150]),  # domyślne proporcje
         }
+
+    # ---------- Per-agent skills (project-local) ----------
+
+    def _agent_local_skills_dir(self) -> Optional[Path]:
+        """Return Path to <working_directory>/.claude/skills/ if working_dir is valid."""
+        wd = self.dir_input.text().strip()
+        if not wd:
+            return None
+        wd_path = Path(wd)
+        if not wd_path.is_dir():
+            return None
+        return wd_path / ".claude" / "skills"
+
+    def _update_agent_skills_button(self):
+        """Refresh label/state of the agent-skills button based on working directory."""
+        local_dir = self._agent_local_skills_dir()
+        if local_dir is None:
+            self.manage_agent_skills_btn.setText(
+                "🧩 Zarządzaj lokalnymi skillami (najpierw ustaw poprawny katalog)"
+            )
+            self.manage_agent_skills_btn.setEnabled(False)
+            self.manage_agent_skills_btn.setToolTip(
+                "Najpierw ustaw poprawny katalog roboczy."
+            )
+            return
+
+        # Count installed local skills (silently — directory may not exist yet)
+        try:
+            count = len(SkillsManager(skills_dir=local_dir).list_skills())
+        except Exception:
+            count = 0
+
+        if count == 0:
+            label = "🧩 Zarządzaj lokalnymi skillami (brak)"
+        elif count == 1:
+            label = "🧩 Zarządzaj lokalnymi skillami (1 zainstalowany)"
+        elif count < 5:
+            label = f"🧩 Zarządzaj lokalnymi skillami ({count} zainstalowane)"
+        else:
+            label = f"🧩 Zarządzaj lokalnymi skillami ({count} zainstalowanych)"
+
+        self.manage_agent_skills_btn.setText(label)
+        self.manage_agent_skills_btn.setEnabled(True)
+        self.manage_agent_skills_btn.setToolTip(
+            f"Skille lokalne dla tego agenta ({local_dir})"
+        )
+
+    def _open_agent_skills(self):
+        """Open SkillsManagerDialog scoped to <working_directory>/.claude/skills/."""
+        local_dir = self._agent_local_skills_dir()
+        if local_dir is None:
+            QMessageBox.warning(
+                self,
+                "Brak katalogu",
+                "Najpierw ustaw poprawny katalog roboczy."
+            )
+            return
+
+        agent_name = self.name_input.text().strip() or "Agent"
+        dialog = SkillsManagerDialog(self, skills_dir=local_dir, agent_name=agent_name)
+        dialog.exec_()
+
+        # Refresh count after the user closed the dialog
+        self._update_agent_skills_button()
 
     def _add_memory_file_chip(self, file_path: str):
         """Add a file chip to the memory files list."""
@@ -1260,13 +1360,28 @@ class AgentsManagerDialog(QDialog):
 
 
 class SkillsManagerDialog(QDialog):
-    """Dialog for managing locally installed Claude Code skills."""
+    """Dialog for managing Claude Code skills.
 
-    def __init__(self, parent=None):
+    By default operates on the global ~/.claude/skills/ directory.
+    When `skills_dir` is provided, scopes to that directory (e.g. for
+    project-local skills inside <agent_working_dir>/.claude/skills/).
+    """
+
+    def __init__(self, parent=None, skills_dir: Optional[Path] = None,
+                 agent_name: Optional[str] = None):
         super().__init__(parent)
-        self.setWindowTitle("Umiejętności (Skills)")
+        self._agent_name = agent_name
+        self._is_per_agent = skills_dir is not None
+
+        if self._is_per_agent and agent_name:
+            self.setWindowTitle(f"Skille agenta — {agent_name}")
+        elif self._is_per_agent:
+            self.setWindowTitle("Skille agenta")
+        else:
+            self.setWindowTitle("Umiejętności (Skills)")
+
         self.setMinimumSize(700, 500)
-        self.skills_manager = SkillsManager()
+        self.skills_manager = SkillsManager(skills_dir=skills_dir)
         self._skills: list = []
         self._setup_ui()
         self._populate_list()
@@ -1275,15 +1390,32 @@ class SkillsManagerDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
 
-        header = QLabel("Umiejętności (Skills)")
+        if self._is_per_agent:
+            header_text = (
+                f"🧩 Skille agenta — {self._agent_name}"
+                if self._agent_name
+                else "🧩 Skille agenta"
+            )
+        else:
+            header_text = "Umiejętności (Skills)"
+
+        header = QLabel(header_text)
         header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
         layout.addWidget(header)
 
-        desc = QLabel(
-            "Skille rozszerzają możliwości Claude Code o gotowe procedury "
-            "(np. analiza PDF, tworzenie dokumentów). Claude sam je aktywuje "
-            "gdy ich opis pasuje do treści rozmowy."
-        )
+        if self._is_per_agent:
+            desc_text = (
+                "Skille tutaj są widoczne TYLKO dla tego agenta. "
+                "Globalne (dla wszystkich agentów) zarządzasz w menu "
+                "Rozszerzenia → Umiejętności (Skills)."
+            )
+        else:
+            desc_text = (
+                "Skille rozszerzają możliwości Claude Code o gotowe procedury "
+                "(np. analiza PDF, tworzenie dokumentów). Claude sam je aktywuje "
+                "gdy ich opis pasuje do treści rozmowy."
+            )
+        desc = QLabel(desc_text)
         desc.setStyleSheet("color: #cccccc; font-size: 13px;")
         desc.setWordWrap(True)
         layout.addWidget(desc)
