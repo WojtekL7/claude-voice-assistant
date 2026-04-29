@@ -1430,17 +1430,50 @@ class AgentsManagerDialog(QDialog):
             )
             row_layout.addWidget(name_label)
 
-            skills_text, skills_tooltip = self._format_skills_summary(agent)
-            info_label = QLabel(
-                f"   📁 {memory_info}  •  🤖 {model_label}  •  {skills_text}"
-            )
-            info_label.setStyleSheet(
+            # Druga linia: trzy osobne etykiety. Tooltipy tylko tam, gdzie
+            # niosą dodatkową informację (📁 pliki, 🧩 skille); część z modelem
+            # jest już w pełni widoczna w tekście, więc nie ma tooltipa.
+            info_style = (
                 "color: #aaaaaa; font-size: 11px; background: transparent; border: none;"
             )
-            info_label.setToolTip(skills_tooltip)
-            row_layout.addWidget(info_label)
+
+            files_label = QLabel(f"   📁 {memory_info}")
+            files_label.setStyleSheet(info_style)
+            files_label.setToolTip(self._format_memory_files_tooltip(agent))
+
+            model_mid_label = QLabel(f"  •  🤖 {model_label}  •  ")
+            model_mid_label.setStyleSheet(info_style)
+
+            skills_text, skills_tooltip = self._format_skills_summary(agent)
+            skills_label = QLabel(skills_text)
+            skills_label.setStyleSheet(info_style)
+            skills_label.setToolTip(skills_tooltip)
+
+            info_row = QHBoxLayout()
+            info_row.setContentsMargins(0, 0, 0, 0)
+            info_row.setSpacing(0)
+            info_row.addWidget(files_label)
+            info_row.addWidget(model_mid_label)
+            info_row.addWidget(skills_label)
+            info_row.addStretch()
+            row_layout.addLayout(info_row)
 
             self.list_widget.setItemWidget(item, row_widget)
+
+    @staticmethod
+    def _format_memory_files_tooltip(agent: dict) -> str:
+        """List the agent's memory files (filenames only) for a hover tooltip.
+
+        Full paths are not shown — they're long and break tooltip layout.
+        The full path is visible inside the agent edit dialog anyway.
+        """
+        files = agent.get('memory_files') or []
+        if not files:
+            return "Pliki pamięci tego agenta:\n\n   (brak plików pamięci)"
+        lines = ["Pliki pamięci tego agenta:", ""]
+        for path in files:
+            lines.append(f"   • {Path(path).name}")
+        return "\n".join(lines)
 
     @staticmethod
     def _pl_local(n: int) -> str:
