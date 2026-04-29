@@ -1430,13 +1430,110 @@ class AgentsManagerDialog(QDialog):
             )
             row_layout.addWidget(name_label)
 
-            info_label = QLabel(f"   📁 {memory_info}  •  🤖 {model_label}")
+            skills_text, skills_tooltip = self._format_skills_summary(agent)
+            info_label = QLabel(
+                f"   📁 {memory_info}  •  🤖 {model_label}  •  {skills_text}"
+            )
             info_label.setStyleSheet(
                 "color: #aaaaaa; font-size: 11px; background: transparent; border: none;"
             )
+            info_label.setToolTip(skills_tooltip)
             row_layout.addWidget(info_label)
 
             self.list_widget.setItemWidget(item, row_widget)
+
+    @staticmethod
+    def _pl_local(n: int) -> str:
+        """Polish plural for 'lokalny': 1 lokalny, 2-4 lokalne, else lokalnych."""
+        if n == 1:
+            return f"{n} lokalny"
+        last_digit = n % 10
+        last_two = n % 100
+        if 2 <= last_digit <= 4 and not 12 <= last_two <= 14:
+            return f"{n} lokalne"
+        return f"{n} lokalnych"
+
+    @staticmethod
+    def _pl_global_only(n: int) -> str:
+        """Polish plural for 'globalny' (no fraction): 1, 2-4, else."""
+        if n == 1:
+            return f"{n} globalny"
+        last_digit = n % 10
+        last_two = n % 100
+        if 2 <= last_digit <= 4 and not 12 <= last_two <= 14:
+            return f"{n} globalne"
+        return f"{n} globalnych"
+
+    def _format_skills_summary(self, agent: dict) -> tuple:
+        """Compute skills info for one agent's row.
+
+        Returns (display_text, tooltip_text). The display text includes an
+        icon + short summary; the tooltip lists every skill name grouped
+        into: globalne aktywne, globalne wyłączone, lokalne.
+        """
+        working_dir = (agent.get('working_directory') or '').strip()
+
+        # Invalid working dir → can't read local skills or disabled list.
+        if not working_dir or not Path(working_dir).is_dir():
+            return (
+                "⚠ skille nieznane",
+                "Katalog roboczy agenta jest pusty lub nie istnieje —\n"
+                "nie da się odczytać listy skilli."
+            )
+
+        wd_path = Path(working_dir)
+
+        # Globalne (z ~/.claude/skills/)
+        global_skills = SkillsManager().list_skills()
+        global_names = [s.name for s in global_skills]
+
+        # Wyłączone globalne dla tego agenta
+        disabled_set = set(AgentSkillsSettings(wd_path).get_disabled_global_skills())
+        enabled_global = [n for n in global_names if n not in disabled_set]
+        disabled_global = [n for n in global_names if n in disabled_set]
+
+        # Lokalne (z <wd>/.claude/skills/)
+        local_skills = SkillsManager(wd_path / ".claude" / "skills").list_skills()
+        local_names = [s.name for s in local_skills]
+
+        n_global_total = len(global_names)
+        n_global_on = len(enabled_global)
+        n_disabled = len(disabled_global)
+        n_local = len(local_names)
+
+        # === Tekst wyświetlany ===
+        if n_global_total == 0 and n_local == 0:
+            display = "🚫 brak skilli"
+        elif n_disabled == 0 and n_local == 0:
+            display = f"🧩 {self._pl_global_only(n_global_on)}"
+        elif n_disabled == 0 and n_local > 0:
+            display = (
+                f"🧩 {self._pl_global_only(n_global_on)} + "
+                f"{self._pl_local(n_local)}"
+            )
+        elif n_disabled > 0 and n_local == 0:
+            display = f"✂️ {n_global_on} z {n_global_total} globalnych"
+        else:
+            display = (
+                f"✂️ {n_global_on} z {n_global_total} globalnych + "
+                f"{self._pl_local(n_local)}"
+            )
+
+        # === Tooltip — pełna lista nazw ===
+        tooltip_parts = ["Skille tego agenta:"]
+        if enabled_global:
+            tooltip_parts.append(f"\n✓ Globalne aktywne ({len(enabled_global)}):")
+            tooltip_parts.extend(f"   • {name}" for name in enabled_global)
+        if disabled_global:
+            tooltip_parts.append(f"\n✗ Globalne wyłączone ({len(disabled_global)}):")
+            tooltip_parts.extend(f"   • {name}" for name in disabled_global)
+        if local_names:
+            tooltip_parts.append(f"\n+ Lokalne ({len(local_names)}):")
+            tooltip_parts.extend(f"   • {name}" for name in local_names)
+        if not enabled_global and not disabled_global and not local_names:
+            tooltip_parts.append("\n(brak zainstalowanych skilli)")
+
+        return (display, "\n".join(tooltip_parts))
 
     def _get_selected_index(self) -> int:
         """Get selected item index."""
