@@ -29,6 +29,7 @@ from config import (
     NEW_AGENT_DEFAULT_MODEL
 )
 from core.skills_manager import SkillsManager, Skill, SkillInstallError
+from core.agent_skills_settings import AgentSkillsSettings
 
 
 # === Stylizowane dialogi plików ===
@@ -841,8 +842,49 @@ class AgentConfigDialog(QDialog):
         self.manage_agent_skills_btn.clicked.connect(self._open_agent_skills)
         layout.addWidget(self.manage_agent_skills_btn)
         self._update_agent_skills_button()
-        # Refresh button label whenever working directory changes
-        self.dir_input.textChanged.connect(self._update_agent_skills_button)
+
+        # === Wyłączanie globalnych skilli per agent ===
+        disable_skills_label = QLabel("🚫 Wyłącz globalne skille dla tego agenta:")
+        disable_skills_label.setStyleSheet("color: #ffffff; margin-top: 10px;")
+        layout.addWidget(disable_skills_label)
+
+        disable_skills_info = QLabel(
+            "ℹ️ Globalne skille są domyślnie aktywne. Odznacz te, których ten "
+            "agent ma nie używać. Zapis dzieje się natychmiast."
+        )
+        disable_skills_info.setStyleSheet("color: #aaaaaa; font-size: 11px;")
+        disable_skills_info.setWordWrap(True)
+        layout.addWidget(disable_skills_info)
+
+        self.global_skills_count_label = QLabel("")
+        self.global_skills_count_label.setStyleSheet("color: #cccccc; font-size: 11px;")
+        layout.addWidget(self.global_skills_count_label)
+
+        self.global_skills_list = QListWidget()
+        self.global_skills_list.setMinimumHeight(120)
+        self.global_skills_list.setMaximumHeight(180)
+        self.global_skills_list.setWordWrap(True)
+        self.global_skills_list.setTextElideMode(Qt.ElideNone)
+        self.global_skills_list.setStyleSheet("""
+            QListWidget {
+                background-color: #2d0a1e;
+                color: #ffffff;
+                border: 1px solid #4a1a3a;
+                border-radius: 4px;
+            }
+            QListWidget::item {
+                padding: 4px;
+                border-bottom: 1px solid #3a1428;
+            }
+            QListWidget::item:selected {
+                background-color: #4a1a3a;
+            }
+        """)
+        layout.addWidget(self.global_skills_list)
+
+        self._refresh_global_skills_section()
+        # Single connection — both 1A button and 1B section refresh on dir change
+        self.dir_input.textChanged.connect(self._on_working_dir_changed)
 
         # Checkboxes - style with checkmark icon
         checkbox_style = f"""
@@ -1018,6 +1060,147 @@ class AgentConfigDialog(QDialog):
 
         # Refresh count after the user closed the dialog
         self._update_agent_skills_button()
+
+    # ---------- Wyłączanie globalnych skilli per agent (1B) ----------
+
+    def _on_working_dir_changed(self):
+        """Refresh both 1A button and 1B section when the working dir changes."""
+        self._update_agent_skills_button()
+        self._refresh_global_skills_section()
+
+    def _agent_skills_settings(self) -> Optional[AgentSkillsSettings]:
+        """Return AgentSkillsSettings if working_dir is valid, else None."""
+        wd = self.dir_input.text().strip()
+        if not wd or not Path(wd).is_dir():
+            return None
+        return AgentSkillsSettings(Path(wd))
+
+    def _refresh_global_skills_section(self):
+        """Rebuild the global-skills list and update count label."""
+        # Block signals while rebuilding to avoid spurious itemChanged events.
+        self.global_skills_list.blockSignals(True)
+        self.global_skills_list.clear()
+        self.global_skills_list.blockSignals(False)
+
+        global_skills = SkillsManager().list_skills()
+        settings = self._agent_skills_settings()
+        disabled_set = set(settings.get_disabled_global_skills()) if settings else set()
+
+        # Update count label
+        if settings is None:
+            self.global_skills_count_label.setText(
+                "⚠ Najpierw ustaw poprawny katalog roboczy."
+            )
+            self.global_skills_count_label.setStyleSheet(
+                "color: #f59e0b; font-size: 11px;"
+            )
+        elif not global_skills:
+            self.global_skills_count_label.setText(
+                "Brak zainstalowanych globalnych skilli. "
+                "Zainstaluj je w menu Rozszerzenia → Umiejętności."
+            )
+            self.global_skills_count_label.setStyleSheet(
+                "color: #cccccc; font-size: 11px;"
+            )
+        else:
+            disabled_count = sum(1 for s in global_skills if s.name in disabled_set)
+            self.global_skills_count_label.setText(
+                f"{disabled_count} z {len(global_skills)} globalnych wyłączone dla tego agenta."
+            )
+            self.global_skills_count_label.setStyleSheet(
+                "color: #cccccc; font-size: 11px;"
+            )
+
+        # Populate list
+        if not global_skills:
+            return
+
+        for skill in global_skills:
+            item = QListWidgetItem()
+            item.setSizeHint(QSize(0, 75))
+            item.setData(Qt.UserRole, skill.name)
+            self.global_skills_list.addItem(item)
+
+            row = QWidget()
+            row.setAttribute(Qt.WA_TranslucentBackground)
+            row_h = QHBoxLayout(row)
+            row_h.setContentsMargins(8, 6, 8, 6)
+            row_h.setSpacing(8)
+
+            cb = QCheckBox()
+            cb.setChecked(skill.name not in disabled_set)
+            cb.setEnabled(settings is not None)
+            cb.setStyleSheet("QCheckBox { background: transparent; }")
+            # Default-arg trick to capture name in lambda closure
+            cb.toggled.connect(
+                lambda checked, name=skill.name: self._toggle_global_skill(name, checked)
+            )
+            row_h.addWidget(cb)
+
+            text_v = QVBoxLayout()
+            text_v.setSpacing(2)
+            name_l = QLabel(skill.name)
+            name_l.setStyleSheet(
+                "color: #ffffff; font-size: 13px; font-weight: bold; "
+                "background: transparent; border: none;"
+            )
+            text_v.addWidget(name_l)
+
+            full_description = skill.description or "(brak opisu)"
+            short_description = self._shorten_skill_description(full_description)
+            desc_l = QLabel(short_description)
+            desc_l.setStyleSheet(
+                "color: #aaaaaa; font-size: 11px; background: transparent; border: none;"
+            )
+            desc_l.setWordWrap(True)
+            desc_l.setToolTip(full_description)
+            text_v.addWidget(desc_l)
+            row_h.addLayout(text_v, stretch=1)
+
+            self.global_skills_list.setItemWidget(item, row)
+
+    @staticmethod
+    def _shorten_skill_description(text: str, max_chars: int = 120) -> str:
+        """Trim a skill's description for compact display.
+
+        Prefers cutting at the end of the first sentence, falls back to a
+        hard char cap. Full text is shown in the tooltip.
+        """
+        text = text.strip()
+        # First-sentence trim
+        for sep in (". ", ".\n"):
+            idx = text.find(sep)
+            if 0 < idx <= max_chars:
+                return text[: idx + 1]
+        # Hard cap with ellipsis
+        if len(text) > max_chars:
+            return text[:max_chars].rstrip() + "…"
+        return text
+
+    def _toggle_global_skill(self, skill_name: str, checked: bool):
+        """Persist a single skill's enabled/disabled state for this agent."""
+        settings = self._agent_skills_settings()
+        if settings is None:
+            return  # working_dir invalid — checkbox should be disabled anyway
+        try:
+            if checked:
+                settings.enable(skill_name)
+            else:
+                settings.disable(skill_name)
+        except Exception as exc:
+            QMessageBox.warning(
+                self, "Błąd zapisu",
+                f"Nie udało się zapisać ustawień: {exc}"
+            )
+            return
+
+        # Refresh just the count label (avoid full list rebuild — it would
+        # detach checkbox widgets and lose the keyboard focus).
+        global_skills = SkillsManager().list_skills()
+        disabled_count = len(settings.get_disabled_global_skills())
+        self.global_skills_count_label.setText(
+            f"{disabled_count} z {len(global_skills)} globalnych wyłączone dla tego agenta."
+        )
 
     def _add_memory_file_chip(self, file_path: str):
         """Add a file chip to the memory files list."""
