@@ -291,7 +291,7 @@ from core.text_cleaner import TextCleanerForTTS, extract_last_claude_response, f
 from gui.agent_tab import AgentTab
 from gui.dialogs import (
     MemoryProjectsDialog, AgentConfigDialog, AgentsManagerDialog,
-    SkillsManagerDialog,
+    SkillsManagerDialog, McpManagerDialog,
     styled_get_open_file_names, styled_get_open_file_name, styled_get_save_file_name
 )
 
@@ -943,6 +943,11 @@ class MainWindow(QMainWindow):
         dialog = SkillsManagerDialog(self)
         dialog.exec_()
 
+    def _show_mcp_manager_dialog(self):
+        """Show MCP servers manager dialog (global scope)."""
+        dialog = McpManagerDialog(self)
+        dialog.exec_()
+
     def _show_agents_manager_dialog(self):
         """Show agents manager dialog."""
         dialog = AgentsManagerDialog(self, self.agents, self.memory_projects)
@@ -1007,6 +1012,10 @@ class MainWindow(QMainWindow):
         skills_action = QAction("🧩 Umiejętności (Skills)...", self)
         skills_action.triggered.connect(self._show_skills_manager_dialog)
         extensions_menu.addAction(skills_action)
+
+        mcp_action = QAction("🔌 Serwery MCP...", self)
+        mcp_action.triggered.connect(self._show_mcp_manager_dialog)
+        extensions_menu.addAction(mcp_action)
 
         # Agents menu
         agents_menu = menubar.addMenu("Zakładki")

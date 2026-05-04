@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
     QTreeWidget, QTreeWidgetItem, QGroupBox, QFileDialog,
     QMessageBox, QListWidget, QListWidgetItem, QRadioButton,
     QButtonGroup, QWidget, QSplitter, QFrame, QInputDialog,
-    QListView
+    QListView, QPlainTextEdit, QStackedWidget
 )
 from PyQt5.QtCore import Qt, QSize, QUrl
 from PyQt5.QtGui import QFont, QDesktopServices
@@ -30,6 +30,12 @@ from config import (
 )
 from core.skills_manager import SkillsManager, Skill, SkillInstallError
 from core.agent_skills_settings import AgentSkillsSettings
+from core.mcp_manager import (
+    McpManager, McpServer, McpError,
+    STATUS_CONNECTED, STATUS_NEEDS_AUTH, STATUS_FAILED, STATUS_UNKNOWN,
+)
+from core.agent_mcp_settings import AgentMcpSettings
+from core.mcp_templates import MCP_TEMPLATES, McpTemplate
 
 
 # === Stylizowane dialogi plików ===
@@ -883,7 +889,83 @@ class AgentConfigDialog(QDialog):
         layout.addWidget(self.global_skills_list)
 
         self._refresh_global_skills_section()
-        # Single connection — both 1A button and 1B section refresh on dir change
+
+        # === Serwery MCP tego agenta (lokalne projektu) ===
+        mcp_label = QLabel("🔌 Serwery MCP tego agenta:")
+        mcp_label.setStyleSheet("color: #ffffff; margin-top: 10px;")
+        layout.addWidget(mcp_label)
+
+        mcp_info = QLabel(
+            "ℹ️ Każdy agent dziedziczy globalne serwery MCP z menu Rozszerzenia. "
+            "Tutaj możesz dodać dodatkowe — działające tylko w katalogu tego agenta."
+        )
+        mcp_info.setStyleSheet("color: #aaaaaa; font-size: 11px;")
+        mcp_info.setWordWrap(True)
+        layout.addWidget(mcp_info)
+
+        self.manage_agent_mcp_btn = QPushButton()
+        self.manage_agent_mcp_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2d0a1e;
+                color: #ffffff;
+                border: 1px solid #4a1a3a;
+                border-radius: 4px;
+                padding: 8px;
+                text-align: left;
+            }
+            QPushButton:hover:enabled {
+                border-color: #22c55e;
+            }
+            QPushButton:disabled {
+                color: #777777;
+            }
+        """)
+        self.manage_agent_mcp_btn.clicked.connect(self._open_agent_mcp)
+        layout.addWidget(self.manage_agent_mcp_btn)
+        self._update_agent_mcp_button()
+
+        # === Wyłączanie globalnych MCP per agent ===
+        disable_mcp_label = QLabel("🚫 Wyłącz globalne MCP dla tego agenta:")
+        disable_mcp_label.setStyleSheet("color: #ffffff; margin-top: 10px;")
+        layout.addWidget(disable_mcp_label)
+
+        disable_mcp_info = QLabel(
+            "ℹ️ Globalne serwery MCP są domyślnie aktywne. Odznacz te, których ten "
+            "agent ma nie używać. Zapis dzieje się natychmiast."
+        )
+        disable_mcp_info.setStyleSheet("color: #aaaaaa; font-size: 11px;")
+        disable_mcp_info.setWordWrap(True)
+        layout.addWidget(disable_mcp_info)
+
+        self.global_mcp_count_label = QLabel("")
+        self.global_mcp_count_label.setStyleSheet("color: #cccccc; font-size: 11px;")
+        layout.addWidget(self.global_mcp_count_label)
+
+        self.global_mcp_list = QListWidget()
+        self.global_mcp_list.setMinimumHeight(120)
+        self.global_mcp_list.setMaximumHeight(180)
+        self.global_mcp_list.setWordWrap(True)
+        self.global_mcp_list.setTextElideMode(Qt.ElideNone)
+        self.global_mcp_list.setStyleSheet("""
+            QListWidget {
+                background-color: #2d0a1e;
+                color: #ffffff;
+                border: 1px solid #4a1a3a;
+                border-radius: 4px;
+            }
+            QListWidget::item {
+                padding: 4px;
+                border-bottom: 1px solid #3a1428;
+            }
+            QListWidget::item:selected {
+                background-color: #4a1a3a;
+            }
+        """)
+        layout.addWidget(self.global_mcp_list)
+
+        self._refresh_global_mcp_section()
+
+        # Single connection — Skills (1A/1B) + MCP (1A/1B) refresh on dir change
         self.dir_input.textChanged.connect(self._on_working_dir_changed)
 
         # Checkboxes - style with checkmark icon
@@ -1064,9 +1146,11 @@ class AgentConfigDialog(QDialog):
     # ---------- Wyłączanie globalnych skilli per agent (1B) ----------
 
     def _on_working_dir_changed(self):
-        """Refresh both 1A button and 1B section when the working dir changes."""
+        """Refresh skills (1A/1B) + MCP (1A/1B) sections when the working dir changes."""
         self._update_agent_skills_button()
         self._refresh_global_skills_section()
+        self._update_agent_mcp_button()
+        self._refresh_global_mcp_section()
 
     def _agent_skills_settings(self) -> Optional[AgentSkillsSettings]:
         """Return AgentSkillsSettings if working_dir is valid, else None."""
@@ -1200,6 +1284,177 @@ class AgentConfigDialog(QDialog):
         disabled_count = len(settings.get_disabled_global_skills())
         self.global_skills_count_label.setText(
             f"{disabled_count} z {len(global_skills)} globalnych wyłączone dla tego agenta."
+        )
+
+    # ---------- Per-agent MCP servers (project-local) ----------
+
+    def _agent_working_dir_path(self) -> Optional[Path]:
+        """Return Path to working_directory if valid, else None."""
+        wd = self.dir_input.text().strip()
+        if not wd:
+            return None
+        wd_path = Path(wd)
+        return wd_path if wd_path.is_dir() else None
+
+    def _update_agent_mcp_button(self):
+        """Refresh label/state of the agent-MCP button based on working directory."""
+        wd_path = self._agent_working_dir_path()
+        if wd_path is None:
+            self.manage_agent_mcp_btn.setText(
+                "🔌 Zarządzaj lokalnymi MCP (najpierw ustaw poprawny katalog)"
+            )
+            self.manage_agent_mcp_btn.setEnabled(False)
+            self.manage_agent_mcp_btn.setToolTip(
+                "Najpierw ustaw poprawny katalog roboczy."
+            )
+            return
+
+        # Count local-scope MCP servers for this working_dir (silently)
+        try:
+            servers = McpManager(working_dir=wd_path).list_servers()
+            count = sum(1 for s in servers if s.scope == "local" and not s.managed)
+        except Exception:
+            count = 0
+
+        if count == 0:
+            label = "🔌 Zarządzaj lokalnymi MCP (brak)"
+        elif count == 1:
+            label = "🔌 Zarządzaj lokalnymi MCP (1 zainstalowany)"
+        elif count < 5:
+            label = f"🔌 Zarządzaj lokalnymi MCP ({count} zainstalowane)"
+        else:
+            label = f"🔌 Zarządzaj lokalnymi MCP ({count} zainstalowanych)"
+
+        self.manage_agent_mcp_btn.setText(label)
+        self.manage_agent_mcp_btn.setEnabled(True)
+        self.manage_agent_mcp_btn.setToolTip(
+            f"Serwery MCP lokalne dla tego agenta ({wd_path})"
+        )
+
+    def _open_agent_mcp(self):
+        """Open McpManagerDialog scoped to this agent's working_dir."""
+        wd_path = self._agent_working_dir_path()
+        if wd_path is None:
+            QMessageBox.warning(self, "Brak katalogu", "Najpierw ustaw poprawny katalog roboczy.")
+            return
+        agent_name = self.name_input.text().strip() or "Agent"
+        dialog = McpManagerDialog(self, working_dir=wd_path, agent_name=agent_name)
+        dialog.exec_()
+        # Refresh count after the user closed the dialog
+        self._update_agent_mcp_button()
+
+    # ---------- Wyłączanie globalnych MCP per agent ----------
+
+    def _agent_mcp_settings(self) -> Optional[AgentMcpSettings]:
+        """Return AgentMcpSettings if working_dir is valid, else None."""
+        wd_path = self._agent_working_dir_path()
+        return AgentMcpSettings(wd_path) if wd_path else None
+
+    def _list_global_mcp_servers(self) -> List[McpServer]:
+        """Return MCP servers visible globally (user scope + managed by claude.ai).
+
+        Te serwery są kandydatami do wyłączenia per agent.
+        """
+        try:
+            all_servers = McpManager().list_servers()
+        except Exception:
+            return []
+        return [s for s in all_servers if s.scope in ("user", "managed")]
+
+    def _refresh_global_mcp_section(self):
+        """Rebuild the global-MCP list and update count label."""
+        self.global_mcp_list.blockSignals(True)
+        self.global_mcp_list.clear()
+        self.global_mcp_list.blockSignals(False)
+
+        global_mcps = self._list_global_mcp_servers()
+        settings = self._agent_mcp_settings()
+        # Porównujemy po sanitized name (deny rule używa zsanityzowanej formy)
+        disabled_set = set(settings.get_disabled_mcp_sanitized()) if settings else set()
+
+        if settings is None:
+            self.global_mcp_count_label.setText("⚠ Najpierw ustaw poprawny katalog roboczy.")
+            self.global_mcp_count_label.setStyleSheet("color: #f59e0b; font-size: 11px;")
+        elif not global_mcps:
+            self.global_mcp_count_label.setText(
+                "Brak globalnych serwerów MCP. Dodaj je w menu Rozszerzenia → Serwery MCP."
+            )
+            self.global_mcp_count_label.setStyleSheet("color: #cccccc; font-size: 11px;")
+        else:
+            disabled_count = sum(1 for s in global_mcps if s.sanitized_name in disabled_set)
+            self.global_mcp_count_label.setText(
+                f"{disabled_count} z {len(global_mcps)} globalnych wyłączone dla tego agenta."
+            )
+            self.global_mcp_count_label.setStyleSheet("color: #cccccc; font-size: 11px;")
+
+        if not global_mcps:
+            return
+
+        for srv in global_mcps:
+            item = QListWidgetItem()
+            item.setSizeHint(QSize(0, 60))
+            item.setData(Qt.UserRole, srv.name)
+            self.global_mcp_list.addItem(item)
+
+            row = QWidget()
+            row.setAttribute(Qt.WA_TranslucentBackground)
+            row_h = QHBoxLayout(row)
+            row_h.setContentsMargins(8, 6, 8, 6)
+            row_h.setSpacing(8)
+
+            cb = QCheckBox()
+            cb.setChecked(srv.sanitized_name not in disabled_set)
+            cb.setEnabled(settings is not None)
+            cb.setStyleSheet("QCheckBox { background: transparent; }")
+            cb.toggled.connect(
+                lambda checked, name=srv.name: self._toggle_global_mcp(name, checked)
+            )
+            row_h.addWidget(cb)
+
+            text_v = QVBoxLayout()
+            text_v.setSpacing(2)
+            scope_label = _MCP_SCOPE_LABEL.get(srv.scope, srv.scope)
+            name_l = QLabel(f"{srv.name}  <span style='color:#888;'>[{scope_label}]</span>")
+            name_l.setTextFormat(Qt.RichText)
+            name_l.setStyleSheet(
+                "color: #ffffff; font-size: 13px; font-weight: bold; "
+                "background: transparent; border: none;"
+            )
+            text_v.addWidget(name_l)
+
+            target_text = srv.target if len(srv.target) <= 80 else srv.target[:77] + "..."
+            desc_l = QLabel(target_text)
+            desc_l.setStyleSheet(
+                "color: #aaaaaa; font-size: 11px; background: transparent; border: none;"
+            )
+            desc_l.setWordWrap(True)
+            desc_l.setToolTip(srv.target)
+            text_v.addWidget(desc_l)
+            row_h.addLayout(text_v, stretch=1)
+
+            self.global_mcp_list.setItemWidget(item, row)
+
+    def _toggle_global_mcp(self, server_name: str, checked: bool):
+        """Persist a single MCP server's enabled/disabled state for this agent."""
+        settings = self._agent_mcp_settings()
+        if settings is None:
+            return
+        try:
+            if checked:
+                settings.enable(server_name)
+            else:
+                settings.disable(server_name)
+        except Exception as exc:
+            QMessageBox.warning(
+                self, "Błąd zapisu",
+                f"Nie udało się zapisać ustawień MCP: {exc}"
+            )
+            return
+        # Refresh just the count label (avoid full list rebuild — would lose checkbox focus)
+        global_mcps = self._list_global_mcp_servers()
+        disabled_count = len(settings.get_disabled_mcp_sanitized())
+        self.global_mcp_count_label.setText(
+            f"{disabled_count} z {len(global_mcps)} globalnych wyłączone dla tego agenta."
         )
 
     def _add_memory_file_chip(self, file_path: str):
@@ -1964,3 +2219,826 @@ class SkillsManagerDialog(QDialog):
         else:
             QMessageBox.warning(self, "Nie znaleziono", "Folder skilla już nie istniał.")
         self._populate_list()
+
+
+# ============================================================================
+# MCP Manager — zarządzanie serwerami Model Context Protocol
+# ============================================================================
+
+# Mapowanie statusu na ikonę + kolor (do listy)
+_MCP_STATUS_BADGES = {
+    STATUS_CONNECTED: ("✅", "#22c55e", "Aktywny"),
+    STATUS_NEEDS_AUTH: ("🔐", "#eab308", "Wymaga autoryzacji"),
+    STATUS_FAILED: ("❌", "#ef4444", "Błąd połączenia"),
+    STATUS_UNKNOWN: ("❓", "#94a3b8", "Status nieznany"),
+}
+
+_MCP_SCOPE_LABEL = {
+    "user": "globalny",
+    "local": "lokalny (agenta)",
+    "managed": "zarządzany (claude.ai)",
+}
+
+
+class McpManagerDialog(QDialog):
+    """Dialog zarządzania serwerami MCP.
+
+    Tryby:
+      - globalny (working_dir=None): pokazuje wszystkie serwery, dodawanie
+        domyślnie w scope=user.
+      - per-agent (working_dir=Path): pokazuje serwery dotyczące tego agenta
+        (user + managed + local-tego-katalogu), dodawanie zawsze w scope=local.
+    """
+
+    def __init__(self, parent=None, working_dir: Optional[Path] = None,
+                 agent_name: Optional[str] = None):
+        super().__init__(parent)
+        self._working_dir = Path(working_dir) if working_dir else None
+        self._agent_name = agent_name
+        self._is_per_agent = working_dir is not None
+
+        if self._is_per_agent and agent_name:
+            self.setWindowTitle(f"Serwery MCP agenta — {agent_name}")
+        elif self._is_per_agent:
+            self.setWindowTitle("Serwery MCP agenta")
+        else:
+            self.setWindowTitle("Serwery MCP")
+
+        self.setMinimumSize(780, 560)
+        self.manager = McpManager(working_dir=self._working_dir)
+        self._servers: List[McpServer] = []
+        self._setup_ui()
+        self._populate_list()
+
+    # ---------- UI ----------
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(10)
+
+        if self._is_per_agent:
+            header_text = (
+                f"🔌 Serwery MCP agenta — {self._agent_name}"
+                if self._agent_name else "🔌 Serwery MCP agenta"
+            )
+            desc_text = (
+                "Serwery dodane tutaj działają TYLKO w katalogu tego agenta. "
+                "Globalne serwery (dla wszystkich agentów) zarządzasz w menu "
+                "Rozszerzenia → Serwery MCP."
+            )
+        else:
+            header_text = "🔌 Serwery MCP (Model Context Protocol)"
+            desc_text = (
+                "Serwery MCP to „wtyczki z narzędziami\" dla Claude Code — "
+                "pozwalają agentowi czytać Twój dysk, kalendarz, bazy danych, "
+                "wysyłać wiadomości itp. Claude sam decyduje, kiedy ich użyć."
+            )
+
+        header = QLabel(header_text)
+        header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
+        layout.addWidget(header)
+
+        desc = QLabel(desc_text)
+        desc.setStyleSheet("color: #cccccc; font-size: 13px;")
+        desc.setWordWrap(True)
+        layout.addWidget(desc)
+
+        # Lista + panel przycisków
+        list_layout = QHBoxLayout()
+
+        self.list_widget = QListWidget()
+        self.list_widget.setWordWrap(True)
+        self.list_widget.setTextElideMode(Qt.ElideNone)
+        self.list_widget.setStyleSheet("""
+            QListWidget {
+                background-color: #2d0a1e;
+                color: #ffffff;
+                border: 1px solid #4a1a3a;
+                border-radius: 4px;
+            }
+            QListWidget::item {
+                padding: 10px;
+                border-bottom: 1px solid #4a1a3a;
+            }
+            QListWidget::item:selected {
+                background-color: #6a2a5a;
+            }
+        """)
+        list_layout.addWidget(self.list_widget, stretch=1)
+
+        btn_layout = QVBoxLayout()
+        btn_layout.setSpacing(5)
+
+        self.add_template_btn = QPushButton("📚 Dodaj z szablonu...")
+        self.add_template_btn.clicked.connect(self._add_from_template)
+        self.add_template_btn.setStyleSheet("QPushButton { color: #22c55e; }")
+        btn_layout.addWidget(self.add_template_btn)
+
+        self.add_manual_btn = QPushButton("✏️ Dodaj ręcznie...")
+        self.add_manual_btn.clicked.connect(self._add_manual)
+        self.add_manual_btn.setStyleSheet("QPushButton { color: #22c55e; }")
+        btn_layout.addWidget(self.add_manual_btn)
+
+        self.add_json_btn = QPushButton("📋 Dodaj z JSON...")
+        self.add_json_btn.clicked.connect(self._add_from_json)
+        self.add_json_btn.setStyleSheet("QPushButton { color: #22c55e; }")
+        btn_layout.addWidget(self.add_json_btn)
+
+        btn_layout.addSpacing(15)
+
+        self.refresh_btn = QPushButton("🔄 Odśwież")
+        self.refresh_btn.clicked.connect(self._populate_list)
+        btn_layout.addWidget(self.refresh_btn)
+
+        btn_layout.addSpacing(15)
+
+        self.delete_btn = QPushButton("🗑️ Usuń")
+        self.delete_btn.clicked.connect(self._delete_selected)
+        self.delete_btn.setStyleSheet("QPushButton { color: #ef4444; }")
+        btn_layout.addWidget(self.delete_btn)
+
+        btn_layout.addStretch()
+
+        list_layout.addLayout(btn_layout)
+        layout.addLayout(list_layout, stretch=1)
+
+        # Stopka
+        bottom_layout = QHBoxLayout()
+        bottom_layout.addStretch()
+        close_btn = QPushButton("Zamknij")
+        close_btn.clicked.connect(self.accept)
+        bottom_layout.addWidget(close_btn)
+        layout.addLayout(bottom_layout)
+
+    # ---------- Lista ----------
+
+    def _populate_list(self):
+        self.list_widget.clear()
+        try:
+            all_servers = self.manager.list_servers()
+        except McpError as exc:
+            QMessageBox.warning(self, "Błąd", f"Nie udało się pobrać listy MCP:\n{exc}")
+            all_servers = []
+
+        # Filtr per-agent: pokazuj user + managed + local (z tego working_dir)
+        # W praktyce `claude mcp list` uruchomione z cwd=working_dir zwraca
+        # tylko local-tego-katalogu, więc nic nie obetnie wieleagenta.
+        self._servers = all_servers
+
+        if not self._servers:
+            placeholder = QListWidgetItem()
+            placeholder.setFlags(Qt.NoItemFlags)
+            placeholder.setSizeHint(QSize(0, 70))
+            self.list_widget.addItem(placeholder)
+
+            placeholder_widget = QWidget()
+            placeholder_widget.setAttribute(Qt.WA_TranslucentBackground)
+            pl_layout = QVBoxLayout(placeholder_widget)
+            pl_layout.setContentsMargins(16, 8, 16, 8)
+            empty_label = QLabel(
+                "Brak serwerów MCP.\n"
+                "Użyj „Dodaj z szablonu\" żeby zainstalować pierwszy."
+            )
+            empty_label.setStyleSheet(
+                "color: #cccccc; font-size: 14px; background: transparent;"
+            )
+            empty_label.setWordWrap(True)
+            pl_layout.addWidget(empty_label)
+            self.list_widget.setItemWidget(placeholder, placeholder_widget)
+            return
+
+        for srv in self._servers:
+            item = QListWidgetItem()
+            item.setData(Qt.UserRole, srv)
+            item.setSizeHint(QSize(0, 76))
+            self.list_widget.addItem(item)
+
+            row_widget = QWidget()
+            row_widget.setAttribute(Qt.WA_TranslucentBackground)
+            row_layout = QVBoxLayout(row_widget)
+            row_layout.setContentsMargins(4, 4, 4, 4)
+            row_layout.setSpacing(2)
+
+            icon, color, status_label = _MCP_STATUS_BADGES.get(
+                srv.status, _MCP_STATUS_BADGES[STATUS_UNKNOWN]
+            )
+            scope_label = _MCP_SCOPE_LABEL.get(srv.scope, srv.scope)
+
+            name_html = (
+                f"{icon} <b>{srv.name}</b> "
+                f"<span style='color: #aaaaaa; font-weight: normal;'>"
+                f"[{srv.transport} · {scope_label}]</span>"
+            )
+            name_label = QLabel(name_html)
+            name_label.setStyleSheet(
+                "color: #ffffff; font-size: 13px; background: transparent; border: none;"
+            )
+            name_label.setTextFormat(Qt.RichText)
+            row_layout.addWidget(name_label)
+
+            target_text = srv.target if len(srv.target) <= 90 else srv.target[:87] + "..."
+            detail_label = QLabel(
+                f"<span style='color: {color};'>{status_label}</span> "
+                f"<span style='color: #888888;'>· {target_text}</span>"
+            )
+            detail_label.setStyleSheet(
+                "font-size: 11px; background: transparent; border: none;"
+            )
+            detail_label.setTextFormat(Qt.RichText)
+            detail_label.setWordWrap(True)
+            row_layout.addWidget(detail_label)
+
+            self.list_widget.setItemWidget(item, row_widget)
+
+    def _selected_server(self) -> Optional[McpServer]:
+        item = self.list_widget.currentItem()
+        if item is None:
+            return None
+        data = item.data(Qt.UserRole)
+        return data if isinstance(data, McpServer) else None
+
+    # ---------- Akcje: dodawanie ----------
+
+    def _default_scope(self) -> str:
+        return "local" if self._is_per_agent else "user"
+
+    def _add_from_template(self):
+        picker = _McpTemplatePickerDialog(self)
+        if picker.exec_() != QDialog.Accepted or picker.selected_template is None:
+            return
+        config_dlg = _McpTemplateConfigDialog(
+            self,
+            template=picker.selected_template,
+            default_scope=self._default_scope(),
+            scope_locked=self._is_per_agent,
+        )
+        if config_dlg.exec_() != QDialog.Accepted:
+            return
+        try:
+            config_dlg.install_into(self.manager)
+        except McpError as exc:
+            QMessageBox.warning(self, "Błąd dodawania", str(exc))
+            return
+        QMessageBox.information(
+            self, "Dodano",
+            f"Serwer „{config_dlg.final_name}\" został dodany.\n\n"
+            f"{picker.selected_template.install_hint}".strip()
+        )
+        self._populate_list()
+
+    def _add_manual(self):
+        dlg = _McpAddManualDialog(
+            self,
+            default_scope=self._default_scope(),
+            scope_locked=self._is_per_agent,
+        )
+        if dlg.exec_() != QDialog.Accepted:
+            return
+        try:
+            dlg.install_into(self.manager)
+        except McpError as exc:
+            QMessageBox.warning(self, "Błąd dodawania", str(exc))
+            return
+        QMessageBox.information(self, "Dodano", f"Serwer „{dlg.final_name}\" został dodany.")
+        self._populate_list()
+
+    def _add_from_json(self):
+        dlg = _McpJsonImportDialog(
+            self,
+            default_scope=self._default_scope(),
+            scope_locked=self._is_per_agent,
+        )
+        if dlg.exec_() != QDialog.Accepted:
+            return
+        try:
+            self.manager.add_from_json(dlg.final_name, dlg.json_text, scope=dlg.final_scope)
+        except McpError as exc:
+            QMessageBox.warning(self, "Błąd dodawania", str(exc))
+            return
+        QMessageBox.information(self, "Dodano", f"Serwer „{dlg.final_name}\" został dodany.")
+        self._populate_list()
+
+    # ---------- Akcje: usuwanie ----------
+
+    def _delete_selected(self):
+        srv = self._selected_server()
+        if srv is None:
+            QMessageBox.warning(self, "Brak wyboru", "Wybierz serwer do usunięcia.")
+            return
+
+        if srv.managed:
+            QMessageBox.information(
+                self, "Serwer zarządzany",
+                f"Serwer „{srv.name}\" jest zarządzany przez claude.ai i nie można go "
+                "usunąć z poziomu tej aplikacji. Aby go odłączyć, zaloguj się na "
+                "claude.ai i odepnij integrację w ustawieniach."
+            )
+            return
+
+        reply = QMessageBox.question(
+            self, "Potwierdź usunięcie",
+            f"Czy na pewno usunąć serwer MCP „{srv.name}\" "
+            f"(scope: {_MCP_SCOPE_LABEL.get(srv.scope, srv.scope)})?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        try:
+            scope = srv.scope if srv.scope in ("user", "local") else None
+            self.manager.remove(srv.name, scope=scope)
+        except McpError as exc:
+            QMessageBox.warning(self, "Błąd usuwania", str(exc))
+            return
+
+        QMessageBox.information(self, "Usunięto", f"Serwer „{srv.name}\" został usunięty.")
+        self._populate_list()
+
+
+class _McpTemplatePickerDialog(QDialog):
+    """Wybór jednego z wbudowanych szablonów MCP."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Wybierz szablon MCP")
+        self.setMinimumSize(640, 460)
+        self.selected_template: Optional[McpTemplate] = None
+        self._setup_ui()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(10)
+
+        header = QLabel("📚 Wybierz szablon serwera MCP")
+        header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
+        layout.addWidget(header)
+
+        desc = QLabel(
+            "Każdy szablon to gotowy serwer MCP — kliknij i podaj wymagane dane "
+            "(np. token, ścieżkę). Szczegóły konfiguracji w następnym kroku."
+        )
+        desc.setStyleSheet("color: #cccccc; font-size: 12px;")
+        desc.setWordWrap(True)
+        layout.addWidget(desc)
+
+        self.list_widget = QListWidget()
+        self.list_widget.setWordWrap(True)
+        self.list_widget.setTextElideMode(Qt.ElideNone)
+        self.list_widget.setStyleSheet("""
+            QListWidget {
+                background-color: #2d0a1e;
+                color: #ffffff;
+                border: 1px solid #4a1a3a;
+                border-radius: 4px;
+            }
+            QListWidget::item {
+                padding: 10px;
+                border-bottom: 1px solid #4a1a3a;
+            }
+            QListWidget::item:selected {
+                background-color: #6a2a5a;
+            }
+        """)
+        self.list_widget.itemDoubleClicked.connect(lambda _: self._accept())
+        layout.addWidget(self.list_widget, stretch=1)
+
+        for tpl in MCP_TEMPLATES:
+            item = QListWidgetItem()
+            item.setData(Qt.UserRole, tpl)
+            item.setSizeHint(QSize(0, 70))
+            self.list_widget.addItem(item)
+
+            row = QWidget()
+            row.setAttribute(Qt.WA_TranslucentBackground)
+            v = QVBoxLayout(row)
+            v.setContentsMargins(4, 4, 4, 4)
+            v.setSpacing(2)
+
+            title = QLabel(f"{tpl.title} <span style='color:#aaaaaa;'>[{tpl.transport}]</span>")
+            title.setTextFormat(Qt.RichText)
+            title.setStyleSheet(
+                "color: #ffffff; font-size: 13px; font-weight: bold; "
+                "background: transparent; border: none;"
+            )
+            v.addWidget(title)
+            d = QLabel(tpl.description)
+            d.setStyleSheet("color: #aaaaaa; font-size: 11px; background: transparent; border: none;")
+            d.setWordWrap(True)
+            v.addWidget(d)
+            self.list_widget.setItemWidget(item, row)
+
+        bottom = QHBoxLayout()
+        bottom.addStretch()
+        cancel_btn = QPushButton("Anuluj")
+        cancel_btn.clicked.connect(self.reject)
+        bottom.addWidget(cancel_btn)
+        next_btn = QPushButton("Dalej →")
+        next_btn.setDefault(True)
+        next_btn.clicked.connect(self._accept)
+        bottom.addWidget(next_btn)
+        layout.addLayout(bottom)
+
+    def _accept(self):
+        item = self.list_widget.currentItem()
+        if item is None:
+            QMessageBox.warning(self, "Brak wyboru", "Wybierz szablon z listy.")
+            return
+        self.selected_template = item.data(Qt.UserRole)
+        self.accept()
+
+
+class _McpTemplateConfigDialog(QDialog):
+    """Dynamicznie generowany formularz na podstawie szablonu MCP."""
+
+    def __init__(self, parent, template: McpTemplate, default_scope: str, scope_locked: bool):
+        super().__init__(parent)
+        self.setWindowTitle(f"Konfiguracja: {template.title}")
+        self.setMinimumWidth(560)
+        self.template = template
+        self._scope_locked = scope_locked
+        self._default_scope = default_scope
+        self.final_name: str = template.default_name
+        self.final_scope: str = default_scope
+        self._inputs: Dict[str, QLineEdit] = {}
+        self._setup_ui()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(10)
+
+        header = QLabel(f"⚙️ {self.template.title}")
+        header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
+        layout.addWidget(header)
+
+        desc = QLabel(self.template.description)
+        desc.setStyleSheet("color: #cccccc; font-size: 12px;")
+        desc.setWordWrap(True)
+        layout.addWidget(desc)
+
+        if self.template.install_hint:
+            hint = QLabel(f"💡 {self.template.install_hint}")
+            hint.setStyleSheet("color: #eab308; font-size: 11px;")
+            hint.setWordWrap(True)
+            layout.addWidget(hint)
+
+        form = QFormLayout()
+        form.setSpacing(8)
+
+        # Nazwa serwera
+        name_input = QLineEdit(self.template.default_name)
+        self._inputs["__name__"] = name_input
+        form.addRow("Nazwa serwera:", name_input)
+
+        # args_required (placeholdery)
+        for key, label in self.template.args_required:
+            inp = QLineEdit()
+            inp.setPlaceholderText(label)
+            self._inputs[f"arg::{key}"] = inp
+            form.addRow(f"{label}:", inp)
+
+        # env_required
+        for key, label in self.template.env_required:
+            inp = QLineEdit()
+            inp.setPlaceholderText(label)
+            if "token" in key.lower() or "key" in key.lower() or "secret" in key.lower():
+                inp.setEchoMode(QLineEdit.Password)
+            self._inputs[f"env::{key}"] = inp
+            form.addRow(f"{key}:", inp)
+
+        # env_optional
+        for key, label in self.template.env_optional:
+            inp = QLineEdit()
+            inp.setPlaceholderText(f"(opcjonalne) {label}")
+            self._inputs[f"envopt::{key}"] = inp
+            form.addRow(f"{key} (opc.):", inp)
+
+        # headers_required
+        for key, label in self.template.headers_required:
+            # Etykieta to wzorzec — wartość podstawiamy do {VAR}
+            # Na razie pole jest dla wartości tokenu (obsługa GitHub: TOKEN)
+            # Pomijamy bo i tak idzie przez env_required (TOKEN dla GitHub)
+            pass
+
+        # Scope
+        self.scope_combo = QComboBox()
+        self.scope_combo.addItem("Globalny (dla wszystkich agentów)", "user")
+        self.scope_combo.addItem("Lokalny (tylko ten agent)", "local")
+        idx = 0 if self._default_scope == "user" else 1
+        self.scope_combo.setCurrentIndex(idx)
+        self.scope_combo.setEnabled(not self._scope_locked)
+        form.addRow("Zakres:", self.scope_combo)
+
+        layout.addLayout(form)
+
+        if self.template.homepage:
+            home = QLabel(f"<a href='{self.template.homepage}' style='color:#7dd3fc;'>📖 Dokumentacja serwera</a>")
+            home.setTextFormat(Qt.RichText)
+            home.setOpenExternalLinks(True)
+            layout.addWidget(home)
+
+        bottom = QHBoxLayout()
+        bottom.addStretch()
+        cancel = QPushButton("Anuluj")
+        cancel.clicked.connect(self.reject)
+        bottom.addWidget(cancel)
+        install = QPushButton("✅ Zainstaluj")
+        install.setDefault(True)
+        install.setStyleSheet("QPushButton { color: #22c55e; }")
+        install.clicked.connect(self._validate_and_accept)
+        bottom.addWidget(install)
+        layout.addLayout(bottom)
+
+    def _validate_and_accept(self):
+        name = self._inputs["__name__"].text().strip()
+        if not name:
+            QMessageBox.warning(self, "Brak nazwy", "Podaj nazwę serwera.")
+            return
+        # Walidacja wymaganych pól
+        for key, label in self.template.args_required:
+            if not self._inputs[f"arg::{key}"].text().strip():
+                QMessageBox.warning(self, "Brak danych", f"Pole „{label}\" jest wymagane.")
+                return
+        for key, label in self.template.env_required:
+            if not self._inputs[f"env::{key}"].text().strip():
+                QMessageBox.warning(self, "Brak danych", f"Pole „{key}\" jest wymagane.")
+                return
+        self.final_name = name
+        self.final_scope = self.scope_combo.currentData()
+        self.accept()
+
+    def install_into(self, manager: McpManager) -> None:
+        """Wykonuje instalację — wywołuje odpowiednią metodę McpManager."""
+        tpl = self.template
+        # Zbierz wartości
+        arg_values = {k: self._inputs[f"arg::{k}"].text().strip() for k, _ in tpl.args_required}
+        env_values: Dict[str, str] = {}
+        for k, _ in tpl.env_required:
+            v = self._inputs[f"env::{k}"].text().strip()
+            if v:
+                env_values[k] = v
+        for k, _ in tpl.env_optional:
+            v = self._inputs[f"envopt::{k}"].text().strip()
+            if v:
+                env_values[k] = v
+
+        if tpl.transport == "stdio":
+            args = tpl.render_args(arg_values)
+            manager.add_stdio(
+                self.final_name,
+                command=tpl.command,
+                args=args,
+                env=env_values or None,
+                scope=self.final_scope,
+            )
+        elif tpl.transport in ("http", "sse"):
+            url = tpl.render_url(arg_values)
+            # Headers — render z env_values (dla GitHub: Authorization: Bearer {TOKEN})
+            headers: Dict[str, str] = {}
+            for hkey, hpattern in tpl.headers_required:
+                rendered = hpattern
+                for k, v in env_values.items():
+                    rendered = rendered.replace("{" + k + "}", v)
+                headers[hkey] = rendered
+            if tpl.transport == "http":
+                manager.add_http(self.final_name, url=url, headers=headers or None, scope=self.final_scope)
+            else:
+                manager.add_sse(self.final_name, url=url, headers=headers or None, scope=self.final_scope)
+        else:
+            raise McpError(f"Nieznany transport szablonu: {tpl.transport}")
+
+
+class _McpAddManualDialog(QDialog):
+    """Ręczne dodawanie serwera MCP — formularz dla zaawansowanych."""
+
+    def __init__(self, parent, default_scope: str, scope_locked: bool):
+        super().__init__(parent)
+        self.setWindowTitle("Dodaj serwer MCP ręcznie")
+        self.setMinimumWidth(580)
+        self._scope_locked = scope_locked
+        self._default_scope = default_scope
+        self.final_name: str = ""
+        self.final_scope: str = default_scope
+        self._setup_ui()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(10)
+
+        header = QLabel("✏️ Dodaj serwer MCP ręcznie")
+        header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
+        layout.addWidget(header)
+
+        form = QFormLayout()
+        form.setSpacing(8)
+
+        self.name_input = QLineEdit()
+        self.name_input.setPlaceholderText("np. moje-narzedzie")
+        form.addRow("Nazwa:", self.name_input)
+
+        self.transport_combo = QComboBox()
+        self.transport_combo.addItem("stdio (komenda lokalna)", "stdio")
+        self.transport_combo.addItem("http (serwer HTTP)", "http")
+        self.transport_combo.addItem("sse (Server-Sent Events)", "sse")
+        self.transport_combo.currentIndexChanged.connect(self._on_transport_change)
+        form.addRow("Transport:", self.transport_combo)
+
+        # stdio: command + args
+        self.command_input = QLineEdit()
+        self.command_input.setPlaceholderText("npx")
+        form.addRow("Komenda:", self.command_input)
+
+        self.args_input = QLineEdit()
+        self.args_input.setPlaceholderText("-y @scope/package arg1 arg2  (oddziel spacjami)")
+        form.addRow("Argumenty:", self.args_input)
+
+        # http/sse: url
+        self.url_input = QLineEdit()
+        self.url_input.setPlaceholderText("https://example.com/mcp")
+        form.addRow("URL:", self.url_input)
+
+        # env (multi-line: KEY=value)
+        self.env_input = QPlainTextEdit()
+        self.env_input.setPlaceholderText("KEY1=value1\nKEY2=value2")
+        self.env_input.setMaximumHeight(70)
+        self.env_input.setStyleSheet(
+            "QPlainTextEdit { background-color: #4a1a3a; color: #ffffff; "
+            "border: 1px solid #6a2a5a; border-radius: 4px; padding: 4px; }"
+        )
+        form.addRow("ENV (po linii):", self.env_input)
+
+        # headers (multi-line: Key: value)
+        self.headers_input = QPlainTextEdit()
+        self.headers_input.setPlaceholderText("Authorization: Bearer xxx\nX-Api-Key: yyy")
+        self.headers_input.setMaximumHeight(70)
+        self.headers_input.setStyleSheet(self.env_input.styleSheet())
+        form.addRow("Nagłówki (po linii):", self.headers_input)
+
+        # scope
+        self.scope_combo = QComboBox()
+        self.scope_combo.addItem("Globalny (dla wszystkich agentów)", "user")
+        self.scope_combo.addItem("Lokalny (tylko ten agent)", "local")
+        self.scope_combo.setCurrentIndex(0 if self._default_scope == "user" else 1)
+        self.scope_combo.setEnabled(not self._scope_locked)
+        form.addRow("Zakres:", self.scope_combo)
+
+        layout.addLayout(form)
+
+        bottom = QHBoxLayout()
+        bottom.addStretch()
+        cancel = QPushButton("Anuluj")
+        cancel.clicked.connect(self.reject)
+        bottom.addWidget(cancel)
+        ok = QPushButton("✅ Dodaj")
+        ok.setDefault(True)
+        ok.setStyleSheet("QPushButton { color: #22c55e; }")
+        ok.clicked.connect(self._validate_and_accept)
+        bottom.addWidget(ok)
+        layout.addLayout(bottom)
+
+        self._on_transport_change()
+
+    def _on_transport_change(self):
+        transport = self.transport_combo.currentData()
+        is_stdio = transport == "stdio"
+        self.command_input.setVisible(is_stdio)
+        self.args_input.setVisible(is_stdio)
+        self.url_input.setVisible(not is_stdio)
+        self.env_input.setVisible(is_stdio)
+        self.headers_input.setVisible(not is_stdio)
+
+    def _parse_kv_lines(self, text: str, sep: str) -> Dict[str, str]:
+        out: Dict[str, str] = {}
+        for line in text.splitlines():
+            line = line.strip()
+            if not line or sep not in line:
+                continue
+            k, _, v = line.partition(sep)
+            k = k.strip()
+            v = v.strip()
+            if k:
+                out[k] = v
+        return out
+
+    def _validate_and_accept(self):
+        name = self.name_input.text().strip()
+        if not name:
+            QMessageBox.warning(self, "Brak nazwy", "Podaj nazwę serwera.")
+            return
+        transport = self.transport_combo.currentData()
+        if transport == "stdio":
+            if not self.command_input.text().strip():
+                QMessageBox.warning(self, "Brak komendy", "Podaj komendę do uruchomienia.")
+                return
+        else:
+            url = self.url_input.text().strip()
+            if not url.startswith(("http://", "https://")):
+                QMessageBox.warning(self, "Zły URL", "URL musi zaczynać się od http:// lub https://")
+                return
+        self.final_name = name
+        self.final_scope = self.scope_combo.currentData()
+        self.accept()
+
+    def install_into(self, manager: McpManager) -> None:
+        transport = self.transport_combo.currentData()
+        if transport == "stdio":
+            command = self.command_input.text().strip()
+            args = [a for a in self.args_input.text().split() if a]
+            env = self._parse_kv_lines(self.env_input.toPlainText(), "=")
+            manager.add_stdio(
+                self.final_name, command=command, args=args,
+                env=env or None, scope=self.final_scope,
+            )
+        else:
+            url = self.url_input.text().strip()
+            headers = self._parse_kv_lines(self.headers_input.toPlainText(), ":")
+            if transport == "http":
+                manager.add_http(self.final_name, url=url, headers=headers or None, scope=self.final_scope)
+            else:
+                manager.add_sse(self.final_name, url=url, headers=headers or None, scope=self.final_scope)
+
+
+class _McpJsonImportDialog(QDialog):
+    """Wklej JSON konfiguracji serwera MCP."""
+
+    def __init__(self, parent, default_scope: str, scope_locked: bool):
+        super().__init__(parent)
+        self.setWindowTitle("Dodaj serwer MCP z JSON")
+        self.setMinimumWidth(560)
+        self._scope_locked = scope_locked
+        self._default_scope = default_scope
+        self.final_name: str = ""
+        self.final_scope: str = default_scope
+        self.json_text: str = ""
+        self._setup_ui()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(10)
+
+        header = QLabel("📋 Dodaj serwer MCP z JSON")
+        header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
+        layout.addWidget(header)
+
+        desc = QLabel(
+            "Wklej JSON konfiguracji serwera MCP (np. z dokumentacji). "
+            "Format: <code>{\"type\":\"stdio\",\"command\":\"npx\",\"args\":[...],\"env\":{...}}</code>"
+        )
+        desc.setTextFormat(Qt.RichText)
+        desc.setStyleSheet("color: #cccccc; font-size: 12px;")
+        desc.setWordWrap(True)
+        layout.addWidget(desc)
+
+        form = QFormLayout()
+        self.name_input = QLineEdit()
+        self.name_input.setPlaceholderText("np. moj-serwer")
+        form.addRow("Nazwa:", self.name_input)
+
+        self.scope_combo = QComboBox()
+        self.scope_combo.addItem("Globalny (dla wszystkich agentów)", "user")
+        self.scope_combo.addItem("Lokalny (tylko ten agent)", "local")
+        self.scope_combo.setCurrentIndex(0 if self._default_scope == "user" else 1)
+        self.scope_combo.setEnabled(not self._scope_locked)
+        form.addRow("Zakres:", self.scope_combo)
+        layout.addLayout(form)
+
+        self.json_input = QPlainTextEdit()
+        self.json_input.setPlaceholderText(
+            '{\n  "type": "stdio",\n  "command": "npx",\n  "args": ["-y", "@scope/server"]\n}'
+        )
+        self.json_input.setStyleSheet(
+            "QPlainTextEdit { background-color: #4a1a3a; color: #ffffff; "
+            "border: 1px solid #6a2a5a; border-radius: 4px; padding: 6px; "
+            "font-family: monospace; }"
+        )
+        layout.addWidget(self.json_input, stretch=1)
+
+        bottom = QHBoxLayout()
+        bottom.addStretch()
+        cancel = QPushButton("Anuluj")
+        cancel.clicked.connect(self.reject)
+        bottom.addWidget(cancel)
+        ok = QPushButton("✅ Dodaj")
+        ok.setDefault(True)
+        ok.setStyleSheet("QPushButton { color: #22c55e; }")
+        ok.clicked.connect(self._validate_and_accept)
+        bottom.addWidget(ok)
+        layout.addLayout(bottom)
+
+    def _validate_and_accept(self):
+        name = self.name_input.text().strip()
+        if not name:
+            QMessageBox.warning(self, "Brak nazwy", "Podaj nazwę serwera.")
+            return
+        text = self.json_input.toPlainText().strip()
+        if not text:
+            QMessageBox.warning(self, "Brak JSON", "Wklej JSON konfiguracji serwera.")
+            return
+        try:
+            json.loads(text)
+        except json.JSONDecodeError as exc:
+            QMessageBox.warning(self, "Zły JSON", f"Nieprawidłowy JSON: {exc}")
+            return
+        self.final_name = name
+        self.final_scope = self.scope_combo.currentData()
+        self.json_text = text
+        self.accept()
