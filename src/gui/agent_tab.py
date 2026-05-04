@@ -122,8 +122,11 @@ class AgentTab(QWidget):
         self.auto_read_responses = False
         self.current_language = "pl-PL"
 
-        self._setup_ui()
+        # Najpierw wczytaj listę szybkich akcji — _setup_ui() korzysta z niej
+        # przy budowaniu menu (przez _update_quick_actions_menu). Bez tego
+        # menu byłoby puste do pierwszej edycji w QuickActionsDialog.
         self._load_quick_actions()
+        self._setup_ui()
 
     def set_shared_state(self, skin_colors: dict, skin_icons: dict,
                          auto_read: bool, language: str):
