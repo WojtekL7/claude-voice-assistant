@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
     QTreeWidget, QTreeWidgetItem, QGroupBox, QFileDialog,
     QMessageBox, QListWidget, QListWidgetItem, QRadioButton,
     QButtonGroup, QWidget, QSplitter, QFrame, QInputDialog,
-    QListView, QPlainTextEdit, QStackedWidget
+    QListView, QPlainTextEdit, QStackedWidget, QTabWidget
 )
 from PyQt5.QtCore import Qt, QSize, QUrl
 from PyQt5.QtGui import QFont, QDesktopServices
@@ -642,79 +642,207 @@ class AgentConfigDialog(QDialog):
     def __init__(self, parent=None, agent: dict = None, memory_projects: list = None):
         super().__init__(parent)
         self.setWindowTitle("Edytuj agenta" if agent else "Nowy agent")
-        self.setMinimumWidth(500)
 
         self.is_new_agent = agent is None
         self.agent = agent or {}
         self.memory_projects = memory_projects or []  # kept for compatibility but not used
         self.memory_files = list(self.agent.get('memory_files', []))  # list of file paths
         self.run_immediately = False  # Flag: should open tab immediately after save
+
+        # Stała wysokość — żeby okno mieściło się na każdym ekranie laptopowym
+        self.setFixedHeight(580)
+        self.setMinimumWidth(640)
+
+        # Path to checkmark icon (used by checkboxes inside Tab "Podstawowe")
+        self._checkmark_path = str(ASSETS_DIR / "checkmark.png").replace("\\", "/")
+
         self._setup_ui()
 
-    def _setup_ui(self):
-        """Setup dialog UI."""
-        layout = QVBoxLayout(self)
-        layout.setSpacing(15)
+    # ---------- Style helpers ----------
 
-        # Path to checkmark icon
-        checkmark_path = str(ASSETS_DIR / "checkmark.png").replace("\\", "/")
+    @staticmethod
+    def _input_style() -> str:
+        return """
+            QLineEdit {
+                background-color: #2d0a1e;
+                color: #ffffff;
+                border: 1px solid #4a1a3a;
+                border-radius: 4px;
+                padding: 8px;
+            }
+        """
+
+    @staticmethod
+    def _section_button_style() -> str:
+        """Styl przycisków „Zarządzaj lokalnymi skillami/MCP"."""
+        return """
+            QPushButton {
+                background-color: #2d0a1e;
+                color: #ffffff;
+                border: 1px solid #4a1a3a;
+                border-radius: 4px;
+                padding: 8px;
+                text-align: left;
+            }
+            QPushButton:hover:enabled {
+                border-color: #22c55e;
+            }
+            QPushButton:disabled {
+                color: #777777;
+            }
+        """
+
+    @staticmethod
+    def _list_style() -> str:
+        return """
+            QListWidget {
+                background-color: #2d0a1e;
+                color: #ffffff;
+                border: 1px solid #4a1a3a;
+                border-radius: 4px;
+            }
+            QListWidget::item {
+                padding: 4px;
+                border-bottom: 1px solid #3a1428;
+            }
+            QListWidget::item:selected {
+                background-color: #4a1a3a;
+            }
+        """
+
+    def _checkbox_style(self) -> str:
+        return f"""
+            QCheckBox {{
+                color: #ffffff;
+                spacing: 8px;
+            }}
+            QCheckBox::indicator {{
+                width: 18px;
+                height: 18px;
+                border: 2px solid #4a1a3a;
+                border-radius: 3px;
+                background-color: transparent;
+            }}
+            QCheckBox::indicator:hover {{
+                border-color: #22c55e;
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: #22c55e;
+                border-color: #22c55e;
+                border-radius: 3px;
+                image: url("{self._checkmark_path}");
+            }}
+        """
+
+    # ---------- Main UI ----------
+
+    def _setup_ui(self):
+        """Setup dialog UI with 4 tabs (Podstawowe / Pamięć / Skille / MCP)."""
+        main_layout = QVBoxLayout(self)
+        main_layout.setSpacing(10)
+        main_layout.setContentsMargins(15, 15, 15, 15)
 
         # Header
         header = QLabel("Konfiguracja agenta")
         header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
-        layout.addWidget(header)
+        main_layout.addWidget(header)
 
-        # Form
+        # Tabs
+        self.tabs = QTabWidget()
+        self.tabs.setStyleSheet("""
+            QTabWidget::pane {
+                border: 1px solid #4a1a3a;
+                background: #2d0a1e;
+                border-radius: 4px;
+                top: -1px;
+            }
+            QTabBar::tab {
+                background: #1d0518;
+                color: #cccccc;
+                padding: 8px 14px;
+                border: 1px solid #4a1a3a;
+                border-bottom: none;
+                border-top-left-radius: 4px;
+                border-top-right-radius: 4px;
+                margin-right: 2px;
+            }
+            QTabBar::tab:selected {
+                background: #2d0a1e;
+                color: #ffffff;
+            }
+            QTabBar::tab:hover:!selected {
+                background: #4a1a3a;
+                color: #ffffff;
+            }
+        """)
+        self.tabs.addTab(self._build_tab_basic(), "📝 Podstawowe")
+        self.tabs.addTab(self._build_tab_memory(), "💾 Pamięć")
+        self.tabs.addTab(self._build_tab_skills(), "🧩 Skille")
+        self.tabs.addTab(self._build_tab_mcp(), "🔌 MCP")
+        main_layout.addWidget(self.tabs, stretch=1)
+
+        # Single connection — wszystkie sekcje (skills 1A/1B + MCP 1A/1B) odświeżają się
+        # gdy user zmieni katalog roboczy. Łączymy DOPIERO po utworzeniu wszystkich zakładek.
+        self.dir_input.textChanged.connect(self._on_working_dir_changed)
+
+        # Buttons (poza zakładkami — zawsze widoczne na dole)
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+
+        cancel_btn = QPushButton("Anuluj")
+        cancel_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(cancel_btn)
+
+        save_btn = QPushButton("Zapisz")
+        save_btn.clicked.connect(self._save)
+        save_btn.setStyleSheet("QPushButton { color: #22c55e; font-weight: bold; }")
+        btn_layout.addWidget(save_btn)
+
+        save_run_btn = QPushButton("Zapisz i uruchom")
+        save_run_btn.clicked.connect(self._save_and_run)
+        save_run_btn.setStyleSheet("QPushButton { color: #22c55e; font-weight: bold; }")
+        btn_layout.addWidget(save_run_btn)
+
+        main_layout.addLayout(btn_layout)
+
+    # ---------- Tab builders ----------
+
+    def _build_tab_basic(self) -> QWidget:
+        """Tab 1: nazwa, katalog roboczy, model, checkboxy."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(12)
+        layout.setContentsMargins(12, 16, 12, 12)
+
         form = QFormLayout()
         form.setSpacing(10)
 
         # Name
         self.name_input = QLineEdit(self.agent.get('name', ''))
         self.name_input.setPlaceholderText("np. CRM Development")
-        self.name_input.setStyleSheet("""
-            QLineEdit {
-                background-color: #2d0a1e;
-                color: #ffffff;
-                border: 1px solid #4a1a3a;
-                border-radius: 4px;
-                padding: 8px;
-            }
-        """)
+        self.name_input.setStyleSheet(self._input_style())
         form.addRow("Nazwa agenta:", self.name_input)
 
         # Working directory
         dir_layout = QHBoxLayout()
         self.dir_input = QLineEdit(self.agent.get('working_directory', str(Path.home())))
-        self.dir_input.setStyleSheet("""
-            QLineEdit {
-                background-color: #2d0a1e;
-                color: #ffffff;
-                border: 1px solid #4a1a3a;
-                border-radius: 4px;
-                padding: 8px;
-            }
-        """)
+        self.dir_input.setStyleSheet(self._input_style())
         dir_layout.addWidget(self.dir_input)
 
         browse_btn = QPushButton("📁")
         browse_btn.setFixedWidth(40)
         browse_btn.clicked.connect(self._browse_directory)
         dir_layout.addWidget(browse_btn)
-
         form.addRow("Katalog roboczy:", dir_layout)
 
         # Model Claude Code
         chevron_path = str(ASSETS_DIR / "chevron-down.svg").replace("\\", "/")
         self.model_combo = _StyledComboBox()
         self.model_combo.setMinimumHeight(36)
-
-        # Use an explicit QListView for the popup so we control its frame and
-        # can react to mouse hover (highlights item under cursor as :selected).
         model_view = QListView()
         model_view.setMouseTracking(True)
         model_view.setFrameShape(QFrame.NoFrame)
         self.model_combo.setView(model_view)
-
         self.model_combo.setStyleSheet(f"""
             QComboBox {{
                 background-color: #2d0a1e;
@@ -724,12 +852,8 @@ class AgentConfigDialog(QDialog):
                 padding: 6px 36px 6px 10px;
                 combobox-popup: 0;
             }}
-            QComboBox:hover {{
-                border-color: #22c55e;
-            }}
-            QComboBox:on {{
-                border-color: #22c55e;
-            }}
+            QComboBox:hover {{ border-color: #22c55e; }}
+            QComboBox:on {{ border-color: #22c55e; }}
             QComboBox::drop-down {{
                 subcontrol-origin: padding;
                 subcontrol-position: top right;
@@ -739,9 +863,7 @@ class AgentConfigDialog(QDialog):
                 border-top-right-radius: 4px;
                 border-bottom-right-radius: 4px;
             }}
-            QComboBox::drop-down:hover {{
-                background-color: #4a1a3a;
-            }}
+            QComboBox::drop-down:hover {{ background-color: #4a1a3a; }}
             QComboBox::down-arrow {{
                 image: url("{chevron_path}");
                 width: 10px;
@@ -766,39 +888,62 @@ class AgentConfigDialog(QDialog):
         """)
         for key, label in CLAUDE_MODELS.items():
             self.model_combo.addItem(label, key)
-
-        if self.is_new_agent:
-            current_model = NEW_AGENT_DEFAULT_MODEL
-        else:
-            current_model = self.agent.get('model', DEFAULT_AGENT_MODEL)
+        current_model = (NEW_AGENT_DEFAULT_MODEL if self.is_new_agent
+                         else self.agent.get('model', DEFAULT_AGENT_MODEL))
         idx = self.model_combo.findData(current_model)
         if idx >= 0:
             self.model_combo.setCurrentIndex(idx)
-
         form.addRow("Model Claude Code:", self.model_combo)
 
         model_hint = QLabel("Zmiana modelu wymaga restartu agenta (Stop → Uruchom).")
         model_hint.setStyleSheet("color: #888888; font-size: 11px;")
         form.addRow("", model_hint)
 
-        # Memory files section - list of file paths
         layout.addLayout(form)
 
-        memory_label = QLabel("Pliki pamięci:")
-        memory_label.setStyleSheet("color: #ffffff; margin-top: 10px;")
+        # Checkboxes
+        cb_style = self._checkbox_style()
+
+        self.auto_start_checkbox = QCheckBox("Uruchamiaj automatycznie przy starcie aplikacji")
+        self.auto_start_checkbox.setChecked(self.agent.get('auto_start', True))
+        self.auto_start_checkbox.setStyleSheet(cb_style)
+        layout.addWidget(self.auto_start_checkbox)
+
+        self.send_memory_checkbox = QCheckBox("Wczytaj pliki pamięci po starcie Claude Code")
+        self.send_memory_checkbox.setChecked(self.agent.get('send_memory_on_start', True))
+        self.send_memory_checkbox.setStyleSheet(cb_style)
+        layout.addWidget(self.send_memory_checkbox)
+
+        layout.addStretch()
+        return widget
+
+    def _build_tab_memory(self) -> QWidget:
+        """Tab 2: pliki pamięci."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(10)
+        layout.setContentsMargins(12, 16, 12, 12)
+
+        memory_label = QLabel("📄 Pliki pamięci agenta:")
+        memory_label.setStyleSheet("color: #ffffff; font-weight: bold;")
         layout.addWidget(memory_label)
 
-        # Container for memory files list
+        memory_info = QLabel(
+            "ℹ️ Pliki wczytywane przy starcie agenta — Claude Code dostaje je "
+            "jako kontekst rozmowy."
+        )
+        memory_info.setStyleSheet("color: #aaaaaa; font-size: 11px;")
+        memory_info.setWordWrap(True)
+        layout.addWidget(memory_info)
+
         self.memory_files_container = QVBoxLayout()
         self.memory_files_container.setSpacing(5)
 
-        # Add existing files
         for file_path in self.memory_files:
             self._add_memory_file_chip(file_path)
 
         layout.addLayout(self.memory_files_container)
 
-        # Add file button
         add_file_btn = QPushButton("+ Dodaj plik")
         add_file_btn.setStyleSheet("""
             QPushButton {
@@ -815,9 +960,19 @@ class AgentConfigDialog(QDialog):
         add_file_btn.clicked.connect(self._add_memory_file)
         layout.addWidget(add_file_btn)
 
-        # === Skille tego agenta (lokalne projektu) ===
+        layout.addStretch()
+        return widget
+
+    def _build_tab_skills(self) -> QWidget:
+        """Tab 3: skille agenta + wyłączanie globalnych."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(8)
+        layout.setContentsMargins(12, 16, 12, 12)
+
+        # === Lokalne skille agenta ===
         skills_label = QLabel("🧩 Skille tego agenta:")
-        skills_label.setStyleSheet("color: #ffffff; margin-top: 10px;")
+        skills_label.setStyleSheet("color: #ffffff; font-weight: bold;")
         layout.addWidget(skills_label)
 
         skills_info = QLabel(
@@ -829,29 +984,14 @@ class AgentConfigDialog(QDialog):
         layout.addWidget(skills_info)
 
         self.manage_agent_skills_btn = QPushButton()
-        self.manage_agent_skills_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #2d0a1e;
-                color: #ffffff;
-                border: 1px solid #4a1a3a;
-                border-radius: 4px;
-                padding: 8px;
-                text-align: left;
-            }
-            QPushButton:hover:enabled {
-                border-color: #22c55e;
-            }
-            QPushButton:disabled {
-                color: #777777;
-            }
-        """)
+        self.manage_agent_skills_btn.setStyleSheet(self._section_button_style())
         self.manage_agent_skills_btn.clicked.connect(self._open_agent_skills)
         layout.addWidget(self.manage_agent_skills_btn)
         self._update_agent_skills_button()
 
-        # === Wyłączanie globalnych skilli per agent ===
+        # === Wyłączanie globalnych skilli ===
         disable_skills_label = QLabel("🚫 Wyłącz globalne skille dla tego agenta:")
-        disable_skills_label.setStyleSheet("color: #ffffff; margin-top: 10px;")
+        disable_skills_label.setStyleSheet("color: #ffffff; margin-top: 6px;")
         layout.addWidget(disable_skills_label)
 
         disable_skills_info = QLabel(
@@ -867,32 +1007,26 @@ class AgentConfigDialog(QDialog):
         layout.addWidget(self.global_skills_count_label)
 
         self.global_skills_list = QListWidget()
-        self.global_skills_list.setMinimumHeight(120)
-        self.global_skills_list.setMaximumHeight(180)
+        self.global_skills_list.setMinimumHeight(140)
         self.global_skills_list.setWordWrap(True)
         self.global_skills_list.setTextElideMode(Qt.ElideNone)
-        self.global_skills_list.setStyleSheet("""
-            QListWidget {
-                background-color: #2d0a1e;
-                color: #ffffff;
-                border: 1px solid #4a1a3a;
-                border-radius: 4px;
-            }
-            QListWidget::item {
-                padding: 4px;
-                border-bottom: 1px solid #3a1428;
-            }
-            QListWidget::item:selected {
-                background-color: #4a1a3a;
-            }
-        """)
-        layout.addWidget(self.global_skills_list)
+        self.global_skills_list.setStyleSheet(self._list_style())
+        layout.addWidget(self.global_skills_list, stretch=1)
 
         self._refresh_global_skills_section()
 
-        # === Serwery MCP tego agenta (lokalne projektu) ===
+        return widget
+
+    def _build_tab_mcp(self) -> QWidget:
+        """Tab 4: serwery MCP agenta + wyłączanie globalnych."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(8)
+        layout.setContentsMargins(12, 16, 12, 12)
+
+        # === Lokalne MCP agenta ===
         mcp_label = QLabel("🔌 Serwery MCP tego agenta:")
-        mcp_label.setStyleSheet("color: #ffffff; margin-top: 10px;")
+        mcp_label.setStyleSheet("color: #ffffff; font-weight: bold;")
         layout.addWidget(mcp_label)
 
         mcp_info = QLabel(
@@ -904,29 +1038,14 @@ class AgentConfigDialog(QDialog):
         layout.addWidget(mcp_info)
 
         self.manage_agent_mcp_btn = QPushButton()
-        self.manage_agent_mcp_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #2d0a1e;
-                color: #ffffff;
-                border: 1px solid #4a1a3a;
-                border-radius: 4px;
-                padding: 8px;
-                text-align: left;
-            }
-            QPushButton:hover:enabled {
-                border-color: #22c55e;
-            }
-            QPushButton:disabled {
-                color: #777777;
-            }
-        """)
+        self.manage_agent_mcp_btn.setStyleSheet(self._section_button_style())
         self.manage_agent_mcp_btn.clicked.connect(self._open_agent_mcp)
         layout.addWidget(self.manage_agent_mcp_btn)
         self._update_agent_mcp_button()
 
-        # === Wyłączanie globalnych MCP per agent ===
+        # === Wyłączanie globalnych MCP ===
         disable_mcp_label = QLabel("🚫 Wyłącz globalne MCP dla tego agenta:")
-        disable_mcp_label.setStyleSheet("color: #ffffff; margin-top: 10px;")
+        disable_mcp_label.setStyleSheet("color: #ffffff; margin-top: 6px;")
         layout.addWidget(disable_mcp_label)
 
         disable_mcp_info = QLabel(
@@ -942,87 +1061,15 @@ class AgentConfigDialog(QDialog):
         layout.addWidget(self.global_mcp_count_label)
 
         self.global_mcp_list = QListWidget()
-        self.global_mcp_list.setMinimumHeight(120)
-        self.global_mcp_list.setMaximumHeight(180)
+        self.global_mcp_list.setMinimumHeight(140)
         self.global_mcp_list.setWordWrap(True)
         self.global_mcp_list.setTextElideMode(Qt.ElideNone)
-        self.global_mcp_list.setStyleSheet("""
-            QListWidget {
-                background-color: #2d0a1e;
-                color: #ffffff;
-                border: 1px solid #4a1a3a;
-                border-radius: 4px;
-            }
-            QListWidget::item {
-                padding: 4px;
-                border-bottom: 1px solid #3a1428;
-            }
-            QListWidget::item:selected {
-                background-color: #4a1a3a;
-            }
-        """)
-        layout.addWidget(self.global_mcp_list)
+        self.global_mcp_list.setStyleSheet(self._list_style())
+        layout.addWidget(self.global_mcp_list, stretch=1)
 
         self._refresh_global_mcp_section()
 
-        # Single connection — Skills (1A/1B) + MCP (1A/1B) refresh on dir change
-        self.dir_input.textChanged.connect(self._on_working_dir_changed)
-
-        # Checkboxes - style with checkmark icon
-        checkbox_style = f"""
-            QCheckBox {{
-                color: #ffffff;
-                spacing: 8px;
-            }}
-            QCheckBox::indicator {{
-                width: 18px;
-                height: 18px;
-                border: 2px solid #4a1a3a;
-                border-radius: 3px;
-                background-color: transparent;
-            }}
-            QCheckBox::indicator:hover {{
-                border-color: #22c55e;
-            }}
-            QCheckBox::indicator:checked {{
-                background-color: #22c55e;
-                border-color: #22c55e;
-                border-radius: 3px;
-                image: url("{checkmark_path}");
-            }}
-        """
-
-        self.auto_start_checkbox = QCheckBox("Uruchamiaj automatycznie przy starcie aplikacji")
-        self.auto_start_checkbox.setChecked(self.agent.get('auto_start', True))
-        self.auto_start_checkbox.setStyleSheet(checkbox_style)
-        layout.addWidget(self.auto_start_checkbox)
-
-        self.send_memory_checkbox = QCheckBox("Wczytaj pliki pamięci po starcie Claude Code")
-        self.send_memory_checkbox.setChecked(self.agent.get('send_memory_on_start', True))
-        self.send_memory_checkbox.setStyleSheet(checkbox_style)
-        layout.addWidget(self.send_memory_checkbox)
-
-        layout.addStretch()
-
-        # Buttons
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-
-        cancel_btn = QPushButton("Anuluj")
-        cancel_btn.clicked.connect(self.reject)
-        btn_layout.addWidget(cancel_btn)
-
-        save_btn = QPushButton("Zapisz")
-        save_btn.clicked.connect(self._save)
-        save_btn.setStyleSheet("QPushButton { color: #22c55e; font-weight: bold; }")
-        btn_layout.addWidget(save_btn)
-
-        save_run_btn = QPushButton("Zapisz i uruchom")
-        save_run_btn.clicked.connect(self._save_and_run)
-        save_run_btn.setStyleSheet("QPushButton { color: #22c55e; font-weight: bold; }")
-        btn_layout.addWidget(save_run_btn)
-
-        layout.addLayout(btn_layout)
+        return widget
 
     def _browse_directory(self):
         """Browse for working directory."""
