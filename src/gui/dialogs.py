@@ -1751,12 +1751,22 @@ class AgentsManagerDialog(QDialog):
             skills_label.setStyleSheet(info_style)
             skills_label.setToolTip(skills_tooltip)
 
+            mcp_sep_label = QLabel("  •  ")
+            mcp_sep_label.setStyleSheet(info_style)
+
+            mcp_text, mcp_tooltip = self._format_mcp_summary(agent)
+            mcp_label = QLabel(mcp_text)
+            mcp_label.setStyleSheet(info_style)
+            mcp_label.setToolTip(mcp_tooltip)
+
             info_row = QHBoxLayout()
             info_row.setContentsMargins(0, 0, 0, 0)
             info_row.setSpacing(0)
             info_row.addWidget(files_label)
             info_row.addWidget(model_mid_label)
             info_row.addWidget(skills_label)
+            info_row.addWidget(mcp_sep_label)
+            info_row.addWidget(mcp_label)
             info_row.addStretch()
             row_layout.addLayout(info_row)
 
@@ -1867,6 +1877,86 @@ class AgentsManagerDialog(QDialog):
             tooltip_parts.extend(f"   • {name}" for name in local_names)
         if not enabled_global and not disabled_global and not local_names:
             tooltip_parts.append("\n(brak zainstalowanych skilli)")
+
+        return (display, "\n".join(tooltip_parts))
+
+    def _format_mcp_summary(self, agent: dict) -> tuple:
+        """Compute MCP info for one agent's row.
+
+        Returns (display_text, tooltip_text). Format identical to
+        _format_skills_summary but for MCP servers (icon 🔌).
+
+        Performance: wywołuje claude mcp list per agent (~500ms-1s przez
+        health checks). Dla 3-5 agentów to akceptowalne; jeśli kiedyś
+        będzie problem — można dodać cache na poziomie _populate_list.
+        """
+        working_dir = (agent.get('working_directory') or '').strip()
+
+        if not working_dir or not Path(working_dir).is_dir():
+            return (
+                "⚠ MCP nieznane",
+                "Katalog roboczy agenta jest pusty lub nie istnieje —\n"
+                "nie da się odczytać listy MCP."
+            )
+
+        wd_path = Path(working_dir)
+
+        try:
+            servers = McpManager(working_dir=wd_path).list_servers()
+        except Exception:
+            return (
+                "⚠ MCP nieznane",
+                "Nie udało się pobrać listy MCP (komenda 'claude' nieaktywna?)."
+            )
+
+        # Wyłączone dla tego agenta — porównujemy po sanitized name
+        # (deny rule używa zsanityzowanej formy).
+        disabled_set = set(AgentMcpSettings(wd_path).get_disabled_mcp_sanitized())
+
+        # Globalne = scope user + managed (claude.ai*)
+        global_servers = [s for s in servers if s.scope in ("user", "managed")]
+        # Lokalne = scope local (working_dir-specific)
+        local_servers = [s for s in servers if s.scope == "local"]
+
+        enabled_global = [s for s in global_servers if s.sanitized_name not in disabled_set]
+        disabled_global = [s for s in global_servers if s.sanitized_name in disabled_set]
+
+        n_global_total = len(global_servers)
+        n_global_on = len(enabled_global)
+        n_disabled = len(disabled_global)
+        n_local = len(local_servers)
+
+        # === Tekst wyświetlany ===
+        if n_global_total == 0 and n_local == 0:
+            display = "🚫 brak MCP"
+        elif n_disabled == 0 and n_local == 0:
+            display = f"🔌 {self._pl_global_only(n_global_on)}"
+        elif n_disabled == 0 and n_local > 0:
+            display = (
+                f"🔌 {self._pl_global_only(n_global_on)} + "
+                f"{self._pl_local(n_local)}"
+            )
+        elif n_disabled > 0 and n_local == 0:
+            display = f"✂️ {n_global_on} z {n_global_total} globalnych MCP"
+        else:
+            display = (
+                f"✂️ {n_global_on} z {n_global_total} globalnych MCP + "
+                f"{self._pl_local(n_local)}"
+            )
+
+        # === Tooltip — pełna lista nazw ===
+        tooltip_parts = ["Serwery MCP tego agenta:"]
+        if enabled_global:
+            tooltip_parts.append(f"\n✓ Globalne aktywne ({len(enabled_global)}):")
+            tooltip_parts.extend(f"   • {s.name}" for s in enabled_global)
+        if disabled_global:
+            tooltip_parts.append(f"\n✗ Globalne wyłączone ({len(disabled_global)}):")
+            tooltip_parts.extend(f"   • {s.name}" for s in disabled_global)
+        if local_servers:
+            tooltip_parts.append(f"\n+ Lokalne ({len(local_servers)}):")
+            tooltip_parts.extend(f"   • {s.name}" for s in local_servers)
+        if not enabled_global and not disabled_global and not local_servers:
+            tooltip_parts.append("\n(brak zarejestrowanych MCP)")
 
         return (display, "\n".join(tooltip_parts))
 
