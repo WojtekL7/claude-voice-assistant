@@ -81,6 +81,25 @@ class AgentMcpSettings:
             current.remove(sanitized)
             self._set_sanitized(current)
 
+    def disable_all(self, server_names: List[str]) -> None:
+        """Wyłącza wszystkie podane serwery jednorazowym zapisem.
+
+        Dodaje do istniejącej listy wyłączonych — nie nadpisuje. Idempotentne
+        (powtórzone wywołanie z tym samym argumentem nie zmienia stanu).
+        """
+        if not server_names:
+            return
+        current = set(self.get_disabled_mcp_sanitized())
+        sanitized = {sanitize_mcp_name(n) for n in server_names if n}
+        new_set = current | sanitized
+        if new_set != current:
+            self._set_sanitized(list(new_set))
+
+    def enable_all(self) -> None:
+        """Włącza wszystkie wyłączone serwery — czyści wszystkie reguły mcp__*__*."""
+        if self.get_disabled_mcp_sanitized():
+            self._set_sanitized([])
+
     # ---------- Helpers ----------
 
     def _set_sanitized(self, sanitized_names: List[str]) -> None:

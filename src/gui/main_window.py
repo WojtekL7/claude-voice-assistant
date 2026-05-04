@@ -294,6 +294,7 @@ from gui.dialogs import (
     SkillsManagerDialog, McpManagerDialog,
     styled_get_open_file_names, styled_get_open_file_name, styled_get_save_file_name
 )
+from gui.mcp_status_widget import McpStatusWidget
 
 # Domyślne kolory skórki (motyw Ubuntu) - interfejs + terminal
 DEFAULT_SKIN_COLORS = {
@@ -621,6 +622,14 @@ class MainWindow(QMainWindow):
         """)
         self.status_bar.addPermanentWidget(self._context_label)
 
+        # MCP status widget (po lewej od licznika tokenów)
+        self.mcp_status_widget = McpStatusWidget()
+        self.mcp_status_widget.request_open_manager.connect(self._open_mcp_manager_for_dir)
+        # Drugie addPermanentWidget — ląduje bardziej na lewo niż _context_label
+        self.status_bar.addPermanentWidget(self.mcp_status_widget)
+        # Synchronizuj z aktywną zakładką (która już istnieje po _create_agent_tabs)
+        self._update_mcp_status_widget()
+
         # Menu bar
         self._create_menu_bar()
 
@@ -893,6 +902,29 @@ class MainWindow(QMainWindow):
     def _on_tab_changed(self, index: int):
         """Handle tab change."""
         self._update_current_tab_references()
+        self._update_mcp_status_widget()
+
+    def _update_mcp_status_widget(self):
+        """Synchronizuje widget MCP statusu z aktywną zakładką."""
+        current = self.tab_widget.currentWidget()
+        if isinstance(current, AgentTab):
+            self.mcp_status_widget.set_agent(
+                Path(current.working_directory) if current.working_directory else None,
+                agent_name=current.agent_name,
+            )
+        else:
+            self.mcp_status_widget.set_agent(None, None)
+
+    def _open_mcp_manager_for_dir(self, working_dir):
+        """Slot dla request_open_manager z McpStatusWidget."""
+        if working_dir is None:
+            return
+        # Scoped manager dla bieżącego agenta
+        current = self.tab_widget.currentWidget()
+        agent_name = current.agent_name if isinstance(current, AgentTab) else None
+        dialog = McpManagerDialog(self, working_dir=Path(working_dir), agent_name=agent_name)
+        dialog.exec_()
+        self.mcp_status_widget.force_refresh()
 
     def _update_current_tab_references(self):
         """Update references to current tab's widgets."""
@@ -947,6 +979,8 @@ class MainWindow(QMainWindow):
         """Show MCP servers manager dialog (global scope)."""
         dialog = McpManagerDialog(self)
         dialog.exec_()
+        # Globalne zmiany mogą wpłynąć na status bieżącego agenta — odśwież.
+        self.mcp_status_widget.force_refresh()
 
     def _show_agents_manager_dialog(self):
         """Show agents manager dialog."""
@@ -972,6 +1006,9 @@ class MainWindow(QMainWindow):
             else:
                 QMessageBox.information(self, "Zapisano",
                     "Zmiany zostaną zastosowane po restarcie aplikacji.")
+        # MCP toggle / lokalne MCP w dialogu agenta zapisywane są na bieżąco —
+        # odśwież status żeby panel pokazał aktualne dane.
+        self.mcp_status_widget.force_refresh()
 
     def _create_menu_bar(self):
         """Create menu bar."""
