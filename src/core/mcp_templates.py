@@ -90,13 +90,18 @@ MCP_TEMPLATES: List[McpTemplate] = [
         title="🐙 GitHub",
         description=(
             "Agent czyta repozytoria, tworzy issues i pull requesty, sprawdza status CI. "
-            "Wymaga osobistego tokenu GitHub (PAT) z uprawnieniami repo + workflow."
+            "Wymaga osobistego tokenu GitHub (PAT) — minimalne wymagane uprawnienia: "
+            "scope „repo\" oraz „read:org\". Dla pełnej funkcjonalności (np. workflow) — także „workflow\"."
         ),
         transport="http",
         url="https://api.githubcopilot.com/mcp/",
         headers_required=[("Authorization", "Bearer {TOKEN}")],
-        env_required=[("TOKEN", "GitHub Personal Access Token (ghp_...)")],
-        install_hint="Token wygeneruj w GitHub → Settings → Developer settings → Personal access tokens.",
+        env_required=[("TOKEN", "Token GitHub (ghp_... albo github_pat_...)")],
+        install_hint=(
+            "Wygeneruj token z gotowymi scope: "
+            "https://github.com/settings/tokens/new?scopes=repo,read:org&description=Claude+Code+MCP "
+            "(otwórz link, kliknij „Generate token\" na dole, skopiuj token i wklej powyżej)."
+        ),
         homepage="https://github.com/github/github-mcp-server",
     ),
     McpTemplate(
@@ -186,6 +191,97 @@ MCP_TEMPLATES: List[McpTemplate] = [
             "Po dodaniu autoryzuj się w przeglądarce. Wymaga konta Sentry."
         ),
         homepage="https://docs.sentry.io/product/sentry-mcp/",
+    ),
+    McpTemplate(
+        id="n8n",
+        default_name="n8n",
+        title="🤖 n8n (Twój własny serwer)",
+        description=(
+            "Łączy agenta z Twoją instancją n8n — dowolną, własną. Agent uruchamia "
+            "Twoje workflow, sprawdza ich status. Każdy użytkownik podaje URL swojego "
+            "serwera n8n MCP — działa z dowolną instalacją (chmura, self-hosted, lokalna)."
+        ),
+        transport="http",
+        url="{N8N_MCP_URL}",
+        args_required=[
+            (
+                "N8N_MCP_URL",
+                "Pełny URL Twojego MCP w n8n "
+                "(np. https://n8n.twojadomena.pl/mcp/abc123)",
+            ),
+        ],
+        env_optional=[
+            (
+                "BEARER_TOKEN",
+                "Bearer token (jeśli Twój workflow MCP wymaga autoryzacji "
+                "— pozostaw puste jeśli nie)",
+            ),
+        ],
+        headers_required=[
+            ("Authorization", "Bearer {BEARER_TOKEN}"),
+        ],
+        install_hint=(
+            "W n8n: Workflows → New → dodaj node „MCP Server Trigger\" → uruchom "
+            "(Active) → skopiuj wygenerowany URL i wklej powyżej. Jeśli Twój endpoint "
+            "używa SSE zamiast HTTP — użyj „Dodaj ręcznie\" z transportem SSE."
+        ),
+        homepage=(
+            "https://docs.n8n.io/integrations/builtin/core-nodes/"
+            "n8n-nodes-langchain.mcptrigger/"
+        ),
+    ),
+    McpTemplate(
+        id="imap",
+        default_name="email-imap",
+        title="📧 Email (IMAP — Gmail / dowolny dostawca)",
+        description=(
+            "Agent czyta Twoją skrzynkę e-mail przez protokół IMAP — działa z Gmailem, "
+            "Outlookiem, własnym serwerem (np. mail.webwavecms.com). Idealne do "
+            "podsumowań „co przyszło dzisiaj?\" albo wyszukiwania w archiwum."
+        ),
+        transport="stdio",
+        command="npx",
+        args=["-y", "@takashiishida/imap-mcp-server"],
+        env_required=[
+            ("IMAP_HOST", "Serwer IMAP (np. imap.gmail.com, mail.webwavecms.com)"),
+            ("IMAP_PORT", "Port IMAP (zazwyczaj 993)"),
+            ("IMAP_USER", "Adres email (login)"),
+            ("IMAP_PASSWORD", "Hasło lub hasło aplikacji (Gmail wymaga App Password)"),
+        ],
+        install_hint=(
+            "Dla Gmaila: włącz 2FA i utwórz „Hasło aplikacji\" "
+            "(https://myaccount.google.com/apppasswords) — zwykłego hasła Google użyć NIE MOŻNA. "
+            "Wymaga Node.js (npx)."
+        ),
+        homepage="https://www.npmjs.com/package/@takashiishida/imap-mcp-server",
+    ),
+    McpTemplate(
+        id="gitlab",
+        default_name="gitlab",
+        title="🦊 GitLab",
+        description=(
+            "Agent czyta projekty, issues i merge requesty w GitLab. Wspiera GitLab.com "
+            "oraz instancje self-hosted (np. firmowy GitLab). Wymaga Personal Access Token."
+        ),
+        transport="stdio",
+        command="npx",
+        args=["-y", "@modelcontextprotocol/server-gitlab"],
+        env_required=[
+            ("GITLAB_PERSONAL_ACCESS_TOKEN", "GitLab PAT (glpat-...)"),
+        ],
+        env_optional=[
+            (
+                "GITLAB_API_URL",
+                "URL API GitLab (domyślnie https://gitlab.com/api/v4 — "
+                "zmień jeśli używasz self-hosted)",
+            ),
+        ],
+        install_hint=(
+            "Token wygeneruj w GitLab → User Settings → Access Tokens → "
+            "scope: api (read+write) lub read_api (tylko-do-odczytu). "
+            "Dla self-hosted — ustaw GITLAB_API_URL na adres swojej instancji."
+        ),
+        homepage="https://github.com/modelcontextprotocol/servers/tree/main/src/gitlab",
     ),
 ]
 

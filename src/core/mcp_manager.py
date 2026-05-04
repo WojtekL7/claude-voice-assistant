@@ -44,7 +44,8 @@ class McpError(Exception):
 class McpServer:
     name: str
     transport: str = "stdio"          # "stdio" | "http" | "sse"
-    target: str = ""                  # command (stdio) lub URL (http/sse)
+    target: str = ""                  # reprezentacja: dla stdio "command + args", dla http/sse URL
+    command: str = ""                 # tylko stdio: czysta komenda (bez args) — do edycji/rollbacku
     args: List[str] = field(default_factory=list)
     env: Dict[str, str] = field(default_factory=dict)
     headers: Dict[str, str] = field(default_factory=dict)
@@ -198,6 +199,93 @@ class McpManager:
         cmd += [name]
         self._run(cmd)
 
+    # ---------- Test + Edycja ----------
+
+    def test_connection(self, name: str) -> Optional[McpServer]:
+        """Wymusza ponowne sprawdzenie połączenia z serwerem MCP.
+
+        Pod spodem `claude mcp list` jednocześnie sprawdza zdrowie wszystkich
+        serwerów (z perspektywy bieżącego working_dir), więc używamy go jako
+        sondy. Zwraca świeży McpServer z zaktualizowanym statusem albo None,
+        jeśli serwera już nie ma w konfiguracji.
+        """
+        servers = self.list_servers()
+        for s in servers:
+            if s.name == name:
+                return s
+        return None
+
+    def update_server(
+        self,
+        old_name: str,
+        old_scope: str,
+        add_callable,
+        old_server: Optional[McpServer] = None,
+    ) -> None:
+        """Atomowa edycja serwera: remove + add z rollbackiem na błąd.
+
+        Strategia (Opcja A z planu):
+        1. Zapisujemy backup obecnego stanu (old_server musi być pełny McpServer).
+        2. Usuwamy stary wpis przez `claude mcp remove`.
+        3. Wywołujemy add_callable() — to ma zainstalować nowy wpis.
+        4. Jeśli krok 3 wybuchnie — przywracamy stary z backupu.
+
+        add_callable to lambda/funkcja, która sama wie jak dodać nowy serwer
+        (np. `lambda: dlg.install_into(self)`). Dzięki temu logika konstrukcji
+        argumentów (transport-specific) zostaje w warstwie UI.
+        """
+        if old_server is None:
+            old_server = self.get(old_name)
+        if old_server is None:
+            raise McpError(f"Nie znaleziono serwera „{old_name}\" w konfiguracji.")
+        if old_server.managed:
+            raise McpError(
+                f"Serwer „{old_name}\" jest zarządzany przez claude.ai — edycja niemożliwa."
+            )
+
+        # Krok 1: backup (już mamy w old_server)
+        # Krok 2: remove (best-effort — jeśli się nie uda, nie ma sensu próbować dalej)
+        try:
+            self.remove(old_name, scope=old_scope if old_scope in VALID_SCOPES else None)
+        except McpError as exc:
+            raise McpError(f"Nie udało się usunąć starego wpisu: {exc}")
+
+        # Krok 3: add nowego
+        try:
+            add_callable()
+        except Exception as add_exc:
+            # Krok 4: rollback — odtwarzamy stary wpis
+            try:
+                self._reinstall_from_backup(old_server)
+                raise McpError(
+                    f"Edycja nie powiodła się (przyczyna: {add_exc}). "
+                    "Przywrócono poprzednią konfigurację."
+                )
+            except Exception as restore_exc:
+                # Najgorszy scenariusz — straciliśmy oryginał
+                raise McpError(
+                    f"KRYTYCZNE: edycja nie powiodła się ({add_exc}) "
+                    f"ORAZ rollback nie powiódł się ({restore_exc}). "
+                    f"Sprawdź ręcznie ~/.claude.json — dane oryginalne: "
+                    f"transport={old_server.transport}, target={old_server.target}, "
+                    f"env={old_server.env}, headers={old_server.headers}, scope={old_server.scope}"
+                )
+
+    def _reinstall_from_backup(self, srv: McpServer) -> None:
+        """Wewnętrzny rollback — odtwarza serwer z McpServer (backupu)."""
+        scope = srv.scope if srv.scope in VALID_SCOPES else "local"
+        if srv.transport == "stdio":
+            self.add_stdio(
+                srv.name, command=srv.command, args=srv.args,
+                env=srv.env or None, scope=scope,
+            )
+        elif srv.transport == "http":
+            self.add_http(srv.name, url=srv.target, headers=srv.headers or None, scope=scope)
+        elif srv.transport == "sse":
+            self.add_sse(srv.name, url=srv.target, headers=srv.headers or None, scope=scope)
+        else:
+            raise McpError(f"Nieznany transport: {srv.transport}")
+
     # ---------- Helpers ----------
 
     def _run(self, args: List[str], *, allow_nonzero: bool = False) -> str:
@@ -296,16 +384,19 @@ class McpManager:
     def _server_from_config(name: str, data: dict, scope: str) -> McpServer:
         """Tworzy McpServer z wpisu w ~/.claude.json."""
         transport = (data.get("type") or "stdio").lower()
+        command = ""
         if transport in ("http", "sse"):
             target = data.get("url", "")
         else:
-            cmd_parts = [data.get("command", "")] + list(data.get("args") or [])
+            command = data.get("command", "")
+            cmd_parts = [command] + list(data.get("args") or [])
             target = " ".join(p for p in cmd_parts if p)
 
         return McpServer(
             name=name,
             transport=transport,
             target=target,
+            command=command,
             args=list(data.get("args") or []),
             env=dict(data.get("env") or {}),
             headers=dict(data.get("headers") or {}),

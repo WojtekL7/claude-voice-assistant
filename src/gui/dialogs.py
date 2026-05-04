@@ -2346,6 +2346,25 @@ class McpManagerDialog(QDialog):
 
         btn_layout.addSpacing(15)
 
+        # Akcje na zaznaczonym serwerze
+        self.authorize_btn = QPushButton("🔓 Autoryzuj")
+        self.authorize_btn.clicked.connect(self._authorize_selected)
+        self.authorize_btn.setStyleSheet("QPushButton { color: #eab308; }")
+        self.authorize_btn.setToolTip("Dla serwerów wymagających autoryzacji (claude.ai, OAuth)")
+        btn_layout.addWidget(self.authorize_btn)
+
+        self.test_btn = QPushButton("🔍 Test")
+        self.test_btn.clicked.connect(self._test_selected)
+        self.test_btn.setToolTip("Sprawdź czy zaznaczony serwer odpowiada")
+        btn_layout.addWidget(self.test_btn)
+
+        self.edit_btn = QPushButton("✏️ Edytuj")
+        self.edit_btn.clicked.connect(self._edit_selected)
+        self.edit_btn.setToolTip("Edytuj zaznaczony serwer (nie działa dla zarządzanych przez claude.ai)")
+        btn_layout.addWidget(self.edit_btn)
+
+        btn_layout.addSpacing(15)
+
         self.refresh_btn = QPushButton("🔄 Odśwież")
         self.refresh_btn.clicked.connect(self._populate_list)
         btn_layout.addWidget(self.refresh_btn)
@@ -2516,6 +2535,122 @@ class McpManagerDialog(QDialog):
             QMessageBox.warning(self, "Błąd dodawania", str(exc))
             return
         QMessageBox.information(self, "Dodano", f"Serwer „{dlg.final_name}\" został dodany.")
+        self._populate_list()
+
+    # ---------- Akcje: autoryzacja ----------
+
+    def _authorize_selected(self):
+        srv = self._selected_server()
+        if srv is None:
+            QMessageBox.warning(self, "Brak wyboru", "Wybierz serwer do autoryzacji.")
+            return
+
+        if srv.managed:
+            # claude.ai* — autoryzacja przez panel claude.ai
+            QDesktopServices.openUrl(QUrl("https://claude.ai/settings/connectors"))
+            QMessageBox.information(
+                self, "Otwarto przeglądarkę",
+                f"Otworzyłem panel integracji claude.ai. Tam zaloguj się i autoryzuj "
+                f"serwer „{srv.name}\". Po zakończeniu wróć tutaj i kliknij „🔄 Odśwież\"."
+            )
+            return
+
+        # Serwery OAuth (Notion, Sentry, GitHub OAuth) — autoryzacja w terminalu Claude Code
+        target_dir = self._working_dir or Path.home()
+        QMessageBox.information(
+            self, "Autoryzacja OAuth",
+            f"Aby autoryzować serwer „{srv.name}\":\n\n"
+            f"1. Otwórz Claude Code w katalogu:\n   {target_dir}\n\n"
+            f"2. Poproś go o jakiekolwiek użycie tego serwera "
+            f"(np. „pokaż mi listę narzędzi z {srv.name}\").\n\n"
+            f"3. Claude Code otworzy przeglądarkę i poprowadzi przez OAuth.\n\n"
+            f"4. Wróć tutaj i kliknij „🔄 Odśwież\"."
+        )
+
+    # ---------- Akcje: test połączenia ----------
+
+    def _test_selected(self):
+        srv = self._selected_server()
+        if srv is None:
+            QMessageBox.warning(self, "Brak wyboru", "Wybierz serwer do przetestowania.")
+            return
+
+        # Cursor zajęty + ponowne pobranie statusu z `claude mcp list`
+        from PyQt5.QtCore import Qt as _Qt
+        from PyQt5.QtGui import QCursor as _QCursor
+        self.setCursor(_QCursor(_Qt.WaitCursor))
+        try:
+            import time as _time
+            t0 = _time.monotonic()
+            updated = self.manager.test_connection(srv.name)
+            elapsed_ms = int((_time.monotonic() - t0) * 1000)
+        except McpError as exc:
+            self.unsetCursor()
+            QMessageBox.warning(self, "Błąd testu", str(exc))
+            return
+        finally:
+            self.unsetCursor()
+
+        if updated is None:
+            QMessageBox.warning(
+                self, "Nie znaleziono",
+                f"Serwer „{srv.name}\" nie istnieje już w konfiguracji."
+            )
+            self._populate_list()
+            return
+
+        icon, color, status_label = _MCP_STATUS_BADGES.get(
+            updated.status, _MCP_STATUS_BADGES[STATUS_UNKNOWN]
+        )
+        QMessageBox.information(
+            self, "Wynik testu",
+            f"{icon} Serwer „{updated.name}\"\n\n"
+            f"Status: {status_label}\n"
+            f"Czas sprawdzenia: {elapsed_ms} ms\n"
+            f"Surowy status: {updated.status_text or '(brak)'}"
+        )
+        self._populate_list()
+
+    # ---------- Akcje: edycja ----------
+
+    def _edit_selected(self):
+        srv = self._selected_server()
+        if srv is None:
+            QMessageBox.warning(self, "Brak wyboru", "Wybierz serwer do edycji.")
+            return
+        if srv.managed:
+            QMessageBox.information(
+                self, "Serwer zarządzany",
+                f"Serwer „{srv.name}\" jest zarządzany przez claude.ai i nie można go "
+                "edytować z poziomu tej aplikacji."
+            )
+            return
+
+        dlg = _McpAddManualDialog(
+            self,
+            default_scope=srv.scope if srv.scope in ("user", "local") else self._default_scope(),
+            scope_locked=self._is_per_agent,
+            edit_server=srv,  # tryb edycji — dialog prefilluje pola
+        )
+        if dlg.exec_() != QDialog.Accepted:
+            return
+
+        # Atomowy update: remove starego + add nowego z rollbackiem
+        try:
+            self.manager.update_server(
+                old_name=srv.name,
+                old_scope=srv.scope,
+                add_callable=lambda: dlg.install_into(self.manager),
+                old_server=srv,
+            )
+        except McpError as exc:
+            QMessageBox.warning(self, "Błąd edycji", str(exc))
+            return
+
+        QMessageBox.information(
+            self, "Zapisano",
+            f"Serwer „{dlg.final_name}\" został zaktualizowany."
+        )
         self._populate_list()
 
     # ---------- Akcje: usuwanie ----------
@@ -2791,10 +2926,18 @@ class _McpTemplateConfigDialog(QDialog):
                 scope=self.final_scope,
             )
         elif tpl.transport in ("http", "sse"):
-            url = tpl.render_url(arg_values)
-            # Headers — render z env_values (dla GitHub: Authorization: Bearer {TOKEN})
+            # URL może mieć placeholdery z arg_values lub env_values (np. {N8N_MCP_URL})
+            url_values = {**arg_values, **env_values}
+            url = tpl.render_url(url_values)
+            # Headers — render z env_values. Jeśli pattern zawiera placeholder bez wartości
+            # (np. opcjonalny BEARER_TOKEN nie podany) — pomijamy header.
+            import re as _re
             headers: Dict[str, str] = {}
             for hkey, hpattern in tpl.headers_required:
+                placeholders = _re.findall(r"\{([A-Z_][A-Z0-9_]*)\}", hpattern)
+                missing = [p for p in placeholders if not env_values.get(p)]
+                if missing:
+                    continue  # opcjonalny env nie podany — header pomijamy
                 rendered = hpattern
                 for k, v in env_values.items():
                     rendered = rendered.replace("{" + k + "}", v)
@@ -2808,25 +2951,49 @@ class _McpTemplateConfigDialog(QDialog):
 
 
 class _McpAddManualDialog(QDialog):
-    """Ręczne dodawanie serwera MCP — formularz dla zaawansowanych."""
+    """Ręczne dodawanie/edycja serwera MCP — formularz dla zaawansowanych.
 
-    def __init__(self, parent, default_scope: str, scope_locked: bool):
+    Jeśli `edit_server` jest podane → tryb edycji: formularz prefillowany,
+    nazwa zablokowana (zmiana nazwy = remove+add z nową nazwą — niepotrzebny
+    dla MVP), pola wypełnione.
+    """
+
+    def __init__(self, parent, default_scope: str, scope_locked: bool,
+                 edit_server: Optional[McpServer] = None):
         super().__init__(parent)
-        self.setWindowTitle("Dodaj serwer MCP ręcznie")
+        self._edit_server = edit_server
+        self._is_edit = edit_server is not None
+        title = f"Edytuj serwer MCP — {edit_server.name}" if self._is_edit else "Dodaj serwer MCP ręcznie"
+        self.setWindowTitle(title)
         self.setMinimumWidth(580)
         self._scope_locked = scope_locked
         self._default_scope = default_scope
-        self.final_name: str = ""
-        self.final_scope: str = default_scope
+        self.final_name: str = edit_server.name if self._is_edit else ""
+        self.final_scope: str = (
+            edit_server.scope if self._is_edit and edit_server.scope in ("user", "local")
+            else default_scope
+        )
         self._setup_ui()
+        if self._is_edit:
+            self._prefill_from_server(edit_server)
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
 
-        header = QLabel("✏️ Dodaj serwer MCP ręcznie")
+        header_text = "✏️ Edytuj serwer MCP" if self._is_edit else "✏️ Dodaj serwer MCP ręcznie"
+        header = QLabel(header_text)
         header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
         layout.addWidget(header)
+
+        if self._is_edit:
+            note = QLabel(
+                "ℹ️ Zmiany zostaną zapisane jako: usunięcie starego wpisu + dodanie "
+                "z nowymi danymi. W razie błędu — automatyczny powrót do poprzedniej konfiguracji."
+            )
+            note.setStyleSheet("color: #aaaaaa; font-size: 11px;")
+            note.setWordWrap(True)
+            layout.addWidget(note)
 
         form = QFormLayout()
         form.setSpacing(8)
@@ -2888,7 +3055,8 @@ class _McpAddManualDialog(QDialog):
         cancel = QPushButton("Anuluj")
         cancel.clicked.connect(self.reject)
         bottom.addWidget(cancel)
-        ok = QPushButton("✅ Dodaj")
+        ok_label = "💾 Zapisz" if self._is_edit else "✅ Dodaj"
+        ok = QPushButton(ok_label)
         ok.setDefault(True)
         ok.setStyleSheet("QPushButton { color: #22c55e; }")
         ok.clicked.connect(self._validate_and_accept)
@@ -2896,6 +3064,34 @@ class _McpAddManualDialog(QDialog):
         layout.addLayout(bottom)
 
         self._on_transport_change()
+
+    def _prefill_from_server(self, srv: McpServer) -> None:
+        """Wypełnia formularz danymi istniejącego serwera (tryb edycji)."""
+        self.name_input.setText(srv.name)
+        # W edycji blokujemy zmianę nazwy — to upraszcza rollback
+        self.name_input.setReadOnly(True)
+        self.name_input.setStyleSheet("QLineEdit { color: #aaaaaa; }")
+        self.name_input.setToolTip("W trybie edycji nazwa jest niezmienna.")
+
+        # Transport
+        transport_idx = {"stdio": 0, "http": 1, "sse": 2}.get(srv.transport, 0)
+        self.transport_combo.setCurrentIndex(transport_idx)
+
+        if srv.transport == "stdio":
+            self.command_input.setText(srv.command)
+            self.args_input.setText(" ".join(srv.args))
+            if srv.env:
+                env_text = "\n".join(f"{k}={v}" for k, v in srv.env.items())
+                self.env_input.setPlainText(env_text)
+        else:
+            self.url_input.setText(srv.target)
+            if srv.headers:
+                hdr_text = "\n".join(f"{k}: {v}" for k, v in srv.headers.items())
+                self.headers_input.setPlainText(hdr_text)
+
+        # Scope
+        scope_idx = 0 if srv.scope == "user" else 1
+        self.scope_combo.setCurrentIndex(scope_idx)
 
     def _on_transport_change(self):
         transport = self.transport_combo.currentData()
