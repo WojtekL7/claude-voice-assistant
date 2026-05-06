@@ -1073,20 +1073,6 @@ class MainWindow(QMainWindow):
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
 
-        # Edit menu
-        edit_menu = menubar.addMenu("Edycja")
-
-        manage_actions = QAction("Zarządzaj szybkimi akcjami...", self)
-        manage_actions.triggered.connect(self._manage_quick_actions)
-        edit_menu.addAction(manage_actions)
-
-        edit_menu.addSeparator()
-
-        # Skin colors option
-        skin_colors_action = QAction("🎨 Zmień kolory skórki...", self)
-        skin_colors_action.triggered.connect(self._show_skin_settings)
-        edit_menu.addAction(skin_colors_action)
-
         # Agents menu
         agents_menu = menubar.addMenu("Zakładki")
 
@@ -1138,6 +1124,13 @@ class MainWindow(QMainWindow):
 
         settings_menu.addSeparator()
 
+        # UI / aplikacja (przeniesione z dawnego menu Edycja)
+        skin_colors_action = QAction("🎨 Zmień kolory skórki...", self)
+        skin_colors_action.triggered.connect(self._show_skin_settings)
+        settings_menu.addAction(skin_colors_action)
+
+        settings_menu.addSeparator()
+
         groq_api_action = QAction("Klucz API Groq...", self)
         groq_api_action.triggered.connect(self._show_groq_api_dialog)
         settings_menu.addAction(groq_api_action)
@@ -1151,6 +1144,14 @@ class MainWindow(QMainWindow):
         claude_command_action = QAction("Komenda Claude Code...", self)
         claude_command_action.triggered.connect(self._show_claude_command_dialog)
         settings_menu.addAction(claude_command_action)
+
+        settings_menu.addSeparator()
+
+        # Szybkie akcje na samym dole — to ergonomia użytkowania, oddzielona
+        # od konfiguracji systemowej (klucze API, komenda Claude Code).
+        manage_actions = QAction("Zarządzaj szybkimi akcjami...", self)
+        manage_actions.triggered.connect(self._manage_quick_actions)
+        settings_menu.addAction(manage_actions)
 
         # Help menu
         help_menu = menubar.addMenu("Pomoc")
