@@ -1111,10 +1111,13 @@ class MainWindow(QMainWindow):
         # memory_projects_action.triggered.connect(self._show_memory_projects_dialog)
         # agents_menu.addAction(memory_projects_action)
 
-        # Language menu
-        self.language_menu = menubar.addMenu("Język")
-        self.language_actions = {}
+        # Settings menu (Język, Skills, MCP, API keys, Claude command)
+        settings_menu = menubar.addMenu("Ustawienia")
 
+        # Submenu Język (przeniesione z top-level — używane przez _set_language
+        # i pętlę aktualizującą checkmarki w l. ~1383).
+        self.language_menu = settings_menu.addMenu("🌐 Język")
+        self.language_actions = {}
         for code, (native, english, voice) in SUPPORTED_LANGUAGES.items():
             action = QAction(f"{native} ({english})", self)
             action.setCheckable(True)
@@ -1123,8 +1126,7 @@ class MainWindow(QMainWindow):
             self.language_menu.addAction(action)
             self.language_actions[code] = action
 
-        # Settings menu (Skills, MCP, API keys, Claude command)
-        settings_menu = menubar.addMenu("Ustawienia")
+        settings_menu.addSeparator()
 
         skills_action = QAction("🧩 Umiejętności (Skills)...", self)
         skills_action.triggered.connect(self._show_skills_manager_dialog)
