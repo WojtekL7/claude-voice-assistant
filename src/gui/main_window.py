@@ -1043,17 +1043,6 @@ class MainWindow(QMainWindow):
         skin_colors_action.triggered.connect(self._show_skin_settings)
         edit_menu.addAction(skin_colors_action)
 
-        # Extensions menu (Skills, MCP — extensions to Claude Code itself)
-        extensions_menu = menubar.addMenu("Rozszerzenia")
-
-        skills_action = QAction("🧩 Umiejętności (Skills)...", self)
-        skills_action.triggered.connect(self._show_skills_manager_dialog)
-        extensions_menu.addAction(skills_action)
-
-        mcp_action = QAction("🔌 Serwery MCP...", self)
-        mcp_action.triggered.connect(self._show_mcp_manager_dialog)
-        extensions_menu.addAction(mcp_action)
-
         # Agents menu
         agents_menu = menubar.addMenu("Zakładki")
 
@@ -1090,8 +1079,18 @@ class MainWindow(QMainWindow):
             self.language_menu.addAction(action)
             self.language_actions[code] = action
 
-        # Settings menu
+        # Settings menu (Skills, MCP, API keys, Claude command)
         settings_menu = menubar.addMenu("Ustawienia")
+
+        skills_action = QAction("🧩 Umiejętności (Skills)...", self)
+        skills_action.triggered.connect(self._show_skills_manager_dialog)
+        settings_menu.addAction(skills_action)
+
+        mcp_action = QAction("🔌 Serwery MCP...", self)
+        mcp_action.triggered.connect(self._show_mcp_manager_dialog)
+        settings_menu.addAction(mcp_action)
+
+        settings_menu.addSeparator()
 
         groq_api_action = QAction("Klucz API Groq...", self)
         groq_api_action.triggered.connect(self._show_groq_api_dialog)
