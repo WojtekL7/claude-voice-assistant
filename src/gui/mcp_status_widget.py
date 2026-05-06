@@ -1,21 +1,27 @@
 """
-Claude Voice Assistant - MCP Status Widget
-Pasek statusu MCP w QStatusBar — pokazuje liczbę aktywnych/needs_auth/failed
-serwerów MCP dla bieżącego agenta.
+Claude Voice Assistant - Agent Status Widget (w pasku statusu)
 
-Cache: 30 sekund per working_dir (klikanie po zakładkach jest natychmiastowe).
-Refresh: w tle (threading.Thread + pyqtSignal — nie blokuje UI).
+Pokazuje 4 liczniki dla aktywnego agenta:
+  🔌 N  — aktywne (connected) serwery MCP
+  🧩 N  — skille aktywne dla agenta (globalne minus deny-list agenta)
+  📁 N  — pliki pamięci agenta z konfiguracji (memory_files)
+  🤖 X  — etykieta wybranego modelu Claude Code
+
+Plus jeden 🔄 odświeżający wszystkie 4 liczniki.
+
+Cache MCP: 30 sekund per working_dir (klikanie po zakładkach jest natychmiastowe).
+Refresh MCP w tle (threading.Thread + pyqtSignal — nie blokuje UI).
+Skille i pliki czytane synchronicznie (operacja jest tania — list dirów / lookup w configu).
 """
 import threading
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from PyQt5.QtCore import Qt, pyqtSignal, QSize
-from PyQt5.QtGui import QCursor
+from PyQt5.QtCore import Qt, QSize, pyqtSignal
+from PyQt5.QtGui import QCursor, QIcon
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QLabel, QPushButton, QToolButton,
-    QMenu, QAction, QMessageBox,
 )
 
 import sys
@@ -26,65 +32,118 @@ from core.mcp_manager import (
     STATUS_CONNECTED, STATUS_NEEDS_AUTH, STATUS_FAILED, STATUS_UNKNOWN,
 )
 from core.agent_mcp_settings import AgentMcpSettings
+from core.skills_manager import SkillsManager, Skill
+from core.agent_skills_settings import AgentSkillsSettings
+from config import CLAUDE_MODELS_SHORT, CLAUDE_MODELS, DEFAULT_AGENT_MODEL
 
 
 CACHE_TTL_SECONDS = 30
 
+# Wspólny styl klikalnych "kafelków" w pasku statusu.
+_TILE_STYLE = """
+    QPushButton, QToolButton {
+        background: transparent;
+        color: #ffffff;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        padding: 2px 6px;
+        font-size: 11px;
+    }
+    QPushButton:hover, QToolButton:hover {
+        background-color: #4a1a3a;
+        border-color: #6a2a5a;
+    }
+    QPushButton:disabled, QToolButton:disabled {
+        color: #888888;
+    }
+"""
+
 
 class McpStatusWidget(QWidget):
-    """Widget statusu MCP w QStatusBar.
+    """Widget statusu agenta w QStatusBar (4 liczniki + refresh).
 
-    Pokazuje 3 kafelki (✅/🔐/❌) z liczbą serwerów + przyciski [🔄] [⚙️].
     Sygnały:
-      - request_open_manager(working_dir) — gdy user klika cyfry albo ⚙️→Otwórz
-      - mcp_changed() — gdy stan się zmienia (po toggle all)
+      - request_open_manager(working_dir) — kliknięcie 🔌 (Menedżer MCP)
+      - request_open_skills() — kliknięcie 🧩 (Menedżer Skills)
+      - request_edit_agent(agent_id) — kliknięcie 📁 lub 🤖 (Edycja agenta)
+      - mcp_changed() — gdy stan MCP się zmienił (po toggle all w innym miejscu)
     """
 
-    request_open_manager = pyqtSignal(object)  # Optional[Path]
+    request_open_manager = pyqtSignal(object)        # Optional[Path]
+    request_open_skills = pyqtSignal()
+    request_edit_agent = pyqtSignal(str)             # agent_id
     mcp_changed = pyqtSignal()
 
-    # Wewnętrzny sygnał — z wątku roboczego do GUI
-    _data_loaded = pyqtSignal(object)  # list[McpServer] albo None gdy błąd
+    # Wewnętrzny sygnał — z wątku roboczego do GUI (lista MCP)
+    _mcp_loaded = pyqtSignal(object)  # list[McpServer] albo None gdy błąd
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._working_dir: Optional[Path] = None
         self._agent_name: Optional[str] = None
-        # Cache: {working_dir_str: (timestamp, [McpServer, ...])}
+        self._agent_id: Optional[str] = None
+        self._memory_files: List[str] = []
+        self._model_key: str = DEFAULT_AGENT_MODEL
+        # Cache MCP: {working_dir_str: (timestamp, [McpServer, ...])}
         self._cache: Dict[str, Tuple[float, List[McpServer]]] = {}
         self._loading: bool = False
         self._setup_ui()
-        self._data_loaded.connect(self._on_data_loaded)
+        self._mcp_loaded.connect(self._on_mcp_loaded)
         self._render_idle()
 
     # ---------- Public API ----------
 
-    def set_agent(self, working_dir: Optional[Path], agent_name: Optional[str] = None):
-        """Ustaw kontekst (zmiana zakładki). Próbuje cache, w razie potrzeby ładuje w tle."""
+    def set_agent(
+        self,
+        working_dir: Optional[Path],
+        agent_name: Optional[str] = None,
+        agent_id: Optional[str] = None,
+        memory_files: Optional[List[str]] = None,
+        model_key: Optional[str] = None,
+    ):
+        """Ustaw kontekst agenta (zmiana zakładki).
+
+        Aktualizuje wszystkie 4 liczniki. MCP korzysta z cache (30s);
+        skille/pliki/model są tanie więc liczone synchronicznie.
+        """
         self._working_dir = Path(working_dir) if working_dir else None
         self._agent_name = agent_name
+        self._agent_id = agent_id
+        self._memory_files = list(memory_files or [])
+        self._model_key = model_key or DEFAULT_AGENT_MODEL
 
+        # Statyczne liczniki — od razu
+        self._render_skills()
+        self._render_files()
+        self._render_model()
+
+        # MCP — z cache lub w tle
         if self._working_dir is None:
-            self._render_idle()
+            self._render_idle_mcp()
             return
 
         cached = self._read_cache(self._working_dir)
         if cached is not None:
-            self._render_servers(cached)
+            self._render_mcp(cached)
             return
 
-        self._render_loading()
-        self._refresh_async()
+        self._render_loading_mcp()
+        self._refresh_mcp_async()
 
     def force_refresh(self):
-        """Wymuszone odświeżenie — ignoruje cache."""
+        """Pełne odświeżenie wszystkich liczników (ignoruje cache MCP)."""
+        # Skills/files/model — od razu (mogły się zmienić w dialogach)
+        self._render_skills()
+        self._render_files()
+        self._render_model()
+
         if self._working_dir is None:
-            self._render_idle()
+            self._render_idle_mcp()
             return
-        # Inwaliduj cache dla bieżącego working_dir
+        # Inwaliduj cache i pobierz świeży stan MCP
         self._cache.pop(str(self._working_dir), None)
-        self._render_loading()
-        self._refresh_async()
+        self._render_loading_mcp()
+        self._refresh_mcp_async()
 
     # ---------- UI ----------
 
@@ -93,154 +152,152 @@ class McpStatusWidget(QWidget):
         layout.setContentsMargins(8, 0, 8, 0)
         layout.setSpacing(6)
 
-        # Główny "kafelek" z licznikami — klikalny (otwiera menedżer)
-        self.summary_btn = QPushButton()
-        self.summary_btn.setFlat(True)
-        self.summary_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        self.summary_btn.setStyleSheet("""
-            QPushButton {
-                background: transparent;
-                color: #ffffff;
-                border: 1px solid transparent;
-                border-radius: 4px;
-                padding: 2px 6px;
-                font-size: 11px;
-            }
-            QPushButton:hover {
-                background-color: #4a1a3a;
-                border-color: #6a2a5a;
-            }
-        """)
-        self.summary_btn.clicked.connect(self._on_summary_click)
-        layout.addWidget(self.summary_btn)
+        # 🔌 MCP
+        self.mcp_btn = QPushButton()
+        self.mcp_btn.setFlat(True)
+        self.mcp_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self.mcp_btn.setStyleSheet(_TILE_STYLE)
+        self.mcp_btn.clicked.connect(self._on_mcp_click)
+        layout.addWidget(self.mcp_btn)
 
-        # Refresh button
-        self.refresh_btn = QToolButton()
-        self.refresh_btn.setText("🔄")
-        self.refresh_btn.setToolTip("Odśwież status MCP")
-        self.refresh_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        self.refresh_btn.setStyleSheet("""
-            QToolButton {
-                background: transparent;
+        # 🧩 Skille
+        self.skills_btn = QPushButton()
+        self.skills_btn.setFlat(True)
+        self.skills_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self.skills_btn.setStyleSheet(_TILE_STYLE)
+        self.skills_btn.clicked.connect(self._on_skills_click)
+        layout.addWidget(self.skills_btn)
+
+        # 📁 Pliki pamięci agenta
+        self.files_btn = QPushButton()
+        self.files_btn.setFlat(True)
+        self.files_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self.files_btn.setStyleSheet(_TILE_STYLE)
+        self.files_btn.clicked.connect(self._on_edit_agent_click)
+        layout.addWidget(self.files_btn)
+
+        # 🤖 Model
+        self.model_btn = QPushButton()
+        self.model_btn.setFlat(True)
+        self.model_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self.model_btn.setStyleSheet(_TILE_STYLE)
+        self.model_btn.clicked.connect(self._on_edit_agent_click)
+        layout.addWidget(self.model_btn)
+
+        # Σ Globalny licznik tokenów (suma ze wszystkich zakładek). Biały,
+        # nieklikalny — czysta informacja. Aktualizowany przez set_total_tokens()
+        # wywoływane z MainWindow.
+        self.total_tokens_label = QLabel("Σ 0")
+        self.total_tokens_label.setStyleSheet("""
+            QLabel {
                 color: #ffffff;
-                border: 1px solid transparent;
-                border-radius: 4px;
-                padding: 2px 4px;
                 font-size: 11px;
-            }
-            QToolButton:hover {
-                background-color: #4a1a3a;
-                border-color: #6a2a5a;
+                padding: 2px 6px;
+                font-weight: 500;
             }
         """)
+        self.total_tokens_label.setToolTip(
+            "Łączne (przybliżone) tokeny ze wszystkich zakładek od startu aplikacji.\n"
+            "Wzór: liczba znaków ÷ 3,5.\n"
+            "Reset przy: restarcie aplikacji.\n"
+            "(Indywidualny licznik agenta — po prawej, z kolorem zależnym od % okna kontekstu.)"
+        )
+        layout.addWidget(self.total_tokens_label)
+
+        # 🔄 Refresh wszystkich liczników — ikona SVG (biała strzałka anticlockwise).
+        self.refresh_btn = QToolButton()
+        refresh_icon_path = Path(__file__).parent / "refresh.svg"
+        if refresh_icon_path.exists():
+            self.refresh_btn.setIcon(QIcon(str(refresh_icon_path)))
+            self.refresh_btn.setIconSize(QSize(16, 16))
+        else:
+            # Fallback gdyby brakowało pliku
+            self.refresh_btn.setText("⟳")
+        self.refresh_btn.setToolTip(
+            "Odśwież status agenta (MCP, skille, pliki, model).\n"
+            "Klika się gdy zmieniłeś coś w menedżerach lub edycji agenta."
+        )
+        self.refresh_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self.refresh_btn.setStyleSheet(_TILE_STYLE)
         self.refresh_btn.clicked.connect(self.force_refresh)
         layout.addWidget(self.refresh_btn)
 
-        # Menu button
-        self.menu_btn = QToolButton()
-        self.menu_btn.setText("⚙️")
-        self.menu_btn.setToolTip("Akcje MCP dla bieżącego agenta")
-        self.menu_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        self.menu_btn.setStyleSheet(self.refresh_btn.styleSheet())
-        self.menu_btn.setPopupMode(QToolButton.InstantPopup)
-        self._build_menu()
-        layout.addWidget(self.menu_btn)
+    # ---------- Public API: globalny licznik ----------
 
-    def _build_menu(self):
-        menu = QMenu(self)
-        menu.setStyleSheet("""
-            QMenu {
-                background-color: #2d0a1e;
-                color: #ffffff;
-                border: 1px solid #4a1a3a;
-            }
-            QMenu::item:selected {
-                background-color: #6a2a5a;
-            }
-            QMenu::separator {
-                background-color: #4a1a3a;
-                height: 1px;
-            }
-        """)
-        self._action_open = QAction("🔌 Otwórz menedżer MCP", self)
-        self._action_open.triggered.connect(self._on_summary_click)
-        menu.addAction(self._action_open)
+    def set_total_tokens(self, value: int):
+        """Ustaw globalną sumę tokenów (suma ze wszystkich zakładek)."""
+        self.total_tokens_label.setText(f"Σ {value:,}")
 
-        menu.addSeparator()
-
-        self._action_disable_all = QAction("🔇 Wyłącz wszystkie globalne dla tego agenta", self)
-        self._action_disable_all.triggered.connect(self._on_disable_all_global)
-        menu.addAction(self._action_disable_all)
-
-        self._action_enable_all = QAction("🔊 Włącz wszystkie z powrotem", self)
-        self._action_enable_all.triggered.connect(self._on_enable_all_global)
-        menu.addAction(self._action_enable_all)
-
-        self.menu_btn.setMenu(menu)
-
-    # ---------- Renderowanie ----------
+    # ---------- Renderowanie: stany puste ----------
 
     def _render_idle(self):
-        """Brak aktywnej zakładki / brak working_dir."""
-        self.summary_btn.setText("🔌 —")
-        self.summary_btn.setToolTip("Wybierz aktywną zakładkę z agentem.")
-        self._set_actions_enabled(False)
+        """Brak aktywnej zakładki agenta."""
+        self._render_idle_mcp()
+        self.skills_btn.setText("🧩 —")
+        self.skills_btn.setToolTip("Wybierz zakładkę agenta, aby zobaczyć liczbę aktywnych skilli.")
+        self.skills_btn.setEnabled(False)
+        self.files_btn.setText("📁 —")
+        self.files_btn.setToolTip("Wybierz zakładkę agenta, aby zobaczyć pliki pamięci.")
+        self.files_btn.setEnabled(False)
+        self.model_btn.setText("🤖 —")
+        self.model_btn.setToolTip("Wybierz zakładkę agenta, aby zobaczyć model AI.")
+        self.model_btn.setEnabled(False)
 
-    def _render_loading(self):
-        self.summary_btn.setText("🔌 …")
-        self.summary_btn.setToolTip("Sprawdzam status MCP...")
+    def _render_idle_mcp(self):
+        self.mcp_btn.setText("🔌 —")
+        self.mcp_btn.setToolTip("Wybierz zakładkę agenta, aby zobaczyć aktywne serwery MCP.")
+        self.mcp_btn.setEnabled(False)
 
-    def _render_invalid(self, msg: str):
-        self.summary_btn.setText("🔌 ?")
-        self.summary_btn.setToolTip(msg)
-        self._set_actions_enabled(False)
+    def _render_loading_mcp(self):
+        self.mcp_btn.setText("🔌 …")
+        self.mcp_btn.setToolTip("Sprawdzam status MCP...")
+        self.mcp_btn.setEnabled(True)
 
-    def _render_servers(self, servers: List[McpServer]):
-        """Renderuje liczniki + tooltip z pełną listą."""
-        self._set_actions_enabled(True)
+    def _render_invalid_mcp(self, msg: str):
+        self.mcp_btn.setText("🔌 ?")
+        self.mcp_btn.setToolTip(msg)
+        self.mcp_btn.setEnabled(False)
 
-        # Filtruj wg deny list bieżącego agenta
-        disabled_set = self._get_disabled_set()
+    # ---------- Renderowanie: MCP ----------
+
+    def _render_mcp(self, servers: List[McpServer]):
+        """Pokazuje liczbę AKTYWNYCH (connected) MCP + tooltip z pełną listą."""
+        self.mcp_btn.setEnabled(True)
+
+        disabled_set = self._get_disabled_mcp_set()
         active = [s for s in servers if s.sanitized_name not in disabled_set]
         disabled = [s for s in servers if s.sanitized_name in disabled_set]
 
-        # Liczniki po statusie (tylko dla aktywnych)
         counts = {STATUS_CONNECTED: 0, STATUS_NEEDS_AUTH: 0, STATUS_FAILED: 0, STATUS_UNKNOWN: 0}
         for s in active:
             counts[s.status] = counts.get(s.status, 0) + 1
 
-        # Skrót dla pustej listy
-        if not servers:
-            self.summary_btn.setText("🔌 brak")
-            self.summary_btn.setToolTip(
-                f"Agent „{self._agent_name or '—'}\" nie ma żadnych zarejestrowanych MCP."
-            )
-            return
+        # Główny licznik = "aktywne" = connected. Pozostałe statusy są w tooltipie.
+        self.mcp_btn.setText(f"🔌 {counts[STATUS_CONNECTED]}")
+        self.mcp_btn.setToolTip(self._build_mcp_tooltip(active, disabled, counts))
 
-        # Tekst kafelka — pomijamy zera, ale pokazujemy ✅ zawsze (dla wskazania że są aktywne)
-        parts = []
-        parts.append(f"{counts[STATUS_CONNECTED]}✅")
-        if counts[STATUS_NEEDS_AUTH]:
-            parts.append(f"{counts[STATUS_NEEDS_AUTH]}🔐")
-        if counts[STATUS_FAILED]:
-            parts.append(f"{counts[STATUS_FAILED]}❌")
-        if counts[STATUS_UNKNOWN]:
-            parts.append(f"{counts[STATUS_UNKNOWN]}❓")
-        self.summary_btn.setText("🔌 " + " ".join(parts))
-
-        # Tooltip — pełna lista
-        self.summary_btn.setToolTip(self._build_tooltip(active, disabled))
-
-    def _build_tooltip(self, active: List[McpServer], disabled: List[McpServer]) -> str:
+    def _build_mcp_tooltip(
+        self, active: List[McpServer], disabled: List[McpServer], counts: dict
+    ) -> str:
         agent_label = self._agent_name or "—"
-        lines = [f"<b>Aktywne MCP dla agenta „{agent_label}\":</b>"]
+        lines = [
+            f"<b>Serwery MCP — agent „{agent_label}\":</b>",
+            f"  ✅ Połączone: {counts.get(STATUS_CONNECTED, 0)}",
+        ]
+        if counts.get(STATUS_NEEDS_AUTH, 0):
+            lines.append(f"  🔐 Wymagają autoryzacji: {counts[STATUS_NEEDS_AUTH]}")
+        if counts.get(STATUS_FAILED, 0):
+            lines.append(f"  ❌ Błąd: {counts[STATUS_FAILED]}")
+        if counts.get(STATUS_UNKNOWN, 0):
+            lines.append(f"  ❓ Nieznany: {counts[STATUS_UNKNOWN]}")
+
         if active:
+            lines.append("")
+            lines.append("<b>Aktywne:</b>")
             for s in active:
                 icon = self._status_icon(s.status)
                 scope_label = self._scope_label(s.scope)
                 lines.append(f"  {icon} {s.name} <span style='color:#888'>({scope_label})</span>")
-        else:
-            lines.append("  <i>(brak aktywnych)</i>")
 
         if disabled:
             lines.append("")
@@ -249,10 +306,7 @@ class McpStatusWidget(QWidget):
                 lines.append(f"  🚫 {s.name}")
 
         lines.append("")
-        lines.append(
-            f"<i>Razem: {len(active) + len(disabled)} zarejestrowanych, "
-            f"{len(disabled)} wyłączonych dla tego agenta.</i>"
-        )
+        lines.append("<i>Kliknij aby otworzyć menedżer MCP.</i>")
         return "<br>".join(lines)
 
     @staticmethod
@@ -267,11 +321,112 @@ class McpStatusWidget(QWidget):
     def _scope_label(scope: str) -> str:
         return {"user": "globalny", "local": "lokalny", "managed": "zarządzany"}.get(scope, scope)
 
-    def _set_actions_enabled(self, enabled: bool):
-        self.refresh_btn.setEnabled(enabled)
-        self.menu_btn.setEnabled(enabled)
+    # ---------- Renderowanie: Skille ----------
 
-    # ---------- Cache ----------
+    def _render_skills(self):
+        """Liczy globalne skille zainstalowane w ~/.claude/skills/, odejmuje
+        deny-list bieżącego agenta. Wynik = aktywne dla agenta."""
+        self.skills_btn.setEnabled(True)
+        try:
+            all_skills = SkillsManager().list_skills()
+        except Exception:
+            self.skills_btn.setText("🧩 ?")
+            self.skills_btn.setToolTip("Nie udało się odczytać katalogu ~/.claude/skills/")
+            return
+
+        disabled_names = self._get_disabled_skills_set()
+        active = [s for s in all_skills if s.name not in disabled_names and s.folder_name not in disabled_names]
+        disabled = [s for s in all_skills if s.name in disabled_names or s.folder_name in disabled_names]
+
+        self.skills_btn.setText(f"🧩 {len(active)}")
+        self.skills_btn.setToolTip(self._build_skills_tooltip(active, disabled))
+
+    def _build_skills_tooltip(self, active: List[Skill], disabled: List[Skill]) -> str:
+        agent_label = self._agent_name or "—"
+        lines = [f"<b>Skille — agent „{agent_label}\":</b>"]
+        if active:
+            lines.append("")
+            lines.append(f"<b>Aktywne ({len(active)}):</b>")
+            for s in active[:30]:
+                lines.append(f"  🧩 {s.name}")
+            if len(active) > 30:
+                lines.append(f"  <i>… i {len(active) - 30} więcej</i>")
+        else:
+            lines.append("")
+            lines.append("<i>(brak aktywnych skilli)</i>")
+
+        if disabled:
+            lines.append("")
+            lines.append(f"<b>Wyłączone dla tego agenta ({len(disabled)}):</b>")
+            for s in disabled[:10]:
+                lines.append(f"  🚫 {s.name}")
+            if len(disabled) > 10:
+                lines.append(f"  <i>… i {len(disabled) - 10} więcej</i>")
+
+        lines.append("")
+        lines.append("<i>Kliknij aby otworzyć menedżer skilli.</i>")
+        return "<br>".join(lines)
+
+    # ---------- Renderowanie: Pliki ----------
+
+    def _render_files(self):
+        """Pokazuje liczbę memory_files agenta (z konfiguracji w 'Zarządzaj agentami')."""
+        self.files_btn.setEnabled(self._agent_id is not None)
+        count = len(self._memory_files)
+        self.files_btn.setText(f"📁 {count}")
+        self.files_btn.setToolTip(self._build_files_tooltip())
+
+    def _build_files_tooltip(self) -> str:
+        agent_label = self._agent_name or "—"
+        lines = [f"<b>Pliki pamięci — agent „{agent_label}\":</b>"]
+        if self._memory_files:
+            lines.append("")
+            for path_str in self._memory_files[:30]:
+                p = Path(path_str)
+                # Wyróżnij brak pliku (czerwono)
+                if p.exists():
+                    lines.append(f"  📄 {p.name} <span style='color:#888'>({p.parent})</span>")
+                else:
+                    lines.append(f"  ⚠️ {p.name} <span style='color:#cc4444'>(brak pliku)</span>")
+            if len(self._memory_files) > 30:
+                lines.append(f"  <i>… i {len(self._memory_files) - 30} więcej</i>")
+        else:
+            lines.append("")
+            lines.append("<i>(brak plików pamięci)</i>")
+
+        lines.append("")
+        if self._agent_id:
+            lines.append("<i>Kliknij aby edytować agenta (zakładka „Pliki\").</i>")
+        else:
+            lines.append("<i>Wybierz zakładkę agenta.</i>")
+        return "<br>".join(lines)
+
+    # ---------- Renderowanie: Model ----------
+
+    def _render_model(self):
+        """Pokazuje wybrany model Claude Code dla agenta."""
+        self.model_btn.setEnabled(self._agent_id is not None)
+        short = CLAUDE_MODELS_SHORT.get(self._model_key, self._model_key)
+        full = CLAUDE_MODELS.get(self._model_key, self._model_key)
+        # Na pasku jest mało miejsca — pomijamy prefiks "Domyślny — ".
+        # W tooltipie pokazujemy pełną etykietę z "Domyślny" zachowaną.
+        if short.startswith("Domyślny — "):
+            short = short[len("Domyślny — "):]
+        self.model_btn.setText(f"🤖 {short}")
+        agent_label = self._agent_name or "—"
+        tooltip_lines = [
+            f"<b>Model AI — agent „{agent_label}\":</b>",
+            "",
+            f"  🤖 {full}",
+            "",
+        ]
+        if self._agent_id:
+            tooltip_lines.append("<i>Kliknij aby zmienić model w edycji agenta.</i>")
+        else:
+            tooltip_lines.append("<i>Wybierz zakładkę agenta.</i>")
+        self.model_btn.setToolTip("<br>".join(tooltip_lines))
+
+    # ---------- Cache MCP ----------
 
     def _read_cache(self, working_dir: Path) -> Optional[List[McpServer]]:
         key = str(working_dir)
@@ -286,17 +441,15 @@ class McpStatusWidget(QWidget):
     def _write_cache(self, working_dir: Path, servers: List[McpServer]):
         self._cache[str(working_dir)] = (time.monotonic(), servers)
 
-    # ---------- Background refresh ----------
+    # ---------- Background refresh MCP ----------
 
-    def _refresh_async(self):
+    def _refresh_mcp_async(self):
         if self._loading:
             return
         if self._working_dir is None:
             return
         if not self._working_dir.is_dir():
-            self._render_invalid(
-                f"Katalog roboczy nie istnieje: {self._working_dir}"
-            )
+            self._render_invalid_mcp(f"Katalog roboczy nie istnieje: {self._working_dir}")
             return
 
         self._loading = True
@@ -311,23 +464,25 @@ class McpStatusWidget(QWidget):
                 servers = None
             except Exception:
                 servers = None
-            self._data_loaded.emit(servers)
+            self._mcp_loaded.emit(servers)
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _on_data_loaded(self, servers):
+    def _on_mcp_loaded(self, servers):
         self._loading = False
         if servers is None:
-            self._render_invalid(
+            self._render_invalid_mcp(
                 "Nie udało się sprawdzić statusu MCP. "
                 "Sprawdź czy Claude Code (komenda 'claude') jest zainstalowany."
             )
             return
         if self._working_dir is not None:
             self._write_cache(self._working_dir, servers)
-        self._render_servers(servers)
+        self._render_mcp(servers)
 
-    def _get_disabled_set(self) -> set:
+    # ---------- Helpers: deny-listy ----------
+
+    def _get_disabled_mcp_set(self) -> set:
         if self._working_dir is None or not self._working_dir.is_dir():
             return set()
         try:
@@ -335,62 +490,24 @@ class McpStatusWidget(QWidget):
         except Exception:
             return set()
 
-    # ---------- Akcje ----------
+    def _get_disabled_skills_set(self) -> set:
+        if self._working_dir is None or not self._working_dir.is_dir():
+            return set()
+        try:
+            return set(AgentSkillsSettings(self._working_dir).get_disabled_global_skills())
+        except Exception:
+            return set()
 
-    def _on_summary_click(self):
+    # ---------- Akcje (kliknięcia) ----------
+
+    def _on_mcp_click(self):
         if self._working_dir is None:
             return
         self.request_open_manager.emit(self._working_dir)
 
-    def _on_disable_all_global(self):
-        if self._working_dir is None or not self._working_dir.is_dir():
-            return
-        cached = self._read_cache(self._working_dir)
-        servers = cached if cached is not None else []
-        # Ten widget jest dla "globalnych" — czyli scope user + managed
-        global_servers = [s for s in servers if s.scope in ("user", "managed")]
-        if not global_servers:
-            QMessageBox.information(
-                self, "Brak globalnych MCP",
-                "Ten agent nie ma globalnych MCP do wyłączenia."
-            )
-            return
+    def _on_skills_click(self):
+        self.request_open_skills.emit()
 
-        names = [s.name for s in global_servers]
-        reply = QMessageBox.question(
-            self, "Potwierdź",
-            f"Wyłączyć dla agenta „{self._agent_name or '—'}\" wszystkie globalne MCP?\n\n"
-            f"Lista: {', '.join(names[:5])}{'…' if len(names) > 5 else ''}\n\n"
-            "Możesz to cofnąć przez „🔊 Włącz wszystkie z powrotem\".",
-            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
-        )
-        if reply != QMessageBox.Yes:
-            return
-
-        try:
-            AgentMcpSettings(self._working_dir).disable_all(names)
-        except Exception as exc:
-            QMessageBox.warning(self, "Błąd zapisu", f"Nie udało się zapisać: {exc}")
-            return
-
-        self.mcp_changed.emit()
-        self.force_refresh()
-
-    def _on_enable_all_global(self):
-        if self._working_dir is None or not self._working_dir.is_dir():
-            return
-        try:
-            settings = AgentMcpSettings(self._working_dir)
-            if not settings.get_disabled_mcp_sanitized():
-                QMessageBox.information(
-                    self, "Nic do włączenia",
-                    "Żaden globalny MCP nie jest wyłączony dla tego agenta."
-                )
-                return
-            settings.enable_all()
-        except Exception as exc:
-            QMessageBox.warning(self, "Błąd zapisu", f"Nie udało się zapisać: {exc}")
-            return
-
-        self.mcp_changed.emit()
-        self.force_refresh()
+    def _on_edit_agent_click(self):
+        if self._agent_id:
+            self.request_edit_agent.emit(self._agent_id)

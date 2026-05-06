@@ -115,6 +115,9 @@ class AgentTab(QWidget):
         self._memory_sent = False
         self.attached_files = []
         self.quick_actions = []
+        # Per-agent licznik przybliżonej liczby tokenów. MainWindow dolicza
+        # znaki przez add_chars() i czyta total_context_tokens przy zmianie zakładki.
+        self.total_context_tokens = 0
 
         # UI references (will be set by MainWindow for shared state)
         self.skin_colors = {}

@@ -281,7 +281,7 @@ from config import (
     SUPPORTED_LANGUAGES, UI_TRANSLATIONS, DEFAULT_QUICK_ACTIONS,
     CONFIG_FILE, QUICK_ACTIONS_FILE, CLAUDE_COMMAND, GROQ_API_KEY,
     AGENTS_FILE, MEMORY_PROJECTS_FILE, DEFAULT_AGENTS, DEFAULT_MEMORY_PROJECTS,
-    ASSETS_DIR
+    ASSETS_DIR, CLAUDE_MODEL_CONTEXT_LIMITS, DEFAULT_AGENT_MODEL,
 )
 from core.claude_bridge import ClaudeBridgeAsync
 from core.tts_engine import TTSEngine, TTSState
@@ -602,15 +602,17 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.status_bar)
         self._update_status("Gotowy")
 
-        # Context usage counter (permanent widget on the right side of status bar)
-        self._total_context_tokens = 0  # Track estimated tokens
-        self._max_context_tokens = 13000000  # Session token pool: 13M tokens
-        self._chars_per_token = 3.5  # Average for Polish text (English ~4)
+        # Context usage counter (per-agent — pokazuje licznik aktywnej zakładki).
+        # Każdy AgentTab przechowuje własny total_context_tokens; tu trzymamy
+        # tylko współczynnik, globalny sumator i sam label.
+        self._chars_per_token = 3.5  # Średnia dla polskiego (angielski ~4).
+        self._total_app_tokens = 0   # Suma tokenów ze wszystkich zakładek (od startu).
         self._context_label = QLabel("0")
         self._context_label.setToolTip(
-            "Licznik tokenów sesji.\n"
-            "Liczy od startu aplikacji do zamknięcia.\n"
-            "Po restarcie zobaczysz pop-up z poprzednią sesją."
+            "Przybliżony licznik tokenów aktywnego agenta + procent okna kontekstu modelu.\n"
+            "Kolory: do 50% zielony, 50–70% żółty, 70–90% pomarańczowy, ≥90% czerwony.\n"
+            "Auto-compact w Claude Code: ~80–90% tej wartości.\n"
+            "Reset przy: /clear, /compact, restarcie aplikacji."
         )
         self._context_label.setStyleSheet("""
             QLabel {
@@ -622,13 +624,18 @@ class MainWindow(QMainWindow):
         """)
         self.status_bar.addPermanentWidget(self._context_label)
 
-        # MCP status widget (po lewej od licznika tokenów)
+        # Status widget agenta (po lewej od licznika tokenów):
+        # 🔌 MCP, 🧩 skille, 📁 pliki, 🤖 model + 🔄 refresh.
         self.mcp_status_widget = McpStatusWidget()
         self.mcp_status_widget.request_open_manager.connect(self._open_mcp_manager_for_dir)
+        self.mcp_status_widget.request_open_skills.connect(self._open_skills_manager_from_status)
+        self.mcp_status_widget.request_edit_agent.connect(self._open_edit_agent_from_status)
         # Drugie addPermanentWidget — ląduje bardziej na lewo niż _context_label
         self.status_bar.addPermanentWidget(self.mcp_status_widget)
         # Synchronizuj z aktywną zakładką (która już istnieje po _create_agent_tabs)
         self._update_mcp_status_widget()
+        # Inicjalna wartość globalnego licznika (Σ 0)
+        self._refresh_total_tokens_label()
 
         # Menu bar
         self._create_menu_bar()
@@ -903,17 +910,25 @@ class MainWindow(QMainWindow):
         """Handle tab change."""
         self._update_current_tab_references()
         self._update_mcp_status_widget()
+        self._refresh_context_label()
 
     def _update_mcp_status_widget(self):
-        """Synchronizuje widget MCP statusu z aktywną zakładką."""
+        """Synchronizuje widget statusu agenta z aktywną zakładką.
+
+        Przekazuje 4 informacje: working_dir, agent_name, agent_id,
+        memory_files, model — widget sam aktualizuje wszystkie 4 liczniki.
+        """
         current = self.tab_widget.currentWidget()
         if isinstance(current, AgentTab):
             self.mcp_status_widget.set_agent(
                 Path(current.working_directory) if current.working_directory else None,
                 agent_name=current.agent_name,
+                agent_id=current.agent_id,
+                memory_files=current.memory_files,
+                model_key=current.model,
             )
         else:
-            self.mcp_status_widget.set_agent(None, None)
+            self.mcp_status_widget.set_agent(None)
 
     def _open_mcp_manager_for_dir(self, working_dir):
         """Slot dla request_open_manager z McpStatusWidget."""
@@ -925,6 +940,24 @@ class MainWindow(QMainWindow):
         dialog = McpManagerDialog(self, working_dir=Path(working_dir), agent_name=agent_name)
         dialog.exec_()
         self.mcp_status_widget.force_refresh()
+
+    def _open_skills_manager_from_status(self):
+        """Slot dla request_open_skills z McpStatusWidget — kliknięcie 🧩."""
+        self._show_skills_manager_dialog()
+        # Po zamknięciu dialogu skille mogły się zmienić → odśwież widget
+        self.mcp_status_widget.force_refresh()
+
+    def _open_edit_agent_from_status(self, agent_id: str):
+        """Slot dla request_edit_agent z McpStatusWidget — kliknięcie 📁 lub 🤖.
+
+        Otwiera Menedżer agentów (dialog edycji konkretnego agenta nie istnieje
+        jako osobny entrypoint — najbliższe miejsce edycji to ten menedżer).
+        """
+        if not agent_id:
+            return
+        self._show_agents_manager_dialog()
+        # Po zamknięciu konfig mógł się zmienić → odśwież widget
+        self._update_mcp_status_widget()
 
     def _update_current_tab_references(self):
         """Update references to current tab's widgets."""
@@ -962,6 +995,13 @@ class MainWindow(QMainWindow):
 
     def _on_message_sent(self, message: str):
         """Handle message sent from agent tab."""
+        # Wykryj komendy Claude Code, które resetują kontekst rozmowy:
+        # /clear (czyści historię) i /compact (kompaktuje, zaczyna od nowa).
+        # Sprawdzamy pierwsze słowo, by nie reagować na np. "/clearance".
+        first_word = message.strip().split(maxsplit=1)[0] if message.strip() else ""
+        if first_word in ("/clear", "/compact"):
+            self._reset_context_usage()
+            return
         self._update_context_usage(len(message))
 
     def _show_memory_projects_dialog(self):
@@ -1201,9 +1241,6 @@ class MainWindow(QMainWindow):
                     self.claude_command = settings.get('claude_command', '/usr/bin/claude')
                     self.auto_run_claude = settings.get('auto_run_claude', True)
 
-                    # Load last session tokens (popup removed)
-                    last_tokens = settings.get('last_session_tokens', 0)
-
             except Exception as e:
                 print(f"Error loading settings: {e}")
 
@@ -1216,7 +1253,6 @@ class MainWindow(QMainWindow):
             'anthropic_api_key': getattr(self, 'anthropic_api_key', ''),
             'skin_colors': self.skin_colors,  # Zawiera kolory interfejsu + terminala
             'skin_icons': self.skin_icons,    # Zawiera ikony przycisków
-            'last_session_tokens': self._total_context_tokens,
             'claude_command': self.claude_command,
             'auto_run_claude': self.auto_run_claude,
         }
@@ -2791,29 +2827,43 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         self.status_bar.showMessage(text)
 
     def _update_context_usage(self, additional_chars: int = 0):
-        """Update context usage estimate in tokens.
+        """Dolicz znaki do licznika aktywnej zakładki + globalnego sumatora aplikacji.
 
-        Session token pool: 4M tokens.
-        Estimate: 1 token ≈ 3.5 characters for Polish text.
+        Wzór: 1 token ≈ 3,5 znaku (przybliżenie dla polskiego).
+        Per-agent licznik resetuje się przy /clear, /compact, restarcie.
+        Globalny licznik resetuje się tylko przy restarcie aplikacji.
         """
-        # Convert chars to tokens
+        tab = self._get_current_agent_tab()
+        if tab is None:
+            return
         additional_tokens = int(additional_chars / self._chars_per_token)
-        self._total_context_tokens += additional_tokens
+        tab.total_context_tokens += additional_tokens
+        self._total_app_tokens += additional_tokens
+        self._refresh_context_label()
+        self._refresh_total_tokens_label()
 
-        # Calculate percentage
-        percentage = min(100, (self._total_context_tokens / self._max_context_tokens) * 100)
+    def _refresh_context_label(self):
+        """Pokaż licznik tokenów + procent okna kontekstu modelu aktywnej zakładki.
 
-        # Format token count with thousands separator
-        tokens_formatted = f"{self._total_context_tokens:,}".replace(",", ",")
-        max_formatted = f"{self._max_context_tokens:,}".replace(",", ",")
+        Kolor zależy od procentu wykorzystania okna modelu:
+          <50% zielony, 50–70% żółty, 70–90% pomarańczowy, ≥90% czerwony.
+        Format: "10,333 (5%)".
+        """
+        tab = self._get_current_agent_tab()
+        tokens = tab.total_context_tokens if tab is not None else 0
+        model_key = tab.model if tab is not None else DEFAULT_AGENT_MODEL
+        limit = CLAUDE_MODEL_CONTEXT_LIMITS.get(model_key) or \
+                CLAUDE_MODEL_CONTEXT_LIMITS.get(DEFAULT_AGENT_MODEL, 1_000_000)
+        percentage = (tokens / limit) * 100.0 if limit > 0 else 0.0
 
-        # Color coding based on usage (3 levels)
-        if percentage <= 50:
-            color = "#4ade80"  # Green: 0-50%
-        elif percentage <= 75:
-            color = "#f97316"  # Orange: 50-75%
+        if percentage < 50:
+            color = "#4ade80"   # zielony
+        elif percentage < 70:
+            color = "#facc15"   # żółty
+        elif percentage < 90:
+            color = "#f97316"   # pomarańczowy
         else:
-            color = "#ef4444"  # Red: >75%
+            color = "#ef4444"   # czerwony
 
         self._context_label.setStyleSheet(f"""
             QLabel {{
@@ -2823,20 +2873,24 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
                 font-weight: bold;
             }}
         """)
-        self._context_label.setText(f"{tokens_formatted}")
+        # Wyświetl % bez miejsc po przecinku poniżej 10%, jedno miejsce powyżej 100% nie wystąpi.
+        pct_text = f"{percentage:.0f}%" if percentage >= 1 else f"{percentage:.1f}%"
+        self._context_label.setText(f"{tokens:,} ({pct_text})")
+
+    def _refresh_total_tokens_label(self):
+        """Aktualizuj globalny licznik (Σ N) w widgecie statusu."""
+        if hasattr(self, "mcp_status_widget") and self.mcp_status_widget is not None:
+            self.mcp_status_widget.set_total_tokens(self._total_app_tokens)
 
     def _reset_context_usage(self):
-        """Reset context counter (e.g., when starting new conversation)."""
-        self._total_context_tokens = 0
-        self._context_label.setText("0")
-        self._context_label.setStyleSheet("""
-            QLabel {
-                color: #4ade80;
-                font-size: 11px;
-                padding: 0 10px;
-                font-weight: bold;
-            }
-        """)
+        """Wyzeruj licznik tokenów aktywnej zakładki (np. po /clear lub /compact).
+
+        UWAGA: globalny licznik aplikacji NIE jest zerowany — to suma od startu.
+        """
+        tab = self._get_current_agent_tab()
+        if tab is not None:
+            tab.total_context_tokens = 0
+        self._refresh_context_label()
 
     def resizeEvent(self, event):
         """Handle window resize."""

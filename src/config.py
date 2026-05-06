@@ -54,6 +54,17 @@ DEFAULT_AGENT_MODEL = "default"
 # Pre-selected model when the user creates a NEW agent.
 NEW_AGENT_DEFAULT_MODEL = "opus"
 
+# Okna kontekstu modeli (w tokenach). Claude Code uruchamia auto-compact
+# przy ~80–90% tej wartości — wartości używane do koloryzacji licznika
+# tokenów per-zakładka w pasku statusu.
+# "default" w Claude Code rozwiązuje się na Opus 4.7 z 1M oknem kontekstu.
+CLAUDE_MODEL_CONTEXT_LIMITS = {
+    "default": 1_000_000,
+    "sonnet":    200_000,
+    "opus":    1_000_000,
+    "haiku":     200_000,
+}
+
 # Groq API (for Speech-to-Text)
 GROQ_API_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
