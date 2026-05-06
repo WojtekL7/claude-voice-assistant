@@ -493,34 +493,38 @@ class MainWindow(QMainWindow):
         self.tab_widget.tabCloseRequested.connect(self._close_agent_tab)
         self.tab_widget.currentChanged.connect(self._on_tab_changed)
 
-        # Style for tabs
-        self.tab_widget.setStyleSheet("""
-            QTabWidget::pane {
+        # Style for tabs. Ikona zamykania (X) — biały SVG, bez tła. Hover czerwony.
+        close_icon_url = (Path(__file__).parent / "close_x.svg").as_posix()
+        self.tab_widget.setStyleSheet(f"""
+            QTabWidget::pane {{
                 border: none;
                 background-color: transparent;
-            }
-            QTabBar::tab {
+            }}
+            QTabBar::tab {{
                 background-color: #2d0a1e;
                 color: #ffffff;
                 padding: 8px 16px;
                 margin-right: 2px;
                 border-top-left-radius: 6px;
                 border-top-right-radius: 6px;
-            }
-            QTabBar::tab:selected {
+            }}
+            QTabBar::tab:selected {{
                 background-color: #4a1a3a;
-            }
-            QTabBar::tab:hover {
+            }}
+            QTabBar::tab:hover {{
                 background-color: #6a2a5a;
-            }
-            QTabBar::close-button {
-                image: none;
+            }}
+            QTabBar::close-button {{
+                image: url({close_icon_url});
                 subcontrol-position: right;
-            }
-            QTabBar::close-button:hover {
+                width: 16px;
+                height: 16px;
+                margin: 2px;
+            }}
+            QTabBar::close-button:hover {{
                 background-color: #ef4444;
                 border-radius: 2px;
-            }
+            }}
         """)
 
         # Create dropdown menu for "+" tab
@@ -2614,8 +2618,10 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         for agent_tab in self.agent_tabs.values():
             agent_tab.apply_styles(colors, self.skin_icons)
 
-        # Tab widget styling
+        # Tab widget styling. Style close-button są tu kopiowane z _setup_ui,
+        # bo bez nich zmiana skórki kasowała ikonę X (regresja).
         if hasattr(self, 'tab_widget'):
+            close_icon_url = (Path(__file__).parent / "close_x.svg").as_posix()
             self.tab_widget.setStyleSheet(f"""
                 QTabWidget::pane {{
                     border: none;
@@ -2634,6 +2640,17 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
                 }}
                 QTabBar::tab:hover {{
                     background-color: {colors.get('hover_color', '#6a2a5a')};
+                }}
+                QTabBar::close-button {{
+                    image: url({close_icon_url});
+                    subcontrol-position: right;
+                    width: 16px;
+                    height: 16px;
+                    margin: 2px;
+                }}
+                QTabBar::close-button:hover {{
+                    background-color: #ef4444;
+                    border-radius: 2px;
                 }}
             """)
 
