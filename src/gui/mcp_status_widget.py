@@ -226,7 +226,8 @@ class McpStatusWidget(QWidget):
 
     def set_total_tokens(self, value: int):
         """Ustaw globalną sumę tokenów (suma ze wszystkich zakładek)."""
-        self.total_tokens_label.setText(f"Σ {value:,}")
+        # 2× NBSP dla odstępu między Σ a liczbą.
+        self.total_tokens_label.setText(f"Σ  {value:,}")
 
     # ---------- Renderowanie: stany puste ----------
 

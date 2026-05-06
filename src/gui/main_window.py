@@ -2892,7 +2892,9 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         """)
         # Wyświetl % bez miejsc po przecinku poniżej 10%, jedno miejsce powyżej 100% nie wystąpi.
         pct_text = f"{percentage:.0f}%" if percentage >= 1 else f"{percentage:.1f}%"
-        self._context_label.setText(f"{tokens:,} ({pct_text})")
+        # 2× NBSP dla odstępu między liczbą a procentem (fonty proporcjonalne
+        # potrafią łączyć wielokrotne zwykłe spacje w jedną — NBSP gwarantuje rozdzielenie).
+        self._context_label.setText(f"{tokens:,}  ({pct_text})")
 
     def _refresh_total_tokens_label(self):
         """Aktualizuj globalny licznik (Σ N) w widgecie statusu."""
