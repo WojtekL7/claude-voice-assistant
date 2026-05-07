@@ -611,6 +611,10 @@ class MainWindow(QMainWindow):
         # tylko współczynnik, globalny sumator i sam label.
         self._chars_per_token = 3.5  # Średnia dla polskiego (angielski ~4).
         self._total_app_tokens = 0   # Suma tokenów ze wszystkich zakładek (od startu).
+        # Throttling odświeżania paska tokenów. Terminal emituje chunki kilkadziesiąt
+        # razy na sekundę przy streamingu odpowiedzi Claude — bez tego setStyleSheet
+        # leciał tysiącami i blokował UI.
+        self._refresh_tokens_pending = False
         self._context_label = QLabel("0")
         self._context_label.setToolTip(
             "Przybliżony licznik tokenów aktywnego agenta + procent okna kontekstu modelu.\n"
@@ -2852,6 +2856,9 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         Wzór: 1 token ≈ 3,5 znaku (przybliżenie dla polskiego).
         Per-agent licznik resetuje się przy /clear, /compact, restarcie.
         Globalny licznik resetuje się tylko przy restarcie aplikacji.
+
+        Odświeżanie UI jest throttlowane (max 1 raz na 200 ms) — patrz
+        _schedule_tokens_refresh. Liczniki same akumulują się bez strat.
         """
         tab = self._get_current_agent_tab()
         if tab is None:
@@ -2859,6 +2866,18 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         additional_tokens = int(additional_chars / self._chars_per_token)
         tab.total_context_tokens += additional_tokens
         self._total_app_tokens += additional_tokens
+        self._schedule_tokens_refresh()
+
+    def _schedule_tokens_refresh(self):
+        """Throttle: pierwsze wywołanie schedują odświeżenie za 200 ms,
+        kolejne (do tego momentu) tylko podbijają liczniki bez kolejnych timerów."""
+        if self._refresh_tokens_pending:
+            return
+        self._refresh_tokens_pending = True
+        QTimer.singleShot(200, self._do_tokens_refresh)
+
+    def _do_tokens_refresh(self):
+        self._refresh_tokens_pending = False
         self._refresh_context_label()
         self._refresh_total_tokens_label()
 
