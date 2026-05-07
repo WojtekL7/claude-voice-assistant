@@ -15,7 +15,8 @@ from PyQt5.QtWidgets import (
     QButtonGroup, QWidget, QSplitter, QFrame, QInputDialog,
     QListView, QPlainTextEdit, QStackedWidget, QTabWidget
 )
-from PyQt5.QtCore import Qt, QSize, QUrl
+from PyQt5.QtCore import Qt, QSize, QUrl, QTimer, pyqtSignal
+import threading
 from PyQt5.QtGui import QFont, QDesktopServices
 
 import sys
@@ -1571,6 +1572,10 @@ class AgentConfigDialog(QDialog):
 class AgentsManagerDialog(QDialog):
     """Dialog for managing all agents."""
 
+    # Async load summaries: (populate_token, row, kind='skills'|'mcp', text, tooltip).
+    # populate_token unieważnia wątki z poprzedniej wersji listy (po move/edit/add).
+    _summary_ready = pyqtSignal(int, int, str, str, str)
+
     def __init__(self, parent=None, agents: list = None, memory_projects: list = None):
         super().__init__(parent)
         self.setWindowTitle("Zarządzaj agentami")
@@ -1578,6 +1583,12 @@ class AgentsManagerDialog(QDialog):
 
         self.agents = [a.copy() for a in (agents or [])]
         self.memory_projects = memory_projects or []
+        # Lazy loading skille/MCP — synchroniczne wywołania `claude mcp list`
+        # blokowały GUI ~2s × liczba agentów. Teraz: placeholdery od razu,
+        # właściwe summary przychodzą z wątków przez sygnał.
+        self._populate_token = 0
+        self._row_labels: Dict[int, Dict[str, QLabel]] = {}
+        self._summary_ready.connect(self._on_summary_ready)
         self._setup_ui()
 
     def _setup_ui(self):
@@ -1690,10 +1701,16 @@ class AgentsManagerDialog(QDialog):
         line (file count + model) reliably renders for every agent.
         QListWidget's default text rendering does not handle '\n' across
         items consistently — a custom widget bypasses that limitation.
+
+        Skille/MCP są ładowane LAZY — najpierw placeholder "⏳ ładowanie...",
+        potem wątek liczy i wraca przez sygnał _summary_ready. populate_token
+        unieważnia wątki z poprzedniej wersji listy (np. po Edytuj).
         """
+        self._populate_token += 1
+        self._row_labels = {}
         self.list_widget.clear()
 
-        for agent in self.agents:
+        for row, agent in enumerate(self.agents):
             # Memory files count (always shown, even when zero)
             memory_files = agent.get('memory_files', [])
             file_count = len(memory_files)
@@ -1746,18 +1763,20 @@ class AgentsManagerDialog(QDialog):
             model_mid_label = QLabel(f"  •  🤖 {model_label}  •  ")
             model_mid_label.setStyleSheet(info_style)
 
-            skills_text, skills_tooltip = self._format_skills_summary(agent)
-            skills_label = QLabel(skills_text)
+            # Placeholder — właściwą zawartość wstawi _on_summary_ready po wątku.
+            skills_label = QLabel("🧩 ⏳ ładowanie…")
             skills_label.setStyleSheet(info_style)
-            skills_label.setToolTip(skills_tooltip)
+            skills_label.setToolTip("Ładuję listę skilli tego agenta...")
 
             mcp_sep_label = QLabel("  •  ")
             mcp_sep_label.setStyleSheet(info_style)
 
-            mcp_text, mcp_tooltip = self._format_mcp_summary(agent)
-            mcp_label = QLabel(mcp_text)
+            mcp_label = QLabel("🔌 ⏳ ładowanie…")
             mcp_label.setStyleSheet(info_style)
-            mcp_label.setToolTip(mcp_tooltip)
+            mcp_label.setToolTip("Ładuję listę MCP tego agenta (wymaga uruchomienia 'claude mcp list')...")
+
+            # Zapamiętaj referencje, żeby slot mógł je zaktualizować po przyjściu wyniku z wątku.
+            self._row_labels[row] = {"skills": skills_label, "mcp": mcp_label}
 
             info_row = QHBoxLayout()
             info_row.setContentsMargins(0, 0, 0, 0)
@@ -1771,6 +1790,60 @@ class AgentsManagerDialog(QDialog):
             row_layout.addLayout(info_row)
 
             self.list_widget.setItemWidget(item, row_widget)
+
+        # Po wstawieniu wszystkich wierszy — odpal ładowanie summary w wątkach.
+        # singleShot(0) odroczy to do następnej iteracji event loopa, dzięki czemu
+        # dialog zdąży się wyrenderować zanim zaczniemy spawnowanie wątków.
+        QTimer.singleShot(0, lambda t=self._populate_token: self._load_summaries_async(t))
+
+    def _load_summaries_async(self, token: int):
+        """Spawn jeden wątek per agent — każdy liczy skille + MCP i emituje sygnał."""
+        if token != self._populate_token:
+            return  # Lista została w międzyczasie przebudowana — nie startuj.
+        for row, agent in enumerate(self.agents):
+            threading.Thread(
+                target=self._compute_summaries,
+                args=(token, row, agent),
+                daemon=True,
+            ).start()
+
+    def _compute_summaries(self, token: int, row: int, agent: dict):
+        """Działa W WĄTKU — wywołuje drogie operacje I/O i subprocess.
+
+        WAŻNE: nie wolno tu dotykać widgetów Qt. Wynik wraca tylko przez sygnał.
+        """
+        # Skille — szybkie (czytanie katalogu), ale dla porządku też w wątku.
+        try:
+            text, tooltip = self._format_skills_summary(agent)
+        except Exception as e:
+            text, tooltip = "⚠ błąd skille", f"Nie udało się załadować skilli:\n{e}"
+        if token == self._populate_token:
+            self._summary_ready.emit(token, row, "skills", text, tooltip)
+
+        # MCP — wolne (claude mcp list ~2s na agenta, czasem timeout 30s).
+        try:
+            text, tooltip = self._format_mcp_summary(agent)
+        except Exception as e:
+            text, tooltip = "⚠ błąd MCP", f"Nie udało się załadować MCP:\n{e}"
+        if token == self._populate_token:
+            self._summary_ready.emit(token, row, "mcp", text, tooltip)
+
+    def _on_summary_ready(self, token: int, row: int, kind: str, text: str, tooltip: str):
+        """Slot w GUI thread — aktualizuje konkretną etykietę po przyjściu wyniku z wątku."""
+        if token != self._populate_token:
+            return  # Stary wynik z poprzedniej wersji listy.
+        labels = self._row_labels.get(row)
+        if not labels:
+            return
+        label = labels.get(kind)
+        if label is None:
+            return
+        try:
+            label.setText(text)
+            label.setToolTip(tooltip)
+        except RuntimeError:
+            # C++ widget już usunięty (np. zamknięto dialog) — ignoruj.
+            pass
 
     @staticmethod
     def _format_memory_files_tooltip(agent: dict) -> str:
