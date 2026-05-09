@@ -1,6 +1,9 @@
 # CLAUDE-VOICE-ASSISTANT - Agent aplikacji desktopowej
 
-**Przed pracą załaduj również:** `CLAUDE-COMMON.md`
+**Przed pracą załaduj również:**
+1. 🔴 [`docs/PRD.md`](docs/PRD.md) — **Roadmap komercjalizacji 2026 (MUST READ)** — wizja, model freemium, 5 faz, 31 funkcji, task breakdown
+2. `CLAUDE-COMMON.md` — wspólne procedury i zasady
+3. [`CLAUDE.md`](CLAUDE.md) (lokalny) — auto-loaded przy starcie Claude Code w tym katalogu
 
 ---
 
@@ -141,4 +144,4 @@ python3 src/main.py
 
 ---
 
-*Ostatnia aktualizacja: 2026-04-16*
+*Ostatnia aktualizacja: 2026-05-09 — dodano reference do `docs/PRD.md` (Roadmap komercjalizacji 2026 v2.2) jako MUST READ przed pracą.*
