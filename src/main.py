@@ -11,6 +11,15 @@ from pathlib import Path
 # Force X11 backend to fix menu positioning on Wayland
 os.environ["QT_QPA_PLATFORM"] = "xcb"
 
+# Wyłącz iBus dla Voice Assistant — pod XWayland z aktywnym iBus klawisz Enter
+# jest "zjadany" przez ibus-engine-simple, gdy w terminalu pojawiają się
+# podpowiedzi/popupy (Claude Code). Skutek: Enter z klawiatury nie wywołuje
+# returnPressed w AutoResizeTextEdit, klik w przycisk "↵ Enter" działa
+# (pomija warstwę IM). Wymuszamy "none" — Qt bierze klawisze bezpośrednio
+# bez pośrednictwa Input Method. Inne aplikacje (LibreOffice, Firefox)
+# iBus nadal używają.
+os.environ["QT_IM_MODULE"] = "none"
+
 # Add src directory to path
 src_dir = Path(__file__).parent
 sys.path.insert(0, str(src_dir))
