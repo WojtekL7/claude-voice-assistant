@@ -915,8 +915,24 @@ class MainWindow(QMainWindow):
         widget.deleteLater()
 
     def _on_tab_changed(self, index: int):
-        """Handle tab change."""
+        """Handle tab change.
+
+        Debounce: gdy użytkownik szybko klika między zakładkami (lub gdy
+        currentChanged jest emitowane wielokrotnie podczas tworzenia tabów),
+        odpalamy ciężkie odświeżanie (set_agent → setStyleSheet w widgecie
+        MCP status, refresh context label) raz, dopiero 50ms po ostatniej
+        zmianie. Bez tego Intel HD 5500 + XWayland dostawał lawinę
+        repaintów, co przyczyniało się do zamarzania kompozytora.
+        """
         self._update_current_tab_references()
+        if not hasattr(self, '_tab_change_debounce'):
+            self._tab_change_debounce = QTimer(self)
+            self._tab_change_debounce.setSingleShot(True)
+            self._tab_change_debounce.timeout.connect(self._apply_tab_change)
+        self._tab_change_debounce.start(50)
+
+    def _apply_tab_change(self):
+        """Odroczona aktualizacja stanu UI po zmianie zakładki (debounced)."""
         self._update_mcp_status_widget()
         self._refresh_context_label()
 
@@ -926,6 +942,14 @@ class MainWindow(QMainWindow):
         Przekazuje 4 informacje: working_dir, agent_name, agent_id,
         memory_files, model — widget sam aktualizuje wszystkie 4 liczniki.
         """
+        # Guard: _create_agent_tabs() w __init__ emituje currentChanged ZANIM
+        # self.mcp_status_widget zostanie utworzony (kilka dziesiątek linii
+        # poniżej). Bez tego guard'u Python wyrzuca AttributeError przy każdym
+        # starcie aplikacji (czasem 4+ razy), excepthook tylko drukuje, ale
+        # event loop Qt zostaje w niespójnym stanie — to był jeden z głównych
+        # winowajców zamarzania całego systemu (XWayland + Mutter starvation).
+        if not hasattr(self, 'mcp_status_widget'):
+            return
         current = self.tab_widget.currentWidget()
         if isinstance(current, AgentTab):
             self.mcp_status_widget.set_agent(
@@ -1466,7 +1490,16 @@ class MainWindow(QMainWindow):
 
             self.conversation_area.setTextCursor(cursor)
             self.conversation_area.ensureCursorVisible()
-            QApplication.processEvents()
+            # USUNIĘTO: QApplication.processEvents() — to była klasyczna pułapka
+            # rekurencji event loopa: callback przychodzi z wątku tła
+            # (ClaudeBridge._execute_query w threading.Thread), ale modyfikuje
+            # widget Qt z tego wątku (już samo to jest błędem — niewspierane
+            # cross-thread GUI access w PyQt). Dodatkowo processEvents()
+            # pozwalało na re-entrancy: w środku obsługi outputu pętla Qt mogła
+            # obsłużyć inne sygnały, m.in. ponownie ten sam, lub kolejny output
+            # → stos przepełniony, GUI starvation, Wayland compositor (Mutter)
+            # blokowany w XWayland handshake → zamarzanie systemu.
+            # Bez processEvents() Qt sam zaplanuje repaint w naturalnym cyklu.
 
     def _on_claude_response(self, text: str):
         """Handle complete response from Claude."""

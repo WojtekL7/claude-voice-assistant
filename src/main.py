@@ -8,8 +8,15 @@ import os
 import traceback
 from pathlib import Path
 
-# Force X11 backend to fix menu positioning on Wayland
-os.environ["QT_QPA_PLATFORM"] = "xcb"
+# Domyślnie wymuszamy backend X11 (XWayland pod sesją Wayland) — historycznie
+# rozwiązywało to problem pozycjonowania menu pod Wayland. ALE: XWayland +
+# Intel iGPU + ciężki UI = ryzyko zamarznięcia kompozytora (patrz diagnoza
+# DIAGNOSE-ENTER-FIX.md i analiza zawieszeń z 2026-05-12).
+# Test natywnego Wayland: VOICE_USE_WAYLAND=1 python3 src/main.py
+# (jeśli menu pozycjonuje się poprawnie pod Wayland w Twoim Ubuntu, lepiej
+# zostać przy Wayland natywnym — odciąża kompozytor i grafikę).
+if os.environ.get("VOICE_USE_WAYLAND") != "1":
+    os.environ["QT_QPA_PLATFORM"] = "xcb"
 
 # Wyłącz iBus dla Voice Assistant — pod XWayland z aktywnym iBus klawisz Enter
 # jest "zjadany" przez ibus-engine-simple, gdy w terminalu pojawiają się
