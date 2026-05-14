@@ -439,6 +439,9 @@ class MainWindow(QMainWindow):
         self.skin_icons = {k: v.copy() for k, v in DEFAULT_SKIN_ICONS.items()}  # Custom icons
         self.claude_command = "/usr/bin/claude"  # Command to run Claude Code
         self.auto_run_claude = True  # Auto-run Claude command on startup
+        # Id ostatnio aktywnej zakładki — używane do wyboru "primary agent" przy
+        # starcie (aktywuje się od razu; pozostałe zakładki czekają na klik).
+        self.last_active_agent_id = None
 
         # Agents and memory projects
         self.agents = self._load_agents()
@@ -737,7 +740,14 @@ class MainWindow(QMainWindow):
                 break
 
     def _create_agent_tabs(self):
-        """Create tabs for all auto-start agents."""
+        """Create tabs for all auto-start agents.
+
+        Każda zakładka powstaje "leniwie" — _create_agent_tab tworzy tylko
+        UI shell (input, przyciski, placeholder terminala). Ciężki QTermWidget
+        + bash + claude CLI startują dopiero w AgentTab.activate(), gdy
+        użytkownik kliknie w zakładkę (lub gdy zakładka stanie się aktywna
+        przy starcie — primary agent poniżej).
+        """
         for agent in self.agents:
             if agent.get('auto_start', True):
                 self._create_agent_tab(agent)
@@ -748,8 +758,39 @@ class MainWindow(QMainWindow):
             self.agents = [default_agent]
             self._create_agent_tab(default_agent)
 
+        # Wybierz "primary agent" do natychmiastowej aktywacji. Pozostałe
+        # zakładki czekają na pierwsze kliknięcie. Priorytet:
+        # last_active_agent_id z configu → pierwsza zakładka.
+        primary_index = 0
+        if getattr(self, 'last_active_agent_id', None):
+            for i in range(self.tab_widget.count()):
+                widget = self.tab_widget.widget(i)
+                if isinstance(widget, AgentTab) and widget.agent_id == self.last_active_agent_id:
+                    primary_index = i
+                    break
+        # NIE polegamy na currentChanged → activate(): pierwsza dodana
+        # zakładka już JEST currentIndex=0, więc setCurrentIndex(0) nie
+        # emituje sygnału i activate() nigdy by się nie wywołał (placeholder
+        # zostaje na ekranie jako czarne tło).
+        # Aktywację primary odraczamy QTimerem na "po pokazaniu okna" — bez
+        # tego QTermWidget startuje w niezamontowanym kontekście (window jeszcze
+        # nie show()-uje się; jesteśmy w __init__) i wyświetla się jako
+        # niewidoczny, mimo że bash + claude działają w tle.
+        self.tab_widget.setCurrentIndex(primary_index)
+        primary_widget = self.tab_widget.widget(primary_index)
+        if isinstance(primary_widget, AgentTab) and not primary_widget.is_activated():
+            self.last_active_agent_id = primary_widget.agent_id
+            QTimer.singleShot(0, primary_widget.activate)
+
     def _create_agent_tab(self, agent_config: dict) -> AgentTab:
-        """Create a single agent tab."""
+        """Create a single agent tab (lazy — bez terminala+claude do aktywacji).
+
+        Tworzy tylko UI shell (splitter, input, przyciski, placeholder zamiast
+        terminala). Prawdziwy QTermWidget + bash + claude CLI startują dopiero
+        gdy zakładka po raz pierwszy stanie się aktywna (currentChanged →
+        _on_tab_changed → agent_tab.activate()), co emituje terminal_ready →
+        _on_terminal_ready obsługuje kolory + uruchomienie claude + pliki pamięci.
+        """
         agent_tab = AgentTab(agent_config, self)
 
         # Set shared state
@@ -768,6 +809,9 @@ class MainWindow(QMainWindow):
         agent_tab.add_quick_action_requested.connect(self._add_quick_action)
         agent_tab.splitter_changed.connect(lambda sizes, tab=agent_tab: self._on_splitter_changed(tab, sizes))
         agent_tab.terminal_output.connect(self._on_terminal_output)
+        # Sygnał z lazy activate() — terminal właśnie powstał, czas
+        # zaaplikować kolory, odpalić claude i wysłać pliki pamięci.
+        agent_tab.terminal_ready.connect(lambda tab=agent_tab: self._on_terminal_ready(tab))
 
         # Add tab (insert before "+" tab which is always last)
         agent_id = agent_config.get('id', 'unknown')
@@ -781,36 +825,15 @@ class MainWindow(QMainWindow):
             index = self.tab_widget.insertTab(insert_index, agent_tab, f"🤖 {agent_name}")
         else:
             index = self.tab_widget.addTab(agent_tab, f"🤖 {agent_name}")
-        self.tab_widget.setCurrentIndex(index)
+        # NIE wołamy setCurrentIndex tutaj — _create_agent_tabs zrobi to
+        # świadomie raz, dla primary agent. Inaczej każda nowa zakładka
+        # natychmiast się aktywuje i znowu mamy 4× claude przy starcie.
 
-        # Apply styles
+        # Apply styles (na shell UI — terminal jeszcze nie istnieje)
         agent_tab.apply_styles(self.skin_colors, self.skin_icons)
-
-        # Apply terminal color scheme (CustomSkin)
-        if agent_tab.terminal:
-            self._apply_terminal_colors(self.skin_colors, agent_tab.terminal)
 
         # Apply button icon styles to new tab
         self._apply_button_icon_styles()
-
-        # KOLEJNOŚĆ: najpierw uruchom Claude Code, potem wyślij pliki pamięci
-        # Używamy SEKWENCYJNEGO wywołania - pliki pamięci są wysyłane
-        # dopiero PO wysłaniu komendy claude (nie równoległe timery)
-        def uruchom_claude_potem_pliki():
-            # 1. Wyślij komendę claude (jeśli auto_start = True LUB _force_start = True)
-            claude_started = False
-            force_start = agent_config.pop('_force_start', False)  # usuń flagę tymczasową
-            if (agent_config.get('auto_start', True) or force_start) and self.claude_command:
-                self._run_claude_in_tab(agent_tab, force=force_start)
-                claude_started = True
-
-            # 2. Po 8 sekundach wyślij pliki pamięci (tylko jeśli Claude Code został uruchomiony!)
-            # NIE wysyłaj do czystego bash - spowoduje błąd "command not found"
-            if claude_started and agent_config.get('send_memory_on_start', True):
-                QTimer.singleShot(8000, agent_tab.send_memory_files)
-
-        # Uruchom wszystko po 500ms (gdy terminal będzie gotowy)
-        QTimer.singleShot(500, uruchom_claude_potem_pliki)
 
         return agent_tab
 
@@ -869,6 +892,10 @@ class MainWindow(QMainWindow):
         agent_tab.message_sent.connect(self._on_message_sent)
         agent_tab.add_quick_action_requested.connect(self._add_quick_action)
         agent_tab.splitter_changed.connect(lambda sizes, tab=agent_tab: self._on_splitter_changed(tab, sizes))
+        # Lazy activation: gdy zakładka stanie się aktywna i terminal powstanie,
+        # zaaplikuj kolory (plain terminal — bez claude, więc _on_terminal_ready
+        # tylko ustawia kolory, bo auto_start=False).
+        agent_tab.terminal_ready.connect(lambda tab=agent_tab: self._on_terminal_ready(tab))
 
         # Add tab with terminal icon (🖥️ instead of 🤖) - insert before "+" tab
         self.agent_tabs[terminal_id] = agent_tab
@@ -878,17 +905,19 @@ class MainWindow(QMainWindow):
             index = self.tab_widget.insertTab(insert_index, agent_tab, f"🖥️ {terminal_config['name']}")
         else:
             index = self.tab_widget.addTab(agent_tab, f"🖥️ {terminal_config['name']}")
-        self.tab_widget.setCurrentIndex(index)
 
-        # Apply styles
+        # WAŻNE: apply_styles MUSI być przed setCurrentIndex.
+        # setCurrentIndex → _on_tab_changed → activate() → tworzy QTermWidget.
+        # Jeśli apply_styles przyjdzie PO activate, setStyleSheet na main_splitter
+        # przelicza geometrię już zamontowanego terminala — efekt: szare pasy po
+        # prawej stronie (terminal zostaje przy szerokości sprzed stylowania).
+        # Ścieżka kliknięcia w istniejącą zakładkę nie ma tego problemu, bo
+        # apply_styles było wywołane przy tworzeniu, dawno przed activate().
         agent_tab.apply_styles(self.skin_colors, self.skin_icons)
-
-        # Apply terminal color scheme (CustomSkin)
-        if agent_tab.terminal:
-            self._apply_terminal_colors(self.skin_colors, agent_tab.terminal)
-
-        # Apply button icon styles to new tab
         self._apply_button_icon_styles()
+
+        # Dopiero teraz aktywuj — terminal powstanie w już ostylowanym splitterze.
+        self.tab_widget.setCurrentIndex(index)
 
         self._update_status(f"Utworzono nowy terminal: {terminal_config['name']}")
 
@@ -923,7 +952,20 @@ class MainWindow(QMainWindow):
         MCP status, refresh context label) raz, dopiero 50ms po ostatniej
         zmianie. Bez tego Intel HD 5500 + XWayland dostawał lawinę
         repaintów, co przyczyniało się do zamarzania kompozytora.
+
+        Lazy activation: jeśli zakładka jeszcze nigdy nie była aktywna,
+        woła AgentTab.activate() — to tworzy QTermWidget+bash i (po sygnale
+        terminal_ready) startuje claude. Bez tego 4 agenty startują równolegle
+        przy uruchomieniu aplikacji i OOM-killer ubija proces.
         """
+        current = self.tab_widget.currentWidget()
+        if isinstance(current, AgentTab):
+            if not current.is_activated():
+                self._update_status(f"⏳ Uruchamiam {current.agent_name}...")
+                current.activate()
+            # Zapamiętaj ostatnio aktywnego — zostanie zapisane przez
+            # _apply_tab_change → _save_settings (debounced 50ms).
+            self.last_active_agent_id = current.agent_id
         self._update_current_tab_references()
         if not hasattr(self, '_tab_change_debounce'):
             self._tab_change_debounce = QTimer(self)
@@ -935,6 +977,39 @@ class MainWindow(QMainWindow):
         """Odroczona aktualizacja stanu UI po zmianie zakładki (debounced)."""
         self._update_mcp_status_widget()
         self._refresh_context_label()
+        # Persist last_active_agent_id (settings JSON jest mały, ~2 KB,
+        # zapis przy każdej zmianie zakładki jest niezauważalny).
+        self._save_settings()
+
+    def _on_terminal_ready(self, agent_tab):
+        """Slot wywoływany po AgentTab.activate() — terminal właśnie powstał.
+
+        Wykonuje to, co dawniej robił deferred lambda w _create_agent_tab:
+        1. zaaplikuj kolory terminala (CustomSkin),
+        2. uruchom komendę `claude` (jeśli auto_start lub _force_start),
+        3. po 8s wyślij pliki pamięci (jeśli send_memory_on_start).
+
+        Bash potrzebuje chwili na rozruch — komenda claude leci po 500ms,
+        pliki pamięci po 8500ms (8 s od claude, jak w starej logice).
+        """
+        if agent_tab.terminal:
+            self._apply_terminal_colors(self.skin_colors, agent_tab.terminal)
+
+        # _force_start jest flagą tymczasową ustawianą przez AgentsManagerDialog
+        # gdy user kliknął "Uruchom" przy zapisanym agencie z auto_start=False.
+        agent_config = agent_tab.agent_config
+        force_start = agent_config.pop('_force_start', False)
+
+        claude_started = False
+        if (agent_tab.auto_start or force_start) and self.claude_command:
+            QTimer.singleShot(
+                500,
+                lambda: self._run_claude_in_tab(agent_tab, force=force_start)
+            )
+            claude_started = True
+
+        if claude_started and agent_config.get('send_memory_on_start', True):
+            QTimer.singleShot(8500, agent_tab.send_memory_files)
 
     def _update_mcp_status_widget(self):
         """Synchronizuje widget statusu agenta z aktywną zakładką.
@@ -1275,6 +1350,7 @@ class MainWindow(QMainWindow):
                     # Load Claude command settings
                     self.claude_command = settings.get('claude_command', '/usr/bin/claude')
                     self.auto_run_claude = settings.get('auto_run_claude', True)
+                    self.last_active_agent_id = settings.get('last_active_agent_id', None)
 
             except Exception as e:
                 print(f"Error loading settings: {e}")
@@ -1290,6 +1366,7 @@ class MainWindow(QMainWindow):
             'skin_icons': self.skin_icons,    # Zawiera ikony przycisków
             'claude_command': self.claude_command,
             'auto_run_claude': self.auto_run_claude,
+            'last_active_agent_id': self.last_active_agent_id,
         }
         try:
             with open(CONFIG_FILE, 'w') as f:

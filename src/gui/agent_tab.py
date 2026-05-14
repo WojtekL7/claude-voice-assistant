@@ -94,6 +94,7 @@ class AgentTab(QWidget):
     request_dictation = pyqtSignal(bool)  # Request dictation start/stop
     add_quick_action_requested = pyqtSignal()  # Request to add new quick action
     splitter_changed = pyqtSignal(list)  # Emitted when splitter position changes
+    terminal_ready = pyqtSignal()  # Emitted from activate() po stworzeniu QTermWidget
 
     def __init__(self, agent_config: dict, parent=None):
         super().__init__(parent)
@@ -113,6 +114,12 @@ class AgentTab(QWidget):
         self._terminal_output_buffer = ""
         self._tts_timer = None
         self._memory_sent = False
+        # Lazy activation: zakładka tworzy tylko UI shell w __init__; ciężki
+        # QTermWidget + bash + claude CLI startują dopiero przy pierwszym
+        # pokazaniu (MainWindow woła activate() z _on_tab_changed). Bez tego
+        # 4 agenty × ~700 MB każdy = OOM-kill na 7.7 GB laptopie.
+        self._activated = False
+        self._terminal_placeholder = None
         self.attached_files = []
         self.quick_actions = []
         # Per-agent licznik przybliżonej liczby tokenów. MainWindow dolicza
@@ -165,7 +172,36 @@ class AgentTab(QWidget):
         layout.addWidget(self.main_splitter)
 
     def _setup_terminal(self):
-        """Setup terminal widget."""
+        """Setup lekkiego placeholdera — prawdziwy terminal powstaje w activate().
+
+        Placeholder zajmuje slot w splitterze (zachowuje rozmiary), ale nie
+        spawnuje bash ani claude CLI. Oszczędność RAM przy starcie: zamiast
+        4 × QTermWidget+bash+claude (~5 GB) tylko 4 × pusty QWidget (~5 MB).
+        """
+        self._terminal_placeholder = QWidget()
+        # Tło dopasowane do skin terminal_bg — żeby nie błyskało białym przed
+        # aktywacją. Bardziej szczegółowe kolory ustawi MainWindow przy
+        # apply_terminal_colors po terminal_ready.
+        self._terminal_placeholder.setStyleSheet("background-color: #1a1a1a;")
+        self.main_splitter.addWidget(self._terminal_placeholder)
+        self.terminal = None
+        self.conversation_area = None
+
+    def is_activated(self) -> bool:
+        """Czy ciężki silnik (terminal + bash) już wstał."""
+        return self._activated
+
+    def activate(self):
+        """Lazy initialization: stwórz QTermWidget + bash. Idempotentne.
+
+        Wołane z MainWindow gdy zakładka po raz pierwszy zostaje aktywna
+        (currentChanged → _on_tab_changed). Po stworzeniu emituje sygnał
+        terminal_ready, na który MainWindow może podpiąć: apply_terminal_colors,
+        uruchomienie komendy `claude`, wysłanie plików pamięci.
+        """
+        if self._activated:
+            return
+
         if QTERMWIDGET_AVAILABLE:
             self.terminal = QTermWidget(0)
             self.terminal.setShellProgram("/usr/bin/bash")
@@ -220,14 +256,15 @@ class AgentTab(QWidget):
             self._tts_timer.setSingleShot(True)
             self._tts_timer.timeout.connect(self._read_terminal_buffer)
 
-            # Start shell
+            # Kolejność jak w oryginale: startShellProgram zanim widget trafi
+            # do splittera. Próba odwrotna (swap przed startShellProgram)
+            # powoduje, że QTermWidget renderuje się jako niewidoczny, mimo że
+            # bash i claude działają poprawnie w tle (zaobserwowane 2026-05-14
+            # na PyQt5 5.15 + QTermWidget 1.4.0 + XWayland).
             self.terminal.startShellProgram()
-
-            self.main_splitter.addWidget(self.terminal)
-            self.conversation_area = None
+            self._swap_placeholder_with(self.terminal)
         else:
-            # Fallback
-            self.terminal = None
+            # Fallback (brak QTermWidget) — QTextEdit read-only
             self.conversation_area = QTextEdit()
             self.conversation_area.setReadOnly(True)
             terminal_font = QFont("Ubuntu Mono", 13)
@@ -242,7 +279,28 @@ class AgentTab(QWidget):
                     padding: 12px;
                 }
             """)
-            self.main_splitter.addWidget(self.conversation_area)
+            self._swap_placeholder_with(self.conversation_area)
+
+        self._activated = True
+        self.terminal_ready.emit()
+
+    def _swap_placeholder_with(self, widget):
+        """Podmiana placeholdera na właściwy widget terminala w splitterze.
+
+        QSplitter.replaceWidget zwraca usunięty widget; my go niszczymy.
+        Sizes splittera przywracamy po podmianie, bo replaceWidget potrafi je
+        zresetować na default'y.
+        """
+        if self._terminal_placeholder is None:
+            self.main_splitter.insertWidget(0, widget)
+        else:
+            idx = self.main_splitter.indexOf(self._terminal_placeholder)
+            old = self.main_splitter.replaceWidget(idx, widget)
+            if old is not None:
+                old.setParent(None)
+                old.deleteLater()
+            self._terminal_placeholder = None
+        self.main_splitter.setSizes(self.splitter_sizes)
 
     def _setup_bottom_panel(self):
         """Setup bottom panel with input and controls."""

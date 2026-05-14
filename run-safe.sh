@@ -30,6 +30,12 @@ fi
 # pod systemd usera. MemoryMax=2G to hard limit (OOM-killer zabije apkę
 # zanim pamięć systemu się skończy).
 # CPUQuota=300% pozwala użyć do 3 z 4 rdzeni (zostaw 1 dla GNOME shell).
+#
+# setsid: aplikacja startuje w NOWEJ sesji procesów, bez controlling TTY.
+# Skutek: zamknięcie okna terminala NIE wysyła SIGHUP do aplikacji, więc
+# aplikacja przeżywa zamknięcie terminala (jak normalna apka GUI). Bez tego
+# aplikacja jest dzieckiem bash i ginie razem z terminalem (cały stan
+# QTermWidget / sesje Claude Code w zakładkach przepadają).
 exec systemd-run \
     --user \
     --scope \
@@ -37,4 +43,4 @@ exec systemd-run \
     -p MemoryMax=2G \
     -p MemorySwapMax=1G \
     -p CPUQuota=300% \
-    python3 src/main.py "$@"
+    setsid python3 src/main.py "$@"
