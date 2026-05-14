@@ -1,7 +1,65 @@
 # DIAGNOZA: Klawisz Enter nie działa gdy w terminalu są podpowiedzi
 
-**Data:** 2026-05-11
-**Status:** Fix wdrożony — wymaga restartu aplikacji do weryfikacji.
+**Data:** 2026-05-11 (pierwsze zgłoszenie) · **Aktualizacja:** 2026-05-14 (re-diagnoza — to nie był bug aplikacji)
+**Status:** Fix `a2f7b5b` (QT_IM_MODULE=none) z 2026-05-11 zostaje. Drugie zgłoszenie z 2026-05-14 okazało się NIE być bugiem aplikacji — to UX Claude Code (ghost text).
+
+---
+
+## 🔄 Re-diagnoza 2026-05-14 — to NIE był bug aplikacji
+
+### Zgłoszenie
+
+Po 3 dniach normalnej pracy użytkownik zgłosił: „Enter w klawiaturze nie zatwierdza
+zaproponowanego tekstu w Claude Code (typu *Sprawdź czy nadal działa po restarcie*).
+Klik w przycisk ↵ Enter działa." Pierwsza hipoteza: powrót bug-u iBus z 2026-05-11.
+
+### Wykonane testy diagnostyczne
+
+| Test | Wynik | Wniosek częściowy |
+|------|-------|-------------------|
+| Klik w przycisk „↵ Enter" w UI | działa | Programowe `sendText` omija warstwę klawiatury — działa |
+| Enter w pole input GDY brak podpowiedzi | działa | Klawiatura/IM nie jest globalnie zepsuta |
+| Enter w multi-choice picker (↑↓ Tab) | działa | Nie wszystkie popupy łapią bug — tylko „zaproponowany tekst" |
+| Rozszerzenie env: `XMODIFIERS=""` + `GTK_IM_MODULE=""` | nie pomogło | Trzy kanały IM wyciszone, mimo to bug stoi |
+| `ibus exit` — twardy ubój daemona, test bez restartu apki | nie pomogło | **iBus NIE jest winowajcą tym razem** |
+| `claude` w czystym gnome-terminal (poza Voice Assistant), ten sam scenariusz | Enter nie działa, **Tab/→ akceptuje propozycję** | Bug nie istnieje w aplikacji — to UX Claude Code |
+
+### Faktyczna przyczyna — UX Claude Code 2.1.14 (nie bug)
+
+Claude Code od wersji 2.x ma feature **ghost text / autocomplete** — identyczny pattern
+jak `fish` i `zsh autosuggestions`:
+
+| Klawisz | Akcja |
+|---------|-------|
+| **Tab** lub **→** (right arrow) | „Akceptuje" propozycję — wkleja zaproponowany tekst do prompta |
+| **Enter** | Wysyła to, co JEST w prompcie (jeśli pusty + ghost text — wysyła pusty wpis, propozycja przepada) |
+
+Stąd zgłoszenie: user widzi ghost text „Sprawdź czy nadal działa", naciska Enter
+licząc że to zatwierdzi propozycję — ale claude widzi pusty input i nic nie robi.
+Trzeba **najpierw Tab/→** (tekst pojawia się w polu „na sztywno"), **dopiero potem Enter**.
+
+### Co zrobiono z fix-em rozszerzonym
+
+Tymczasowe dodatki w `src/main.py`:
+```python
+os.environ["XMODIFIERS"] = ""
+os.environ["GTK_IM_MODULE"] = ""
+```
+**zostały cofnięte** — nie pomogły, więc nie ma powodu zostawiać hałasu w kodzie.
+Wraca do stanu `a2f7b5b`: tylko `QT_IM_MODULE=none` (ten *faktycznie* zadziałał
+11 maja przy klasycznym iBus „candidate window", więc go zostawiamy jako prewencję).
+
+### Wniosek na przyszłość — wzorzec diagnostyczny
+
+Jeśli zgłoszenie brzmi „klawisz nie działa w jednej aplikacji, ale w innej tak" —
+**zanim** spojrzysz w kod, **zweryfikuj reprodukowalność poza aplikacją**.
+Tu wystarczył jeden test (`claude` w gnome-terminal), żeby przesunąć diagnozę
+o 180° — z „bug w QTermWidget/iBus" na „nie-bug, tylko UX". Bez tego kroku
+poprzednia sesja wystrzelałaby kolejne `QT_IM_MODULE=xim`, `=compose`, event filtery,
+a problem byłby tam gdzie był.
+
+Pełna diagnoza w pierwszej części tego pliku — pozostaje aktualna **dla scenariusza
+z 2026-05-11** (klasyczny iBus + popup, fix `QT_IM_MODULE=none`).
 
 ---
 
