@@ -992,6 +992,19 @@ class MainWindow(QMainWindow):
         Bash potrzebuje chwili na rozruch — komenda claude leci po 500ms,
         pliki pamięci po 8500ms (8 s od claude, jak w starej logice).
         """
+        # Guard idempotencji: terminal_ready bywa emitowany >1× w pewnych
+        # ścieżkach (reentrancy z QSplitter.replaceWidget + deleteLater wewnątrz
+        # activate(), event-processing w trakcie zmiany drzewa widgetów). Bez
+        # tego guardu każde wywołanie dodaje nowy QTimer(claude) + QTimer(memory),
+        # czego efektem jest 2× banner Claude Code i 2× "Przeczytaj pliki
+        # pamięci..." w jednym terminalu (zgłoszenie 2026-05-14, po wdrożeniu
+        # lazy activation w commicie 3aa5e35). Wzorzec symetryczny do _activated
+        # w AgentTab.activate() i _memory_sent w AgentTab.send_memory_files() —
+        # uzupełniamy brakujący trzeci, środkowy guard.
+        if getattr(agent_tab, '_terminal_ready_handled', False):
+            return
+        agent_tab._terminal_ready_handled = True
+
         if agent_tab.terminal:
             self._apply_terminal_colors(self.skin_colors, agent_tab.terminal)
 
