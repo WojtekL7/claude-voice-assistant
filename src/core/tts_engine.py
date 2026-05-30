@@ -1,13 +1,19 @@
 """
 Claude Voice Assistant - Text-to-Speech Engine
 Uses edge-tts for high-quality multilingual speech synthesis.
-Supports pause/resume functionality.
+
+Gapless streaming model (Etap 1):
+- enqueue(text) dokłada zdania do kolejki BEZ przerywania bieżącego czytania.
+- Wątek-generator pobiera audio dla kolejnych zdań Z WYPRZEDZENIEM (prefetch),
+  podczas gdy wątek-odtwarzacz gra zdanie bieżące → brak ciszy między zdaniami.
+- speak(text) zachowane dla kompatybilności (przycisk "czytaj"): stop + enqueue.
+- clear_queue() / stop() czyści kolejkę (np. przy przełączeniu zakładki).
 """
 import asyncio
+import queue
 import tempfile
 import threading
 import os
-from pathlib import Path
 from typing import Optional, Callable
 from enum import Enum
 
@@ -23,9 +29,14 @@ class TTSState(Enum):
     STOPPED = "stopped"
 
 
+# Ile zdań trzymać wygenerowanych "do przodu". Bufor pochłania wahania
+# opóźnień sieciowych edge-tts, dzięki czemu odtwarzanie jest ciągłe.
+PREFETCH_DEPTH = 2
+
+
 class TTSEngine:
     """
-    Text-to-Speech engine with pause/resume support.
+    Text-to-Speech engine z płynnym, kolejkowanym odtwarzaniem (prefetch).
     Uses edge-tts for synthesis and pygame for playback.
     """
 
@@ -35,81 +46,119 @@ class TTSEngine:
         self.volume = "+0%"
 
         self.state = TTSState.IDLE
-        self._current_text = ""
-        self._sentences: list = []
-        self._current_sentence_index = 0
-        self._temp_files: list = []
 
-        # Callbacks
+        # Callbacks (wywoływane z wątków TTS — w aplikacji emitują sygnały Qt,
+        # więc dostęp do GUI jest bezpieczny wątkowo).
         self.on_state_changed: Optional[Callable[[TTSState], None]] = None
-        self.on_progress: Optional[Callable[[int, int], None]] = None  # current, total
+        self.on_progress: Optional[Callable[[int, int], None]] = None
         self.on_finished: Optional[Callable[[], None]] = None
         self.on_error: Optional[Callable[[str], None]] = None
 
         # Initialize pygame mixer
         pygame.mixer.init()
 
-        # Thread control
-        self._play_thread: Optional[threading.Thread] = None
+        # --- Współbieżność ---
+        self._lock = threading.Lock()
+        self._running = False
+        self._active = False  # czy aktualnie coś gramy/generujemy (do on_finished)
+
         self._stop_event = threading.Event()
         self._pause_event = threading.Event()
-        self._pause_event.set()  # Not paused by default
+        self._pause_event.set()  # domyślnie NIE wstrzymane
+
+        self._pending: "queue.Queue[str]" = queue.Queue()
+        self._ready: "queue.Queue[tuple]" = queue.Queue(maxsize=PREFETCH_DEPTH)
+
+        self._gen_thread: Optional[threading.Thread] = None
+        self._play_thread: Optional[threading.Thread] = None
+
+        self._temp_files = set()  # ścieżki mp3 do posprzątania (pod _lock)
+
+    # ==================== Ustawienia ====================
 
     def set_voice(self, voice: str):
-        """Set TTS voice."""
         self.voice = voice
 
     def set_rate(self, rate: str):
-        """Set speech rate (e.g., '+20%', '-10%')."""
         self.rate = rate
 
     def set_volume(self, volume: str):
-        """Set volume (e.g., '+50%', '-20%')."""
         self.volume = volume
 
-    def speak(self, text: str):
-        """Start speaking text. Splits into sentences for pause support."""
-        if not text.strip():
+    # ==================== API publiczne ====================
+
+    def enqueue(self, text: str):
+        """Dołóż tekst do kolejki czytania BEZ przerywania bieżącego.
+
+        Tekst jest dzielony na zdania; każde zdanie to osobny element kolejki,
+        co pozwala generować audio z wyprzedzeniem i grać bez przerw.
+        """
+        if not text or not text.strip():
             return
 
-        # Stop any current playback
+        sentences = self._split_into_sentences(text)
+        if not sentences:
+            return
+
+        with self._lock:
+            if not self._running:
+                self._start_workers_locked()
+            for s in sentences:
+                self._pending.put(s)
+
+        # Sygnalizuj aktywność od razu (UI: animacja głośnika), jeśli stoimy.
+        if self.state == TTSState.IDLE:
+            self._set_state(TTSState.GENERATING)
+
+    def speak(self, text: str):
+        """Zatrzymaj bieżące czytanie i zacznij od nowa (przycisk 'czytaj')."""
+        if not text or not text.strip():
+            return
         self.stop()
+        self.enqueue(text)
 
-        self._current_text = text
-        self._sentences = self._split_into_sentences(text)
-        self._current_sentence_index = 0
-
-        # Reset events
-        self._stop_event.clear()
-        self._pause_event.set()
-
-        # Start playback in background thread
-        self._play_thread = threading.Thread(target=self._play_sentences, daemon=True)
-        self._play_thread.start()
+    def clear_queue(self):
+        """Wyczyść kolejkę i zatrzymaj czytanie (np. przy zmianie zakładki)."""
+        self.stop()
 
     def pause(self):
         """Pause playback."""
         if self.state == TTSState.PLAYING:
             self._pause_event.clear()
-            pygame.mixer.music.pause()
+            try:
+                pygame.mixer.music.pause()
+            except Exception:
+                pass
             self._set_state(TTSState.PAUSED)
 
     def resume(self):
         """Resume playback from pause."""
         if self.state == TTSState.PAUSED:
             self._pause_event.set()
-            pygame.mixer.music.unpause()
+            try:
+                pygame.mixer.music.unpause()
+            except Exception:
+                pass
             self._set_state(TTSState.PLAYING)
 
-    def stop(self):
-        """Stop playback completely.
+    def toggle_pause(self):
+        if self.state == TTSState.PLAYING:
+            self.pause()
+        elif self.state == TTSState.PAUSED:
+            self.resume()
 
-        Defensive: pygame/SDL can segfault or raise when stop() is called on a
-        corrupted mixer state (e.g. after loading malformed MP3). We never let
-        an exception here propagate — it would kill the whole GUI process.
+    def stop(self):
+        """Zatrzymaj odtwarzanie całkowicie i posprzątaj.
+
+        Defensywnie: pygame/SDL potrafi rzucić wyjątek przy stop() na zepsutym
+        stanie miksera (np. po wadliwym MP3). Nigdy nie pozwalamy, by wyjątek
+        stąd ubił cały proces GUI.
         """
+        # Zasygnalizuj wątkom zakończenie i odblokuj ewentualną pauzę.
         self._stop_event.set()
-        self._pause_event.set()  # Unblock if paused
+        self._pause_event.set()
+
+        gen_t, play_t = self._gen_thread, self._play_thread
 
         try:
             pygame.mixer.music.stop()
@@ -120,176 +169,244 @@ class TTSEngine:
         except Exception:
             pass
 
-        # Short join so the GUI never freezes waiting for an edge-tts network call.
-        if self._play_thread and self._play_thread.is_alive():
-            self._play_thread.join(timeout=1)
+        # Krótki join — wątki pętlą z timeoutem 0.2s zauważą stop szybko.
+        # Nie blokujemy GUI na długo (są to wątki daemon).
+        for t in (gen_t, play_t):
+            if t and t.is_alive() and t is not threading.current_thread():
+                t.join(timeout=0.5)
 
-        try:
-            self._cleanup_temp_files()
-        except Exception:
-            pass
+        with self._lock:
+            self._running = False
+            self._active = False
+            # Opróżnij kolejki.
+            self._drain_queue(self._pending)
+            ready_left = self._drain_queue(self._ready)
+            self._gen_thread = None
+            self._play_thread = None
+
+        # Posprzątaj pliki, które były wygenerowane, a nieodtworzone.
+        for item in ready_left:
+            try:
+                _, path = item
+                if path and os.path.exists(path):
+                    os.remove(path)
+            except Exception:
+                pass
+        self._cleanup_temp_files()
+
+        # Świeże eventy/kolejki na kolejną sesję czytania.
+        self._stop_event = threading.Event()
+        self._pause_event = threading.Event()
+        self._pause_event.set()
+        self._pending = queue.Queue()
+        self._ready = queue.Queue(maxsize=PREFETCH_DEPTH)
 
         self._set_state(TTSState.IDLE)
 
-    def toggle_pause(self):
-        """Toggle between pause and resume."""
-        if self.state == TTSState.PLAYING:
-            self.pause()
-        elif self.state == TTSState.PAUSED:
-            self.resume()
-
     def is_playing(self) -> bool:
-        return self.state in [TTSState.PLAYING, TTSState.PAUSED, TTSState.GENERATING]
+        return self.state in (TTSState.PLAYING, TTSState.PAUSED, TTSState.GENERATING)
 
     def get_state(self) -> TTSState:
         return self.state
 
+    # ==================== Wnętrze ====================
+
     def _set_state(self, state: TTSState):
         self.state = state
         if self.on_state_changed:
-            self.on_state_changed(state)
+            try:
+                self.on_state_changed(state)
+            except Exception:
+                pass
+
+    @staticmethod
+    def _drain_queue(q: "queue.Queue") -> list:
+        items = []
+        try:
+            while True:
+                items.append(q.get_nowait())
+        except queue.Empty:
+            pass
+        return items
+
+    def _start_workers_locked(self):
+        """Uruchom świeże wątki generatora i odtwarzacza. Wołane pod _lock."""
+        self._stop_event = threading.Event()
+        self._pause_event.set()
+        self._running = True
+        self._active = False
+        self._gen_thread = threading.Thread(target=self._gen_loop,
+                                            args=(self._stop_event, self._pending, self._ready),
+                                            daemon=True)
+        self._play_thread = threading.Thread(target=self._play_loop,
+                                             args=(self._stop_event, self._pending, self._ready),
+                                             daemon=True)
+        self._gen_thread.start()
+        self._play_thread.start()
 
     def _split_into_sentences(self, text: str) -> list:
-        """Split text into sentences for better pause/resume experience."""
+        """Podziel tekst na zdania (dla płynnej pauzy i szybkiego startu)."""
         import re
-
-        # Split by sentence-ending punctuation
         sentences = re.split(r'(?<=[.!?])\s+', text)
-
-        # Filter empty sentences and strip whitespace
         sentences = [s.strip() for s in sentences if s.strip()]
-
-        # If no sentences found, return original text as single item
         if not sentences:
-            sentences = [text]
-
+            sentences = [text.strip()]
         return sentences
 
-    def _play_sentences(self):
-        """Background thread to generate and play sentences."""
+    def _gen_loop(self, stop_event, pending, ready):
+        """Wątek-generator: pobiera audio dla kolejnych zdań z wyprzedzeniem."""
+        while not stop_event.is_set():
+            try:
+                sentence = pending.get(timeout=0.2)
+            except queue.Empty:
+                continue
+            if stop_event.is_set():
+                break
+
+            path = self._generate_audio(sentence)
+            if stop_event.is_set():
+                break
+            if not path:
+                continue
+
+            # Wstaw do gotowych; blokuje gdy bufor pełny (backpressure = prefetch).
+            while not stop_event.is_set():
+                try:
+                    ready.put((sentence, path), timeout=0.2)
+                    break
+                except queue.Full:
+                    continue
+
+    def _play_loop(self, stop_event, pending, ready):
+        """Wątek-odtwarzacz: gra gotowe pliki jeden po drugim, bez przerw."""
         try:
-            total = len(self._sentences)
+            while not stop_event.is_set():
+                try:
+                    sentence, path = ready.get(timeout=0.2)
+                except queue.Empty:
+                    # Nic gotowego — sprawdź, czy to koniec całej kolejki.
+                    if self._active and pending.empty() and ready.empty():
+                        self._active = False
+                        if not stop_event.is_set():
+                            self._set_state(TTSState.IDLE)
+                            if self.on_finished:
+                                try:
+                                    self.on_finished()
+                                except Exception:
+                                    pass
+                    continue
 
-            while self._current_sentence_index < total:
-                if self._stop_event.is_set():
-                    break
-
-                # Wait if paused
+                self._active = True
                 self._pause_event.wait()
-
-                if self._stop_event.is_set():
+                if stop_event.is_set():
+                    self._safe_remove(path)
                     break
 
-                sentence = self._sentences[self._current_sentence_index]
+                self._set_state(TTSState.PLAYING)
+                self._play_audio_file(path)
 
-                # Generate audio for this sentence
-                self._set_state(TTSState.GENERATING)
-                audio_file = self._generate_audio(sentence)
+                # Czekaj na koniec odtwarzania (respektując pauzę/stop).
+                while True:
+                    try:
+                        busy = pygame.mixer.music.get_busy()
+                    except Exception:
+                        busy = False
+                    if not busy:
+                        break
+                    if stop_event.is_set():
+                        break
+                    self._pause_event.wait()
+                    pygame.time.wait(50)
 
-                if self._stop_event.is_set():
-                    break
-
-                if audio_file:
-                    # Play the audio
-                    self._set_state(TTSState.PLAYING)
-                    self._play_audio_file(audio_file)
-
-                    # Wait for playback to finish
-                    while pygame.mixer.music.get_busy():
-                        if self._stop_event.is_set():
-                            break
-                        self._pause_event.wait()  # Block if paused
-                        pygame.time.wait(100)
-
-                # Report progress
-                if self.on_progress:
-                    self.on_progress(self._current_sentence_index + 1, total)
-
-                self._current_sentence_index += 1
-
-            # Finished all sentences
-            if not self._stop_event.is_set():
-                self._set_state(TTSState.IDLE)
-                if self.on_finished:
-                    self.on_finished()
-
+                self._safe_remove(path)
         except Exception as e:
             if self.on_error:
-                self.on_error(str(e))
-            self._set_state(TTSState.IDLE)
-
-        finally:
-            self._cleanup_temp_files()
+                try:
+                    self.on_error(str(e))
+                except Exception:
+                    pass
 
     def _generate_audio(self, text: str) -> Optional[str]:
         """Generate audio file for text using edge-tts."""
         try:
-            # Create temp file
             temp_file = tempfile.NamedTemporaryFile(
-                suffix='.mp3',
-                delete=False,
-                prefix='claude_tts_'
+                suffix='.mp3', delete=False, prefix='claude_tts_'
             )
             temp_path = temp_file.name
             temp_file.close()
 
-            self._temp_files.append(temp_path)
+            with self._lock:
+                self._temp_files.add(temp_path)
 
-            # Run async edge-tts
             asyncio.run(self._async_generate(text, temp_path))
-
             return temp_path
-
         except Exception as e:
             if self.on_error:
-                self.on_error(f"TTS generation failed: {str(e)}")
+                try:
+                    self.on_error(f"TTS generation failed: {str(e)}")
+                except Exception:
+                    pass
             return None
 
     async def _async_generate(self, text: str, output_path: str):
         """Async generation using edge-tts."""
         communicate = edge_tts.Communicate(
-            text,
-            self.voice,
-            rate=self.rate,
-            volume=self.volume
+            text, self.voice, rate=self.rate, volume=self.volume
         )
         await communicate.save(output_path)
 
     def _play_audio_file(self, file_path: str):
         """Play audio file using pygame.
 
-        Defensive: malformed MP3 (e.g. from edge-tts fed garbage text) leaves
-        pygame's mixer in an inconsistent state that can segfault on a later
-        stop(). Swallow the error so we skip the bad sentence instead of
-        crashing the whole app.
+        Defensywnie: wadliwy MP3 zostawia mikser pygame w niespójnym stanie,
+        który może segfaultować przy późniejszym stop(). Łykamy błąd, by
+        pominąć złe zdanie zamiast ubijać całą aplikację.
         """
         try:
             pygame.mixer.music.load(file_path)
             pygame.mixer.music.play()
         except Exception as e:
             if self.on_error:
-                self.on_error(f"Playback failed: {str(e)}")
-            self._stop_event.set()
+                try:
+                    self.on_error(f"Playback failed: {str(e)}")
+                except Exception:
+                    pass
+
+    def _safe_remove(self, path: str):
+        try:
+            if path and os.path.exists(path):
+                os.remove(path)
+        except Exception:
+            pass
+        with self._lock:
+            self._temp_files.discard(path)
 
     def _cleanup_temp_files(self):
         """Remove temporary audio files."""
-        for path in self._temp_files:
+        with self._lock:
+            paths = list(self._temp_files)
+            self._temp_files.clear()
+        for path in paths:
             try:
                 if os.path.exists(path):
                     os.remove(path)
-            except:
+            except Exception:
                 pass
-        self._temp_files.clear()
 
     def get_available_voices(self) -> list:
         """Get list of available voices."""
         try:
-            voices = asyncio.run(edge_tts.list_voices())
-            return voices
-        except:
+            return asyncio.run(edge_tts.list_voices())
+        except Exception:
             return []
 
     def __del__(self):
         """Cleanup on destruction."""
-        self.stop()
-        pygame.mixer.quit()
+        try:
+            self.stop()
+        except Exception:
+            pass
+        try:
+            pygame.mixer.quit()
+        except Exception:
+            pass
