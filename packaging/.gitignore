@@ -1,0 +1,7 @@
+# Sekrety podpisu — NIGDY do repo.
+signing.conf
+*.pfx
+*.p12
+*.cer
+*_private*.pem
+update_private*.key

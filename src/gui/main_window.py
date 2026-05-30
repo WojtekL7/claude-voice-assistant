@@ -438,7 +438,7 @@ class MainWindow(QMainWindow):
         self.attached_files = []  # List of attached file paths
         self.skin_colors = DEFAULT_SKIN_COLORS.copy()  # Custom skin colors (interfejs + terminal)
         self.skin_icons = {k: v.copy() for k, v in DEFAULT_SKIN_ICONS.items()}  # Custom icons
-        self.claude_command = "/usr/bin/claude"  # Command to run Claude Code
+        self.claude_command = CLAUDE_COMMAND  # rozwiązywane wieloplatformowo (config.find_claude_command)
         self.auto_run_claude = True  # Auto-run Claude command on startup
         # Id ostatnio aktywnej zakładki — używane do wyboru "primary agent" przy
         # starcie (aktywuje się od razu; pozostałe zakładki czekają na klik).
@@ -1457,8 +1457,8 @@ class MainWindow(QMainWindow):
                     # Set Anthropic API key
                     self.anthropic_api_key = settings.get('anthropic_api_key', '')
 
-                    # Load Claude command settings
-                    self.claude_command = settings.get('claude_command', '/usr/bin/claude')
+                    # Load Claude command settings (domyślnie wieloplatformowo)
+                    self.claude_command = settings.get('claude_command', CLAUDE_COMMAND)
                     self.auto_run_claude = settings.get('auto_run_claude', True)
                     self.last_active_agent_id = settings.get('last_active_agent_id', None)
 

@@ -1,0 +1,31 @@
+# Konfiguracja PODPISU KODU — szablon (skopiuj do packaging/signing.conf i uzupełnij).
+#
+# Pusty/nieobecny packaging/signing.conf = build NIEPODPISANY (działa; na macOS
+# pierwsze uruchomienie wymaga: prawy klik → "Otwórz"). Wypełnienie tych pól
+# włączy podpis w kroku pakowania (M4) BEZ zmian w kodzie aplikacji.
+#
+# packaging/signing.conf NIE trafia do repo (patrz packaging/.gitignore) — to sekrety.
+
+# ----- macOS -----
+# Czy podpisywać i notaryzować build macOS (true/false).
+MACOS_SIGN=false
+# Tożsamość "Developer ID Application" z Twojego konta Apple Developer,
+# np. "Developer ID Application: Imię Nazwisko (TEAMID1234)".
+MACOS_DEVELOPER_ID=""
+# Profil notaryzacji zapisany przez:
+#   xcrun notarytool store-credentials "cva-notary" --apple-id ... --team-id ... --password ...
+MACOS_NOTARY_PROFILE="cva-notary"
+
+# ----- Windows (przyszłość) -----
+WINDOWS_SIGN=false
+# Odcisk (thumbprint) certyfikatu Authenticode w magazynie certyfikatów,
+# albo ścieżka do .pfx + hasło (przez zmienną środowiskową, nie tutaj).
+WINDOWS_CERT_THUMBPRINT=""
+WINDOWS_TIMESTAMP_URL="http://timestamp.digicert.com"
+
+# ----- Podpis paczek aktualizacji (niezależny od podpisu systemowego) -----
+# Klucz prywatny (Ed25519) do podpisywania paczek z appcast.json — pozwala
+# aplikacji zweryfikować, że aktualizacja pochodzi od Ciebie (nawet bez podpisu
+# Apple/Windows). Generowany w M3. Tu tylko ścieżka; klucz NIE w repo.
+UPDATE_SIGN=false
+UPDATE_PRIVATE_KEY_PATH=""

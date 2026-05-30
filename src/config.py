@@ -6,6 +6,9 @@ from pathlib import Path
 
 # Application Info
 APP_NAME = "Claude Voice Assistant"
+# APP_VERSION — JEDYNE źródło prawdy o wersji. Używane przez auto-aktualizację
+# (M3) do porównania z wersją w pliku appcast na serwerze. Podbijaj przy każdym
+# wydaniu (semver: MAJOR.MINOR.PATCH).
 APP_VERSION = "1.0.0"
 APP_AUTHOR = "Fulfillment Polska"
 
@@ -28,8 +31,13 @@ CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 LICENSE_SERVER_URL = "https://license.srv1251441.hstgr.cloud/api"
 TRIAL_DAYS = 30
 
-# Claude Code
-CLAUDE_COMMAND = "/usr/bin/claude"  # Full path to Claude Code CLI
+# Claude Code — ścieżka rozstrzygana wieloplatformowo (Linux/macOS/Windows):
+# PATH, potem typowe lokalizacje (~/.local/bin, Homebrew, npm). Fallback: 'claude'.
+try:
+    from core.platform_utils import find_claude_command
+    CLAUDE_COMMAND = find_claude_command()
+except Exception:
+    CLAUDE_COMMAND = "claude"
 
 # Claude Code models available for selection per agent.
 # Key is passed to `claude --model <key>`. "default" means: launch without --model

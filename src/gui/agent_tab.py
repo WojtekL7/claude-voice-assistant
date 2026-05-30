@@ -30,6 +30,7 @@ from config import (
     MEMORY_PROJECTS_FILE, MEMORY_FILE_EXTENSIONS,
     DEFAULT_QUICK_ACTIONS, QUICK_ACTIONS_FILE
 )
+from core.platform_utils import default_shell
 from gui.dialogs import styled_get_open_file_names
 
 
@@ -215,7 +216,9 @@ class AgentTab(QWidget):
 
         if QTERMWIDGET_AVAILABLE:
             self.terminal = QTermWidget(0)
-            self.terminal.setShellProgram("/usr/bin/bash")
+            # Powłoka zależna od systemu (Linux: $SHELL/bash). QTermWidget jest
+            # tylko-Linux; na macOS/Windows terminal dostarczy backend z M2.
+            self.terminal.setShellProgram(default_shell())
             self.terminal.setWorkingDirectory(self.working_directory)
 
             # Terminal font
