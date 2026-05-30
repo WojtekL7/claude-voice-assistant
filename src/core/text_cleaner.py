@@ -741,3 +741,103 @@ def clean_for_tts(text: str, language: str = "pl_PL", use_dictionary: bool = Tru
     """
     cleaner = TextCleanerForTTS(language)
     return cleaner.clean(text, use_dictionary)
+
+
+# === Etap 2 (Droga A): filtr prozy z czystego markdownu ===
+# Wejście pochodzi z dziennika sesji Claude Code (poprawny markdown, polskie
+# znaki OK) — NIE z terminala. Dlatego nie ruszamy tu ANSI ani słownika; po
+# prostu wycinamy to, czego użytkownik nie chce słyszeć: bloki kodu, kod w
+# tekście (ta "niebieska czcionka"), tabele, linki, obrazki — a zostawiamy prozę.
+
+# Zakresy znaków emoji/symboli/strzałek/ramek do usunięcia (TTS i tak ich nie czyta sensownie)
+_EMOJI_SYMBOLS = re.compile(
+    "["
+    "\U0001F000-\U0001FAFF"   # emoji
+    "\U00002600-\U000027BF"   # symbole różne, dingbaty
+    "\U00002190-\U000021FF"   # strzałki
+    "\U00002B00-\U00002BFF"   # strzałki/symbole
+    "\U00002500-\U0000257F"   # ramki (box drawing)
+    "\U0000FE00-\U0000FE0F"   # variation selectors
+    "\U00002022\U000025CF\U000025CB\U000025AA\U000025A0"  # • ● ○ ▪ ■
+    "]",
+    flags=re.UNICODE,
+)
+
+
+def prose_from_markdown(md_text: str) -> str:
+    """Wyciągnij z markdownu samą prozę do przeczytania na głos.
+
+    Usuwa: bloki kodu (``` ```), kod w tekście (`...`), tabele, linki, obrazki,
+    znaczniki nagłówków/pogrubień/list/cytatów, gołe URL-e, emoji/symbole.
+    Zostawia: zwykłe zdania (z zachowaną interpunkcją do podziału na zdania).
+    """
+    if not md_text:
+        return ""
+
+    text = md_text.replace("\r\n", "\n").replace("\r", "\n")
+
+    # 1) Bloki kodu ``` ... ``` oraz ~~~ ... ~~~ — całe precz.
+    text = re.sub(r"```.*?```", " ", text, flags=re.DOTALL)
+    text = re.sub(r"~~~.*?~~~", " ", text, flags=re.DOTALL)
+    # niedomknięty blok kodu na końcu (jeszcze dopisywany)
+    text = re.sub(r"```.*\Z", " ", text, flags=re.DOTALL)
+
+    # 2) Obrazki ![alt](url) — całe precz (przed linkami!).
+    text = re.sub(r"!\[[^\]]*\]\([^)]*\)", " ", text)
+
+    # 3) Linki [tekst](url) -> tekst (czytamy słowa, gubimy adres).
+    text = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", text)
+    # Linki referencyjne [tekst][id] -> tekst; definicje [id]: url -> precz.
+    text = re.sub(r"\[([^\]]+)\]\[[^\]]*\]", r"\1", text)
+    text = re.sub(r"^\s*\[[^\]]+\]:\s*\S+.*$", "", text, flags=re.MULTILINE)
+
+    # 4) Kod w tekście `...` / ``...`` — treść precz (to "niebieska czcionka").
+    text = re.sub(r"``[^`]*``", " ", text)
+    text = re.sub(r"`[^`]*`", " ", text)
+    # niedomknięty inline-kod na końcu
+    text = re.sub(r"`[^`\n]*\Z", " ", text)
+
+    # 5) Przetwarzanie liniami: tabele, linie poziome, znaczniki.
+    out_lines = []
+    for line in text.split("\n"):
+        stripped = line.strip()
+        if not stripped:
+            out_lines.append("")
+            continue
+        # Tabela markdown: wiersz |...|...|  oraz separator |---|:---|
+        if re.match(r"^\|.*\|?\s*$", stripped) or re.match(r"^[:\-\|\s]+$", stripped) and "|" in stripped:
+            continue
+        if re.match(r"^\|", stripped):
+            continue
+        # Linia pozioma --- *** ___
+        if re.match(r"^([-*_])\1{2,}\s*$", stripped):
+            continue
+        # Cytat > ...
+        line = re.sub(r"^\s*>+\s?", "", line)
+        # Nagłówek ###
+        line = re.sub(r"^\s*#{1,6}\s*", "", line)
+        # Punktor listy -, *, +, 1.
+        line = re.sub(r"^\s*([-*+]|\d+[.)])\s+", "", line)
+        out_lines.append(line)
+    text = "\n".join(out_lines)
+
+    # 6) Gołe URL-e i e-maile.
+    text = re.sub(r"https?://\S+", " ", text)
+    text = re.sub(r"www\.\S+", " ", text)
+    text = re.sub(r"\S+@\S+\.\S+", " ", text)
+
+    # 7) Znaczniki pogrubienia/kursywy/przekreślenia (zostaw słowa).
+    text = re.sub(r"\*\*\*?|___?|~~", "", text)
+    text = re.sub(r"(?<!\w)[*_](?=\w)|(?<=\w)[*_](?!\w)", "", text)
+
+    # 8) Resztki HTML.
+    text = re.sub(r"<[^>]+>", " ", text)
+
+    # 9) Emoji/symbole/ramki.
+    text = _EMOJI_SYMBOLS.sub(" ", text)
+
+    # 10) Normalizacja białych znaków (zachowujemy interpunkcję zdań).
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\s*\n\s*", " ", text)
+    text = re.sub(r"\s{2,}", " ", text)
+    return text.strip()
