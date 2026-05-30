@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="vendor/xterm.css">
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; background: #1b1b1d; overflow: hidden; }
+    #terminal { width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+  <div id="terminal"></div>
+  <script src="vendor/xterm.js"></script>
+  <script src="vendor/addon-fit.js"></script>
+  <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+  <script>
+    const term = new Terminal({
+      fontFamily: 'Menlo, "DejaVu Sans Mono", Consolas, monospace',
+      fontSize: 13,
+      cursorBlink: true,
+      scrollback: 5000,
+      allowProposedApi: true,
+      theme: { background: '#1b1b1d', foreground: '#e0e0e0' }
+    });
+    const fitAddon = new FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+    term.open(document.getElementById('terminal'));
+    fitAddon.fit();
+
+    // Funkcje wołane z Pythona.
+    window.__termWrite  = function (data) { term.write(data); };
+    window.__termClear  = function () { term.clear(); };
+    window.__termFocus  = function () { term.focus(); };
+    window.__termTheme  = function (bg, fg) { term.options.theme = { background: bg, foreground: fg }; };
+    window.__termFont   = function (family, size) {
+      if (family) term.options.fontFamily = family;
+      if (size)   term.options.fontSize = size;
+      fitAddon.fit();
+    };
+
+    new QWebChannel(qt.webChannelTransport, function (channel) {
+      const bridge = channel.objects.bridge;
+      // Python → terminal (wyjście PTY).
+      bridge.output.connect(function (data) { term.write(data); });
+      if (bridge.closed) bridge.closed.connect(function () {
+        term.write('\r\n\x1b[90m[proces zakończony]\x1b[0m\r\n');
+      });
+      // terminal → Python.
+      term.onData(function (d) { bridge.send_input(d); });
+      term.onResize(function (sz) { bridge.resize(sz.cols, sz.rows); });
+      term.onSelectionChange(function () { bridge.set_selection(term.getSelection()); });
+      // Dopasuj rozmiar i zgłoś gotowość (Python odpali wtedy powłokę).
+      fitAddon.fit();
+      bridge.frontend_ready(term.cols, term.rows);
+      term.focus();
+    });
+
+    window.addEventListener('resize', function () { fitAddon.fit(); });
+  </script>
+</body>
+</html>

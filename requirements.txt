@@ -3,8 +3,11 @@
 PyQt5>=5.15.0
 PyQt5-Qt5>=5.15.0
 PyQt5-sip>=12.0.0
+# WebTerminal (xterm.js w QtWebEngine) — terminal wieloplatformowy (M2).
+# Na macOS/Windows jedyny backend terminala; na Linuksie opcjonalny.
+PyQtWebEngine>=5.15.0
 
-# Terminal Emulator (QTermWidget)
+# Terminal Emulator (QTermWidget) — TYLKO Linux (x86_64)
 # Install from wheels/qtermwidget-1.4.0-cp310-abi3-manylinux_2_17_x86_64.whl
 # Or build from source: https://github.com/lxqt/qtermwidget (tag 1.4.0)
 # Requires system package: libqtermwidget5-1-dev
