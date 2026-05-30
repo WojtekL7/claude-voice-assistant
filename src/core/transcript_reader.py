@@ -166,6 +166,33 @@ class TranscriptReader:
                 results.append(text)
         return results
 
+    def last_response(self) -> Optional[str]:
+        """Zwróć OSTATNIĄ wypowiedź tekstową Claude'a z bieżącej sesji.
+
+        Używane przez przycisk 🔊 (ręczne "czytaj"), gdy nie ma zaznaczenia
+        ani zaległości. Czyta cały plik sesji — w sam raz na akcję na żądanie.
+        """
+        self._ensure_session()
+        if not self._session_file or not os.path.exists(self._session_file):
+            return None
+        last = None
+        try:
+            with open(self._session_file, encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        obj = json.loads(line)
+                    except Exception:
+                        continue
+                    t = self._extract_text(obj)
+                    if t:
+                        last = t
+        except Exception:
+            return None
+        return last
+
     @staticmethod
     def _extract_text(obj: dict) -> Optional[str]:
         """Wyciągnij prozę z wpisu, jeśli to wypowiedź tekstowa głównego agenta."""

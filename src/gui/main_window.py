@@ -287,7 +287,8 @@ from core.claude_bridge import ClaudeBridgeAsync
 from core.tts_engine import TTSEngine, TTSState
 from core.stt_engine import STTEngine, STTState
 from core.license_manager import LicenseManager, LicenseStatus
-from core.text_cleaner import TextCleanerForTTS, extract_last_claude_response, fix_polish_encoding
+from core.text_cleaner import TextCleanerForTTS, extract_last_claude_response, fix_polish_encoding, prose_from_markdown
+from core.transcript_reader import TranscriptReader
 from gui.agent_tab import AgentTab
 from gui.dialogs import (
     MemoryProjectsDialog, AgentConfigDialog, AgentsManagerDialog,
@@ -600,6 +601,13 @@ class MainWindow(QMainWindow):
         self._pause_blink_timer = QTimer()
         self._pause_blink_timer.timeout.connect(self._animate_pause_blink)
         self._pause_blink_state = True
+
+        # Etap 3 (Droga A): cykliczne czytanie nowej prozy z dziennika sesji.
+        # Co ~0.8s zaglądamy do dziennika aktywnej zakładki i czytamy nowe
+        # wypowiedzi; nieaktywne zakładki z auto-read zbierają zaległości.
+        self._transcript_timer = QTimer()
+        self._transcript_timer.timeout.connect(self._poll_transcripts)
+        self._transcript_timer.start(800)
 
         # Update references to current tab
         self._update_current_tab_references()
@@ -977,9 +985,87 @@ class MainWindow(QMainWindow):
         """Odroczona aktualizacja stanu UI po zmianie zakładki (debounced)."""
         self._update_mcp_status_widget()
         self._refresh_context_label()
+        self._handle_active_tab_switch()
         # Persist last_active_agent_id (settings JSON jest mały, ~2 KB,
         # zapis przy każdej zmianie zakładki jest niezauważalny).
         self._save_settings()
+
+    def _handle_active_tab_switch(self):
+        """Etap 3: po przełączeniu zakładki — tylko aktywna czyta na głos.
+
+        - Zatrzymujemy czytanie (kolejkę) poprzedniej zakładki.
+        - Jeśli nowa zakładka ma włączone auto-czytanie i nazbierała zaległości
+          (gdy była nieaktywna) — pokazujemy komunikat; doczytanie odpala
+          przycisk 🔊 (patrz _read_last_response).
+        """
+        # Zatrzymaj głos poprzedniej zakładki (jest jeden lektor).
+        try:
+            self.tts.clear_queue()
+        except Exception:
+            pass
+
+        tab = self._get_current_agent_tab()
+        if not tab:
+            return
+        backlog = getattr(tab, 'pending_backlog', None) or []
+        if getattr(tab, 'auto_read_responses', False) and backlog:
+            n = len(backlog)
+            self._update_status(
+                f"🔔 {n} nieprzeczytanych wypowiedzi w tej zakładce — kliknij 🔊, aby doczytać"
+            )
+
+    def _poll_transcripts(self):
+        """Etap 3: czytaj nową prozę Claude'a z dziennika sesji (Droga A).
+
+        Co tick: dla aktywnej zakładki z auto-read — nową prozę wysyłamy do
+        lektora na żywo. Dla nieaktywnych z auto-read — odkładamy do zaległości.
+        Priming: przy pierwszym wykryciu pliku sesji przeskakujemy na jego
+        koniec (pomijamy historię i startowe potwierdzenie pamięci).
+        """
+        tabs = getattr(self, 'agent_tabs', None)
+        if not tabs:
+            return
+        active = self.tab_widget.currentWidget()
+
+        for tab in list(tabs.values()):
+            if not isinstance(tab, AgentTab):
+                continue
+            reader = getattr(tab, '_transcript_reader', None)
+            if reader is None:
+                continue
+            try:
+                if not reader.has_session():
+                    continue
+                # Priming — pomiń to, co było przed startem czytania.
+                if not getattr(tab, '_transcript_primed', False):
+                    reader.seek_to_end()
+                    tab._transcript_primed = True
+                    continue
+                new_blocks = reader.poll()
+            except Exception:
+                continue
+            if not new_blocks:
+                continue
+
+            proses = []
+            for raw in new_blocks:
+                p = prose_from_markdown(raw)
+                if p and len(p.strip()) >= 2:
+                    proses.append(p)
+            if not proses:
+                continue
+
+            if tab is active:
+                if getattr(tab, 'auto_read_responses', False):
+                    for p in proses:
+                        self.tts.enqueue(p)
+                # aktywna, ale auto-read wyłączone → nie czytamy, nie zbieramy
+            else:
+                if getattr(tab, 'auto_read_responses', False):
+                    tab.pending_backlog.extend(proses)
+                    # Ogranicz rozrost (trzymamy ostatnie 50 wypowiedzi).
+                    if len(tab.pending_backlog) > 50:
+                        tab.pending_backlog = tab.pending_backlog[-50:]
 
     def _on_terminal_ready(self, agent_tab):
         """Slot wywoływany po AgentTab.activate() — terminal właśnie powstał.
@@ -1023,6 +1109,17 @@ class MainWindow(QMainWindow):
 
         if claude_started and agent_config.get('send_memory_on_start', True):
             QTimer.singleShot(8500, agent_tab.send_memory_files)
+
+        # Etap 3: utwórz czytnik dziennika dla tej zakładki (poza zwykłym
+        # terminalem, który nie ma sesji claude). Priming (przeskok na koniec,
+        # by pominąć historię/startowe potwierdzenie pamięci) robi pętla
+        # _poll_transcripts przy pierwszym wykryciu pliku sesji.
+        if not getattr(agent_tab, 'is_plain_terminal', False):
+            try:
+                agent_tab._transcript_reader = TranscriptReader(agent_tab.working_directory)
+                agent_tab._transcript_primed = False
+            except Exception:
+                agent_tab._transcript_reader = None
 
     def _update_mcp_status_widget(self):
         """Synchronizuje widget statusu agenta z aktywną zakładką.
@@ -1628,36 +1725,12 @@ class MainWindow(QMainWindow):
             if len(self._terminal_output_buffer) > 5000:
                 self._terminal_output_buffer = self._terminal_output_buffer[-5000:]
 
-            # Reset timer - wait 2 seconds after last output before auto-reading
-            if self.auto_read_responses and hasattr(self, '_tts_timer') and self._tts_timer is not None:
-                self._tts_timer.stop()
-                self._tts_timer.start(2000)
+            # Auto-czytanie korzysta teraz z dziennika sesji (Droga A,
+            # _poll_transcripts), nie z tego bufora. Bufor zostaje wyłącznie
+            # do liczenia tokenów (_update_context_usage powyżej).
 
             # NOTE: Removed auto-scroll on terminal output - user controls scroll manually
             # Previously this caused annoying jumps when trying to read history
-
-    def _read_terminal_buffer(self):
-        """Read accumulated terminal output via TTS (auto-read mode)."""
-        if not self._terminal_output_buffer.strip():
-            return
-
-        # Use the same logic as manual read - extract Claude response only
-        last_response = extract_last_claude_response(self._terminal_output_buffer)
-
-        if last_response:
-            # Fix Polish encoding first
-            last_response = fix_polish_encoding(last_response)
-            # Clean for TTS
-            # use_dictionary=False because terminal encoding may corrupt Polish chars
-            text_cleaner = TextCleanerForTTS(self.current_language)
-            cleaned_text = text_cleaner.clean(last_response, use_dictionary=False)
-
-            if cleaned_text and len(cleaned_text) > 20:
-                self.tts.speak(cleaned_text)
-                self._update_status("Auto-czytam odpowiedź...")
-
-        # Always clear buffer after auto-read attempt
-        self._terminal_output_buffer = ""
 
     def _on_terminal_finished(self):
         """Handle terminal session finished."""
@@ -1966,7 +2039,34 @@ class MainWindow(QMainWindow):
                     self._update_status("Zaznaczony tekst nie zawiera treści do odczytania")
                 return
 
-            # No selection - extract last Claude response from buffer
+            # Etap 3: bez zaznaczenia — najpierw zaległości tej zakładki.
+            tab = self._get_current_agent_tab()
+            backlog = getattr(tab, 'pending_backlog', None) or [] if tab else []
+            if backlog:
+                tab.pending_backlog = []
+                joined = " ".join(backlog)
+                cleaned_text = prose_from_markdown(joined)
+                if cleaned_text:
+                    self.tts.speak(cleaned_text)
+                    self._update_status(f"Czytam {len(backlog)} zaległych wypowiedzi...")
+                    return
+
+            # Następnie: ostatnia wypowiedź z dziennika sesji (czysta proza,
+            # zamiast śmieci z bufora terminala).
+            reader = getattr(tab, '_transcript_reader', None) if tab else None
+            if reader is not None:
+                try:
+                    last = reader.last_response()
+                except Exception:
+                    last = None
+                if last:
+                    cleaned_text = prose_from_markdown(last)
+                    if cleaned_text:
+                        self.tts.speak(cleaned_text)
+                        self._update_status("Czytam ostatnią odpowiedź...")
+                        return
+
+            # Fallback (stary tor) — ekstrakcja z bufora terminala.
             if self._terminal_output_buffer.strip():
                 # Extract only the last response (strips UI frames, spinners, user prompts)
                 last_response = extract_last_claude_response(self._terminal_output_buffer)

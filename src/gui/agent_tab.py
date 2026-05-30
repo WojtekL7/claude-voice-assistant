@@ -132,6 +132,17 @@ class AgentTab(QWidget):
         self.auto_read_responses = False
         self.current_language = "pl-PL"
 
+        # Etap 3 (Droga A): czytanie prozy z dziennika sesji per-zakładka.
+        # is_plain_terminal — zwykły terminal bez claude, więc bez dziennika.
+        self.is_plain_terminal = agent_config.get('is_plain_terminal', False)
+        # Czytnik dziennika (tworzony w MainWindow._on_terminal_ready, gdy
+        # terminal i sesja claude już istnieją).
+        self._transcript_reader = None
+        self._transcript_primed = False
+        # Zaległa proza nazbierana, gdy zakładka była NIEAKTYWNA — do doczytania
+        # przyciskiem 🔊 po przełączeniu (decyzja: komunikat + przycisk).
+        self.pending_backlog = []
+
         # Najpierw wczytaj listę szybkich akcji — _setup_ui() korzysta z niej
         # przy budowaniu menu (przez _update_quick_actions_menu). Bez tego
         # menu byłoby puste do pierwszej edycji w QuickActionsDialog.
@@ -487,14 +498,13 @@ class AgentTab(QWidget):
         if clean_text:
             self._terminal_output_buffer += clean_text + "\n"
 
-            # Limit buffer size
+            # Limit buffer size (bufor służy już tylko do liczenia tokenów)
             if len(self._terminal_output_buffer) > 5000:
                 self._terminal_output_buffer = self._terminal_output_buffer[-5000:]
 
-            # Auto-read timer
-            if self.auto_read_responses and self._tts_timer:
-                self._tts_timer.stop()
-                self._tts_timer.start(2000)
+            # Auto-czytanie NIE korzysta już z tego śmieciowego bufora terminala.
+            # Czytamy czystą prozę z dziennika sesji (Droga A) — patrz
+            # MainWindow._poll_transcripts. Tu zostaje tylko liczenie tokenów.
 
     def _on_terminal_finished(self):
         """Handle terminal process finished."""
