@@ -18,22 +18,40 @@ packaging/web/
 Gdy zbudujesz aplikację, **zmień nazwę** pliku na tę z listy i wrzuć do
 `downloads/`. (Albo zmień adres w `index.html` — szukaj `href="downloads/...`.)
 
+## 🟢 LIVE — strona jest już opublikowana
+
+**Adres:** **https://pobierz.srv1251441.hstgr.cloud** (HTTPS, certyfikat Let's Encrypt).
+
+Hostowana na VPS `srv1251441.hstgr.cloud` jako osobny kontener nginx (NIE rusza
+stacka n8n/CRM), routowany przez istniejący traefik:
+
+```
+/opt/cva-web/                      # na serwerze
+├── docker-compose.yml             # izolowany kontener 'cva-web' (nginx:alpine)
+└── html/
+    ├── index.html                 # = ta strona
+    └── downloads/                 # tu trafiają paczki do pobrania
+```
+
+- Kontener: `docker compose -f /opt/cva-web/docker-compose.yml up -d` (restart unless-stopped).
+- Etykiety traefik: Host `pobierz.srv1251441.hstgr.cloud`, TLS `mytlschallenge`, sieć `n8n_default`.
+- Cofnięcie: `cd /opt/cva-web && docker compose down` (usuwa tylko ten kontener).
+
+### Aktualizacja strony / wgranie paczek (przez SSH)
+
+```bash
+# nowa wersja strony
+scp packaging/web/index.html root@168.231.127.133:/opt/cva-web/html/index.html
+
+# wgranie gotowej paczki (przykład — Mac); nazwa MUSI zgadzać się z linkiem w index.html
+scp dist/ClaudeVoiceAssistant-1.0.0-macos-arm64.dmg \
+    root@168.231.127.133:/opt/cva-web/html/downloads/ClaudeVoiceAssistant-macos.dmg
+```
+nginx serwuje na żywo — bez restartu kontenera.
+
 ## Jak obejrzeć stronę u siebie (bez serwera)
 
 Kliknij dwukrotnie `index.html` — otworzy się w przeglądarce. Tak wygląda.
-
-## Jak wystawić ją w internecie (na VPS)
-
-Strona to jeden plik + folder `downloads/`. Wgrywasz oba na serwer
-`srv1251441.hstgr.cloud` pod publiczny katalog, np. `/cva/`:
-
-```
-https://srv1251441.hstgr.cloud/cva/index.html   ← strona
-https://srv1251441.hstgr.cloud/cva/downloads/   ← pliki do pobrania
-```
-
-Adresy w `index.html` są **względne** (`downloads/...`), więc strona działa
-niezależnie od tego, w jakim katalogu ją położysz.
 
 ## Status przycisków
 
