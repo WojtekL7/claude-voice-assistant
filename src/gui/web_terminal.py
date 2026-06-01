@@ -186,9 +186,24 @@ class WebTerminal(QWidget):
         env = dict(os.environ)
         env["TERM"] = "xterm-256color"
         env["COLORTERM"] = "truecolor"
+        # Aplikacja uruchamiana z Findera (macOS) / menu dostaje UBOGI PATH i nie
+        # widzi narzędzi z profilu użytkownika (Homebrew, nvm, node). Bez tego
+        # `claude` nie znajduje `node` → "env: node: No such file or directory".
+        # Dwie warstwy zaradcze:
+        #  1) login shell (-l) — wczytuje ~/.zprofile/~/.profile, jak Terminal.app,
+        #  2) dołożenie typowych lokalizacji binarek do PATH (na wszelki wypadek).
+        for extra in ("/opt/homebrew/bin", "/usr/local/bin",
+                      str(Path.home() / ".local" / "bin"),
+                      str(Path.home() / ".npm-global" / "bin")):
+            parts = env.get("PATH", "").split(os.pathsep)
+            if extra not in parts:
+                env["PATH"] = (env.get("PATH", "") + os.pathsep + extra).strip(os.pathsep)
+        argv = [self._shell]
+        if not is_windows():
+            argv.append("-l")  # login shell
         try:
             self._proc = ptyprocess.PtyProcess.spawn(
-                [self._shell], dimensions=(rows, cols), env=env, cwd=self._cwd)
+                argv, dimensions=(rows, cols), env=env, cwd=self._cwd)
         except Exception as e:
             self._data_ready.emit(f"\r\n\x1b[31m[Nie udało się uruchomić powłoki: {e}]\x1b[0m\r\n")
             return
