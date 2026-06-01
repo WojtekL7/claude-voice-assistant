@@ -28,13 +28,19 @@ requests>=2.31.0
 
 # Utilities
 python-dotenv>=1.0.0
-aiohttp>=3.9.0
-asyncio>=3.4.3
+aiohttp>=3.9.0          # używane przez edge-tts (TTS)
+# UWAGA: NIE dodawać 'asyncio' jako pakietu pip — asyncio jest modułem
+# standardowym Pythona 3.x; pakiet pip 'asyncio' to przestarzały backport,
+# który psuje instalację na nowoczesnym Pythonie (m.in. na macOS).
 
-# Text cleaning for TTS (optional - dictionary filtering)
-# Requires system packages: libenchant-2-dev, aspell-pl (for Polish), aspell-en (for English)
-# On Ubuntu/Debian: sudo apt-get install libenchant-2-dev aspell-pl aspell-en
-pyenchant>=3.2.0
+# Text cleaning for TTS — OPCJONALNE (słownikowe czyszczenie wymowy).
+# Kod działa bez tego (patrz ENCHANT_AVAILABLE w src/core/text_cleaner.py — przy
+# braku po prostu pomija filtr słownikowy). Wymaga SYSTEMOWEJ biblioteki enchant,
+# więc NIE instalujemy domyślnie, by `pip install -r requirements.txt` działał
+# wszędzie (Linux/macOS/Windows). Aby włączyć:
+#   Linux:  sudo apt-get install libenchant-2-dev aspell-pl aspell-en && pip install pyenchant
+#   macOS:  brew install enchant && pip install pyenchant
+# pyenchant>=3.2.0
 
 # Packaging
 pyinstaller>=6.0.0
