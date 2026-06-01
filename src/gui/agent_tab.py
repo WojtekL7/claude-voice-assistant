@@ -92,6 +92,7 @@ class AgentTab(QWidget):
     status_changed = pyqtSignal(str)  # Emitted to update status bar
     request_tts = pyqtSignal(str)  # Request TTS to speak text
     request_tts_stop = pyqtSignal()  # Request TTS to stop
+    request_pause = pyqtSignal()  # Request TTS pause/resume (przycisk ⏸)
     request_read_last = pyqtSignal()  # Request MainWindow to read last Claude response (with extraction)
     request_dictation = pyqtSignal(bool)  # Request dictation start/stop
     add_quick_action_requested = pyqtSignal()  # Request to add new quick action
@@ -584,9 +585,8 @@ class AgentTab(QWidget):
         self.request_read_last.emit()
 
     def _toggle_pause(self):
-        """Toggle TTS pause."""
-        # Will be connected to MainWindow's TTS
-        pass
+        """Pauza/wznów czytania (TTS). Obsługę wykonuje MainWindow na silniku TTS."""
+        self.request_pause.emit()
 
     def _stop_all(self):
         """Stop all TTS and dictation."""
