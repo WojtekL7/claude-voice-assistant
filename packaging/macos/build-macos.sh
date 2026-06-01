@@ -35,9 +35,19 @@ if [[ "$(uname)" != "Darwin" ]]; then
 fi
 
 # 1) Środowisko + zależności
+# Wybierz Pythona — preferuj 3.12 (cel projektu), w razie czego inny 3.x.
+PY=""
+for c in python3.12 python3.13 python3.11 python3; do
+  if command -v "$c" >/dev/null 2>&1; then PY="$c"; break; fi
+done
+if [[ -z "$PY" ]]; then
+  echo "BŁĄD: nie znaleziono Pythona. Zainstaluj Python 3.12 z python.org."
+  exit 1
+fi
+echo "== Python: $PY ($($PY --version 2>&1)) =="
 if [[ ! -d "$PROJECT_DIR/venv" ]]; then
   echo "== Tworzę venv =="
-  python3 -m venv "$PROJECT_DIR/venv"
+  "$PY" -m venv "$PROJECT_DIR/venv"
 fi
 # shellcheck disable=SC1091
 source "$PROJECT_DIR/venv/bin/activate"
