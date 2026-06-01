@@ -18,7 +18,8 @@ sys.path.insert(0, str(src_dir))
 #   patrz DIAGNOSE-ENTER-FIX.md). Test natywnego Wayland: VOICE_USE_WAYLAND=1.
 # - macOS/Windows: backendy natywne, nic nie wymuszamy.
 from core.platform_utils import (
-    configure_qt_environment, use_native_menu_bar, prefer_webengine_terminal
+    configure_qt_environment, use_native_menu_bar, prefer_webengine_terminal,
+    is_linux,
 )
 configure_qt_environment()
 
@@ -66,6 +67,20 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     app.setOrganizationName("Fulfillment Polska")
+
+    # Czcionki dołączone do aplikacji (Ubuntu / Ubuntu Mono) — żeby wygląd na
+    # macOS/Windows był taki jak na Linuksie, a nie cienki zamiennik systemu.
+    from PyQt5.QtGui import QFontDatabase, QFont
+    from config import ASSETS_DIR
+    for _fp in (ASSETS_DIR / "fonts" / "UbuntuMono.ttf",
+                ASSETS_DIR / "fonts" / "Ubuntu.ttf"):
+        if _fp.exists():
+            QFontDatabase.addApplicationFont(str(_fp))
+    # Poza Linuksem ustaw czytelny font UI (Ubuntu) — natywny bywa zbyt cienki.
+    if not is_linux():
+        _ui_font = QFont("Ubuntu", 13)
+        _ui_font.setWeight(QFont.Normal)
+        app.setFont(_ui_font)
 
     # Set application icon
     icon_path = ASSETS_DIR / "icon.png"

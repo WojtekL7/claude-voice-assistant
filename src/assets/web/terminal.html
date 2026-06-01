@@ -4,6 +4,14 @@
   <meta charset="utf-8">
   <link rel="stylesheet" href="vendor/xterm.css">
   <style>
+    /* Ubuntu Mono dołączony do aplikacji — żeby terminal na macOS/Windows
+       wyglądał TAK SAMO jak na Linuksie (a nie cienkim zamiennikiem systemu). */
+    @font-face {
+      font-family: 'Ubuntu Mono';
+      src: url('../fonts/UbuntuMono.ttf') format('truetype');
+      font-weight: 400;
+      font-style: normal;
+    }
     html, body { margin: 0; padding: 0; height: 100%; background: #1b1b1d; overflow: hidden; }
     #terminal { width: 100%; height: 100%; }
   </style>
@@ -15,8 +23,8 @@
   <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
   <script>
     const term = new Terminal({
-      fontFamily: 'Menlo, "DejaVu Sans Mono", Consolas, monospace',
-      fontSize: 13,
+      fontFamily: '"Ubuntu Mono", Menlo, "DejaVu Sans Mono", Consolas, monospace',
+      fontSize: 14,
       cursorBlink: true,
       scrollback: 10000,
       allowProposedApi: true,
@@ -26,6 +34,16 @@
     term.loadAddon(fitAddon);
     term.open(document.getElementById('terminal'));
     fitAddon.fit();
+
+    // Gdy Ubuntu Mono się załaduje, przerysuj terminal tą czcionką (inaczej
+    // pierwsza klatka idzie zamiennikiem, zanim font dojedzie).
+    if (document.fonts && document.fonts.load) {
+      document.fonts.load('14px "Ubuntu Mono"').then(function () {
+        try { term.options.fontFamily = '"Ubuntu Mono", Menlo, monospace'; } catch (e) {}
+        fitAddon.fit();
+        term.refresh(0, term.rows - 1);
+      }).catch(function () {});
+    }
 
     // Funkcje wołane z Pythona.
     window.__termWrite  = function (data) { term.write(data); };
