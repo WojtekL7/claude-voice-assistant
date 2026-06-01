@@ -2,6 +2,7 @@
 Claude Voice Assistant - Configuration
 """
 import os
+import sys
 from pathlib import Path
 
 # Application Info
@@ -13,7 +14,14 @@ APP_VERSION = "1.0.0"
 APP_AUTHOR = "Fulfillment Polska"
 
 # Paths
-BASE_DIR = Path(__file__).parent.parent
+# Wersja spakowana (PyInstaller, .app/.exe): zasoby leżą w katalogu wypakowania
+# (sys._MEIPASS); datas w packaging/macos/*.spec dokładają je pod 'src/...'.
+# Tryb developerski (uruchomienie z kodu): BASE_DIR = korzeń repo. Przełączka
+# włącza się WYŁĄCZNIE w buildzie — na Linuksie z venv nic nie zmienia.
+if getattr(sys, "frozen", False):
+    BASE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).parent.parent))
+else:
+    BASE_DIR = Path(__file__).parent.parent
 SRC_DIR = BASE_DIR / "src"
 ASSETS_DIR = SRC_DIR / "assets"
 I18N_DIR = SRC_DIR / "i18n"

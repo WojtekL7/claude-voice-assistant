@@ -24,6 +24,7 @@ from PyQt5.QtWebChannel import QWebChannel
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from core.platform_utils import default_shell, is_windows
+from config import ASSETS_DIR
 
 # PTY: ptyprocess to wariant uniksowy (Linux/macOS). Windows = ConPTY w przyszłości.
 try:
@@ -32,7 +33,9 @@ try:
 except Exception:
     _PTY_AVAILABLE = False
 
-ASSET_DIR = Path(__file__).parent.parent / "assets" / "web"
+# Jedno źródło prawdy o ścieżce zasobów (config.ASSETS_DIR jest świadomy
+# wersji spakowanej — sys._MEIPASS — więc terminal.html działa też w .app/.exe).
+ASSET_DIR = ASSETS_DIR / "web"
 
 
 class _Bridge(QObject):

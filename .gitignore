@@ -86,3 +86,6 @@ api_keys.txt
 
 # Claude Code local settings & locally installed skills (per-project)
 .claude/
+
+# Generowane przy buildzie macOS (z icon.png)
+src/assets/icon.icns
