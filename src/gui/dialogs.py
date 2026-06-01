@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
     QTreeWidget, QTreeWidgetItem, QGroupBox, QFileDialog,
     QMessageBox, QListWidget, QListWidgetItem, QRadioButton,
     QButtonGroup, QWidget, QSplitter, QFrame, QInputDialog,
-    QListView, QPlainTextEdit, QStackedWidget, QTabWidget
+    QListView, QPlainTextEdit, QStackedWidget, QTabWidget, QProgressBar
 )
 from PyQt5.QtCore import Qt, QSize, QUrl, QTimer, pyqtSignal
 import threading
@@ -3448,3 +3448,102 @@ class _McpJsonImportDialog(QDialog):
         self.final_scope = self.scope_combo.currentData()
         self.json_text = text
         self.accept()
+
+
+class UpdateAvailableDialog(QDialog):
+    """Okno „dostępna nowa wersja" — pobiera, weryfikuje i otwiera instalator (M3).
+
+    Współpracuje z core.update_manager.UpdateManager przez jego sygnały
+    (download_progress/finished/failed). Samo pobieranie idzie w wątku tła
+    managera, więc to okno tylko pokazuje postęp i nie blokuje.
+    """
+
+    def __init__(self, update_manager, info, current_version, parent=None):
+        super().__init__(parent)
+        self.manager = update_manager
+        self.info = info
+        self.setWindowTitle("Dostępna aktualizacja")
+        self.setMinimumWidth(440)
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+
+        title = QLabel(f"Dostępna nowa wersja: {info.version}")
+        tf = QFont()
+        tf.setPointSize(13)
+        tf.setBold(True)
+        title.setFont(tf)
+        layout.addWidget(title)
+
+        layout.addWidget(QLabel(f"Masz zainstalowaną wersję {current_version}."))
+
+        if info.mandatory:
+            layout.addWidget(QLabel("⚠️ To jest aktualizacja wymagana."))
+
+        if info.notes_url:
+            notes_btn = QPushButton("Informacje o wydaniu…")
+            notes_btn.clicked.connect(
+                lambda: QDesktopServices.openUrl(QUrl(info.notes_url)))
+            layout.addWidget(notes_btn)
+
+        self.status_label = QLabel("")
+        layout.addWidget(self.status_label)
+
+        self.progress = QProgressBar()
+        self.progress.setVisible(False)
+        layout.addWidget(self.progress)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        self.later_btn = QPushButton("Później")
+        self.later_btn.clicked.connect(self.reject)
+        btn_row.addWidget(self.later_btn)
+        self.download_btn = QPushButton("Pobierz i zainstaluj")
+        self.download_btn.setDefault(True)
+        self.download_btn.clicked.connect(self._start_download)
+        btn_row.addWidget(self.download_btn)
+        layout.addLayout(btn_row)
+
+        self.manager.download_progress.connect(self._on_progress)
+        self.manager.download_finished.connect(self._on_finished)
+        self.manager.download_failed.connect(self._on_failed)
+
+    def _start_download(self):
+        self.download_btn.setEnabled(False)
+        self.later_btn.setEnabled(False)
+        self.progress.setVisible(True)
+        self.progress.setRange(0, 0)  # nieokreślony do pierwszej porcji
+        self.status_label.setText("Pobieranie…")
+        self.manager.download_async(self.info)
+
+    def _on_progress(self, downloaded, total):
+        if total > 0:
+            self.progress.setRange(0, total)
+            self.progress.setValue(downloaded)
+            self.status_label.setText(
+                f"Pobieranie… {downloaded/1048576:.1f}/{total/1048576:.1f} MB")
+        else:
+            self.progress.setRange(0, 0)
+            self.status_label.setText(f"Pobieranie… {downloaded/1048576:.1f} MB")
+
+    def _on_finished(self, path):
+        self.progress.setRange(0, 1)
+        self.progress.setValue(1)
+        self.status_label.setText("Pobrano i zweryfikowano. Otwieram instalator…")
+        opened = self.manager.open_installer(path)
+        if opened:
+            QMessageBox.information(
+                self, "Aktualizacja pobrana",
+                "Instalator został otwarty. Dokończ instalację i uruchom aplikację ponownie.")
+        else:
+            QMessageBox.information(
+                self, "Aktualizacja pobrana",
+                f"Paczka zapisana w:\n{path}\n\nOtwórz ją ręcznie, aby zainstalować.")
+        self.accept()
+
+    def _on_failed(self, msg):
+        self.progress.setVisible(False)
+        self.status_label.setText("")
+        self.download_btn.setEnabled(True)
+        self.later_btn.setEnabled(True)
+        QMessageBox.warning(self, "Błąd aktualizacji", msg)

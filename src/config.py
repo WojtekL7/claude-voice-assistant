@@ -31,6 +31,16 @@ CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 LICENSE_SERVER_URL = "https://license.srv1251441.hstgr.cloud/api"
 TRIAL_DAYS = 30
 
+# ===== Auto-aktualizacja (M3) =====
+# Feed z najnowszymi wersjami per platforma. Format: packaging/appcast.example.json.
+UPDATE_APPCAST_URL = "https://srv1251441.hstgr.cloud/cva/appcast.json"
+# Klucz publiczny Ed25519 (base64) do weryfikacji podpisu paczek aktualizacji.
+# PUSTY = weryfikacja podpisu wyłączona (sha256 i tak jest obowiązkowe). Włączymy
+# razem z UPDATE_SIGN w packaging/signing.conf, gdy paczki będą podpisywane.
+UPDATE_PUBLIC_KEY = ""
+# Katalog pobranych paczek aktualizacji.
+UPDATE_DOWNLOAD_DIR = CONFIG_DIR / "updates"
+
 # Claude Code — ścieżka rozstrzygana wieloplatformowo (Linux/macOS/Windows):
 # PATH, potem typowe lokalizacje (~/.local/bin, Homebrew, npm). Fallback: 'claude'.
 try:

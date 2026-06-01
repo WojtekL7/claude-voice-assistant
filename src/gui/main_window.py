@@ -282,6 +282,7 @@ from config import (
     CONFIG_FILE, QUICK_ACTIONS_FILE, CLAUDE_COMMAND, GROQ_API_KEY,
     AGENTS_FILE, MEMORY_PROJECTS_FILE, DEFAULT_AGENTS, DEFAULT_MEMORY_PROJECTS,
     ASSETS_DIR, CLAUDE_MODEL_CONTEXT_LIMITS, DEFAULT_AGENT_MODEL,
+    UPDATE_APPCAST_URL, UPDATE_PUBLIC_KEY, UPDATE_DOWNLOAD_DIR,
 )
 from core.claude_bridge import ClaudeBridgeAsync
 from core.tts_engine import TTSEngine, TTSState
@@ -289,10 +290,12 @@ from core.stt_engine import STTEngine, STTState
 from core.license_manager import LicenseManager, LicenseStatus
 from core.text_cleaner import TextCleanerForTTS, extract_last_claude_response, fix_polish_encoding, prose_from_markdown
 from core.transcript_reader import TranscriptReader
+from core.update_manager import UpdateManager
+from core.platform_utils import update_platform_id
 from gui.agent_tab import AgentTab
 from gui.dialogs import (
     MemoryProjectsDialog, AgentConfigDialog, AgentsManagerDialog,
-    SkillsManagerDialog, McpManagerDialog,
+    SkillsManagerDialog, McpManagerDialog, UpdateAvailableDialog,
     styled_get_open_file_names, styled_get_open_file_name, styled_get_save_file_name
 )
 from gui.mcp_status_widget import McpStatusWidget
@@ -431,9 +434,18 @@ class MainWindow(QMainWindow):
         self.stt = STTEngine()
         self.license_manager = LicenseManager()
 
+        # Auto-aktualizacja (M3) — sprawdzanie/pobieranie idzie w wątku tła managera.
+        self.update_manager = UpdateManager(
+            UPDATE_APPCAST_URL, APP_VERSION, update_platform_id(),
+            public_key=UPDATE_PUBLIC_KEY, download_dir=UPDATE_DOWNLOAD_DIR)
+        # True = sprawdzanie wywołane ręcznie z menu (wtedy pokazujemy też wynik
+        # „masz najnowszą"/błąd); False = ciche sprawdzanie przy starcie.
+        self._manual_update_check = False
+
         # Settings
         self.current_language = "pl-PL"
         self.auto_read_responses = False
+        self.auto_check_updates = True  # nadpisywane przez _load_settings
         self.quick_actions = self._load_quick_actions()
         self.attached_files = []  # List of attached file paths
         self.skin_colors = DEFAULT_SKIN_COLORS.copy()  # Custom skin colors (interfejs + terminal)
@@ -471,6 +483,10 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(500, lambda: self._apply_terminal_colors(self.skin_colors))
         # Apply again after longer delay to ensure it takes effect
         QTimer.singleShot(1500, lambda: self._apply_terminal_colors(self.skin_colors))
+
+        # Ciche sprawdzenie aktualizacji ~3 s po starcie (po rozruchu terminala),
+        # w tle; brak nowszej/błąd przy cichym = bez popupów.
+        QTimer.singleShot(3000, self._maybe_auto_check_updates)
 
         # NOTE: Claude jest teraz uruchamiany w _create_agent_tab() dla każdej zakładki
         # Stare globalne wywołanie usunięte, bo powodowało podwójne uruchomienie
@@ -1382,6 +1398,18 @@ class MainWindow(QMainWindow):
         license_action.triggered.connect(self._show_license_dialog)
         help_menu.addAction(license_action)
 
+        help_menu.addSeparator()
+
+        check_updates_action = QAction("Sprawdź aktualizacje", self)
+        check_updates_action.triggered.connect(self._check_updates_manual)
+        help_menu.addAction(check_updates_action)
+
+        self.auto_update_action = QAction("Sprawdzaj aktualizacje przy starcie", self)
+        self.auto_update_action.setCheckable(True)
+        self.auto_update_action.setChecked(getattr(self, 'auto_check_updates', True))
+        self.auto_update_action.toggled.connect(self._on_auto_check_updates_toggled)
+        help_menu.addAction(self.auto_update_action)
+
     def _setup_connections(self):
         """Setup signal connections (thread-safe via SignalBridge)."""
         # Connect SignalBridge signals to GUI slots (thread-safe)
@@ -1408,6 +1436,11 @@ class MainWindow(QMainWindow):
         self.stt.on_transcription = lambda t: self.signals.stt_transcription.emit(t)
         self.stt.on_error = lambda e: self.signals.stt_error.emit(e)
 
+        # Auto-aktualizacja (M3) — wynik sprawdzania wraca z wątku tła tu.
+        self.update_manager.update_available.connect(self._on_update_available)
+        self.update_manager.no_update.connect(self._on_no_update)
+        self.update_manager.check_failed.connect(self._on_update_check_failed)
+
     def _setup_shortcuts(self):
         """Setup keyboard shortcuts."""
         # Ctrl+Enter to send
@@ -1415,6 +1448,49 @@ class MainWindow(QMainWindow):
         # Ctrl+R to read
         # Escape to stop
         pass
+
+    # ==================== Auto-aktualizacja (M3) ====================
+
+    def _check_updates_manual(self):
+        """Ręczne 'Sprawdź aktualizacje' z menu — pokazuje też wynik negatywny."""
+        self._manual_update_check = True
+        self._update_status("Sprawdzanie aktualizacji…")
+        self.update_manager.check_async()
+
+    def _maybe_auto_check_updates(self):
+        """Ciche sprawdzenie przy starcie (jeśli włączone w ustawieniach)."""
+        if getattr(self, 'auto_check_updates', True):
+            self._manual_update_check = False
+            self.update_manager.check_async()
+
+    def _on_update_available(self, info):
+        """Jest nowsza wersja — pokaż okno pobierania (także przy cichym sprawdzaniu)."""
+        self._manual_update_check = False
+        self._update_status("")
+        dlg = UpdateAvailableDialog(self.update_manager, info, APP_VERSION, self)
+        dlg.exec_()
+
+    def _on_no_update(self):
+        """Brak nowszej — informuj tylko, gdy użytkownik sprawdzał ręcznie."""
+        if self._manual_update_check:
+            self._manual_update_check = False
+            QMessageBox.information(
+                self, "Aktualizacje", f"Masz najnowszą wersję ({APP_VERSION}).")
+        self._update_status("")
+
+    def _on_update_check_failed(self, msg):
+        """Błąd sprawdzania — komunikat tylko przy ręcznym; przy cichym milczy."""
+        if self._manual_update_check:
+            self._manual_update_check = False
+            QMessageBox.warning(
+                self, "Aktualizacje",
+                f"Nie udało się sprawdzić aktualizacji.\n\n{msg}")
+        self._update_status("")
+
+    def _on_auto_check_updates_toggled(self, checked):
+        """Przełącznik 'Sprawdzaj przy starcie' z menu."""
+        self.auto_check_updates = bool(checked)
+        self._save_settings()
 
     def _apply_dark_theme(self):
         """Apply dark theme using custom skin colors and icons."""
@@ -1466,6 +1542,7 @@ class MainWindow(QMainWindow):
                     self.claude_command = settings.get('claude_command', CLAUDE_COMMAND)
                     self.auto_run_claude = settings.get('auto_run_claude', True)
                     self.last_active_agent_id = settings.get('last_active_agent_id', None)
+                    self.auto_check_updates = settings.get('auto_check_updates', True)
 
             except Exception as e:
                 print(f"Error loading settings: {e}")
@@ -1482,6 +1559,7 @@ class MainWindow(QMainWindow):
             'claude_command': self.claude_command,
             'auto_run_claude': self.auto_run_claude,
             'last_active_agent_id': self.last_active_agent_id,
+            'auto_check_updates': getattr(self, 'auto_check_updates', True),
         }
         try:
             with open(CONFIG_FILE, 'w') as f:
