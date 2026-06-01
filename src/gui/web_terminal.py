@@ -74,6 +74,7 @@ class WebTerminal(QWidget):
         self._stop = threading.Event()
         self._selection = ""
         self._shell = default_shell()
+        self._cwd = None
         self._pending_size = (80, 24)
         self._frontend_ready = False
         self._decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
@@ -101,6 +102,10 @@ class WebTerminal(QWidget):
 
     def set_shell_program(self, program: str):
         self._shell = program
+
+    def set_working_directory(self, path: str):
+        """Katalog roboczy powłoki. Ustaw PRZED start_shell_program()."""
+        self._cwd = path or None
 
     def start_shell_program(self):
         """Odpal powłokę (jeśli front gotowy; inaczej zrobi to frontend_ready)."""
@@ -147,7 +152,7 @@ class WebTerminal(QWidget):
         env["COLORTERM"] = "truecolor"
         try:
             self._proc = ptyprocess.PtyProcess.spawn(
-                [self._shell], dimensions=(rows, cols), env=env)
+                [self._shell], dimensions=(rows, cols), env=env, cwd=self._cwd)
         except Exception as e:
             self._data_ready.emit(f"\r\n\x1b[31m[Nie udało się uruchomić powłoki: {e}]\x1b[0m\r\n")
             return
