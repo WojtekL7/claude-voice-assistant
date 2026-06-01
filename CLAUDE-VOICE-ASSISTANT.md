@@ -93,11 +93,16 @@ pip install wheels/qtermwidget-1.4.0-cp310-abi3-manylinux_2_17_x86_64.whl
 
 ```
 PyQt5
+PyQtWebEngine     # WebTerminal (xterm.js w QtWebEngine) — Mac/Win, opcjonalnie Linux
 edge-tts          # Text-to-Speech (Microsoft voices)
 sounddevice       # Nagrywanie audio
-numpy
-httpx             # HTTP client dla Groq API
+numpy / scipy
+requests          # HTTP client (Groq STT, licencje, auto-aktualizacja M3) — NIE httpx
+ptyprocess        # PTY dla WebTerminal (Unix); Windows = ConPTY (TODO)
 ```
+
+> ⚠️ Klientem HTTP jest **`requests`** (`stt_engine.py`, `license_manager.py`,
+> `update_manager.py`), a NIE `httpx` (httpx nie ma w `requirements.txt`).
 
 **Groq API** (Speech-to-Text):
 - URL: `https://api.groq.com/openai/v1/audio/transcriptions`
@@ -192,12 +197,13 @@ Nagrywanie surowej próbki: PTY + `claude` w zaufanym katalogu, `TERM=xterm-256c
 
 ---
 
-## 🚧 PORT macOS (+ Windows w przyszłości) — STATUS I PLAN [WZNOWIENIE od 2026-05-31]
+## ✅ PORT macOS (+ Windows w przyszłości) — STRONA KODU UKOŃCZONA (2026-06-01)
 
-> **Czytaj to NAJPIERW przy wznowieniu prac nad wersją Mac.** Stan na koniec sesji 2026-05-30.
+> **Stan: M1–M4 zrobione i wypchnięte.** Cała strona kodu portu gotowa; zostaje
+> tylko zbudowanie `.dmg` **na Macu** (z Linuksa się nie da) + opcjonalnie feed na VPS.
 
-**Cel:** wersja na **Apple Silicon (M1–M4)**, architektura od razu pod **przyszły Windows**;
-**auto-aktualizacja** z VPS; **podpis odłożony** (gniazdo gotowe).
+**Cel (osiągnięty):** wersja na **Apple Silicon**, architektura od razu pod **przyszły
+Windows**; **auto-aktualizacja** z VPS; **podpis odłożony** (gniazdo gotowe).
 
 ### Zablokowane decyzje (uzgodnione z użytkownikiem)
 - **Mac:** Apple Silicon. Finalny `.app`/`.dmg` **użytkownik buduje/testuje na swoim Macu** — z Linuksa się nie da (mogę przygotować kod + skrypty + instrukcję).
@@ -210,18 +216,23 @@ Nagrywanie surowej próbki: PTY + `claude` w zaufanym katalogu, `TERM=xterm-256c
 Każdy etap: zrobić → przetestować na Linuksie → checklista dla użytkownika → po „działa" **commit+push**.
 **Główna zasada: NIE psuć działającej wersji linuksowej** — na Linuksie domyślnie zostaje QTermWidget.
 
-### ✅ ZROBIONE
-- **M1** (commit `fffe6dd`): `src/core/platform_utils.py` (wykrywanie OS/arch, `configure_qt_environment` — X11/iBus tylko Linux, `use_native_menu_bar` — natywne poza Linuksem, `default_shell`, `find_claude_command`, `claude_projects_dir`, `update_platform_id`); `APP_VERSION` w `config.py` = źródło prawdy aktualizacji; `main.py` guardy per-OS; `packaging/` (gniazdo podpisu + format appcast, śledzone — `build/`+`dist/` są w `.gitignore` jako temp PyInstallera); `CLAUDE_COMMAND` wieloplatformowo.
-- **M2.1** (commit `44b387d`): `src/gui/web_terminal.py` (`WebTerminal`) + `src/assets/web/terminal.html` + `vendor/xterm.js,xterm.css,addon-fit.js` (MIT, lokalnie). Działa: PTY (ptyprocess) ↔ QWebChannel ↔ xterm.js; render TUI claude OK (potwierdzone wizualnie). `PyQtWebEngine` w `requirements.txt` i zainstalowany w venv.
+### ✅ ZROBIONE (M1–M4, wszystko na `main`)
+- **M1** (`fffe6dd`): `src/core/platform_utils.py` (OS/arch, `configure_qt_environment` — X11/iBus tylko Linux, `use_native_menu_bar`, `default_shell`, `find_claude_command`, `claude_projects_dir`, `update_platform_id`, **`prefer_webengine_terminal`** dodane w M2.3); `APP_VERSION` w `config.py`; `packaging/` (gniazdo podpisu + format appcast).
+- **M2.1** (`44b387d`): `src/gui/web_terminal.py` (`WebTerminal`) + `src/assets/web/terminal.html` + `vendor/xterm.js`. PTY (ptyprocess) ↔ QWebChannel ↔ xterm.js.
+- **M2.2** (`ade4a25`): `src/gui/terminal_backend.py` — wspólny interfejs `TerminalBackend` + adaptery `QTermWidgetBackend`/`WebTerminalBackend` + fabryka `create_terminal_backend()`/`selected_backend_kind()`. Czysto addytywne.
+- **M2.3** (`716946e`): wpięcie do `AgentTab`/`MainWindow` za interfejsem (11 punktów styku w main_window). Linux=QTermWidget domyślnie, Mac/Win/`CVA_WEBTERMINAL=1`=WebTerminal. Gotcha `AA_ShareOpenGLContexts` + wczesny import QtWebEngine w `main.py`.
+- **M2.4** (`f9c030d`): pełny motyw xterm ze skórki (`_xterm_theme_from_colors`), czcionka, scrollback 10000; zaznaczanie/kopiowanie/resize działały od M2.1.
+- **M3** (`0338b07`): `src/core/update_manager.py` (`UpdateManager`+`UpdateInfo`) + `UpdateAvailableDialog` (dialogs.py) + menu Pomoc (Sprawdź aktualizacje / przełącznik) + ustawienie `auto_check_updates` + ciche sprawdzanie 3s po starcie. sha256 obowiązkowe, Ed25519 jako gniazdo wyłączone. Instalacja = otwórz instalator (bez auto-podmiany). HTTP przez **requests**.
+- **M4** (`61d5774`): `packaging/macos/` (`ClaudeVoiceAssistant.spec`, `entitlements.plist`, `build-macos.sh`, `README.md`) + `packaging/make-appcast-entry.py`. `config.BASE_DIR` świadomy `sys._MEIPASS` (frozen-only); `web_terminal.ASSET_DIR` z `config.ASSETS_DIR`.
 
-### ⏭️ NASTĘPNY KROK: **M2.2** (zacząć tu jutro)
-Wspólny **interfejs terminala** + **fabryka backendów**: `QTermWidgetBackend` (Linux) ↔ `WebTerminalBackend` (wszędzie). Jeden zestaw metod używanych przez AgentTab (`set_shell_program`, `start_shell_program`, `send_text`, `selected_text`, `clear`, kolory, sygnał wyjścia do liczenia tokenów, sygnał `finished`). Krok w większości addytywny — jeszcze bez ruszania zakładek.
+### 🧱 Architektura terminala (po M2) — pamiętaj
+Jedna „deska rozdzielcza": **`terminal_backend.py`** definiuje `TerminalBackend` (metody: `set_shell_program`, `start_shell_program`, `send_text`, `selected_text`, `copy_selection`, `clear`, `set_font`, `set_color_scheme`, `focus_terminal`, `shutdown`; sygnały `output_received(str)`, `finished`). Fabryka wybiera silnik: **Linux→QTermWidget** (chyba że `CVA_WEBTERMINAL=1` lub brak QTermWidget), **macOS/Windows→WebTerminal**. AgentTab trzyma `self.terminal_backend` (+ `self.terminal = backend.widget`). Cały kod woła backend, nie surowy widget — dlatego oba silniki działają tą samą ścieżką.
 
-Dalej:
-- **M2.3** — wpięcie w `AgentTab` za interfejsem. Linux **domyślnie QTermWidget** (bez zmian); WebTerminal włączany flagą (proponowane: env `CVA_WEBTERMINAL=1` lub opcja w configu); **macOS/Windows → WebTerminal wymuszony**. Uwagi: AgentTab używa terminala w wielu miejscach (`setShellProgram`, `sendText`, `selectedText`, `copyClipboard`, sygnał `terminal_output` do tokenów, kolory) + **lazy activation** + **3-warstwowy guard idempotencji** (patrz PUŁAPKI QT). **Auto-czytanie NIE zależy od terminala** (Droga A z dziennika) — to upraszcza wpięcie. **WAŻNY GOTCHA:** QtWebEngine wymaga `QApplication.setAttribute(Qt.AA_ShareOpenGLContexts, True)` **przed** utworzeniem QApplication — dodać w `main.py` przy włączeniu WebTerminal w aplikacji.
-- **M2.4** — kolory/skórki (mapowanie skin → motyw xterm), czcionka, zaznaczanie (`selected_text` do 🔊), kopiowanie, resize, scrollback.
-- **M3** — updater: sprawdza `appcast.json` na VPS, porównuje z `APP_VERSION`, pobiera paczkę, weryfikuje sha256/podpis, zdejmuje kwarantannę (macOS), podmienia i restartuje.
-- **M4** — pakowanie macOS (py2app lub PyInstaller, `Info.plist` z `NSMicrophoneUsageDescription`), `packaging/macos/`. **Build na Macu** wg instrukcji. Potem analogicznie Windows.
+### ⏭️ CO ZOSTAŁO (nie-kodowe / przyszłość)
+- **Build na Macu:** `./packaging/macos/build-macos.sh` → `.app`/`.dmg` (instrukcja w `packaging/macos/README.md`). Tylko na macOS.
+- **Feed na VPS:** wgrać paczki + `appcast.json` pod `https://srv1251441.hstgr.cloud/cva/` (generator wpisu: `packaging/make-appcast-entry.py`). Bez tego „Sprawdź aktualizacje" zwraca błąd (feedu jeszcze nie ma — to OK).
+- **Podpis/notaryzacja macOS:** opcjonalny, wg `packaging/signing.conf` (domyślnie OFF).
+- **Windows:** jedyne realne gniazdo do dorobienia = backend PTY **ConPTY/`pywinpty`** w `web_terminal.py` (oznaczone `TODO(Windows)`); reszta warstwy (fabryka, `default_shell`, `open_installer` `os.startfile`, packaging) już Windows-aware. Pakowanie `.exe` w `packaging/windows/`.
 
 ### Jak testować WebTerminal na Linuksie
 - Demo wizualne: `source venv/bin/activate && python3 src/gui/web_terminal.py`
@@ -229,4 +240,4 @@ Dalej:
 
 ---
 
-*Ostatnia aktualizacja: 2026-05-30 — dodano sekcję 🚧 PORT macOS — STATUS I PLAN [wznowienie 2026-05-31]: cel (Mac Apple Silicon, architektura pod Windows, auto-aktualizacja z VPS, podpis odłożony z gotowym gniazdem); zablokowane decyzje; ZROBIONE M1 (platform_utils, packaging, APP_VERSION) + M2.1 (WebTerminal xterm.js+QtWebEngine+PTY, działa); NASTĘPNY KROK = M2.2 (wspólny interfejs + fabryka backendów), dalej M2.3 wpięcie do AgentTab (Linux=QTermWidget domyślnie, Mac/Win=WebTerminal; gotcha AA_ShareOpenGLContexts), M2.4, M3 updater, M4 pakowanie. Wcześniej 2026-05-30 — nowa sekcja ARCHITEKTURA AUTO-CZYTANIA (Droga A): auto-czytanie czyta czystą prozę z dziennika `~/.claude/projects/<cwd>/*.jsonl` (transcript_reader.py + prose_from_markdown + kolejka TTS z prefetch + _poll_transcripts), a NIE ze śmieciowego strumienia terminala (źródło „A ×N" = spinner literka po literce, oraz czytania ghost-text). Tylko aktywna zakładka czyta; nieaktywne zbierają zaległości + komunikat. Wcześniej 2026-05-09 — dodano reference do `docs/PRD.md` (Roadmap komercjalizacji 2026 v2.2) jako MUST READ przed pracą.* `~/.claude/projects/<cwd>/*.jsonl` (transcript_reader.py + prose_from_markdown + kolejka TTS z prefetch + _poll_transcripts), a NIE ze śmieciowego strumienia terminala (źródło „A ×N" = spinner literka po literce, oraz czytania ghost-text). Tylko aktywna zakładka czyta; nieaktywne zbierają zaległości + komunikat. Wcześniej 2026-05-09 — dodano reference do `docs/PRD.md` (Roadmap komercjalizacji 2026 v2.2) jako MUST READ przed pracą.*
+*Ostatnia aktualizacja: 2026-06-01 — PORT macOS UKOŃCZONY (strona kodu): M2.2 (terminal_backend.py — wspólny interfejs + fabryka), M2.3 (wpięcie do AgentTab/MainWindow; Linux=QTermWidget, Mac/Win/CVA_WEBTERMINAL=1=WebTerminal; gotcha AA_ShareOpenGLContexts w main.py), M2.4 (pełny motyw xterm ze skórki + czcionka + scrollback 10000), M3 (update_manager.py + UpdateAvailableDialog + menu Pomoc + ciche sprawdzanie przy starcie; sha256 obowiązkowe, Ed25519 wyłączone; instalacja=otwórz instalator; HTTP przez requests NIE httpx), M4 (packaging/macos: spec PyInstallera + Info.plist z mikrofonem + entitlements + build-macos.sh + make-appcast-entry.py; config.BASE_DIR świadomy sys._MEIPASS frozen-only). Sekcja PORT przepisana na ✅ UKOŃCZONE + architektura terminala + CO ZOSTAŁO (build na Macu, feed VPS, Windows ConPTY). Poprawka ZALEŻNOŚCI: httpx→requests. Commity: ade4a25, 716946e, f9c030d, 0338b07, 61d5774. Wcześniej 2026-05-30 — dodano sekcję 🚧 PORT macOS — STATUS I PLAN [wznowienie 2026-05-31]: cel (Mac Apple Silicon, architektura pod Windows, auto-aktualizacja z VPS, podpis odłożony z gotowym gniazdem); zablokowane decyzje; ZROBIONE M1 (platform_utils, packaging, APP_VERSION) + M2.1 (WebTerminal xterm.js+QtWebEngine+PTY, działa); NASTĘPNY KROK = M2.2 (wspólny interfejs + fabryka backendów), dalej M2.3 wpięcie do AgentTab (Linux=QTermWidget domyślnie, Mac/Win=WebTerminal; gotcha AA_ShareOpenGLContexts), M2.4, M3 updater, M4 pakowanie. Wcześniej 2026-05-30 — nowa sekcja ARCHITEKTURA AUTO-CZYTANIA (Droga A): auto-czytanie czyta czystą prozę z dziennika `~/.claude/projects/<cwd>/*.jsonl` (transcript_reader.py + prose_from_markdown + kolejka TTS z prefetch + _poll_transcripts), a NIE ze śmieciowego strumienia terminala (źródło „A ×N" = spinner literka po literce, oraz czytania ghost-text). Tylko aktywna zakładka czyta; nieaktywne zbierają zaległości + komunikat. Wcześniej 2026-05-09 — dodano reference do `docs/PRD.md` (Roadmap komercjalizacji 2026 v2.2) jako MUST READ przed pracą.* `~/.claude/projects/<cwd>/*.jsonl` (transcript_reader.py + prose_from_markdown + kolejka TTS z prefetch + _poll_transcripts), a NIE ze śmieciowego strumienia terminala (źródło „A ×N" = spinner literka po literce, oraz czytania ghost-text). Tylko aktywna zakładka czyta; nieaktywne zbierają zaległości + komunikat. Wcześniej 2026-05-09 — dodano reference do `docs/PRD.md` (Roadmap komercjalizacji 2026 v2.2) jako MUST READ przed pracą.*
