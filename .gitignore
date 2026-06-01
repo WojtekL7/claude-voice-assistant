@@ -27,6 +27,9 @@ var/
 # PyInstaller
 *.manifest
 *.spec
+# ...ale nasz świadomie utrzymywany przepis macOS MUSI być w repo (inaczej CI
+# „Spec file not found"). Wyjątek od reguły *.spec powyżej:
+!packaging/macos/ClaudeVoiceAssistant.spec
 
 # Installer logs
 pip-log.txt
