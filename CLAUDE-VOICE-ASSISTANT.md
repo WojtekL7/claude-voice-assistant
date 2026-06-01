@@ -240,4 +240,58 @@ Jedna „deska rozdzielcza": **`terminal_backend.py`** definiuje `TerminalBacken
 
 ---
 
-*Ostatnia aktualizacja: 2026-06-01 — PORT macOS UKOŃCZONY (strona kodu): M2.2 (terminal_backend.py — wspólny interfejs + fabryka), M2.3 (wpięcie do AgentTab/MainWindow; Linux=QTermWidget, Mac/Win/CVA_WEBTERMINAL=1=WebTerminal; gotcha AA_ShareOpenGLContexts w main.py), M2.4 (pełny motyw xterm ze skórki + czcionka + scrollback 10000), M3 (update_manager.py + UpdateAvailableDialog + menu Pomoc + ciche sprawdzanie przy starcie; sha256 obowiązkowe, Ed25519 wyłączone; instalacja=otwórz instalator; HTTP przez requests NIE httpx), M4 (packaging/macos: spec PyInstallera + Info.plist z mikrofonem + entitlements + build-macos.sh + make-appcast-entry.py; config.BASE_DIR świadomy sys._MEIPASS frozen-only). Sekcja PORT przepisana na ✅ UKOŃCZONE + architektura terminala + CO ZOSTAŁO (build na Macu, feed VPS, Windows ConPTY). Poprawka ZALEŻNOŚCI: httpx→requests. Commity: ade4a25, 716946e, f9c030d, 0338b07, 61d5774. Wcześniej 2026-05-30 — dodano sekcję 🚧 PORT macOS — STATUS I PLAN [wznowienie 2026-05-31]: cel (Mac Apple Silicon, architektura pod Windows, auto-aktualizacja z VPS, podpis odłożony z gotowym gniazdem); zablokowane decyzje; ZROBIONE M1 (platform_utils, packaging, APP_VERSION) + M2.1 (WebTerminal xterm.js+QtWebEngine+PTY, działa); NASTĘPNY KROK = M2.2 (wspólny interfejs + fabryka backendów), dalej M2.3 wpięcie do AgentTab (Linux=QTermWidget domyślnie, Mac/Win=WebTerminal; gotcha AA_ShareOpenGLContexts), M2.4, M3 updater, M4 pakowanie. Wcześniej 2026-05-30 — nowa sekcja ARCHITEKTURA AUTO-CZYTANIA (Droga A): auto-czytanie czyta czystą prozę z dziennika `~/.claude/projects/<cwd>/*.jsonl` (transcript_reader.py + prose_from_markdown + kolejka TTS z prefetch + _poll_transcripts), a NIE ze śmieciowego strumienia terminala (źródło „A ×N" = spinner literka po literce, oraz czytania ghost-text). Tylko aktywna zakładka czyta; nieaktywne zbierają zaległości + komunikat. Wcześniej 2026-05-09 — dodano reference do `docs/PRD.md` (Roadmap komercjalizacji 2026 v2.2) jako MUST READ przed pracą.* `~/.claude/projects/<cwd>/*.jsonl` (transcript_reader.py + prose_from_markdown + kolejka TTS z prefetch + _poll_transcripts), a NIE ze śmieciowego strumienia terminala (źródło „A ×N" = spinner literka po literce, oraz czytania ghost-text). Tylko aktywna zakładka czyta; nieaktywne zbierają zaległości + komunikat. Wcześniej 2026-05-09 — dodano reference do `docs/PRD.md` (Roadmap komercjalizacji 2026 v2.2) jako MUST READ przed pracą.*
+## 🍎 DYSTRYBUCJA / WYDANIA macOS (od 2026-06-01) — działa na realnym Macu
+
+Port doprowadzony do **działającego `.dmg`** na Macu (potwierdzone na MacBooku Magdy).
+Pełna automatyzacja „użytkownik nie buduje nic". Uniwersalne nauki → `CLAUDE-COMMON.md`
+(sekcja PAKOWANIE / DYSTRYBUCJA APLIKACJI DESKTOPOWEJ).
+
+### Budowanie i wydania (chmura)
+- **GitHub Actions:** `.github/workflows/build-macos.yml` — runner `macos-14` (arm64),
+  uruchamia `packaging/macos/build-macos.sh`, artefakt + Release przy tagu `vX.Y.Z`.
+  Wyzwalanie: `gh workflow run build-macos.yml` albo `git tag vX.Y.Z && git push origin vX.Y.Z`.
+- **Launchery dwuklik (dla nie-programisty):** `Uruchom-Mac.command` (uruchom z kodu),
+  `Zbuduj-DMG-Mac.command` (zbuduj `.dmg` lokalnie na Macu).
+- **Podmiana pliku na stronie po buildzie:** `gh release download vX -p '*.dmg'` → `scp`
+  na serwer jako `…/downloads/ClaudeVoiceAssistant-macos.dmg` (nazwa stała = przycisk działa).
+
+### Strona pobierania (z hasłem)
+- **URL:** `https://pobierz.srv1251441.hstgr.cloud` — basicauth (login `pobierz`; hasło
+  regenerowalne: `openssl passwd -apr1` + podwojone `$$` w compose).
+- Kontener `cva-web` (nginx) na VPS Hostinger w **`/opt/cva-web/`** (osobny
+  `docker-compose.yml` za traefik, sieć `n8n_default`, middleware basicauth). Pliki:
+  `/opt/cva-web/html/` (+ `downloads/`). Źródło strony: `packaging/web/index.html`.
+  Wyłączenie: `cd /opt/cva-web && docker compose down`; włączenie: `up -d`.
+
+### Wydane wersje i co naprawiają
+- **1.0.0** — pierwszy `.dmg`. **1.0.1** — terminal jako **login shell** (`claude` znajduje
+  `node`; był `env: node: No such file`). **1.0.2** — **menu wbudowane w okno** (natywny pasek
+  macOS znikał, też po restarcie). **1.0.3** — dołączony **font Ubuntu Mono/Ubuntu**
+  (`src/assets/fonts/`, czytelność jak na Linuksie; macowy zamiennik był cienki). **1.0.4** —
+  **działa Pauza czytania (TTS)**.
+
+### Pauza TTS — uwaga na przyszłość
+Silnik `tts_engine.py` MA gotową pauzę (`pause/resume/toggle_pause`, pygame). Bug był w GUI:
+`AgentTab._toggle_pause` było puste (`pass`). Naprawa: sygnał **`request_pause`** → podłączony
+w MainWindow (`_create_agent_tab` i `_add_new_terminal`) do `_toggle_pause` → `tts.toggle_pause()`.
+Przycisk ⏸ widoczny tylko podczas `PLAYING` (`_on_tts_state_changed`).
+
+### requirements pod macOS
+Usunięto pakiet `asyncio` (to stdlib; pip-backport psuł instalację na Py3.x). `pyenchant`
+**opcjonalny** (zakomentowany — wymaga systemowego `enchant`; kod działa bez:
+`ENCHANT_AVAILABLE` w `text_cleaner.py`).
+
+### TODO (następna sesja)
+- 🎤 **Klucz Groq** do dyktowania — pole w Ustawieniach domyślnie puste, user wkleja własny;
+  bez niga klik mikrofonu nic nie robi (powinno otworzyć dialog klucza). Brak mikrofonu na
+  macOS = też pozwolenie systemowe (`NSMicrophoneUsageDescription` jest w Info.plist).
+- 🍏 **Podpis Apple** (Developer ID + notaryzacja, `signing.conf`) — żeby zniknął krok
+  „Otwórz mimo to" (Sequoia: Ustawienia→Prywatność→„Otwórz mimo to").
+- 💻 **Intel Mac** (`macos-13`) + **Linux AppImage** w automacie + włączenie ich przycisków
+  na stronie (teraz Linux/Windows nieaktywne).
+- 🔒 **Ochrona/licencja/własna nazwa** (NIE „Claude" — to znak Anthropic) — rozmowa 2026-06-01:
+  warstwy = prawo+marka, logika na serwerze, aktywacja licencji, Nuitka/PyArmor+podpis.
+
+---
+
+*Ostatnia aktualizacja: 2026-06-01 (wieczór) — DYSTRYBUCJA macOS DZIAŁA NA REALNYM MACU: nowa sekcja 🍎 DYSTRYBUCJA / WYDANIA macOS — GitHub Actions buduje `.dmg` (macos-14 arm64, tag v* → Release), launchery dwuklik (Uruchom-Mac.command / Zbuduj-DMG-Mac.command), strona pobierania z hasłem `https://pobierz.srv1251441.hstgr.cloud` (kontener cva-web w /opt/cva-web za traefik+basicauth), automat gh release download + scp podmienia plik. Wydania 1.0.0→1.0.4: 1.0.1 login shell (claude↔node), 1.0.2 menu w oknie (natywny pasek znikał), 1.0.3 font Ubuntu dołączony (cienki na Macu), 1.0.4 pauza TTS (brakowało sygnału request_pause). requirements: usunięto asyncio, pyenchant opcjonalny. TODO: klucz Groq, podpis Apple, Intel+Linux w automacie, ochrona/licencja/własna nazwa. Wcześniej 2026-06-01 — PORT macOS UKOŃCZONY (strona kodu): M2.2 (terminal_backend.py — wspólny interfejs + fabryka), M2.3 (wpięcie do AgentTab/MainWindow; Linux=QTermWidget, Mac/Win/CVA_WEBTERMINAL=1=WebTerminal; gotcha AA_ShareOpenGLContexts w main.py), M2.4 (pełny motyw xterm ze skórki + czcionka + scrollback 10000), M3 (update_manager.py + UpdateAvailableDialog + menu Pomoc + ciche sprawdzanie przy starcie; sha256 obowiązkowe, Ed25519 wyłączone; instalacja=otwórz instalator; HTTP przez requests NIE httpx), M4 (packaging/macos: spec PyInstallera + Info.plist z mikrofonem + entitlements + build-macos.sh + make-appcast-entry.py; config.BASE_DIR świadomy sys._MEIPASS frozen-only). Sekcja PORT przepisana na ✅ UKOŃCZONE + architektura terminala + CO ZOSTAŁO (build na Macu, feed VPS, Windows ConPTY). Poprawka ZALEŻNOŚCI: httpx→requests. Commity: ade4a25, 716946e, f9c030d, 0338b07, 61d5774. Wcześniej 2026-05-30 — dodano sekcję 🚧 PORT macOS — STATUS I PLAN [wznowienie 2026-05-31]: cel (Mac Apple Silicon, architektura pod Windows, auto-aktualizacja z VPS, podpis odłożony z gotowym gniazdem); zablokowane decyzje; ZROBIONE M1 (platform_utils, packaging, APP_VERSION) + M2.1 (WebTerminal xterm.js+QtWebEngine+PTY, działa); NASTĘPNY KROK = M2.2 (wspólny interfejs + fabryka backendów), dalej M2.3 wpięcie do AgentTab (Linux=QTermWidget domyślnie, Mac/Win=WebTerminal; gotcha AA_ShareOpenGLContexts), M2.4, M3 updater, M4 pakowanie. Wcześniej 2026-05-30 — nowa sekcja ARCHITEKTURA AUTO-CZYTANIA (Droga A): auto-czytanie czyta czystą prozę z dziennika `~/.claude/projects/<cwd>/*.jsonl` (transcript_reader.py + prose_from_markdown + kolejka TTS z prefetch + _poll_transcripts), a NIE ze śmieciowego strumienia terminala (źródło „A ×N" = spinner literka po literce, oraz czytania ghost-text). Tylko aktywna zakładka czyta; nieaktywne zbierają zaległości + komunikat. Wcześniej 2026-05-09 — dodano reference do `docs/PRD.md` (Roadmap komercjalizacji 2026 v2.2) jako MUST READ przed pracą.* `~/.claude/projects/<cwd>/*.jsonl` (transcript_reader.py + prose_from_markdown + kolejka TTS z prefetch + _poll_transcripts), a NIE ze śmieciowego strumienia terminala (źródło „A ×N" = spinner literka po literce, oraz czytania ghost-text). Tylko aktywna zakładka czyta; nieaktywne zbierają zaległości + komunikat. Wcześniej 2026-05-09 — dodano reference do `docs/PRD.md` (Roadmap komercjalizacji 2026 v2.2) jako MUST READ przed pracą.*
