@@ -12,6 +12,7 @@ TODO(Windows).
 """
 import os
 import sys
+import json
 import codecs
 import threading
 from pathlib import Path
@@ -76,6 +77,10 @@ class WebTerminal(QWidget):
         self._shell = default_shell()
         self._cwd = None
         self._pending_size = (80, 24)
+        # Motyw/czcionka mogą przyjść z Pythona ZANIM xterm.js się załaduje —
+        # buforujemy i wysyłamy po frontend_ready (inaczej runJavaScript przepada).
+        self._pending_theme = None
+        self._pending_font = None
         self._frontend_ready = False
         self._decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
 
@@ -121,9 +126,34 @@ class WebTerminal(QWidget):
     def clear(self):
         self.view.page().runJavaScript("window.__termClear && window.__termClear();")
 
-    def set_theme(self, background: str, foreground: str):
+    def set_theme(self, theme: dict):
+        """Zastosuj pełny motyw xterm (dict ITheme: background/foreground/cursor/
+        selectionBackground + 16 kolorów ANSI). Przed gotowością frontu — buforuj."""
+        self._pending_theme = dict(theme) if theme else None
+        if self._frontend_ready:
+            self._push_theme()
+
+    def set_font(self, family: str, size: int):
+        """Ustaw czcionkę terminala (rodzina + rozmiar). Przed gotowością — buforuj."""
+        self._pending_font = (family, int(size))
+        if self._frontend_ready:
+            self._push_font()
+
+    def _push_theme(self):
+        if self._pending_theme is None:
+            return
+        # json.dumps daje poprawny literał JS (klucze/wartości w cudzysłowach).
+        payload = json.dumps(self._pending_theme)
         self.view.page().runJavaScript(
-            f"window.__termTheme && window.__termTheme('{background}','{foreground}');")
+            f"window.__termTheme && window.__termTheme({payload});")
+
+    def _push_font(self):
+        if self._pending_font is None:
+            return
+        family, size = self._pending_font
+        fam = json.dumps(family)
+        self.view.page().runJavaScript(
+            f"window.__termFont && window.__termFont({fam}, {int(size)});")
 
     def focus_terminal(self):
         self.view.setFocus()
@@ -137,6 +167,9 @@ class WebTerminal(QWidget):
     def _on_frontend_ready(self, cols, rows):
         self._frontend_ready = True
         self._pending_size = (cols, rows)
+        # Wyślij zbuforowany motyw/czcionkę, gdy xterm.js jest już gotowy.
+        self._push_theme()
+        self._push_font()
         if self._proc is None:
             self._spawn()
 

@@ -18,7 +18,7 @@
       fontFamily: 'Menlo, "DejaVu Sans Mono", Consolas, monospace',
       fontSize: 13,
       cursorBlink: true,
-      scrollback: 5000,
+      scrollback: 10000,
       allowProposedApi: true,
       theme: { background: '#1b1b1d', foreground: '#e0e0e0' }
     });
@@ -31,7 +31,12 @@
     window.__termWrite  = function (data) { term.write(data); };
     window.__termClear  = function () { term.clear(); };
     window.__termFocus  = function () { term.focus(); };
-    window.__termTheme  = function (bg, fg) { term.options.theme = { background: bg, foreground: fg }; };
+    // Pełny motyw xterm: tło, tekst, kursor, zaznaczenie + 16 kolorów ANSI.
+    // Przyjmuje obiekt ITheme (z Pythona idzie jako literał JSON). Brak pola =
+    // xterm użyje swojego domyślnego.
+    window.__termTheme  = function (theme) {
+      if (theme && typeof theme === 'object') term.options.theme = theme;
+    };
     window.__termFont   = function (family, size) {
       if (family) term.options.fontFamily = family;
       if (size)   term.options.fontSize = size;

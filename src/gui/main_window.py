@@ -2726,7 +2726,7 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
             try:
                 backend.set_color_scheme(
                     scheme_dir=str(custom_scheme_dir), scheme_name=scheme_name,
-                    background=bg, foreground=fg,
+                    background=bg, foreground=fg, colors=colors,
                 )
             except Exception:
                 pass

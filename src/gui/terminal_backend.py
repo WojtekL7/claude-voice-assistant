@@ -73,6 +73,45 @@ _QTERMWIDGET_SCROLLBAR_QSS = """
 """
 
 
+def _xterm_theme_from_colors(colors: dict) -> dict:
+    """Zbuduj motyw xterm.js (ITheme) ze słownika skórki.
+
+    Używa DOKŁADNIE tych samych kluczy, co wariant QTermWidget w
+    MainWindow._apply_terminal_colors (terminal_bg/fg + terminal_color_0..7 i ich
+    warianty _bright) — dzięki temu oba silniki pokazują te same kolory skórki.
+    """
+    c = colors or {}
+
+    def g(key, default):
+        return c.get(key, default)
+
+    bg = g('terminal_bg', '#300A24')
+    fg = g('terminal_fg', '#EEEEEC')
+    return {
+        'background': bg,
+        'foreground': fg,
+        'cursor': fg,
+        'cursorAccent': bg,
+        'selectionBackground': g('hover_color', '#6a2a5a'),
+        'black':         g('terminal_color_0', '#2E3436'),
+        'red':           g('terminal_color_1', '#CC0000'),
+        'green':         g('terminal_color_2', '#4E9A06'),
+        'yellow':        g('terminal_color_3', '#C4A000'),
+        'blue':          g('terminal_color_4', '#3465A4'),
+        'magenta':       g('terminal_color_5', '#75507B'),
+        'cyan':          g('terminal_color_6', '#06989A'),
+        'white':         g('terminal_color_7', '#D3D7CF'),
+        'brightBlack':   g('terminal_color_0_bright', '#555753'),
+        'brightRed':     g('terminal_color_1_bright', '#EF2929'),
+        'brightGreen':   g('terminal_color_2_bright', '#8AE234'),
+        'brightYellow':  g('terminal_color_3_bright', '#FCE94F'),
+        'brightBlue':    g('terminal_color_4_bright', '#729FCF'),
+        'brightMagenta': g('terminal_color_5_bright', '#AD7FA8'),
+        'brightCyan':    g('terminal_color_6_bright', '#34E2E2'),
+        'brightWhite':   g('terminal_color_7_bright', '#EEEEEC'),
+    }
+
+
 # ==================== Wspólny kontrakt ====================
 
 class TerminalBackend(QObject):
@@ -126,12 +165,12 @@ class TerminalBackend(QObject):
         raise NotImplementedError
 
     def set_color_scheme(self, scheme_dir=None, scheme_name=None,
-                         background=None, foreground=None):
+                         background=None, foreground=None, colors=None):
         """Zastosuj kolory terminala.
 
         QTermWidget: używa pary (scheme_dir, scheme_name) — wczytuje plik .colorscheme.
-        WebTerminal: na razie używa (background, foreground); pełne mapowanie
-        skin → motyw xterm.js przyjdzie w M2.4.
+        WebTerminal: buduje pełny motyw xterm.js ze słownika `colors` (skórka);
+        gdy go brak — bierze samo (background, foreground).
         """
         raise NotImplementedError
 
@@ -216,7 +255,9 @@ class QTermWidgetBackend(TerminalBackend):
         self._term.setTerminalFont(font)
 
     def set_color_scheme(self, scheme_dir=None, scheme_name=None,
-                         background=None, foreground=None):
+                         background=None, foreground=None, colors=None):
+        # QTermWidget wczytuje plik .colorscheme; `colors` ignoruje (to ścieżka
+        # WebTerminala).
         if scheme_dir and scheme_name:
             self._term.addCustomColorSchemeDir(str(scheme_dir))
             self._term.setColorScheme(scheme_name)
@@ -251,6 +292,7 @@ class WebTerminalBackend(TerminalBackend):
         if working_directory:
             self._term.set_working_directory(working_directory)
         self._font = (font_family, font_size)
+        self._term.set_font(font_family, font_size)  # zbuforuje do frontend_ready
 
         # WebTerminal.output_bytes jest typu str, a nasz output_received(object)
         # — bezpośrednie połączenie sygnał-w-sygnał Qt odrzuca (niezgodne typy),
@@ -286,14 +328,15 @@ class WebTerminalBackend(TerminalBackend):
 
     def set_font(self, family: str, size: int):
         self._font = (family, size)
-        # TODO(M2.4): przekazać czcionkę do xterm.js (np. window.__termFont).
+        self._term.set_font(family, size)
 
     def set_color_scheme(self, scheme_dir=None, scheme_name=None,
-                         background=None, foreground=None):
-        # TODO(M2.4): pełne mapowanie skin → motyw xterm.js. Na razie minimalnie
-        # ustawiamy tło/tekst, jeśli ktoś je poda jawnie.
-        if background and foreground:
-            self._term.set_theme(background, foreground)
+                         background=None, foreground=None, colors=None):
+        # Pełny motyw ze skórki; awaryjnie samo tło/tekst.
+        if colors:
+            self._term.set_theme(_xterm_theme_from_colors(colors))
+        elif background and foreground:
+            self._term.set_theme({'background': background, 'foreground': foreground})
 
     def focus_terminal(self):
         self._term.focus_terminal()
