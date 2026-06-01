@@ -72,13 +72,15 @@ def configure_qt_environment():
 
 
 def use_native_menu_bar() -> bool:
-    """Czy używać natywnego paska menu systemu.
+    """Czy używać natywnego paska menu systemu (u góry ekranu).
 
-    macOS: TAK (pasek u góry ekranu — naturalne dla Maca).
-    Linux: NIE (pozycjonowanie pod XWayland bywa błędne).
     Windows: TAK (menu w oknie jest natywne i poprawne).
+    macOS: NIE — natywny pasek u góry ekranu potrafił całkowicie znikać w tej
+      aplikacji (PyQt5), blokując dostęp do ustawień. Używamy menu WBUDOWANEGO
+      w okno (pod tytułem) — zawsze widoczne i odporne na ten problem.
+    Linux: NIE (pozycjonowanie pod XWayland bywa błędne).
     """
-    return not is_linux()
+    return is_windows()
 
 
 def prefer_webengine_terminal() -> bool:
