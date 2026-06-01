@@ -1,0 +1,51 @@
+name: Build macOS app
+
+# Buduje gotowy .dmg na maszynie Apple w chmurze GitHuba.
+# Uruchamia się:
+#   - ręcznie (przycisk "Run workflow" w zakładce Actions), oraz
+#   - automatycznie po nadaniu taga wersji (np. v1.0.0) — wtedy dodatkowo
+#     publikuje Release z plikiem .dmg do pobrania.
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write   # potrzebne, by opublikować Release przy tagu
+
+jobs:
+  build-macos:
+    name: Zbuduj .dmg (Apple Silicon / arm64)
+    runs-on: macos-14   # runner Apple Silicon
+    steps:
+      - name: Pobierz kod
+        uses: actions/checkout@v4
+
+      - name: Zainstaluj Pythona 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Zbuduj aplikację i .dmg
+        run: |
+          chmod +x packaging/macos/build-macos.sh
+          bash packaging/macos/build-macos.sh
+
+      - name: Pokaż wynik (zawartość dist/)
+        if: always()
+        run: ls -la dist || true
+
+      - name: Wyślij .dmg jako artefakt do pobrania
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClaudeVoiceAssistant-macos-arm64
+          path: dist/*.dmg
+          if-no-files-found: error
+
+      - name: Opublikuj Release (tylko przy tagu vX.Y.Z)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.dmg
+          generate_release_notes: true
