@@ -81,6 +81,24 @@ def use_native_menu_bar() -> bool:
     return not is_linux()
 
 
+def prefer_webengine_terminal() -> bool:
+    """Czy to uruchomienie najpewniej użyje WebTerminala (QtWebEngine).
+
+    Używane w main.py do ustawienia Qt.AA_ShareOpenGLContexts ORAZ wczesnego
+    importu QtWebEngine PRZED utworzeniem QApplication (oba wymagane przez
+    QtWebEngine). Celowo LEKKA — nie importuje QTermWidget ani WebTerminala,
+    by main.py mógł ją wywołać u samego startu.
+
+    Reguła: macOS/Windows → zawsze (tam terminalem jest WebTerminal);
+    Linux → tylko gdy CVA_WEBTERMINAL=1 (tryb testowy). Pełną, dokładną decyzję
+    (z uwzględnieniem braku QTermWidget) podejmuje
+    terminal_backend.selected_backend_kind() już po starcie QApplication.
+    """
+    if is_macos() or is_windows():
+        return True
+    return os.environ.get("CVA_WEBTERMINAL") == "1"
+
+
 # ==================== Powłoka / proces ====================
 
 def default_shell() -> str:

@@ -17,7 +17,9 @@ sys.path.insert(0, str(src_dir))
 # - Linux: backend X11 (XWayland) + wyłączony iBus (zjada Enter w terminalu;
 #   patrz DIAGNOSE-ENTER-FIX.md). Test natywnego Wayland: VOICE_USE_WAYLAND=1.
 # - macOS/Windows: backendy natywne, nic nie wymuszamy.
-from core.platform_utils import configure_qt_environment, use_native_menu_bar
+from core.platform_utils import (
+    configure_qt_environment, use_native_menu_bar, prefer_webengine_terminal
+)
 configure_qt_environment()
 
 from PyQt5.QtWidgets import QApplication
@@ -49,6 +51,16 @@ def main():
     # Pasek menu: natywny na macOS/Windows, w oknie na Linuksie (pozycjonowanie
     # pod XWayland bywa błędne). Atrybut "DontUseNative" = odwrotność.
     QApplication.setAttribute(Qt.AA_DontUseNativeMenuBar, not use_native_menu_bar())
+
+    # QtWebEngine (WebTerminal na macOS/Windows, a na Linuksie pod
+    # CVA_WEBTERMINAL=1) ma dwa twarde wymogi, oba PRZED QApplication:
+    #  1) atrybut AA_ShareOpenGLContexts,
+    #  2) zaimportowanie QtWebEngineWidgets zanim powstanie QApplication
+    #     (inaczej PyQt5 rzuca "must be imported before a QApplication").
+    # Na Linuksie domyślnie (QTermWidget) ten blok się NIE wykonuje → bez zmian.
+    if prefer_webengine_terminal():
+        QApplication.setAttribute(Qt.AA_ShareOpenGLContexts, True)
+        import PyQt5.QtWebEngineWidgets  # noqa: F401  (import dla efektu ubocznego)
 
     # Create application
     app = QApplication(sys.argv)

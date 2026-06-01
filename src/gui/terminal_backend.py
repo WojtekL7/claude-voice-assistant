@@ -252,9 +252,14 @@ class WebTerminalBackend(TerminalBackend):
             self._term.set_working_directory(working_directory)
         self._font = (font_family, font_size)
 
-        # WebTerminal.output_bytes niesie już str — łączymy sygnał-w-sygnał.
-        self._term.output_bytes.connect(self.output_received)
+        # WebTerminal.output_bytes jest typu str, a nasz output_received(object)
+        # — bezpośrednie połączenie sygnał-w-sygnał Qt odrzuca (niezgodne typy),
+        # więc mostkujemy przez slot, który re-emituje.
+        self._term.output_bytes.connect(self._forward_output)
         self._term.finished.connect(self.finished)
+
+    def _forward_output(self, text):
+        self.output_received.emit(text)
 
     @property
     def widget(self) -> QWidget:

@@ -581,6 +581,10 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(self.tab_widget)
 
         # Keep references for compatibility with existing code
+        # terminal_backend — wspólny interfejs aktywnej zakładki (M2.2/M2.3).
+        # terminal — opakowany widget (na Linuksie QTermWidget). Operacje wołamy
+        # przez terminal_backend, by działały też na WebTerminalu (macOS/Windows).
+        self.terminal_backend = None
         self.terminal = None
         self.conversation_area = None
         self.bottom_panel = None
@@ -1091,8 +1095,8 @@ class MainWindow(QMainWindow):
             return
         agent_tab._terminal_ready_handled = True
 
-        if agent_tab.terminal:
-            self._apply_terminal_colors(self.skin_colors, agent_tab.terminal)
+        if agent_tab.terminal_backend:
+            self._apply_terminal_colors(self.skin_colors, agent_tab.terminal_backend)
 
         # _force_start jest flagą tymczasową ustawianą przez AgentsManagerDialog
         # gdy user kliknął "Uruchom" przy zapisanym agencie z auto_start=False.
@@ -1180,6 +1184,7 @@ class MainWindow(QMainWindow):
         """Update references to current tab's widgets."""
         current_tab = self.tab_widget.currentWidget()
         if isinstance(current_tab, AgentTab):
+            self.terminal_backend = current_tab.terminal_backend
             self.terminal = current_tab.terminal
             self.conversation_area = current_tab.conversation_area
             self.bottom_panel = current_tab.bottom_panel
@@ -1562,9 +1567,9 @@ class MainWindow(QMainWindow):
 
         # Send command to all auto-start agent terminals
         for agent_id, tab in self.agent_tabs.items():
-            if tab.terminal and tab.auto_start:
+            if tab.terminal_backend and tab.auto_start:
                 cmd = self._build_claude_command(tab)
-                tab.terminal.sendText(cmd + "\r")
+                tab.terminal_backend.send_text(cmd + "\r")
                 self._update_status("Claude Code uruchomiony")
 
     def _run_claude_in_tab(self, agent_tab, force=False):
@@ -1578,9 +1583,9 @@ class MainWindow(QMainWindow):
         if not self.claude_command:
             return
 
-        if agent_tab.terminal and (agent_tab.auto_start or force):
+        if agent_tab.terminal_backend and (agent_tab.auto_start or force):
             cmd = self._build_claude_command(agent_tab)
-            agent_tab.terminal.sendText(cmd + "\r")
+            agent_tab.terminal_backend.send_text(cmd + "\r")
             self._update_status(f"Claude Code uruchomiony w: {agent_tab.agent_name}")
 
     # ==================== Event Handlers ====================
@@ -1736,8 +1741,8 @@ class MainWindow(QMainWindow):
         """Handle terminal session finished."""
         self._update_status("Terminal zakończony")
         # Optionally restart
-        if self.terminal:
-            self.terminal.startShellProgram()
+        if self.terminal_backend:
+            self.terminal_backend.start_shell_program()
             # Schedule scroll after terminal restarts
             if self._scroll_manager:
                 QTimer.singleShot(500, self._scroll_manager.schedule_scroll)
@@ -1943,18 +1948,18 @@ class MainWindow(QMainWindow):
         # Build full message with attachments
         full_message = self._build_message_with_attachments(text)
 
-        if self.terminal and QTERMWIDGET_AVAILABLE:
+        if self.terminal_backend:
             if full_message:
                 # Send text + Enter (with delay for Claude Code)
-                self.terminal.sendText(full_message)
-                QTimer.singleShot(50, lambda: self.terminal.sendText("\r"))
+                self.terminal_backend.send_text(full_message)
+                QTimer.singleShot(50, lambda: self.terminal_backend.send_text("\r"))
                 self.input_field.clear()
                 self._clear_attachments()
                 # Update context usage with user input
                 self._update_context_usage(len(full_message))
             else:
                 # Empty field - just send Enter (accept Claude Code proposal)
-                self.terminal.sendText("\r")
+                self.terminal_backend.send_text("\r")
 
             # Schedule scroll to bottom via centralized manager
             # The manager handles debouncing and proper timing
@@ -2022,9 +2027,9 @@ class MainWindow(QMainWindow):
         # Initialize text cleaner with current language
         text_cleaner = TextCleanerForTTS(self.current_language)
 
-        if self.terminal and QTERMWIDGET_AVAILABLE:
+        if self.terminal_backend:
             # For terminal mode - read from buffer or selected text
-            selected = self.terminal.selectedText()
+            selected = self.terminal_backend.selected_text()
 
             if selected:
                 # Fix Polish encoding first
@@ -2117,8 +2122,8 @@ class MainWindow(QMainWindow):
 
     def _copy_selection(self):
         """Copy selected text from terminal to system clipboard."""
-        if self.terminal and QTERMWIDGET_AVAILABLE:
-            selected = self.terminal.selectedText()
+        if self.terminal_backend:
+            selected = self.terminal_backend.selected_text()
 
             if selected and selected.strip():
                 # Copy to system clipboard
@@ -2399,9 +2404,9 @@ class MainWindow(QMainWindow):
             QMessageBox.Yes | QMessageBox.No)
 
         if reply == QMessageBox.Yes:
-            if self.terminal and QTERMWIDGET_AVAILABLE:
+            if self.terminal_backend:
                 # Clear terminal and restart shell
-                self.terminal.sendText("clear\n")
+                self.terminal_backend.send_text("clear\n")
                 self._terminal_output_buffer = ""
                 # Licznik tokenów NIE jest resetowany - liczy do końca sesji
             else:
@@ -2615,15 +2620,14 @@ class MainWindow(QMainWindow):
                     }}
                 """)
 
-    def _apply_terminal_colors(self, colors: dict = None, terminal=None):
-        """Apply terminal colors by creating a custom color scheme.
+    def _apply_terminal_colors(self, colors: dict = None, terminal_backend=None):
+        """Zastosuj kolory terminala przez backend (M2.3).
 
-        This generates a .colorscheme file and loads it into QTermWidget.
-        If terminal is None, applies to all terminals in all tabs.
+        Generuje plik .colorscheme (format QTermWidget) i wczytuje go przez
+        backend. Na Linuksie (QTermWidget) działa jak dawniej; na WebTerminalu
+        backend bierze na razie samo tło/tekst — pełne mapowanie skin → motyw
+        xterm.js to M2.4. Gdy terminal_backend=None — stosuje do wszystkich zakładek.
         """
-        if not QTERMWIDGET_AVAILABLE:
-            return
-
         if colors is None:
             colors = self.skin_colors
 
@@ -2711,20 +2715,27 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         with open(scheme_file, 'w') as f:
             f.write(scheme_content)
 
-        # Apply scheme to specific terminal or all terminals in all tabs
+        # Zastosuj schemat do wskazanego backendu albo do wszystkich zakładek.
         scheme_name = 'CustomSkin'
+        bg = colors.get('terminal_bg', '#300A24')
+        fg = colors.get('terminal_fg', '#EEEEEC')
 
-        if terminal:
-            terminal.addCustomColorSchemeDir(str(custom_scheme_dir))
-            terminal.setColorScheme(scheme_name)
+        def _apply(backend):
+            if backend is None:
+                return
+            try:
+                backend.set_color_scheme(
+                    scheme_dir=str(custom_scheme_dir), scheme_name=scheme_name,
+                    background=bg, foreground=fg,
+                )
+            except Exception:
+                pass
+
+        if terminal_backend is not None:
+            _apply(terminal_backend)
         else:
-            # Apply to all terminals in all agent tabs
             for agent_id, tab in self.agent_tabs.items():
-                if tab.terminal:
-                    tab.terminal.addCustomColorSchemeDir(str(custom_scheme_dir))
-                    tab.terminal.setColorScheme(scheme_name)
-                    # Force terminal to update/refresh
-                    tab.terminal.update()
+                _apply(getattr(tab, 'terminal_backend', None))
 
     def apply_skin_colors(self, colors: dict = None):
         """Apply skin colors to all UI elements.
@@ -3175,12 +3186,22 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         self.tts.stop()
         self.stt.cancel_recording()
 
-        if self.terminal and QTERMWIDGET_AVAILABLE:
+        if self.terminal_backend:
             # Terminal cleanup
             if hasattr(self, '_tts_timer'):
                 self._tts_timer.stop()
         else:
             self.claude.stop()
+
+        # Zamknij backendy wszystkich zakładek (WebTerminal ubija wątek-czytnik
+        # PTY i proces powłoki; QTermWidget — no-op, sprząta się sam).
+        for tab in self.agent_tabs.values():
+            backend = getattr(tab, 'terminal_backend', None)
+            if backend is not None:
+                try:
+                    backend.shutdown()
+                except Exception:
+                    pass
 
         self._save_settings()
         event.accept()

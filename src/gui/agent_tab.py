@@ -32,6 +32,7 @@ from config import (
 )
 from core.platform_utils import default_shell
 from gui.dialogs import styled_get_open_file_names
+from gui.terminal_backend import create_terminal_backend
 
 
 class AutoResizeTextEdit(QTextEdit):
@@ -110,6 +111,11 @@ class AgentTab(QWidget):
         self.splitter_sizes = agent_config.get('splitter_sizes', [600, 150])
 
         # State
+        # terminal_backend — wspólny interfejs (M2.2); terminal — opakowany
+        # widget (backend.widget). Na Linuksie to QTermWidget, na macOS/Windows
+        # (lub pod CVA_WEBTERMINAL=1) WebTerminal. Reszta kodu rozmawia z
+        # backendem, nie z surowym widgetem.
+        self.terminal_backend = None
         self.terminal = None
         self.conversation_area = None
         self._terminal_output_buffer = ""
@@ -204,96 +210,47 @@ class AgentTab(QWidget):
         return self._activated
 
     def activate(self):
-        """Lazy initialization: stwórz QTermWidget + bash. Idempotentne.
+        """Lazy initialization: stwórz backend terminala (silnik + powłoka). Idempotentne.
 
         Wołane z MainWindow gdy zakładka po raz pierwszy zostaje aktywna
-        (currentChanged → _on_tab_changed). Po stworzeniu emituje sygnał
-        terminal_ready, na który MainWindow może podpiąć: apply_terminal_colors,
-        uruchomienie komendy `claude`, wysłanie plików pamięci.
+        (currentChanged → _on_tab_changed). Fabryka (M2.2) wybiera silnik:
+        Linux → QTermWidget (bez zmian), macOS/Windows lub CVA_WEBTERMINAL=1 →
+        WebTerminal. Po stworzeniu emituje terminal_ready, na który MainWindow
+        podpina: apply_terminal_colors, uruchomienie `claude`, pliki pamięci.
         """
         if self._activated:
             return
 
-        if QTERMWIDGET_AVAILABLE:
-            self.terminal = QTermWidget(0)
-            # Powłoka zależna od systemu (Linux: $SHELL/bash). QTermWidget jest
-            # tylko-Linux; na macOS/Windows terminal dostarczy backend z M2.
-            self.terminal.setShellProgram(default_shell())
-            self.terminal.setWorkingDirectory(self.working_directory)
+        # Fabryka tworzy i konfiguruje właściwy silnik. Cała konfiguracja
+        # (czcionka, scrollbar, historia, flow control) żyje wewnątrz backendu
+        # — patrz terminal_backend.py.
+        self.terminal_backend = create_terminal_backend(
+            working_directory=self.working_directory,
+            shell=default_shell(),
+            font_family="Ubuntu Mono",
+            font_size=13,
+        )
+        self.terminal = self.terminal_backend.widget
+        self.conversation_area = None
 
-            # Terminal font
-            terminal_font = QFont("Ubuntu Mono", 13)
-            terminal_font.setStyleHint(QFont.Monospace)
-            self.terminal.setTerminalFont(terminal_font)
+        # Wyjście terminala (już zdekodowane do str) — wyłącznie do liczenia
+        # tokenów; auto-czytanie idzie z dziennika sesji (Droga A).
+        self.terminal_backend.output_received.connect(self._on_terminal_output)
+        self.terminal_backend.finished.connect(self._on_terminal_finished)
 
-            # Terminal settings
-            self.terminal.setScrollBarPosition(QTermWidget.ScrollBarRight)
-            self.terminal.setTerminalOpacity(1.0)
-            self.terminal.setHistorySize(10000)
-            self.terminal.setFlowControlEnabled(False)
-            self.terminal.setFlowControlWarningEnabled(False)
-            self.terminal.setTerminalSizeHint(False)
+        # TTS timer (zachowany jak w oryginale).
+        self._tts_timer = QTimer()
+        self._tts_timer.setSingleShot(True)
+        self._tts_timer.timeout.connect(self._read_terminal_buffer)
 
-            # Scrollbar styling
-            self.terminal.setStyleSheet("""
-                QScrollBar:vertical {
-                    background: transparent;
-                    width: 12px;
-                    margin: 2px;
-                }
-                QScrollBar::handle:vertical {
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                        stop:0 #888888, stop:0.5 #aaaaaa, stop:1 #888888);
-                    border-radius: 5px;
-                    min-height: 30px;
-                }
-                QScrollBar::handle:vertical:hover {
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                        stop:0 #999999, stop:0.5 #bbbbbb, stop:1 #999999);
-                }
-                QScrollBar::add-line:vertical,
-                QScrollBar::sub-line:vertical {
-                    height: 0px;
-                }
-                QScrollBar::add-page:vertical,
-                QScrollBar::sub-page:vertical {
-                    background: transparent;
-                }
-            """)
-
-            # Connect signals
-            self.terminal.receivedData.connect(self._on_terminal_output)
-            self.terminal.finished.connect(self._on_terminal_finished)
-
-            # TTS timer
-            self._tts_timer = QTimer()
-            self._tts_timer.setSingleShot(True)
-            self._tts_timer.timeout.connect(self._read_terminal_buffer)
-
-            # Kolejność jak w oryginale: startShellProgram zanim widget trafi
-            # do splittera. Próba odwrotna (swap przed startShellProgram)
-            # powoduje, że QTermWidget renderuje się jako niewidoczny, mimo że
-            # bash i claude działają poprawnie w tle (zaobserwowane 2026-05-14
-            # na PyQt5 5.15 + QTermWidget 1.4.0 + XWayland).
-            self.terminal.startShellProgram()
-            self._swap_placeholder_with(self.terminal)
-        else:
-            # Fallback (brak QTermWidget) — QTextEdit read-only
-            self.conversation_area = QTextEdit()
-            self.conversation_area.setReadOnly(True)
-            terminal_font = QFont("Ubuntu Mono", 13)
-            terminal_font.setStyleHint(QFont.Monospace)
-            self.conversation_area.setFont(terminal_font)
-            self.conversation_area.setStyleSheet("""
-                QTextEdit {
-                    background-color: #300A24;
-                    color: #ffffff;
-                    border: 1px solid #4a1a3a;
-                    border-radius: 8px;
-                    padding: 12px;
-                }
-            """)
-            self._swap_placeholder_with(self.conversation_area)
+        # Kolejność jak w oryginale: start powłoki ZANIM widget trafi do
+        # splittera. Odwrotnie QTermWidget renderuje się jako niewidoczny, mimo
+        # że bash i claude działają w tle (PyQt5 5.15 + QTermWidget 1.4.0 +
+        # XWayland, 2026-05-14). Splitter jest już ostylowany (apply_styles przy
+        # tworzeniu zakładki), więc ciężki widget wchodzi w gotową geometrię
+        # (pułapka „szare pasy po prawej").
+        self.terminal_backend.start_shell_program()
+        self._swap_placeholder_with(self.terminal)
 
         self._activated = True
         self.terminal_ready.emit()
@@ -480,17 +437,19 @@ class AgentTab(QWidget):
     # ==================== Terminal Handling ====================
 
     def _on_terminal_output(self, data):
-        """Handle terminal output for TTS."""
-        if not self.terminal:
+        """Handle terminal output (już zdekodowany str z backendu).
+
+        Backend ujednolica wyjście: na Linuksie QTermWidget oddaje QByteArray,
+        który backend dekoduje do str; WebTerminal od razu daje str. Bufor służy
+        wyłącznie do liczenia tokenów — auto-czytanie idzie z dziennika sesji.
+        """
+        if not self.terminal_backend:
             return
 
         # Emit signal for MainWindow
         self.terminal_output.emit(data)
 
-        try:
-            text = data.data().decode('utf-8', errors='ignore')
-        except:
-            text = str(data)
+        text = data if isinstance(data, str) else str(data)
 
         # Clean ANSI codes
         import re
@@ -529,16 +488,16 @@ class AgentTab(QWidget):
         text = self.input_field.text().strip()
         full_message = self._build_message_with_attachments(text)
 
-        if self.terminal and QTERMWIDGET_AVAILABLE:
+        if self.terminal_backend:
             if full_message:
-                self.terminal.sendText(full_message)
-                QTimer.singleShot(50, lambda: self.terminal.sendText("\r"))
+                self.terminal_backend.send_text(full_message)
+                QTimer.singleShot(50, lambda: self.terminal_backend.send_text("\r"))
                 self.input_field.clear()
                 self._clear_attachments()
                 self.status_changed.emit("Wysłano do terminala...")
                 self.message_sent.emit(full_message)
             else:
-                self.terminal.sendText("\r")
+                self.terminal_backend.send_text("\r")
         elif self.conversation_area:
             if full_message:
                 self.conversation_area.append(f">>> {full_message}")
@@ -564,9 +523,9 @@ class AgentTab(QWidget):
 
     def send_text_to_terminal(self, text: str):
         """Send text directly to terminal (for memory files)."""
-        if self.terminal and QTERMWIDGET_AVAILABLE:
-            self.terminal.sendText(text)
-            QTimer.singleShot(50, lambda: self.terminal.sendText("\r"))
+        if self.terminal_backend:
+            self.terminal_backend.send_text(text)
+            QTimer.singleShot(50, lambda: self.terminal_backend.send_text("\r"))
 
     # ==================== Memory Files ====================
 
@@ -635,8 +594,8 @@ class AgentTab(QWidget):
 
     def _copy_selection(self):
         """Copy selected text from terminal."""
-        if self.terminal and QTERMWIDGET_AVAILABLE:
-            self.terminal.copyClipboard()
+        if self.terminal_backend:
+            self.terminal_backend.copy_selection()
             self.status_changed.emit("Skopiowano do schowka")
         elif self.conversation_area:
             self.conversation_area.copy()
@@ -824,8 +783,8 @@ class AgentTab(QWidget):
         new_working_dir = config.get('working_directory', self.working_directory)
         if new_working_dir != self.working_directory:
             self.working_directory = new_working_dir
-            if self.terminal and QTERMWIDGET_AVAILABLE:
-                self.terminal.sendText(f"cd {new_working_dir}\r")
+            if self.terminal_backend:
+                self.terminal_backend.send_text(f"cd {new_working_dir}\r")
 
         # Update splitter sizes if provided
         new_splitter_sizes = config.get('splitter_sizes')
