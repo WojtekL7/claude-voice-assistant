@@ -1727,7 +1727,7 @@ class AgentsManagerDialog(QDialog):
             model_key = agent.get('model', DEFAULT_AGENT_MODEL)
             model_label = CLAUDE_MODELS_SHORT.get(model_key, model_key)
 
-            auto_icon = "🟢" if agent.get('auto_start', True) else "⚪"
+            auto_start = agent.get('auto_start', True)
             agent_name = agent.get('name', 'Bez nazwy')
 
             # Empty list item — visual content lives in the attached widget.
@@ -1736,16 +1736,21 @@ class AgentsManagerDialog(QDialog):
             item.setSizeHint(QSize(0, 56))
             self.list_widget.addItem(item)
 
-            # Custom widget for this row.
+            # Custom widget for this row. TŁO sygnalizuje auto-start: zielone =
+            # agent uruchamiany przy starcie aplikacji, szare = nie. Kolor jest
+            # PÓŁPRZEZROCZYSTY, żeby fioletowe podświetlenie zaznaczenia
+            # (QListWidget::item:selected) prześwitywało. Zastąpiło nieczytelne
+            # na Linuksie emoji 🟢/⚪ (renderowały się monochromatycznie — szaro).
             row_widget = QWidget()
-            row_widget.setAttribute(Qt.WA_TranslucentBackground)
+            row_bg = "rgba(34, 160, 84, 70)" if auto_start else "rgba(120, 125, 135, 65)"
+            row_widget.setStyleSheet(f"background-color: {row_bg};")
             row_layout = QVBoxLayout(row_widget)
-            row_layout.setContentsMargins(4, 4, 4, 4)
+            row_layout.setContentsMargins(8, 6, 8, 6)
             row_layout.setSpacing(2)
 
-            name_label = QLabel(f"{auto_icon} {agent_name}")
+            name_label = QLabel(agent_name)
             name_label.setStyleSheet(
-                "color: #ffffff; font-size: 13px; background: transparent; border: none;"
+                "color: #ffffff; font-size: 13px; font-weight: bold; background: transparent; border: none;"
             )
             row_layout.addWidget(name_label)
 
