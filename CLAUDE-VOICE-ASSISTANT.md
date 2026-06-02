@@ -282,9 +282,10 @@ Usunięto pakiet `asyncio` (to stdlib; pip-backport psuł instalację na Py3.x).
 `ENCHANT_AVAILABLE` w `text_cleaner.py`).
 
 ### TODO (następna sesja)
-- 🎤 **Klucz Groq** do dyktowania — pole w Ustawieniach domyślnie puste, user wkleja własny;
-  bez niga klik mikrofonu nic nie robi (powinno otworzyć dialog klucza). Brak mikrofonu na
-  macOS = też pozwolenie systemowe (`NSMicrophoneUsageDescription` jest w Info.plist).
+- 🎤 **Klucz Groq** do dyktowania — pole w Ustawieniach domyślnie puste, user wkleja własny.
+  ✅ Klik mikrofonu bez klucza pokazuje już komunikat + dialog (naprawione w 1.0.7 — patrz sekcja
+  „SESJA 2026-06-02" niżej). Brak mikrofonu na macOS = pozwolenie systemowe
+  (`NSMicrophoneUsageDescription` jest w Info.plist).
 - 🍏 **Podpis Apple** (Developer ID + notaryzacja, `signing.conf`) — żeby zniknął krok
   „Otwórz mimo to" (Sequoia: Ustawienia→Prywatność→„Otwórz mimo to").
 - 💻 **Intel Mac** (`macos-13`) + **Linux AppImage** w automacie + włączenie ich przycisków
@@ -294,4 +295,60 @@ Usunięto pakiet `asyncio` (to stdlib; pip-backport psuł instalację na Py3.x).
 
 ---
 
-*Ostatnia aktualizacja: 2026-06-01 (wieczór) — DYSTRYBUCJA macOS DZIAŁA NA REALNYM MACU: nowa sekcja 🍎 DYSTRYBUCJA / WYDANIA macOS — GitHub Actions buduje `.dmg` (macos-14 arm64, tag v* → Release), launchery dwuklik (Uruchom-Mac.command / Zbuduj-DMG-Mac.command), strona pobierania z hasłem `https://pobierz.srv1251441.hstgr.cloud` (kontener cva-web w /opt/cva-web za traefik+basicauth), automat gh release download + scp podmienia plik. Wydania 1.0.0→1.0.4: 1.0.1 login shell (claude↔node), 1.0.2 menu w oknie (natywny pasek znikał), 1.0.3 font Ubuntu dołączony (cienki na Macu), 1.0.4 pauza TTS (brakowało sygnału request_pause). requirements: usunięto asyncio, pyenchant opcjonalny. TODO: klucz Groq, podpis Apple, Intel+Linux w automacie, ochrona/licencja/własna nazwa. Wcześniej 2026-06-01 — PORT macOS UKOŃCZONY (strona kodu): M2.2 (terminal_backend.py — wspólny interfejs + fabryka), M2.3 (wpięcie do AgentTab/MainWindow; Linux=QTermWidget, Mac/Win/CVA_WEBTERMINAL=1=WebTerminal; gotcha AA_ShareOpenGLContexts w main.py), M2.4 (pełny motyw xterm ze skórki + czcionka + scrollback 10000), M3 (update_manager.py + UpdateAvailableDialog + menu Pomoc + ciche sprawdzanie przy starcie; sha256 obowiązkowe, Ed25519 wyłączone; instalacja=otwórz instalator; HTTP przez requests NIE httpx), M4 (packaging/macos: spec PyInstallera + Info.plist z mikrofonem + entitlements + build-macos.sh + make-appcast-entry.py; config.BASE_DIR świadomy sys._MEIPASS frozen-only). Sekcja PORT przepisana na ✅ UKOŃCZONE + architektura terminala + CO ZOSTAŁO (build na Macu, feed VPS, Windows ConPTY). Poprawka ZALEŻNOŚCI: httpx→requests. Commity: ade4a25, 716946e, f9c030d, 0338b07, 61d5774. Wcześniej 2026-05-30 — dodano sekcję 🚧 PORT macOS — STATUS I PLAN [wznowienie 2026-05-31]: cel (Mac Apple Silicon, architektura pod Windows, auto-aktualizacja z VPS, podpis odłożony z gotowym gniazdem); zablokowane decyzje; ZROBIONE M1 (platform_utils, packaging, APP_VERSION) + M2.1 (WebTerminal xterm.js+QtWebEngine+PTY, działa); NASTĘPNY KROK = M2.2 (wspólny interfejs + fabryka backendów), dalej M2.3 wpięcie do AgentTab (Linux=QTermWidget domyślnie, Mac/Win=WebTerminal; gotcha AA_ShareOpenGLContexts), M2.4, M3 updater, M4 pakowanie. Wcześniej 2026-05-30 — nowa sekcja ARCHITEKTURA AUTO-CZYTANIA (Droga A): auto-czytanie czyta czystą prozę z dziennika `~/.claude/projects/<cwd>/*.jsonl` (transcript_reader.py + prose_from_markdown + kolejka TTS z prefetch + _poll_transcripts), a NIE ze śmieciowego strumienia terminala (źródło „A ×N" = spinner literka po literce, oraz czytania ghost-text). Tylko aktywna zakładka czyta; nieaktywne zbierają zaległości + komunikat. Wcześniej 2026-05-09 — dodano reference do `docs/PRD.md` (Roadmap komercjalizacji 2026 v2.2) jako MUST READ przed pracą.* `~/.claude/projects/<cwd>/*.jsonl` (transcript_reader.py + prose_from_markdown + kolejka TTS z prefetch + _poll_transcripts), a NIE ze śmieciowego strumienia terminala (źródło „A ×N" = spinner literka po literce, oraz czytania ghost-text). Tylko aktywna zakładka czyta; nieaktywne zbierają zaległości + komunikat. Wcześniej 2026-05-09 — dodano reference do `docs/PRD.md` (Roadmap komercjalizacji 2026 v2.2) jako MUST READ przed pracą.*
+## 🛠️ SESJA 2026-06-02 — licznik, ikony SVG, UI agentów/plików, mikrofon (wydania 1.0.5→1.0.7)
+
+### Terminal i sygnały zakładki — pułapki/naprawy
+- **`QTermWidgetBackend._on_received` (terminal_backend.py): `receivedData` niesie `str`, nie QByteArray.**
+  Stare `bytes(data)` na stringu rzucało `TypeError` połykany w `try/except` → `output_received`
+  NIGDY nie leciało → **całe wyjście terminala gubione na Linuksie od refaktoru backendu M2.3**
+  (licznik tokenów milczał, bo karmi go ten strumień). Fix: obsługa `isinstance(str)` /
+  `hasattr('data')` (QByteArray) / `bytes()`. Uniwersalna wersja → CLAUDE-COMMON „DIAGNOZA SYGNAŁÓW QT".
+- **`MainWindow._connect_agent_tab_signals(agent_tab)` = JEDNO źródło prawdy** dla podłączania
+  sygnałów zakładki. Wcześniej lista była zdublowana w `_create_agent_tab` i `_add_new_terminal`,
+  a w tym drugim (zakładki „+") **brakowało `terminal_output`** → licznik nie rósł na „+".
+  Reguła: oba tory tworzenia zakładek wołają tę metodę.
+- **`self.terminal_backend` = None przy starcie primary taba (index 0).** Lazy activation +
+  `setCurrentIndex(0)` NIE emituje `currentChanged` → referencja kopiowana w `__init__` zanim
+  powstanie terminal i nigdy nieodświeżana (przy jednej zakładce). Objaw: **🔊/⧉ nie działają do
+  pierwszej zmiany zakładki.** Fix: `_update_current_tab_references()` w `_on_terminal_ready`,
+  gdy to aktywna zakładka.
+
+### Ikony dolnego panelu — kolorowe SVG (zamiast emoji)
+- Pliki: **`src/assets/icons/*.svg`** (13: mic, speaker-low/mid/high, pause, play, stop, copy,
+  check, close, clip, bolt, hourglass) ładowane przez **`gui/icon_set.py`**:
+  `button_icon(key, state)` (mapowanie (klucz,stan)→plik, te same klucze/stany co
+  `DEFAULT_SKIN_ICONS`), `SPEAKER_LEVELS` do animacji głośnika.
+- Przyciski: `setIcon(...)` + `setIconSize(QSize(24,24))`, **nie** emoji-tekst. `agent_tab.py`
+  ustawia ikony przy tworzeniu; `main_window` zmienia je przy stanach (pauza↔play, kopiuj↔ptaszek,
+  mikrofon nagrywanie/przetwarzanie, animacja głośnika); `_apply_skin_icons` ustawia QIcon.
+- **`send_btn` pozostaje tekstowy** („↵ Enter"). Paczka PyInstaller dołącza **całe `src/assets`
+  automatycznie** (`datas` w `.spec`) — nowe ikony trafiają do `.app`/`.dmg` bez zmian w spec.
+- Dialog „zmień emoji ikony" przestał dotyczyć tych przycisków (do ewentualnej przeróbki na wybór ikon).
+
+### Pasek statusu — licznik + pasek postępu
+- Licznik tokenów (zielony „N (X%)") i globalny „Σ N" mają **stałą szerokość** (anty-skakanie).
+- **Pasek postępu zużycia kontekstu** (QProgressBar 70×10) po lewej od liczby; wypełnienie i kolor
+  z `_refresh_context_label` (te same progi: <50 zielony / <70 żółty / <90 pomarańcz / ≥90 czerwony).
+  Zero ruchu: liczba o stałej szerokości, wyrównana do prawej. Szczegóły trade-offu → CLAUDE-COMMON.
+
+### „Zarządzaj agentami" — tło = auto-start
+- Wskaźnik auto-startu to teraz **TŁO wiersza** (zielone `rgba(34,160,84,70)` = uruchamiany przy
+  starcie, szare `rgba(120,125,135,65)` = nie), **półprzezroczyste** by fioletowe zaznaczenie
+  (`item:selected #6a2a5a`) prześwitywało. Kółko 🟢/⚪ usunięte (na Linuksie było szare/nieczytelne).
+
+### Okna plików — neutralna ciemna paleta
+- Natywne okno GNOME niedostępne dla Qt tutaj (patrz CLAUDE-COMMON). `DIALOG_COLORS` (dialogs.py,
+  używane TYLKO w `get_file_dialog_stylesheet`) zmienione z fioletu na neutralne ciemne
+  (tło `#2e2e2e`, pola `#1e1e1e`, zaznaczenie = niebieski GNOME `#3584e4`). Polskie etykiety bez zmian.
+
+### Groq / dyktowanie
+- **Groq = WYŁĄCZNIE dyktowanie (STT, Whisper). Czytanie (TTS) = edge-tts, działa BEZ klucza.**
+- `_toggle_dictation` przy pustym kluczu wołało nieistniejące `_show_api_key_dialog` →
+  `AttributeError` → mikrofon „nic nie robił". Fix (1.0.7): `QMessageBox` wyjaśniający +
+  `_show_groq_api_dialog` (istniejący dialog wpisania klucza; menu „Klucz API Groq…").
+- Ustawienia użytkownika: `~/.claude-voice-assistant/config.json` (`groq_api_key`); jest backup
+  `config.json.bak-*` (przydatny do odzyskania klucza po pomyłce).
+
+---
+
+*Ostatnia aktualizacja: 2026-06-02 — sesja licznik/ikony/UI, wydania 1.0.5→1.0.7: nowa sekcja 🛠️ SESJA 2026-06-02 — (a) fix licznika tokenów: `QTermWidgetBackend._on_received` gubił całe wyjście terminala bo `receivedData` niesie str a kod robił `bytes(data)` (TypeError połykany) — od M2.3; + `_connect_agent_tab_signals` (jedno źródło sygnałów, „+" gubiło terminal_output); + `self.terminal_backend`=None przy starcie primary taba index 0 → fix w `_on_terminal_ready` (objaw: 🔊/⧉ nie działają do 1. zmiany zakładki). (b) kolorowe ikony SVG `src/assets/icons/*.svg` + `gui/icon_set.py` (setIcon zamiast emoji; emoji na Linuksie monochromatyczne). (c) pasek postępu zużycia kontekstu + stałe szerokości liczników (anty-skakanie). (d) „Zarządzaj agentami": tło wiersza = auto-start (zielone/szare) zamiast 🟢/⚪. (e) okna plików: neutralna ciemna paleta `DIALOG_COLORS` (natywne GNOME niedostępne dla Qt). (f) Groq tylko STT (TTS=edge-tts bez klucza); klik 🎤 bez klucza → komunikat + dialog (fix AttributeError `_show_api_key_dialog`→`_show_groq_api_dialog`). Nauki uniwersalne (emoji-monochromat, natywne QFileDialog, anty-skakanie, diagnoza sygnałów Qt) w CLAUDE-COMMON.md. Wcześniej 2026-06-01 (wieczór) — DYSTRYBUCJA macOS DZIAŁA NA REALNYM MACU: nowa sekcja 🍎 DYSTRYBUCJA / WYDANIA macOS — GitHub Actions buduje `.dmg` (macos-14 arm64, tag v* → Release), launchery dwuklik (Uruchom-Mac.command / Zbuduj-DMG-Mac.command), strona pobierania z hasłem `https://pobierz.srv1251441.hstgr.cloud` (kontener cva-web w /opt/cva-web za traefik+basicauth), automat gh release download + scp podmienia plik. Wydania 1.0.0→1.0.4: 1.0.1 login shell (claude↔node), 1.0.2 menu w oknie (natywny pasek znikał), 1.0.3 font Ubuntu dołączony (cienki na Macu), 1.0.4 pauza TTS (brakowało sygnału request_pause). requirements: usunięto asyncio, pyenchant opcjonalny. TODO: klucz Groq, podpis Apple, Intel+Linux w automacie, ochrona/licencja/własna nazwa. Wcześniej 2026-06-01 — PORT macOS UKOŃCZONY (strona kodu): M2.2 (terminal_backend.py — wspólny interfejs + fabryka), M2.3 (wpięcie do AgentTab/MainWindow; Linux=QTermWidget, Mac/Win/CVA_WEBTERMINAL=1=WebTerminal; gotcha AA_ShareOpenGLContexts w main.py), M2.4 (pełny motyw xterm ze skórki + czcionka + scrollback 10000), M3 (update_manager.py + UpdateAvailableDialog + menu Pomoc + ciche sprawdzanie przy starcie; sha256 obowiązkowe, Ed25519 wyłączone; instalacja=otwórz instalator; HTTP przez requests NIE httpx), M4 (packaging/macos: spec PyInstallera + Info.plist z mikrofonem + entitlements + build-macos.sh + make-appcast-entry.py; config.BASE_DIR świadomy sys._MEIPASS frozen-only). Sekcja PORT przepisana na ✅ UKOŃCZONE + architektura terminala + CO ZOSTAŁO (build na Macu, feed VPS, Windows ConPTY). Poprawka ZALEŻNOŚCI: httpx→requests. Commity: ade4a25, 716946e, f9c030d, 0338b07, 61d5774. Wcześniej 2026-05-30 — dodano sekcję 🚧 PORT macOS — STATUS I PLAN [wznowienie 2026-05-31]: cel (Mac Apple Silicon, architektura pod Windows, auto-aktualizacja z VPS, podpis odłożony z gotowym gniazdem); zablokowane decyzje; ZROBIONE M1 (platform_utils, packaging, APP_VERSION) + M2.1 (WebTerminal xterm.js+QtWebEngine+PTY, działa); NASTĘPNY KROK = M2.2 (wspólny interfejs + fabryka backendów), dalej M2.3 wpięcie do AgentTab (Linux=QTermWidget domyślnie, Mac/Win=WebTerminal; gotcha AA_ShareOpenGLContexts), M2.4, M3 updater, M4 pakowanie. Wcześniej 2026-05-30 — nowa sekcja ARCHITEKTURA AUTO-CZYTANIA (Droga A): auto-czytanie czyta czystą prozę z dziennika `~/.claude/projects/<cwd>/*.jsonl` (transcript_reader.py + prose_from_markdown + kolejka TTS z prefetch + _poll_transcripts), a NIE ze śmieciowego strumienia terminala (źródło „A ×N" = spinner literka po literce, oraz czytania ghost-text). Tylko aktywna zakładka czyta; nieaktywne zbierają zaległości + komunikat. Wcześniej 2026-05-09 — dodano reference do `docs/PRD.md` (Roadmap komercjalizacji 2026 v2.2) jako MUST READ przed pracą.* `~/.claude/projects/<cwd>/*.jsonl` (transcript_reader.py + prose_from_markdown + kolejka TTS z prefetch + _poll_transcripts), a NIE ze śmieciowego strumienia terminala (źródło „A ×N" = spinner literka po literce, oraz czytania ghost-text). Tylko aktywna zakładka czyta; nieaktywne zbierają zaległości + komunikat. Wcześniej 2026-05-09 — dodano reference do `docs/PRD.md` (Roadmap komercjalizacji 2026 v2.2) jako MUST READ przed pracą.*
