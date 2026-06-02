@@ -42,13 +42,17 @@ from core.mcp_templates import MCP_TEMPLATES, McpTemplate
 # === Stylizowane dialogi plików ===
 
 # Domyślne kolory dla dialogów (ciemny motyw)
+# Paleta okien wyboru plików (QFileDialog). Neutralna, „systemowa" — ciemny
+# GNOME-owy wygląd zamiast fioletu aplikacji. Prawdziwie natywne okno GNOME nie
+# jest tu dostępne dla Qt (brak aktywnej integracji portal/GTK dla okien plików),
+# więc dajemy czysty, neutralny zamiennik dopasowany do ciemnej aplikacji.
 DIALOG_COLORS = {
-    'bg': '#300A24',
-    'text': '#ffffff',
-    'input_bg': '#4a1a3a',
-    'border': '#6a2a5a',
-    'hover': '#7a3a6a',
-    'selection': '#8a4a7a',
+    'bg': '#2e2e2e',          # tło okna (ciemnoszare)
+    'text': '#eeeeee',        # jasny tekst
+    'input_bg': '#1e1e1e',    # pola/listy (ciemniejsze)
+    'border': '#4a4a4a',      # neutralna ramka
+    'hover': '#3a3a3a',       # podświetlenie najechania
+    'selection': '#3584e4',   # zaznaczenie = niebieski akcent GNOME
 }
 
 
