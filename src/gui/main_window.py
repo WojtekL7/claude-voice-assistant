@@ -2153,7 +2153,24 @@ class MainWindow(QMainWindow):
             self.stt.stop_recording()
         else:
             if not self.stt.api_key:
-                self._show_api_key_dialog()
+                # Brak klucza Groq. Dyktowanie (STT) go WYMAGA; czytanie (TTS,
+                # edge-tts) działa bez klucza. Wyjaśnij i zaproponuj dodanie.
+                # (Wcześniej wołano nieistniejące _show_api_key_dialog →
+                #  AttributeError, przez co klik mikrofonu nic nie robił na
+                #  świeżej instalacji bez klucza.)
+                answer = QMessageBox.question(
+                    self,
+                    "Dyktowanie wymaga klucza Groq",
+                    "Aby dyktowanie głosem działało, dodaj darmowy klucz API Groq "
+                    "— służy do rozpoznawania mowy (zamiana głosu na tekst).\n\n"
+                    "Uwaga: czytanie na głos działa bez klucza. Groq jest "
+                    "potrzebny WYŁĄCZNIE do dyktowania.\n\n"
+                    "Czy chcesz dodać klucz teraz?",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.Yes,
+                )
+                if answer == QMessageBox.Yes:
+                    self._show_groq_api_dialog()
                 return
             self.stt.start_recording()
 
