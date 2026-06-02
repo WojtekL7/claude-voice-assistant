@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
     QFrame, QMenu, QAction, QLabel, QFileDialog,
     QMessageBox
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QTimer
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QSize
 from PyQt5.QtGui import QFont
 
 # QTermWidget for real terminal emulation
@@ -33,6 +33,10 @@ from config import (
 from core.platform_utils import default_shell
 from gui.dialogs import styled_get_open_file_names
 from gui.terminal_backend import create_terminal_backend
+from gui import icon_set
+
+# Rozmiar ikon SVG w przyciskach dolnego panelu.
+PANEL_ICON_SIZE = QSize(24, 24)
 
 
 class AutoResizeTextEdit(QTextEdit):
@@ -324,8 +328,10 @@ class AgentTab(QWidget):
         layout = QHBoxLayout()
         btn_size = 48
 
-        # Dictate button
-        self.dictate_btn = QPushButton("🎤")
+        # Dictate button (ikona SVG zamiast emoji — spójna na Linux/Mac/Windows)
+        self.dictate_btn = QPushButton()
+        self.dictate_btn.setIcon(icon_set.button_icon('dictate'))
+        self.dictate_btn.setIconSize(PANEL_ICON_SIZE)
         self.dictate_btn.setFixedSize(btn_size, btn_size)
         self.dictate_btn.setCheckable(True)
         self.dictate_btn.setToolTip("Dyktuj (nagrywanie głosu)")
@@ -333,14 +339,18 @@ class AgentTab(QWidget):
         layout.addWidget(self.dictate_btn)
 
         # Read button
-        self.read_btn = QPushButton("🔊")
+        self.read_btn = QPushButton()
+        self.read_btn.setIcon(icon_set.button_icon('read'))
+        self.read_btn.setIconSize(PANEL_ICON_SIZE)
         self.read_btn.setFixedSize(btn_size, btn_size)
         self.read_btn.setToolTip("Czytaj ostatnią odpowiedź")
         self.read_btn.clicked.connect(self._read_last_response)
         layout.addWidget(self.read_btn)
 
         # Pause button (hidden by default)
-        self.pause_btn = QPushButton("⏸")
+        self.pause_btn = QPushButton()
+        self.pause_btn.setIcon(icon_set.button_icon('pause'))
+        self.pause_btn.setIconSize(PANEL_ICON_SIZE)
         self.pause_btn.setFixedSize(btn_size, btn_size)
         self.pause_btn.setToolTip("Pauza / Wznów")
         self.pause_btn.clicked.connect(self._toggle_pause)
@@ -349,7 +359,9 @@ class AgentTab(QWidget):
         layout.addWidget(self.pause_btn)
 
         # Stop button (hidden by default)
-        self.stop_btn = QPushButton("⬜")
+        self.stop_btn = QPushButton()
+        self.stop_btn.setIcon(icon_set.button_icon('stop'))
+        self.stop_btn.setIconSize(PANEL_ICON_SIZE)
         self.stop_btn.setFixedSize(btn_size, btn_size)
         self.stop_btn.setToolTip("Zatrzymaj wszystko")
         self.stop_btn.clicked.connect(self._stop_all)
@@ -357,21 +369,27 @@ class AgentTab(QWidget):
         layout.addWidget(self.stop_btn)
 
         # Copy button
-        self.copy_btn = QPushButton("⧉")
+        self.copy_btn = QPushButton()
+        self.copy_btn.setIcon(icon_set.button_icon('copy'))
+        self.copy_btn.setIconSize(PANEL_ICON_SIZE)
         self.copy_btn.setFixedSize(btn_size, btn_size)
         self.copy_btn.setToolTip("Kopiuj zaznaczony tekst")
         self.copy_btn.clicked.connect(self._copy_selection)
         layout.addWidget(self.copy_btn)
 
         # Clear input button
-        self.clear_input_btn = QPushButton("✕")
+        self.clear_input_btn = QPushButton()
+        self.clear_input_btn.setIcon(icon_set.button_icon('clear_input'))
+        self.clear_input_btn.setIconSize(PANEL_ICON_SIZE)
         self.clear_input_btn.setFixedSize(btn_size, btn_size)
         self.clear_input_btn.setToolTip("Wyczyść pole tekstowe")
         self.clear_input_btn.clicked.connect(self._clear_input_field)
         layout.addWidget(self.clear_input_btn)
 
         # Add media button
-        self.add_media_btn = QPushButton("📎")
+        self.add_media_btn = QPushButton()
+        self.add_media_btn.setIcon(icon_set.button_icon('add_media'))
+        self.add_media_btn.setIconSize(PANEL_ICON_SIZE)
         self.add_media_btn.setFixedSize(btn_size, btn_size)
         self.add_media_btn.setToolTip("Dodaj media (zdjęcia, dokumenty, pliki)")
         self.add_media_btn.clicked.connect(self._add_media)
@@ -379,7 +397,8 @@ class AgentTab(QWidget):
 
         # Quick actions dropdown
         self.quick_actions_btn = QToolButton()
-        self.quick_actions_btn.setText("⚡▼")
+        self.quick_actions_btn.setIcon(icon_set.button_icon('quick_actions'))
+        self.quick_actions_btn.setIconSize(PANEL_ICON_SIZE)
         self.quick_actions_btn.setToolTip("Szybkie akcje")
         self.quick_actions_btn.setPopupMode(QToolButton.InstantPopup)
         self.quick_actions_btn.setFixedSize(btn_size, btn_size)

@@ -293,6 +293,7 @@ from core.transcript_reader import TranscriptReader
 from core.update_manager import UpdateManager
 from core.platform_utils import update_platform_id
 from gui.agent_tab import AgentTab
+from gui import icon_set
 from gui.dialogs import (
     MemoryProjectsDialog, AgentConfigDialog, AgentsManagerDialog,
     SkillsManagerDialog, McpManagerDialog, UpdateAvailableDialog,
@@ -616,7 +617,8 @@ class MainWindow(QMainWindow):
         self._speaker_anim_timer = QTimer()
         self._speaker_anim_timer.timeout.connect(self._animate_speaker)
         self._speaker_anim_state = 0
-        self._speaker_icons = ["🔈", "🔉", "🔊"]
+        # Poziomy głośnika do animacji czytania (nazwy ikon SVG; dawniej 🔈🔉🔊).
+        self._speaker_icons = icon_set.SPEAKER_LEVELS
 
         self._pause_blink_timer = QTimer()
         self._pause_blink_timer.timeout.connect(self._animate_pause_blink)
@@ -1897,7 +1899,7 @@ class MainWindow(QMainWindow):
             tab.pause_btn.setVisible(True)
             tab.stop_btn.setVisible(True)
             tab.pause_btn.setEnabled(True)
-            tab.pause_btn.setText(self._get_icon('pause', 'normal'))
+            tab.pause_btn.setIcon(icon_set.button_icon('pause', 'normal'))
             # Start speaker animation
             self._speaker_anim_timer.start(300)
             # Stop pause blink if running
@@ -1907,10 +1909,10 @@ class MainWindow(QMainWindow):
             # Keep buttons visible during pause
             tab.pause_btn.setVisible(True)
             tab.stop_btn.setVisible(True)
-            tab.pause_btn.setText(self._get_icon('pause', 'active'))
+            tab.pause_btn.setIcon(icon_set.button_icon('pause', 'active'))
             # Stop speaker animation
             self._speaker_anim_timer.stop()
-            tab.read_btn.setText(self._get_icon('read', 'normal'))
+            tab.read_btn.setIcon(icon_set.button_icon('read', 'normal'))
             # Start pause blink animation
             self._pause_blink_timer.start(500)
             self._update_status("Wstrzymano")
@@ -1923,11 +1925,11 @@ class MainWindow(QMainWindow):
             tab.pause_btn.setVisible(False)
             tab.stop_btn.setVisible(False)
             tab.pause_btn.setEnabled(False)
-            tab.pause_btn.setText(self._get_icon('pause', 'normal'))
+            tab.pause_btn.setIcon(icon_set.button_icon('pause', 'normal'))
             # Stop all animations
             self._speaker_anim_timer.stop()
             self._pause_blink_timer.stop()
-            tab.read_btn.setText(self._get_icon('read', 'normal'))
+            tab.read_btn.setIcon(icon_set.button_icon('read', 'normal'))
             self._update_status("Gotowy")
 
     def _on_tts_finished(self):
@@ -1941,7 +1943,7 @@ class MainWindow(QMainWindow):
         tab.stop_btn.setVisible(False)
         # Stop speaker animation
         self._speaker_anim_timer.stop()
-        tab.read_btn.setText(self._get_icon('read', 'normal'))
+        tab.read_btn.setIcon(icon_set.button_icon('read', 'normal'))
         self._update_status("Gotowy")
 
     def _on_stt_state_changed(self, state: STTState):
@@ -1956,12 +1958,12 @@ class MainWindow(QMainWindow):
             self._mic_pulse_timer.start(400)
             self._update_status("Nagrywanie... (kliknij ponownie aby zakończyć)")
         elif state == STTState.PROCESSING:
-            tab.dictate_btn.setText(self._get_icon('dictate', 'processing'))
+            tab.dictate_btn.setIcon(icon_set.button_icon('dictate', 'processing'))
             # Stop pulse animation
             self._mic_pulse_timer.stop()
             self._update_status("Przetwarzanie mowy...")
         else:
-            tab.dictate_btn.setText(self._get_icon('dictate', 'normal'))
+            tab.dictate_btn.setIcon(icon_set.button_icon('dictate', 'normal'))
             tab.dictate_btn.setChecked(False)
             # Stop pulse animation and reset style
             self._mic_pulse_timer.stop()
@@ -1977,32 +1979,26 @@ class MainWindow(QMainWindow):
             return
 
         self._mic_pulse_state = not self._mic_pulse_state
-        mic_icon = self._get_icon('dictate', 'active')
-        border_color = self.skin_colors.get('border_color', '#4a1a3a')
+        # Ikona mikrofonu bez zmian; nagrywanie sygnalizuje PULSUJĄCA czerwona ramka.
+        tab.dictate_btn.setIcon(icon_set.button_icon('dictate', 'active'))
         if self._mic_pulse_state:
-            # Bright recording state - red color, larger
-            tab.dictate_btn.setStyleSheet(f"""
-                QPushButton {{
+            # Bright recording state - jasna czerwona ramka
+            tab.dictate_btn.setStyleSheet("""
+                QPushButton {
                     background-color: transparent;
-                    color: #ff0000;
                     border: 2px solid #ff0000;
                     border-radius: 12px;
-                    font-size: 24px;
-                }}
+                }
             """)
-            tab.dictate_btn.setText(mic_icon)
         else:
-            # Darker recording state
-            tab.dictate_btn.setStyleSheet(f"""
-                QPushButton {{
+            # Darker recording state - ciemniejsza czerwona ramka
+            tab.dictate_btn.setStyleSheet("""
+                QPushButton {
                     background-color: transparent;
-                    color: #b91c1c;
                     border: 2px solid #b91c1c;
                     border-radius: 12px;
-                    font-size: 22px;
-                }}
+                }
             """)
-            tab.dictate_btn.setText(mic_icon)
 
     def _reset_mic_style(self):
         """Reset microphone button to default style."""
@@ -2017,7 +2013,7 @@ class MainWindow(QMainWindow):
             return
 
         self._speaker_anim_state = (self._speaker_anim_state + 1) % 3
-        tab.read_btn.setText(self._speaker_icons[self._speaker_anim_state])
+        tab.read_btn.setIcon(icon_set.icon_by_name(self._speaker_icons[self._speaker_anim_state]))
 
     def _animate_pause_blink(self):
         """Animate pause button blinking - icon only, button stays in place."""
@@ -2026,12 +2022,12 @@ class MainWindow(QMainWindow):
             return
 
         self._pause_blink_state = not self._pause_blink_state
-        pause_active = self._get_icon('pause', 'active')
         if self._pause_blink_state:
-            tab.pause_btn.setText(pause_active)  # Play icon visible
+            # Ikona „play" widoczna (wznów)
+            tab.pause_btn.setIcon(icon_set.button_icon('pause', 'active'))
         else:
-            # Slightly dimmed version (use same icon or fallback)
-            tab.pause_btn.setText(pause_active)
+            # Mrugnięcie — chwilowo pusta ikona, by przyciągnąć wzrok
+            tab.pause_btn.setIcon(QIcon())
 
     def _on_transcription(self, text: str):
         """Handle transcription result - inserts at cursor position."""
@@ -2414,17 +2410,14 @@ class MainWindow(QMainWindow):
         if not tab:
             return
 
-        # Change to green with checkmark
-        border_color = self.skin_colors.get('border_color', '#4a1a3a')
-        tab.copy_btn.setText(self._get_icon('copy', 'active'))
-        tab.copy_btn.setStyleSheet(f"""
-            QPushButton {{
+        # Change to green checkmark icon + green border
+        tab.copy_btn.setIcon(icon_set.button_icon('copy', 'active'))
+        tab.copy_btn.setStyleSheet("""
+            QPushButton {
                 background-color: transparent;
-                color: #22c55e;
                 border: 2px solid #22c55e;
                 border-radius: 12px;
-                font-size: 22px;
-            }}
+            }
         """)
         # Reset after 500ms
         QTimer.singleShot(500, self._reset_copy_style)
@@ -2433,7 +2426,7 @@ class MainWindow(QMainWindow):
         """Reset copy button to default style."""
         tab = self._get_current_agent_tab()
         if tab:
-            tab.copy_btn.setText(self._get_icon('copy', 'normal'))
+            tab.copy_btn.setIcon(icon_set.button_icon('copy', 'normal'))
             self._apply_button_icon_style(tab.copy_btn, 'icon_copy_color')
 
     def _toggle_pause(self):
@@ -2624,45 +2617,26 @@ class MainWindow(QMainWindow):
             self._apply_skin_icons()
 
     def _apply_skin_icons(self):
-        """Apply skin icons to all buttons in all tabs."""
-        icons = self.skin_icons
+        """Ustaw ikony SVG przycisków dolnego panelu we wszystkich zakładkach.
 
-        # Apply to all agent tabs
+        Dawniej ustawiało emoji-tekst ze skin_icons; teraz przyciski używają
+        spójnych, kolorowych ikon SVG (icon_set), identycznych na Linux/Mac/
+        Windows. send_btn pozostaje przyciskiem tekstowym ('↵ Enter').
+        """
         for agent_id, tab in self.agent_tabs.items():
-            # Dictate button (mikrofon)
-            if hasattr(tab, 'dictate_btn'):
-                dictate_icons = icons.get('dictate', {})
-                tab.dictate_btn.setText(dictate_icons.get('normal', '🎤'))
-
-            # Read button (głośnik)
-            if hasattr(tab, 'read_btn'):
-                read_icons = icons.get('read', {})
-                tab.read_btn.setText(read_icons.get('normal', '🔊'))
-
-            # Pause button
-            if hasattr(tab, 'pause_btn'):
-                pause_icons = icons.get('pause', {})
-                tab.pause_btn.setText(pause_icons.get('normal', '⏸'))
-
-            # Stop button
-            if hasattr(tab, 'stop_btn'):
-                stop_icons = icons.get('stop', {})
-                tab.stop_btn.setText(stop_icons.get('normal', '⬜'))
-
-            # Copy button
-            if hasattr(tab, 'copy_btn'):
-                copy_icons = icons.get('copy', {})
-                tab.copy_btn.setText(copy_icons.get('normal', '⧉'))
-
-            # Send button
-            if hasattr(tab, 'send_btn'):
-                send_icons = icons.get('send', {})
-                tab.send_btn.setText(send_icons.get('normal', '↵'))
-
-            # Quick actions button
-            if hasattr(tab, 'quick_actions_btn'):
-                qa_icons = icons.get('quick_actions', {})
-                tab.quick_actions_btn.setText(qa_icons.get('normal', '⚡▼'))
+            for attr, key in (
+                ('dictate_btn', 'dictate'),
+                ('read_btn', 'read'),
+                ('pause_btn', 'pause'),
+                ('stop_btn', 'stop'),
+                ('copy_btn', 'copy'),
+                ('clear_input_btn', 'clear_input'),
+                ('add_media_btn', 'add_media'),
+                ('quick_actions_btn', 'quick_actions'),
+            ):
+                btn = getattr(tab, attr, None)
+                if btn is not None:
+                    btn.setIcon(icon_set.button_icon(key))
 
     def _get_icon(self, button_name: str, state: str = 'normal') -> str:
         """Get icon for a button from skin_icons."""
