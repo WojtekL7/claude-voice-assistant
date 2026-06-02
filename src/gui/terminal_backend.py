@@ -214,7 +214,8 @@ class QTermWidgetBackend(TerminalBackend):
         self._term.setTerminalSizeHint(False)
         self._term.setStyleSheet(_QTERMWIDGET_SCROLLBAR_QSS)
 
-        # receivedData niesie QByteArray — dekodujemy do str i wystawiamy ujednolicony sygnał.
+        # receivedData (PyQt5) niesie str (QString), NIE QByteArray — normalizujemy
+        # w _on_received i wystawiamy ujednolicony sygnał output_received(str).
         self._term.receivedData.connect(self._on_received)
         self._term.finished.connect(self.finished)
 
@@ -223,9 +224,19 @@ class QTermWidgetBackend(TerminalBackend):
         return self._term
 
     def _on_received(self, data):
+        # QTermWidget (PyQt5) emituje receivedData jako str (QString → str),
+        # a NIE QByteArray. Wcześniejsze `bytes(data)` na stringu rzucało
+        # TypeError ("string argument without an encoding"); wyjątek był po
+        # cichu połykany → output_received nigdy nie leciało → cały odbiór
+        # wyjścia terminala milczał (m.in. licznik tokenów stał w miejscu na
+        # Linuksie od refaktoru backendu M2.3). Obsługujemy oba typy defensywnie.
         try:
-            raw = data.data() if hasattr(data, "data") else bytes(data)
-            text = raw.decode("utf-8", errors="ignore")
+            if isinstance(data, str):
+                text = data
+            elif hasattr(data, "data"):              # QByteArray
+                text = bytes(data.data()).decode("utf-8", errors="ignore")
+            else:                                    # bytes / bytearray
+                text = bytes(data).decode("utf-8", errors="ignore")
         except Exception:
             text = ""
         if text:

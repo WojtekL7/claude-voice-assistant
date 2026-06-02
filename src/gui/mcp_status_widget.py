@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from PyQt5.QtCore import Qt, QSize, pyqtSignal
-from PyQt5.QtGui import QCursor, QIcon
+from PyQt5.QtGui import QCursor, QIcon, QFont
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QLabel, QPushButton, QToolButton,
 )
@@ -202,6 +202,17 @@ class McpStatusWidget(QWidget):
             "Reset przy: restarcie aplikacji.\n"
             "(Indywidualny licznik agenta — po prawej, z kolorem zależnym od % okna kontekstu.)"
         )
+        # Stała zarezerwowana szerokość pod największą realną sumę — bez tego
+        # rosnąca liczba cyfr przesuwałaby sąsiednie kafelki i przycisk 🔄 przy
+        # każdej aktualizacji licznika („skakanie" paska statusu). Σ zostaje
+        # wyrównane do lewej (symbol Σ w miejscu, cyfry rosną w prawo w obrębie
+        # zarezerwowanego pola).
+        _tot_font = QFont(self.total_tokens_label.font())
+        _tot_font.setPixelSize(11)
+        self.total_tokens_label.setFont(_tot_font)
+        self.total_tokens_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.total_tokens_label.setMinimumWidth(
+            self.total_tokens_label.fontMetrics().horizontalAdvance("Σ  999,999,999") + 16)
         layout.addWidget(self.total_tokens_label)
 
         # 🔄 Refresh wszystkich liczników — ikona SVG (biała strzałka anticlockwise).

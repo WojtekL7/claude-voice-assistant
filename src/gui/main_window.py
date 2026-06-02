@@ -661,6 +661,18 @@ class MainWindow(QMainWindow):
                 font-weight: bold;
             }
         """)
+        # Stała zarezerwowana szerokość — bez tego rosnąca liczba cyfr zmienia
+        # szerokość etykiety i cały prawy róg paska statusu „skacze" w lewo/prawo
+        # przy każdej aktualizacji (co ~200 ms podczas streamingu). Rezerwujemy
+        # miejsce pod największą realną wartość i wyrównujemy do prawej (przy
+        # grupie przyklejonej do prawej krawędzi prawa krawędź liczby zostaje w
+        # miejscu, a ewentualna luka chowa się na lewym końcu paska).
+        _ctx_font = QFont(self._context_label.font())
+        _ctx_font.setPixelSize(11)
+        self._context_label.setFont(_ctx_font)
+        self._context_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self._context_label.setMinimumWidth(
+            self._context_label.fontMetrics().horizontalAdvance("99,999,999  (100%)") + 24)
         self.status_bar.addPermanentWidget(self._context_label)
 
         # Status widget agenta (po lewej od licznika tokenów):
@@ -810,6 +822,33 @@ class MainWindow(QMainWindow):
             self.last_active_agent_id = primary_widget.agent_id
             QTimer.singleShot(0, primary_widget.activate)
 
+    def _connect_agent_tab_signals(self, agent_tab: AgentTab):
+        """Podłącz WSZYSTKIE sygnały zakładki do MainWindow — jedno źródło prawdy.
+
+        Używane przez OBIE ścieżki tworzenia zakładek (_create_agent_tab oraz
+        _add_new_terminal). Wcześniej lista połączeń była zdublowana w dwóch
+        miejscach i w _add_new_terminal zabrakło `terminal_output` → na
+        zakładkach otwartych przyciskiem „+" licznik tokenów nie rósł (wyjście
+        terminala nie docierało do _on_terminal_output). Trzymanie listy w
+        jednym miejscu eliminuje ten rodzaj „zgubionego kabelka" na przyszłość.
+        """
+        agent_tab.status_changed.connect(self._update_status)
+        agent_tab.request_tts.connect(self._handle_tts_request)
+        agent_tab.request_tts_stop.connect(self._stop_all)
+        agent_tab.request_pause.connect(self._toggle_pause)
+        agent_tab.request_read_last.connect(self._read_last_response)
+        agent_tab.request_dictation.connect(self._handle_dictation_request)
+        agent_tab.message_sent.connect(self._on_message_sent)
+        agent_tab.add_quick_action_requested.connect(self._add_quick_action)
+        agent_tab.splitter_changed.connect(
+            lambda sizes, tab=agent_tab: self._on_splitter_changed(tab, sizes))
+        # Wyjście terminala → liczenie tokenów (per-agent + globalna suma Σ).
+        agent_tab.terminal_output.connect(self._on_terminal_output)
+        # Sygnał z lazy activate() — terminal właśnie powstał, czas zaaplikować
+        # kolory, odpalić claude i wysłać pliki pamięci.
+        agent_tab.terminal_ready.connect(
+            lambda tab=agent_tab: self._on_terminal_ready(tab))
+
     def _create_agent_tab(self, agent_config: dict) -> AgentTab:
         """Create a single agent tab (lazy — bez terminala+claude do aktywacji).
 
@@ -827,20 +866,8 @@ class MainWindow(QMainWindow):
             self.auto_read_responses, self.current_language
         )
 
-        # Connect signals
-        agent_tab.status_changed.connect(self._update_status)
-        agent_tab.request_tts.connect(self._handle_tts_request)
-        agent_tab.request_tts_stop.connect(self._stop_all)
-        agent_tab.request_pause.connect(self._toggle_pause)
-        agent_tab.request_read_last.connect(self._read_last_response)
-        agent_tab.request_dictation.connect(self._handle_dictation_request)
-        agent_tab.message_sent.connect(self._on_message_sent)
-        agent_tab.add_quick_action_requested.connect(self._add_quick_action)
-        agent_tab.splitter_changed.connect(lambda sizes, tab=agent_tab: self._on_splitter_changed(tab, sizes))
-        agent_tab.terminal_output.connect(self._on_terminal_output)
-        # Sygnał z lazy activate() — terminal właśnie powstał, czas
-        # zaaplikować kolory, odpalić claude i wysłać pliki pamięci.
-        agent_tab.terminal_ready.connect(lambda tab=agent_tab: self._on_terminal_ready(tab))
+        # Connect signals — jedno źródło prawdy (patrz _connect_agent_tab_signals)
+        self._connect_agent_tab_signals(agent_tab)
 
         # Add tab (insert before "+" tab which is always last)
         agent_id = agent_config.get('id', 'unknown')
@@ -912,20 +939,10 @@ class MainWindow(QMainWindow):
             self.auto_read_responses, self.current_language
         )
 
-        # Connect signals
-        agent_tab.status_changed.connect(self._update_status)
-        agent_tab.request_tts.connect(self._handle_tts_request)
-        agent_tab.request_tts_stop.connect(self._stop_all)
-        agent_tab.request_pause.connect(self._toggle_pause)
-        agent_tab.request_read_last.connect(self._read_last_response)
-        agent_tab.request_dictation.connect(self._handle_dictation_request)
-        agent_tab.message_sent.connect(self._on_message_sent)
-        agent_tab.add_quick_action_requested.connect(self._add_quick_action)
-        agent_tab.splitter_changed.connect(lambda sizes, tab=agent_tab: self._on_splitter_changed(tab, sizes))
-        # Lazy activation: gdy zakładka stanie się aktywna i terminal powstanie,
-        # zaaplikuj kolory (plain terminal — bez claude, więc _on_terminal_ready
-        # tylko ustawia kolory, bo auto_start=False).
-        agent_tab.terminal_ready.connect(lambda tab=agent_tab: self._on_terminal_ready(tab))
+        # Connect signals — jedno źródło prawdy (patrz _connect_agent_tab_signals).
+        # To tu wcześniej brakowało terminal_output → licznik tokenów nie rósł
+        # na zakładkach „+". Teraz obie ścieżki podłączają identyczny zestaw.
+        self._connect_agent_tab_signals(agent_tab)
 
         # Add tab with terminal icon (🖥️ instead of 🤖) - insert before "+" tab
         self.agent_tabs[terminal_id] = agent_tab
