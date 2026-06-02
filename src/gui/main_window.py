@@ -1143,6 +1143,17 @@ class MainWindow(QMainWindow):
             except Exception:
                 agent_tab._transcript_reader = None
 
+        # Po faktycznym powstaniu terminala: jeśli to AKTYWNA zakładka, odśwież
+        # referencje MainWindow (self.terminal_backend itd.). Przy starcie primary
+        # tab (index 0) activate() jest odroczone QTimerem i wykonuje się PO
+        # _update_current_tab_references() z __init__, a setCurrentIndex(0) nie
+        # emituje currentChanged (Qt deduplikuje) → bez tego self.terminal_backend
+        # zostaje None aż do pierwszej zmiany zakładki, więc 🔊/⧉ nie widzą
+        # zaznaczenia tuż po uruchomieniu. Guard chroni przed nadpisaniem
+        # referencji, gdyby w tle aktywowała się nieaktywna zakładka.
+        if agent_tab is self._get_current_agent_tab():
+            self._update_current_tab_references()
+
     def _update_mcp_status_widget(self):
         """Synchronizuje widget statusu agenta z aktywną zakładką.
 
