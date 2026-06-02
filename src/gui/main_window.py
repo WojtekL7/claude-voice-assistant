@@ -16,7 +16,7 @@ from PyQt5.QtWidgets import (
     QToolButton, QSizePolicy, QApplication, QInputDialog,
     QColorDialog, QGridLayout, QGroupBox, QScrollArea, QFileDialog,
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
-    QTabWidget, QTabBar
+    QTabWidget, QTabBar, QProgressBar
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QObject, QEvent, QPoint
 from PyQt5.QtGui import QFont, QTextCursor, QIcon, QKeySequence, QPalette, QColor, QTextCharFormat
@@ -657,7 +657,7 @@ class MainWindow(QMainWindow):
             QLabel {
                 color: #4ade80;
                 font-size: 11px;
-                padding: 0 10px;
+                padding: 0 10px 0 4px;
                 font-weight: bold;
             }
         """)
@@ -670,10 +670,41 @@ class MainWindow(QMainWindow):
         _ctx_font = QFont(self._context_label.font())
         _ctx_font.setPixelSize(11)
         self._context_label.setFont(_ctx_font)
+        # ZERO RUCHU: STAŁA szerokość + wyrównanie do PRAWEJ. Prawa krawędź liczby
+        # (tuż przy ikonach) jest nieruchoma, a liczba „dorasta" w lewo jak na
+        # wyświetlaczu kalkulatora — nic nie drga, niezależnie od liczby cyfr ani
+        # długości procentu. Rezerwa z zapasem pod największą realną wartość
+        # per-zakładka (7 cyfr tokenów + do 3 cyfr %).
         self._context_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self._context_label.setMinimumWidth(
-            self._context_label.fontMetrics().horizontalAdvance("99,999,999  (100%)") + 24)
-        self.status_bar.addPermanentWidget(self._context_label)
+        self._context_label.setFixedWidth(
+            self._context_label.fontMetrics().horizontalAdvance("9,999,999  (999%)") + 18)
+
+        # Pasek postępu zużycia okna kontekstu zakładki — graficzny odpowiednik
+        # zielonej liczby. Wypełnienie = ten sam procent, kolor = ten sam próg
+        # (zielony/żółty/pomarańczowy/czerwony); jedno i drugie ustawiane w
+        # _refresh_context_label. Stała szerokość → nie wprowadza skakania.
+        self._context_bar = QProgressBar()
+        self._context_bar.setRange(0, 100)
+        self._context_bar.setValue(0)
+        self._context_bar.setTextVisible(False)
+        self._context_bar.setFixedSize(70, 10)
+        self._context_bar.setToolTip(
+            "Graficzne zużycie okna kontekstu modelu w tej zakładce.\n"
+            "Wypełnienie i kolor odpowiadają liczbie obok (zielony→żółty→\n"
+            "pomarańczowy→czerwony). Auto-compact w Claude Code: ~80–90%."
+        )
+        # Pasek (lewo) + liczba (prawo) w jednym kontenerze — pewna kolejność,
+        # niezależnie od porządku addPermanentWidget.
+        self._context_box = QWidget()
+        # Maximum: kontener [pasek+liczba] przylega do treści i ląduje przy prawej
+        # krawędzi obszaru (tuż przy ikonach MCP), zamiast być rozciągany.
+        self._context_box.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
+        _ctx_box_layout = QHBoxLayout(self._context_box)
+        _ctx_box_layout.setContentsMargins(0, 0, 0, 0)
+        _ctx_box_layout.setSpacing(4)
+        _ctx_box_layout.addWidget(self._context_bar)
+        _ctx_box_layout.addWidget(self._context_label)
+        self.status_bar.addPermanentWidget(self._context_box)
 
         # Status widget agenta (po lewej od licznika tokenów):
         # 🔌 MCP, 🧩 skille, 📁 pliki, 🤖 model + 🔄 refresh.
@@ -3250,7 +3281,7 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
             QLabel {{
                 color: {color};
                 font-size: 11px;
-                padding: 0 10px;
+                padding: 0 10px 0 4px;
                 font-weight: bold;
             }}
         """)
@@ -3259,6 +3290,26 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         # 2× NBSP dla odstępu między liczbą a procentem (fonty proporcjonalne
         # potrafią łączyć wielokrotne zwykłe spacje w jedną — NBSP gwarantuje rozdzielenie).
         self._context_label.setText(f"{tokens:,}  ({pct_text})")
+
+        # Pasek postępu: to samo wypełnienie i ten sam kolor co liczba.
+        if hasattr(self, "_context_bar"):
+            bar_value = int(round(min(100.0, percentage)))
+            # Przy bardzo małym, ale niezerowym zużyciu pokaż widoczny „okruszek",
+            # żeby pasek nie wyglądał na całkiem pusty gdy tokeny już są.
+            if bar_value == 0 and tokens > 0:
+                bar_value = 1
+            self._context_bar.setValue(bar_value)
+            self._context_bar.setStyleSheet(f"""
+                QProgressBar {{
+                    background-color: #2a2a2e;
+                    border: 1px solid #3a3a3e;
+                    border-radius: 3px;
+                }}
+                QProgressBar::chunk {{
+                    background-color: {color};
+                    border-radius: 2px;
+                }}
+            """)
 
     def _refresh_total_tokens_label(self):
         """Aktualizuj globalny licznik (Σ N) w widgecie statusu."""
