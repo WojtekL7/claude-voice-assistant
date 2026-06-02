@@ -2165,6 +2165,9 @@ class MainWindow(QMainWindow):
                     "— służy do rozpoznawania mowy (zamiana głosu na tekst).\n\n"
                     "Uwaga: czytanie na głos działa bez klucza. Groq jest "
                     "potrzebny WYŁĄCZNIE do dyktowania.\n\n"
+                    "Darmowy klucz zdobędziesz w minutę na:\n"
+                    "https://console.groq.com/keys\n"
+                    "(zaloguj się, kliknij 'Create API Key', skopiuj klucz 'gsk_...').\n\n"
                     "Czy chcesz dodać klucz teraz?",
                     QMessageBox.Yes | QMessageBox.No,
                     QMessageBox.Yes,
@@ -3041,7 +3044,15 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         display_key = current_key[:8] + "..." if len(current_key) > 8 else current_key
 
         key, ok = QInputDialog.getText(self, "Klucz API Groq",
-            f"Podaj klucz API Groq (do rozpoznawania mowy STT):\n\nAktualny: {display_key if display_key else 'brak'}",
+            "Klucz API Groq jest potrzebny do dyktowania (zamiana mowy na tekst).\n"
+            "Czytanie na głos działa bez klucza.\n\n"
+            "Jak zdobyć DARMOWY klucz — krok po kroku:\n"
+            "1. Wejdź na stronę:  https://console.groq.com/keys\n"
+            "2. Zaloguj się lub załóż konto (najszybciej kontem Google) — jest darmowe.\n"
+            "3. Kliknij 'Create API Key' i nadaj dowolną nazwę (np. voice-assistant).\n"
+            "4. Skopiuj klucz (zaczyna się od 'gsk_...') - UWAGA: pokazany jest tylko RAZ!\n"
+            "5. Wklej go w pole poniżej i kliknij OK.\n\n"
+            f"Aktualny klucz: {display_key if display_key else 'brak'}",
             QLineEdit.Normal)
 
         if ok and key:
