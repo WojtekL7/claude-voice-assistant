@@ -65,7 +65,9 @@ def sign_file(path: str, key_path: str) -> str:
 
 def main():
     ap = argparse.ArgumentParser(description="Generator wpisu appcast.json")
-    ap.add_argument("artifact", help="ścieżka do zbudowanej paczki (.dmg/.exe/.tar.gz)")
+    ap.add_argument("artifact",
+                    help="ścieżka do zbudowanej paczki "
+                         "(.zip dla samo-aktualizacji macOS, .dmg/.exe/.tar.gz/.AppImage)")
     ap.add_argument("--version", required=True, help="wersja, np. 1.0.0")
     ap.add_argument("--base-url", required=True,
                     help="URL katalogu z paczkami (z / na końcu lub bez)")

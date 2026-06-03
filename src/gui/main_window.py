@@ -442,6 +442,13 @@ class MainWindow(QMainWindow):
         # True = sprawdzanie wywołane ręcznie z menu (wtedy pokazujemy też wynik
         # „masz najnowszą"/błąd); False = ciche sprawdzanie przy starcie.
         self._manual_update_check = False
+        # Sprawdzanie aktualizacji PRZY ZAMYKANIU (Etap 1):
+        #  _force_close          — pomiń sprawdzanie, zamknij naprawdę (2. wywołanie close)
+        #  _update_checked_on_close — sprawdziliśmy już raz w tej sesji przy zamykaniu
+        #  _close_check_in_progress — czekamy na wynik sprawdzania uruchomionego z closeEvent
+        self._force_close = False
+        self._update_checked_on_close = False
+        self._close_check_in_progress = False
 
         # Settings
         self.current_language = "pl-PL"
@@ -1530,11 +1537,22 @@ class MainWindow(QMainWindow):
         """Jest nowsza wersja — pokaż okno pobierania (także przy cichym sprawdzaniu)."""
         self._manual_update_check = False
         self._update_status("")
+        was_closing = self._close_check_in_progress
+        self._close_check_in_progress = False
         dlg = UpdateAvailableDialog(self.update_manager, info, APP_VERSION, self)
         dlg.exec_()
+        # Jeśli pytaliśmy przy zamykaniu, a użytkownik nie zaktualizował teraz
+        # (kliknął „Później") — dokończ zamykanie aplikacji.
+        if was_closing:
+            self._finish_close()
 
     def _on_no_update(self):
         """Brak nowszej — informuj tylko, gdy użytkownik sprawdzał ręcznie."""
+        if self._close_check_in_progress:
+            self._close_check_in_progress = False
+            self._update_status("")
+            self._finish_close()
+            return
         if self._manual_update_check:
             self._manual_update_check = False
             QMessageBox.information(
@@ -1543,12 +1561,29 @@ class MainWindow(QMainWindow):
 
     def _on_update_check_failed(self, msg):
         """Błąd sprawdzania — komunikat tylko przy ręcznym; przy cichym milczy."""
+        if self._close_check_in_progress:
+            # Brak internetu przy zamykaniu nie może blokować zamknięcia.
+            self._close_check_in_progress = False
+            self._update_status("")
+            self._finish_close()
+            return
         if self._manual_update_check:
             self._manual_update_check = False
             QMessageBox.warning(
                 self, "Aktualizacje",
                 f"Nie udało się sprawdzić aktualizacji.\n\n{msg}")
         self._update_status("")
+
+    def _close_check_timeout(self):
+        """Bezpiecznik: jeśli serwer milczy ~4 s przy zamykaniu — zamknij i tak."""
+        if self._close_check_in_progress:
+            self._close_check_in_progress = False
+            self._finish_close()
+
+    def _finish_close(self):
+        """Dokończ zamykanie aplikacji, pomijając ponowne sprawdzanie."""
+        self._force_close = True
+        self.close()
 
     def _on_auto_check_updates_toggled(self, checked):
         """Przełącznik 'Sprawdzaj przy starcie' z menu."""
@@ -3336,6 +3371,23 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
 
     def closeEvent(self, event):
         """Handle window close."""
+        # Sprawdzenie aktualizacji PRZY ZAMYKANIU (Etap 1): zanim zamkniemy,
+        # raz na sesję cicho pytamy serwer o nowszą wersję. Jeśli jest — okno
+        # „aktualizować? tak/nie". Bezpiecznik 4 s, by brak/wolny internet nie
+        # blokował zamykania. _force_close pomija ten krok przy ponownym close().
+        if (getattr(self, 'auto_check_updates', True)
+                and not self._force_close
+                and not self._update_checked_on_close
+                and not self._close_check_in_progress):
+            self._update_checked_on_close = True
+            self._close_check_in_progress = True
+            self._manual_update_check = False
+            self._update_status("Sprawdzanie aktualizacji przed zamknięciem…")
+            QTimer.singleShot(4000, self._close_check_timeout)
+            self.update_manager.check_async()
+            event.ignore()
+            return
+
         # Remove menu position fixer
         if hasattr(self, '_menu_fixer'):
             QApplication.instance().removeEventFilter(self._menu_fixer)

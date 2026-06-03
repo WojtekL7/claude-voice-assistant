@@ -10,16 +10,21 @@ Przepływ:
                    porównaj wersje → update_available / no_update / check_failed
   download_async(info) → pobierz paczkę z postępem, zweryfikuj sha256 (i opcjonalnie
                    podpis Ed25519), zdejmij kwarantannę (macOS) → download_finished
-  open_installer(path) → otwórz pobraną paczkę instalatorem systemu
+  apply_update_async(path) → ZAINSTALUJ pobraną paczkę:
+                   • macOS + .zip + uruchomiona apka .app → samo-podmiana pakietu
+                     i restart (relaunch_ready) — bez ręcznego przeciągania,
+                   • pozostałe → otwórz paczkę instalatorem (installer_opened).
 
-Decyzje (M3): instalacja = „otwórz instalator" (bez automatycznej podmiany);
-podpis Ed25519 to gniazdo gotowe-ale-wyłączone (działa tylko gdy podano klucz
-publiczny i dostępna jest biblioteka `cryptography`). sha256 jest obowiązkowe,
-gdy appcast je podaje.
+Decyzje: sha256 obowiązkowe, gdy appcast je podaje. Podpis Ed25519 to gniazdo
+gotowe-ale-wyłączone (działa tylko z kluczem publicznym + biblioteką
+`cryptography`). Samo-podmiana (Etap 2) jest dziś realna na macOS; Linux/Windows
+zostają na „otwórz instalator", dopóki nie powstaną paczki podmienialne w miejscu
+(AppImage / instalator z pomocnikiem) — patrz TODO w build/packaging.
 """
 import os
 import re
 import hashlib
+import tempfile
 import threading
 import subprocess
 from pathlib import Path
@@ -28,7 +33,7 @@ from PyQt5.QtCore import QObject, pyqtSignal
 
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from core.platform_utils import is_macos, is_windows
+from core.platform_utils import is_macos, is_windows, macos_app_bundle
 
 
 class UpdateInfo:
@@ -58,6 +63,10 @@ class UpdateManager(QObject):
     download_progress = pyqtSignal(int, int)  # pobrane_bajty, total_bajtów (0 = nieznane)
     download_finished = pyqtSignal(str)     # ścieżka pobranej, zweryfikowanej paczki
     download_failed = pyqtSignal(str)       # błąd pobierania/weryfikacji (komunikat)
+    # ---- instalacja pobranej paczki (Etap 2) ----
+    relaunch_ready = pyqtSignal()           # macOS: podmiana przygotowana, aplikacja ma się zamknąć (pomocnik ją wznowi)
+    installer_opened = pyqtSignal(str)      # inne systemy: otwarto pobraną paczkę instalatorem
+    apply_failed = pyqtSignal(str)          # nie udało się zainstalować (komunikat)
 
     def __init__(self, appcast_url, current_version, platform_id,
                  public_key="", download_dir=None, parent=None):
@@ -188,6 +197,84 @@ class UpdateManager(QObject):
         # macOS: zdejmij kwarantannę, by instalacja była „gładka".
         self._remove_quarantine(dest)
         self.download_finished.emit(str(dest))
+
+    # ==================== Instalacja pobranej paczki (Etap 2) ====================
+
+    def apply_update_async(self, path):
+        """Zainstaluj pobraną paczkę. macOS + paczka .zip + uruchomiona apka .app
+        → prawdziwa samo-podmiana (aplikacja wymieni się i wystartuje ponownie).
+        Pozostałe przypadki → otwórz paczkę instalatorem systemu (jak dotąd).
+        Cała robota w wątku tła (rozpakowanie .zip bywa kilkusekundowe)."""
+        threading.Thread(target=self._apply_worker, args=(str(path),),
+                         daemon=True).start()
+
+    def can_self_replace(self, path) -> bool:
+        """Czy dla tej paczki zrobimy samo-podmianę (macOS, .zip, spakowana .app)."""
+        return (is_macos()
+                and str(path).lower().endswith(".zip")
+                and macos_app_bundle() is not None)
+
+    def _apply_worker(self, path):
+        if self.can_self_replace(path):
+            try:
+                target = macos_app_bundle()
+                self._macos_self_replace(path, target)
+            except Exception as e:
+                self.apply_failed.emit(f"Samo-aktualizacja nie powiodła się: {e}")
+                return
+            self.relaunch_ready.emit()
+            return
+        # Nie-macOS / nie-.zip / uruchomione „z kodu" → otwórz paczkę ręcznie.
+        if self.open_installer(path):
+            self.installer_opened.emit(str(path))
+        else:
+            self.apply_failed.emit(
+                f"Nie udało się otworzyć pobranej paczki. Plik:\n{path}")
+
+    def _macos_self_replace(self, zip_path, target_app: Path):
+        """Rozpakuj nową aplikację z .zip i uruchom pomocnika, który po
+        zamknięciu tej aplikacji podmieni pakiet .app i odpali nową wersję.
+
+        Używamy macowego `ditto` (nie zipfile Pythona!) — poprawnie odtwarza
+        dowiązania symboliczne i bity wykonywalności wewnątrz `.app` (frameworki
+        Qt mają symlinki, których `zipfile` by nie odtworzył → uszkodzona apka)."""
+        staging = Path(tempfile.mkdtemp(prefix="cva-update-"))
+        # ditto -x -k: rozpakuj archiwum PKZip zachowując symlinki/uprawnienia.
+        subprocess.run(["ditto", "-x", "-k", str(zip_path), str(staging)],
+                       check=True, capture_output=True)
+        apps = sorted(staging.glob("*.app")) or sorted(staging.rglob("*.app"))
+        if not apps:
+            raise RuntimeError("w pobranej paczce nie znaleziono aplikacji .app")
+        new_app = apps[0]
+        # Zdejmij kwarantannę z nowej apki (niepodpisana — by start był gładki).
+        subprocess.run(["xattr", "-dr", "com.apple.quarantine", str(new_app)],
+                       check=False, capture_output=True)
+
+        pid = os.getpid()
+        # Pomocnik: czeka aż TA aplikacja (pid) się zamknie, podmienia pakiet,
+        # uruchamia nową wersję. `mv` może paść między wolumenami → fallback cp.
+        script = staging / "cva-swap.sh"
+        script.write_text(
+            "#!/bin/bash\n"
+            "# Auto-podmiana Claude Voice Assistant — generowane przez updater.\n"
+            f"PID={pid}\n"
+            f'NEW_APP="{new_app}"\n'
+            f'TARGET="{target_app}"\n'
+            'for _ in $(seq 1 150); do\n'
+            '  kill -0 "$PID" 2>/dev/null || break\n'
+            '  sleep 0.2\n'
+            'done\n'
+            'sleep 0.5\n'
+            'rm -rf "$TARGET"\n'
+            'mv "$NEW_APP" "$TARGET" 2>/dev/null || cp -R "$NEW_APP" "$TARGET"\n'
+            'xattr -dr com.apple.quarantine "$TARGET" 2>/dev/null\n'
+            'open "$TARGET"\n'
+        )
+        script.chmod(0o755)
+        subprocess.Popen(
+            ["/bin/bash", str(script)],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True)
 
     # ==================== Weryfikacja / system ====================
 

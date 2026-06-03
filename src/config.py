@@ -41,7 +41,10 @@ TRIAL_DAYS = 30
 
 # ===== Auto-aktualizacja (M3) =====
 # Feed z najnowszymi wersjami per platforma. Format: packaging/appcast.example.json.
-UPDATE_APPCAST_URL = "https://srv1251441.hstgr.cloud/cva/appcast.json"
+# PUBLICZNY (bez hasła) — auto-aktualizator pobiera bez logowania. Leży w
+# /opt/cva-web/html/cva/ na VPS; ścieżka /cva ma osobny router traefik bez
+# basicauth (reszta strony pobierania zostaje za hasłem).
+UPDATE_APPCAST_URL = "https://pobierz.srv1251441.hstgr.cloud/cva/appcast.json"
 # Klucz publiczny Ed25519 (base64) do weryfikacji podpisu paczek aktualizacji.
 # PUSTY = weryfikacja podpisu wyłączona (sha256 i tak jest obowiązkowe). Włączymy
 # razem z UPDATE_SIGN w packaging/signing.conf, gdy paczki będą podpisywane.

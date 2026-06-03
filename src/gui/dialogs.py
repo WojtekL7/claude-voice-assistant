@@ -3516,6 +3516,10 @@ class UpdateAvailableDialog(QDialog):
         self.manager.download_progress.connect(self._on_progress)
         self.manager.download_finished.connect(self._on_finished)
         self.manager.download_failed.connect(self._on_failed)
+        # Instalacja pobranej paczki (Etap 2) — wynik wraca jednym z tych sygnałów.
+        self.manager.relaunch_ready.connect(self._on_relaunch_ready)
+        self.manager.installer_opened.connect(self._on_installer_opened)
+        self.manager.apply_failed.connect(self._on_apply_failed)
 
     def _start_download(self):
         self.download_btn.setEnabled(False)
@@ -3538,17 +3542,38 @@ class UpdateAvailableDialog(QDialog):
     def _on_finished(self, path):
         self.progress.setRange(0, 1)
         self.progress.setValue(1)
-        self.status_label.setText("Pobrano i zweryfikowano. Otwieram instalator…")
-        opened = self.manager.open_installer(path)
-        if opened:
-            QMessageBox.information(
-                self, "Aktualizacja pobrana",
-                "Instalator został otwarty. Dokończ instalację i uruchom aplikację ponownie.")
+        # macOS (.zip): aplikacja podmieni się sama i wystartuje ponownie.
+        # Inne systemy: otworzy się instalator. Decyzję podejmuje manager.
+        if self.manager.can_self_replace(path):
+            self.status_label.setText("Pobrano. Instaluję nową wersję…")
         else:
-            QMessageBox.information(
-                self, "Aktualizacja pobrana",
-                f"Paczka zapisana w:\n{path}\n\nOtwórz ją ręcznie, aby zainstalować.")
+            self.status_label.setText("Pobrano i zweryfikowano. Otwieram instalator…")
+        self.manager.apply_update_async(path)
+
+    def _on_relaunch_ready(self):
+        """macOS: podmiana przygotowana — zamknij aplikację, pomocnik ją wznowi."""
+        from PyQt5.QtWidgets import QApplication
+        self.status_label.setText("Gotowe. Uruchamiam nową wersję…")
+        QMessageBox.information(
+            self, "Aktualizacja gotowa",
+            "Nowa wersja zostanie zainstalowana, a aplikacja uruchomi się ponownie "
+            "za chwilę.")
         self.accept()
+        # Zamknij całą aplikację — pomocnik czeka na to, by podmienić pakiet.
+        QApplication.instance().quit()
+
+    def _on_installer_opened(self, path):
+        QMessageBox.information(
+            self, "Aktualizacja pobrana",
+            "Instalator został otwarty. Dokończ instalację i uruchom aplikację ponownie.")
+        self.accept()
+
+    def _on_apply_failed(self, msg):
+        self.progress.setVisible(False)
+        self.status_label.setText("")
+        self.download_btn.setEnabled(True)
+        self.later_btn.setEnabled(True)
+        QMessageBox.warning(self, "Błąd aktualizacji", msg)
 
     def _on_failed(self, msg):
         self.progress.setVisible(False)

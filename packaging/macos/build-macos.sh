@@ -97,7 +97,7 @@ else
   echo "== Build NIEPODPISANY (pierwsze uruchomienie: prawy klik -> Otwórz) =="
 fi
 
-# 5) DMG (z aliasem do /Applications, by przeciągnąć ikonę)
+# 5) DMG (z aliasem do /Applications, by przeciągnąć ikonę) — dla NOWYCH instalacji
 DMG="$DIST_DIR/ClaudeVoiceAssistant-$APP_VERSION-$PLATFORM_ID.dmg"
 echo "== Tworzenie DMG =="
 STAGING="$(mktemp -d)/dmg"
@@ -105,6 +105,14 @@ mkdir -p "$STAGING"
 cp -R "$APP_PATH" "$STAGING/"
 ln -s /Applications "$STAGING/Applications"
 hdiutil create -volname "$APP_NAME" -srcfolder "$STAGING" -ov -format UDZO "$DMG"
+
+# 5b) ZIP pakietu .app — dla SAMO-AKTUALIZACJI w aplikacji (Etap 2)
+# .dmg nie nadaje się do podmiany w miejscu; updater rozpakowuje .zip przez
+# `ditto -x -k`. `ditto -c -k --keepParent` zachowuje symlinki/uprawnienia i
+# trzyma pakiet „Foo.app" jako katalog nadrzędny w archiwum (tak jak Sparkle).
+ZIP="$DIST_DIR/ClaudeVoiceAssistant-$APP_VERSION-$PLATFORM_ID.zip"
+echo "== Tworzenie ZIP (samo-aktualizacja) =="
+ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$ZIP"
 
 # 6) Notaryzacja DMG (tylko gdy podpis włączony)
 if [[ "${MACOS_SIGN:-false}" == "true" && -n "${MACOS_NOTARY_PROFILE:-}" ]]; then
@@ -117,11 +125,15 @@ echo ""
 echo "=========================================="
 echo "GOTOWE"
 echo "  App: $APP_PATH"
-echo "  DMG: $DMG"
+echo "  DMG: $DMG   (nowe instalacje — strona pobierania)"
+echo "  ZIP: $ZIP   (samo-aktualizacja w aplikacji)"
 echo "=========================================="
 echo ""
-echo "Wpis do appcast.json wygenerujesz (sha256 + rozmiar):"
+echo "Wpis do appcast.json generuj z PACZKI ZIP (to jej używa samo-aktualizacja):"
 echo "  python3 \"$PROJECT_DIR/packaging/make-appcast-entry.py\" \\"
-echo "    \"$DMG\" --version $APP_VERSION \\"
+echo "    \"$ZIP\" --version $APP_VERSION \\"
 echo "    --base-url https://srv1251441.hstgr.cloud/cva/ \\"
 echo "    --appcast \"$PROJECT_DIR/packaging/appcast.json\" --merge"
+echo ""
+echo "Wgraj na serwer OBA pliki (.zip do samo-aktualizacji, .dmg na stronę):"
+echo "  scp \"$ZIP\" \"$DMG\" root@168.231.127.133:/opt/cva-web/html/cva/"

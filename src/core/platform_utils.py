@@ -157,3 +157,32 @@ def update_platform_id() -> str:
     'macos-arm64', 'macos-x64', 'linux-x64', 'windows-x64'.
     Pozwala jednemu serwerowi serwować paczki dla wszystkich systemów."""
     return f"{os_key()}-{arch()}"
+
+
+def is_frozen() -> bool:
+    """Czy aplikacja działa jako spakowana paczka (PyInstaller .app/.exe),
+    a NIE „z kodu źródłowego" (python src/main.py). Tylko spakowaną da się
+    podmienić w miejscu (samo-aktualizacja)."""
+    return bool(getattr(sys, "frozen", False))
+
+
+def macos_app_bundle() -> Path:
+    """Ścieżka do pakietu `.app` bieżącej (spakowanej) aplikacji na macOS,
+    albo None gdy to nie macOS / nie spakowana / nie wygląda na `.app`.
+
+    `sys.executable` w spakowanej apce to
+    `…/Claude Voice Assistant.app/Contents/MacOS/Claude Voice Assistant` —
+    pakiet `.app` to katalog trzy poziomy wyżej. Ta ścieżka jest celem
+    samo-podmiany (updater wymienia cały ten katalog)."""
+    if not (is_macos() and is_frozen()):
+        return None
+    try:
+        exe = Path(sys.executable).resolve()
+    except Exception:
+        return None
+    # …/Foo.app/Contents/MacOS/Foo  → parents[2] == …/Foo.app
+    if len(exe.parents) >= 3:
+        bundle = exe.parents[2]
+        if bundle.suffix == ".app" and bundle.is_dir():
+            return bundle
+    return None
