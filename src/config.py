@@ -10,7 +10,7 @@ APP_NAME = "Claude Voice Assistant"
 # APP_VERSION — JEDYNE źródło prawdy o wersji. Używane przez auto-aktualizację
 # (M3) do porównania z wersją w pliku appcast na serwerze. Podbijaj przy każdym
 # wydaniu (semver: MAJOR.MINOR.PATCH).
-APP_VERSION = "1.0.7"
+APP_VERSION = "1.0.8"
 APP_AUTHOR = "Fulfillment Polska"
 
 # Paths

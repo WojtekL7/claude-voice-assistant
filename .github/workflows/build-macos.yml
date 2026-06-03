@@ -36,16 +36,22 @@ jobs:
         if: always()
         run: ls -la dist || true
 
-      - name: Wyślij .dmg jako artefakt do pobrania
+      - name: Wyślij .dmg + .zip jako artefakt do pobrania
         uses: actions/upload-artifact@v4
         with:
           name: ClaudeVoiceAssistant-macos-arm64
-          path: dist/*.dmg
+          # .dmg = nowe instalacje (strona pobierania), .zip = samo-aktualizacja w aplikacji
+          path: |
+            dist/*.dmg
+            dist/*.zip
           if-no-files-found: error
 
       - name: Opublikuj Release (tylko przy tagu vX.Y.Z)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.dmg
+          # Publikujemy OBA: .dmg (pobranie ręczne) i .zip (auto-aktualizacja)
+          files: |
+            dist/*.dmg
+            dist/*.zip
           generate_release_notes: true
