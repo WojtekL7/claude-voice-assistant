@@ -14,6 +14,38 @@
     }
     html, body { margin: 0; padding: 0; height: 100%; background: #1b1b1d; overflow: hidden; }
     #terminal { width: 100%; height: 100%; }
+
+    /* Suwak boczny terminala — odwzorowanie 1:1 wyglądu z Linuksa (QTermWidget,
+       _QTERMWIDGET_SCROLLBAR_QSS w terminal_backend.py), żeby na macOS/Windows
+       wyglądał TAK SAMO, a nie domyślnym cienkim overlay-em przeglądarki.
+       Zdefiniowanie ::-webkit-scrollbar wyłącza macowy overlay → suwak zawsze
+       widoczny i spójny na wszystkich platformach. */
+    .xterm-viewport::-webkit-scrollbar {
+      width: 12px;
+      background: transparent;
+    }
+    .xterm-viewport::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .xterm-viewport::-webkit-scrollbar-thumb {
+      /* Gradient poziomy #888 → #aaa → #888, rogi 5px, min. wysokość 30px.
+         Margines 2px (jak w Qt) odtworzony przezroczystą ramką + background-clip. */
+      background: linear-gradient(to right, #888888 0%, #aaaaaa 50%, #888888 100%);
+      border-radius: 5px;
+      min-height: 30px;
+      border: 2px solid transparent;
+      background-clip: padding-box;
+    }
+    .xterm-viewport::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(to right, #999999 0%, #bbbbbb 50%, #999999 100%);
+      background-clip: padding-box;
+    }
+    /* Brak strzałek góra/dół (jak add-line/sub-line: height 0 w Qt). */
+    .xterm-viewport::-webkit-scrollbar-button {
+      display: none;
+      height: 0;
+      width: 0;
+    }
   </style>
 </head>
 <body>
