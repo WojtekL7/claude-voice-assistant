@@ -107,6 +107,12 @@ TTS_DEFAULT_VOLUME = "+0%"
 AUDIO_SAMPLE_RATE = 16000
 AUDIO_CHANNELS = 1
 
+# Ochrona pamięci: każda AKTYWNA zakładka-agent uruchamia osobny proces
+# `claude` (Node.js) zużywający ~1.5–2 GB RAM. Na słabszych maszynach kilku
+# agentów naraz wyczerpuje RAM i zawiesza pulpit. Po przekroczeniu tego progu
+# apka OSTRZEGA przed uruchomieniem kolejnego agenta (nie blokuje twardo).
+MAX_ACTIVE_AGENTS = 3
+
 # UI Settings
 WINDOW_MIN_WIDTH = 800
 WINDOW_MIN_HEIGHT = 600

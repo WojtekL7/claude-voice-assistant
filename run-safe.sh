@@ -2,14 +2,18 @@
 # Claude Voice Assistant — uruchomienie z limitem pamięci (ochrona systemu)
 #
 # Dlaczego:
-#   System (Ubuntu 24.04, Lenovo Z51-70, 7.7 GB RAM, Intel HD 5500) zawieszał
-#   się hard wraz z Voice Assistant + Chrome + Claude CLI (łącznie >5 GB).
-#   Memory pressure → Mutter (kompozytor) zalewany → freeze całego desktopu.
+#   System (Ubuntu 24.04, Lenovo Z51-70, ~11 GB RAM, Intel HD 5500) zawieszał
+#   się hard wraz z Voice Assistant + Chrome + Claude CLI. Każda AKTYWNA
+#   zakładka-agent uruchamia osobny proces `claude` (Node.js) ~1.5–2 GB;
+#   kilku agentów naraz wyczerpuje RAM. Memory pressure → Mutter (kompozytor)
+#   zalewany → freeze całego desktopu.
 #
-# Ten skrypt uruchamia apkę w izolowanym cgroup z limitem 2 GB RAM:
+# Ten skrypt uruchamia apkę w izolowanym cgroup z limitem 4 GB RAM:
 #   - Jeśli apka zacznie ciec lub żreć pamięć — OOM-killer zabije TYLKO ją,
 #     a NIE zamrozi systemu.
 #   - Bez limitu OOM-killer wybiera losowo, czasem celuje w gnome-shell.
+#   - 4 GB mieści GUI + ~2 aktywnych agentów. Sama apka dodatkowo OSTRZEGA
+#     przy aktywacji >3 agentów (config.MAX_ACTIVE_AGENTS).
 #
 # Użycie:
 #   ./run-safe.sh                  # X11/XWayland (domyślny, stabilny)
@@ -26,8 +30,8 @@ if [ -f venv/bin/activate ]; then
     source venv/bin/activate
 fi
 
-# Limit pamięci 2 GB. systemd-run --user --scope tworzy efemeryczny cgroup
-# pod systemd usera. MemoryMax=2G to hard limit (OOM-killer zabije apkę
+# Limit pamięci 4 GB. systemd-run --user --scope tworzy efemeryczny cgroup
+# pod systemd usera. MemoryMax=4G to hard limit (OOM-killer zabije apkę
 # zanim pamięć systemu się skończy).
 # CPUQuota=300% pozwala użyć do 3 z 4 rdzeni (zostaw 1 dla GNOME shell).
 #
@@ -40,7 +44,7 @@ exec systemd-run \
     --user \
     --scope \
     --unit="claude-voice-assistant-$$" \
-    -p MemoryMax=2G \
-    -p MemorySwapMax=1G \
+    -p MemoryMax=4G \
+    -p MemorySwapMax=2G \
     -p CPUQuota=300% \
     setsid python3 src/main.py "$@"

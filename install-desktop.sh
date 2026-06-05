@@ -15,7 +15,11 @@ Type=Application
 Name=Claude Voice Assistant
 GenericName=Voice Assistant
 Comment=Voice interaction with Claude Code CLI
-Exec=$SCRIPT_DIR/venv/bin/python $SCRIPT_DIR/src/main.py
+# Uruchamiamy przez run-safe.sh (cgroup z limitem RAM), a NIE bezpośrednio
+# przez python — bez limitu kilku agentów potrafiło wyczerpać pamięć i
+# zamrozić cały pulpit GNOME. run-safe.sh izoluje apkę, więc OOM-killer
+# ubije tylko ją, a nie system.
+Exec=$SCRIPT_DIR/run-safe.sh
 Icon=$SCRIPT_DIR/src/assets/icon.png
 Terminal=false
 Categories=Utility;Development;

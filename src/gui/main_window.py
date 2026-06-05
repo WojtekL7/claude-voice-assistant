@@ -283,6 +283,7 @@ from config import (
     AGENTS_FILE, MEMORY_PROJECTS_FILE, DEFAULT_AGENTS, DEFAULT_MEMORY_PROJECTS,
     ASSETS_DIR, CLAUDE_MODEL_CONTEXT_LIMITS, DEFAULT_AGENT_MODEL,
     UPDATE_APPCAST_URL, UPDATE_PUBLIC_KEY, UPDATE_DOWNLOAD_DIR,
+    MAX_ACTIVE_AGENTS,
 )
 from core.claude_bridge import ClaudeBridgeAsync
 from core.tts_engine import TTSEngine, TTSState
@@ -1030,6 +1031,55 @@ class MainWindow(QMainWindow):
         self.tab_widget.removeTab(index)
         widget.deleteLater()
 
+    def _active_agent_count(self) -> int:
+        """Ile zakładek z uruchomionym `claude` jest aktywnych (żre RAM).
+
+        Liczymy tylko aktywowane AgentTab-y będące prawdziwymi agentami —
+        zwykłe terminale (is_plain_terminal) nie uruchamiają claude, więc
+        nie obciążają pamięci w ten sam sposób i ich nie wliczamy.
+        """
+        return sum(
+            1 for t in self.agent_tabs.values()
+            if isinstance(t, AgentTab) and t.is_activated()
+            and not getattr(t, 'is_plain_terminal', False)
+        )
+
+    def _confirm_more_agents(self) -> bool:
+        """Ostrzeż przed uruchomieniem kolejnego agenta. True = kontynuuj."""
+        active = self._active_agent_count()
+        reply = QMessageBox.question(
+            self,
+            "Dużo aktywnych agentów",
+            f"Masz już {active} aktywnych agentów. Każdy uruchamia osobny "
+            f"proces Claude zużywający ok. 1,5–2 GB pamięci RAM.\n\n"
+            f"Uruchomienie kolejnego może spowolnić lub zawiesić komputer.\n\n"
+            f"Czy na pewno uruchomić tego agenta?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        return reply == QMessageBox.Yes
+
+    def _revert_tab_activation(self):
+        """Wróć do poprzednio aktywnej zakładki bez uruchamiania nowej.
+
+        Wołane gdy użytkownik odmówił uruchomienia kolejnego agenta.
+        Poprzednia zakładka (last_active_agent_id) jest już aktywowana, więc
+        przełączenie na nią NIE wyzwoli ponownie ostrzeżenia.
+        """
+        prev_id = getattr(self, 'last_active_agent_id', None)
+        prev_tab = self.agent_tabs.get(prev_id) if prev_id else None
+        if isinstance(prev_tab, AgentTab):
+            idx = self.tab_widget.indexOf(prev_tab)
+            if idx >= 0:
+                self.tab_widget.setCurrentIndex(idx)
+                return
+        # Brak sensownej poprzedniej zakładki — wróć do pierwszej aktywowanej.
+        for i in range(self.tab_widget.count()):
+            w = self.tab_widget.widget(i)
+            if isinstance(w, AgentTab) and w.is_activated():
+                self.tab_widget.setCurrentIndex(i)
+                return
+
     def _on_tab_changed(self, index: int):
         """Handle tab change.
 
@@ -1048,6 +1098,16 @@ class MainWindow(QMainWindow):
         current = self.tab_widget.currentWidget()
         if isinstance(current, AgentTab):
             if not current.is_activated():
+                # Ochrona pamięci: każdy aktywny agent to osobny proces `claude`
+                # (~1.5–2 GB RAM). Po przekroczeniu progu ostrzegamy, zanim
+                # uruchomimy kolejny — inaczej kilku agentów zawiesza komputer.
+                if self._active_agent_count() >= MAX_ACTIVE_AGENTS \
+                        and not current.is_plain_terminal:
+                    if not self._confirm_more_agents():
+                        # Użytkownik zrezygnuje — wracamy do poprzedniej
+                        # zakładki BEZ uruchamiania claude w bieżącej.
+                        self._revert_tab_activation()
+                        return
                 self._update_status(f"⏳ Uruchamiam {current.agent_name}...")
                 current.activate()
             # Zapamiętaj ostatnio aktywnego — zostanie zapisane przez
