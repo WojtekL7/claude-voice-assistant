@@ -92,3 +92,4 @@ api_keys.txt
 
 # Generowane przy buildzie macOS (z icon.png)
 src/assets/icon.icns
+dist-release/

@@ -1,14 +1,14 @@
 {
   "_comment": "Feed auto-aktualizacji Claude Voice Assistant. PUBLICZNY na VPS: /opt/cva-web/html/cva/appcast.json -> https://pobierz.srv1251441.hstgr.cloud/cva/appcast.json . Aplikacja porownuje config.APP_VERSION z 'version' wpisu dla swojej platformy (core.platform_utils.update_platform_id). macOS uzywa paczki .zip (samo-podmiana). Wpisy aktualizuj generatorem: packaging/make-appcast-entry.py PACZKA.zip --version X.Y.Z --base-url https://pobierz.srv1251441.hstgr.cloud/cva/ --appcast packaging/appcast.json --merge",
   "latest": {
-    "version": "1.0.8",
+    "version": "1.0.9",
     "notes_url": "",
     "mandatory": false,
     "platforms": {
       "macos-arm64": {
-        "url": "https://pobierz.srv1251441.hstgr.cloud/cva/ClaudeVoiceAssistant-1.0.8-macos-arm64.zip",
-        "size": 122966484,
-        "sha256": "5e33726d7d368be01e35eda3af38f54b796bb1763fc58d166dd24ecc399a21db",
+        "url": "https://pobierz.srv1251441.hstgr.cloud/cva/ClaudeVoiceAssistant-1.0.9-macos-arm64.zip",
+        "size": 122973886,
+        "sha256": "c3748ffc475180279f03a24b3cd95296f05139594cc380000d91308f15fe30ed",
         "signature": ""
       }
     }
