@@ -529,6 +529,9 @@ class MainWindow(QMainWindow):
                 border: none;
                 background-color: transparent;
             }}
+            QTabWidget::tab-bar {{
+                alignment: left;
+            }}
             QTabBar::tab {{
                 background-color: #2d0a1e;
                 color: #ffffff;
