@@ -1,0 +1,56 @@
+name: Build Windows app
+
+# Buduje gotowy instalator .exe na maszynie Windows w chmurze GitHuba.
+# Uruchamia się:
+#   - ręcznie (przycisk "Run workflow" w zakładce Actions), oraz
+#   - automatycznie po nadaniu taga wersji (np. v1.0.12) — wtedy dodatkowo
+#     publikuje Release z plikiem Setup.exe do pobrania.
+# (.exe da się zbudować TYLKO na Windows — analogicznie jak .dmg tylko na macOS.)
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write   # potrzebne, by opublikować Release przy tagu
+
+jobs:
+  build-windows:
+    name: Zbuduj instalator .exe (x64)
+    runs-on: windows-latest
+    steps:
+      - name: Pobierz kod
+        uses: actions/checkout@v4
+
+      - name: Zainstaluj Pythona 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Zainstaluj Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Zbuduj aplikację i instalator
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File packaging\windows\build-windows.ps1
+
+      - name: Pokaż wynik (zawartość dist/)
+        if: always()
+        shell: pwsh
+        run: Get-ChildItem dist -ErrorAction SilentlyContinue
+
+      - name: Wyślij instalator jako artefakt do pobrania
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClaudeVoiceAssistant-windows-x64
+          # Setup.exe = i instalacja ręczna (strona pobierania), i samo-aktualizacja w aplikacji.
+          path: dist/ClaudeVoiceAssistant-Setup-*.exe
+          if-no-files-found: error
+
+      - name: Opublikuj Release (tylko przy tagu vX.Y.Z)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/ClaudeVoiceAssistant-Setup-*.exe
+          generate_release_notes: true
