@@ -16,7 +16,7 @@ from PyQt5.QtWidgets import (
     QToolButton, QSizePolicy, QApplication, QInputDialog,
     QColorDialog, QGridLayout, QGroupBox, QScrollArea, QFileDialog,
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
-    QTabWidget, QTabBar, QProgressBar, QProxyStyle, QStyle
+    QTabWidget, QTabBar, QProgressBar, QProxyStyle, QStyle, QStyleFactory
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QObject, QEvent, QPoint
 from PyQt5.QtGui import QFont, QTextCursor, QIcon, QKeySequence, QPalette, QColor, QTextCharFormat
@@ -31,19 +31,38 @@ except ImportError:
 
 
 class _LeftAlignedTabStyle(QProxyStyle):
-    """Wyrównuje pasek zakładek do LEWEJ na każdej platformie.
+    """Wyrównuje pasek zakładek do LEWEJ na każdej platformie (zwł. macOS).
 
-    Na macOS natywny styl (QMacStyle) centruje pasek zakładek przez style-hint
-    SH_TabBar_Alignment, którego arkusz stylów Qt (``QTabWidget::tab-bar {alignment}``)
-    NIE przebija. Nadpisujemy ten style-hint bezpośrednio — kolory/kształt/ikona X
-    z QSS działają dalej, zmienia się tylko wyrównanie. Na Linuksie/Fusion domyślnie
-    i tak jest lewo, więc zero regresji.
+    Tło problemu (potwierdzone na realnym Macu + research):
+    macOS centruje zakładki NIE przez sam style-hint SH_TabBar_Alignment (ten
+    QMacStyle ignoruje — dlatego ani CSS `tab-bar{alignment:left}`, ani sam
+    QProxyStyle nadpisujący ten hint nie działały). Realne centrowanie liczy
+    styl *QTabWidget* w `subElementRect(SE_TabWidgetTabBar)` — zwraca prostokąt
+    paska wyśrodkowany w szerokości widżetu.
+
+    Dlatego ta nakładka robi DWIE rzeczy i jest oparta o silnik **Fusion**
+    (nie-macowy, który wyrównanie do lewej respektuje):
+      1. `subElementRect(SE_TabWidgetTabBar)` — dosuwa prostokąt paska do lewej
+         krawędzi, jeśli styl bazowy zwrócił go przesuniętego w prawo (centrowanie).
+      2. `styleHint(SH_TabBar_Alignment)` -> Qt.AlignLeft — wyrównanie zakładek
+         wewnątrz paska (dla porządku / innych stylów).
+
+    Podpinana do *QTabWidget* (decyduje o położeniu paska) i do jego paska.
+    Kolory/kształt/ikona X z QSS działają dalej. Na Linuksie i tak lewo → zero regresji.
     """
 
     def styleHint(self, hint, option=None, widget=None, returnData=None):
         if hint == QStyle.SH_TabBar_Alignment:
             return Qt.AlignLeft
         return super().styleHint(hint, option, widget, returnData)
+
+    def subElementRect(self, element, option, widget=None):
+        rect = super().subElementRect(element, option, widget)
+        if element == QStyle.SE_TabWidgetTabBar and option is not None:
+            # Dosuń pasek zakładek do lewej krawędzi (gdy styl bazowy wycentrował).
+            if rect.left() > option.rect.left():
+                rect.moveLeft(option.rect.left())
+        return rect
 
 
 class SignalBridge(QObject):
@@ -533,10 +552,17 @@ class MainWindow(QMainWindow):
 
         # Tab widget for agents
         self.tab_widget = QTabWidget()
-        # Wyrównaj pasek zakładek do lewej także na macOS (QMacStyle centruje go
-        # przez style-hint, którego CSS nie przebija). Referencję TRZYMAMY na self,
-        # inaczej garbage collector skasuje styl i wyrównanie wróci na środek.
-        self._tab_style = _LeftAlignedTabStyle()
+        # Wyrównaj zakładki do lewej także na macOS. Centrowanie liczy styl
+        # QTabWidget (SE_TabWidgetTabBar), a QMacStyle ignoruje hint wyrównania —
+        # dlatego bazujemy na silniku Fusion (respektuje lewą) i dosuwamy pasek
+        # jawnie. Nakładkę podpinamy do QTabWidget (położenie paska) ORAZ do paska.
+        # Referencję TRZYMAMY na self — inaczej GC skasuje styl i wróci środek.
+        _fusion = QStyleFactory.create("Fusion")
+        self._tab_style = (
+            _LeftAlignedTabStyle(_fusion) if _fusion is not None
+            else _LeftAlignedTabStyle()
+        )
+        self.tab_widget.setStyle(self._tab_style)
         self.tab_widget.tabBar().setStyle(self._tab_style)
         self.tab_widget.setTabsClosable(True)
         self.tab_widget.setMovable(True)
