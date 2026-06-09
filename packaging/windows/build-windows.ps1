@@ -22,7 +22,7 @@ Write-Host "== Korzeń repo: $Root =="
 
 # 1) Wersja z JEDYNEGO źródła prawdy (src/config.py).
 $configText = Get-Content -Raw "src\config.py"
-if ($configText -match 'APP_VERSION\s*=\s*["'']([^"'']+)["'']') {
+if ($configText -match 'APP_VERSION\s*=\s*"([^"]+)"') {
     $Version = $Matches[1]
 } else {
     throw "Nie znaleziono APP_VERSION w src\config.py"
