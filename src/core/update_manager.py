@@ -13,13 +13,17 @@ Przepływ:
   apply_update_async(path) → ZAINSTALUJ pobraną paczkę:
                    • macOS + .zip + uruchomiona apka .app → samo-podmiana pakietu
                      i restart (relaunch_ready) — bez ręcznego przeciągania,
-                   • pozostałe → otwórz paczkę instalatorem (installer_opened).
+                   • Windows + .exe + apka spakowana → uruchom instalator Inno PO CICHU
+                     (/VERYSILENT, per-user, bez UAC); Restart Manager podmienia pliki,
+                     sekcja [Run] wznawia program (relaunch_ready) — też bez klikania,
+                   • pozostałe (np. Linux / uruchomienie „z kodu") → otwórz paczkę
+                     instalatorem (installer_opened).
 
 Decyzje: sha256 obowiązkowe, gdy appcast je podaje. Podpis Ed25519 to gniazdo
 gotowe-ale-wyłączone (działa tylko z kluczem publicznym + biblioteką
-`cryptography`). Samo-podmiana (Etap 2) jest dziś realna na macOS; Linux/Windows
-zostają na „otwórz instalator", dopóki nie powstaną paczki podmienialne w miejscu
-(AppImage / instalator z pomocnikiem) — patrz TODO w build/packaging.
+`cryptography`). Samo-podmiana (Etap 2) jest dziś realna na macOS i Windows; Linux
+zostaje na „otwórz instalator", dopóki nie powstanie paczka podmienialna w miejscu
+(AppImage) — patrz TODO w build/packaging.
 """
 import os
 import re
@@ -33,7 +37,7 @@ from PyQt5.QtCore import QObject, pyqtSignal
 
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from core.platform_utils import is_macos, is_windows, macos_app_bundle
+from core.platform_utils import is_macos, is_windows, is_frozen, macos_app_bundle
 
 
 class UpdateInfo:
@@ -209,19 +213,29 @@ class UpdateManager(QObject):
                          daemon=True).start()
 
     def can_self_replace(self, path) -> bool:
-        """Czy dla tej paczki zrobimy samo-podmianę (macOS, .zip, spakowana .app)."""
-        return (is_macos()
-                and str(path).lower().endswith(".zip")
-                and macos_app_bundle() is not None)
+        """Czy dla tej paczki zrobimy prawdziwą samo-podmianę:
+          • macOS: paczka .zip + uruchomiona apka .app,
+          • Windows: pobrany instalator .exe + aplikacja spakowana (frozen) —
+            instalator (Inno, per-user) podmieni pliki po cichu i wznowi program.
+        Inaczej (np. uruchomienie „z kodu") → otwórz instalator ręcznie."""
+        p = str(path).lower()
+        if is_macos() and p.endswith(".zip") and macos_app_bundle() is not None:
+            return True
+        if is_windows() and p.endswith(".exe") and is_frozen():
+            return True
+        return False
 
     def _apply_worker(self, path):
         if self.can_self_replace(path):
             try:
-                target = macos_app_bundle()
-                self._macos_self_replace(path, target)
+                if is_macos():
+                    self._macos_self_replace(path, macos_app_bundle())
+                elif is_windows():
+                    self._windows_self_replace(path)
             except Exception as e:
                 self.apply_failed.emit(f"Samo-aktualizacja nie powiodła się: {e}")
                 return
+            # macOS: pomocnik wznowi apkę; Windows: instalator (sekcja [Run]) ją wznowi.
             self.relaunch_ready.emit()
             return
         # Nie-macOS / nie-.zip / uruchomione „z kodu" → otwórz paczkę ręcznie.
@@ -275,6 +289,24 @@ class UpdateManager(QObject):
             ["/bin/bash", str(script)],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             start_new_session=True)
+
+    def _windows_self_replace(self, installer_path):
+        """Uruchom pobrany instalator Inno PO CICHU i odłączony od tej aplikacji.
+
+        Instalator jest per-user ({localappdata}) → bez UAC. Z `CloseApplications=yes`
+        w skrypcie .iss Inno (Restart Manager) zamknie działającą aplikację, podmieni
+        pliki i — dzięki sekcji [Run] bez `skipifsilent` — wznowi nową wersję. My zaraz
+        po starcie instalatora emitujemy `relaunch_ready` (aplikacja sama się zamyka),
+        więc pliki nie są zablokowane.
+
+        DETACHED_PROCESS + CREATE_NEW_PROCESS_GROUP: instalator przeżyje zamknięcie
+        aplikacji (inaczej zginąłby razem z procesem-rodzicem)."""
+        DETACHED_PROCESS = getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
+        CREATE_NEW_PROCESS_GROUP = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200)
+        subprocess.Popen(
+            [str(installer_path), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"],
+            creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+            close_fds=True)
 
     # ==================== Weryfikacja / system ====================
 

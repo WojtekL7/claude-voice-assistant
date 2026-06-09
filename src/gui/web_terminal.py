@@ -26,12 +26,26 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from core.platform_utils import default_shell, is_windows
 from config import ASSETS_DIR
 
-# PTY: ptyprocess to wariant uniksowy (Linux/macOS). Windows = ConPTY w przyszłości.
-try:
-    import ptyprocess
-    _PTY_AVAILABLE = not is_windows()
-except Exception:
-    _PTY_AVAILABLE = False
+# PTY: dwa warianty za jednym interfejsem.
+#  - Unix (Linux/macOS): ptyprocess (read=bytes, write=bytes, terminate(force=)).
+#  - Windows: winpty (pywinpty) → ConPTY (read=str, write=str, terminate()).
+# _PTY_KIND wybiera gałąź w _spawn/_read_loop/_write_pty/shutdown.
+if is_windows():
+    try:
+        import winpty  # pywinpty — ConPTY (Windows 10+)
+        _PTY_AVAILABLE = True
+        _PTY_KIND = "winpty"
+    except Exception:
+        _PTY_AVAILABLE = False
+        _PTY_KIND = None
+else:
+    try:
+        import ptyprocess
+        _PTY_AVAILABLE = True
+        _PTY_KIND = "ptyprocess"
+    except Exception:
+        _PTY_AVAILABLE = False
+        _PTY_KIND = None
 
 # Jedno źródło prawdy o ścieżce zasobów (config.ASSETS_DIR jest świadomy
 # wersji spakowanej — sys._MEIPASS — więc terminal.html działa też w .app/.exe).
@@ -178,32 +192,37 @@ class WebTerminal(QWidget):
 
     def _spawn(self):
         if not _PTY_AVAILABLE:
-            # TODO(Windows): backend ConPTY (pywinpty) zamiast tego komunikatu.
-            self._data_ready.emit(
-                "\r\n\x1b[33m[Terminal niedostępny: brak PTY na tym systemie]\x1b[0m\r\n")
+            hint = ("\r\n\x1b[33m[Terminal niedostępny: brak pakietu 'pywinpty' "
+                    "— zainstaluj: pip install pywinpty]\x1b[0m\r\n") if is_windows() else \
+                   "\r\n\x1b[33m[Terminal niedostępny: brak PTY na tym systemie]\x1b[0m\r\n"
+            self._data_ready.emit(hint)
             return
         cols, rows = self._pending_size
         env = dict(os.environ)
         env["TERM"] = "xterm-256color"
         env["COLORTERM"] = "truecolor"
-        # Aplikacja uruchamiana z Findera (macOS) / menu dostaje UBOGI PATH i nie
-        # widzi narzędzi z profilu użytkownika (Homebrew, nvm, node). Bez tego
-        # `claude` nie znajduje `node` → "env: node: No such file or directory".
-        # Dwie warstwy zaradcze:
-        #  1) login shell (-l) — wczytuje ~/.zprofile/~/.profile, jak Terminal.app,
-        #  2) dołożenie typowych lokalizacji binarek do PATH (na wszelki wypadek).
-        for extra in ("/opt/homebrew/bin", "/usr/local/bin",
-                      str(Path.home() / ".local" / "bin"),
-                      str(Path.home() / ".npm-global" / "bin")):
-            parts = env.get("PATH", "").split(os.pathsep)
-            if extra not in parts:
-                env["PATH"] = (env.get("PATH", "") + os.pathsep + extra).strip(os.pathsep)
+        # macOS/Linux: aplikacja z Findera/menu dostaje UBOGI PATH i nie widzi
+        # narzędzi z profilu (Homebrew, nvm, node) → `claude` nie znajduje `node`.
+        # Zaradczo: 1) login shell (-l), 2) dołożenie typowych lokalizacji do PATH.
+        # Na Windows te ścieżki nie istnieją i PATH ustawia instalator — pomijamy.
+        if not is_windows():
+            for extra in ("/opt/homebrew/bin", "/usr/local/bin",
+                          str(Path.home() / ".local" / "bin"),
+                          str(Path.home() / ".npm-global" / "bin")):
+                parts = env.get("PATH", "").split(os.pathsep)
+                if extra not in parts:
+                    env["PATH"] = (env.get("PATH", "") + os.pathsep + extra).strip(os.pathsep)
         argv = [self._shell]
         if not is_windows():
-            argv.append("-l")  # login shell
+            argv.append("-l")  # login shell (Unix); na Windows powłoka jest non-login
         try:
-            self._proc = ptyprocess.PtyProcess.spawn(
-                argv, dimensions=(rows, cols), env=env, cwd=self._cwd)
+            if _PTY_KIND == "winpty":
+                # pywinpty: komenda jako string (powłoka bez argów); wymiary (rows, cols).
+                self._proc = winpty.PtyProcess.spawn(
+                    self._shell, dimensions=(rows, cols), env=env, cwd=self._cwd)
+            else:
+                self._proc = ptyprocess.PtyProcess.spawn(
+                    argv, dimensions=(rows, cols), env=env, cwd=self._cwd)
         except Exception as e:
             self._data_ready.emit(f"\r\n\x1b[31m[Nie udało się uruchomić powłoki: {e}]\x1b[0m\r\n")
             return
@@ -221,7 +240,8 @@ class WebTerminal(QWidget):
                 break
             if not data:
                 break
-            text = self._decoder.decode(data)
+            # winpty zwraca str (już zdekodowany), ptyprocess — bytes.
+            text = data if _PTY_KIND == "winpty" else self._decoder.decode(data)
             if text:
                 self._data_ready.emit(text)
         self.finished.emit()
@@ -240,7 +260,8 @@ class WebTerminal(QWidget):
     def _write_pty(self, data: str):
         if self._proc is not None:
             try:
-                self._proc.write(data.encode("utf-8"))
+                # winpty pisze str, ptyprocess — bytes.
+                self._proc.write(data if _PTY_KIND == "winpty" else data.encode("utf-8"))
             except Exception:
                 pass
 
@@ -256,7 +277,10 @@ class WebTerminal(QWidget):
         self._stop.set()
         if self._proc is not None:
             try:
-                self._proc.terminate(force=True)
+                if _PTY_KIND == "winpty":
+                    self._proc.terminate()  # winpty.terminate() nie przyjmuje force=
+                else:
+                    self._proc.terminate(force=True)
             except Exception:
                 pass
             self._proc = None
