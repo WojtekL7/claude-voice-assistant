@@ -16,7 +16,7 @@ from PyQt5.QtWidgets import (
     QToolButton, QSizePolicy, QApplication, QInputDialog,
     QColorDialog, QGridLayout, QGroupBox, QScrollArea, QFileDialog,
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
-    QTabWidget, QTabBar, QProgressBar
+    QTabWidget, QTabBar, QProgressBar, QProxyStyle, QStyle
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QObject, QEvent, QPoint
 from PyQt5.QtGui import QFont, QTextCursor, QIcon, QKeySequence, QPalette, QColor, QTextCharFormat
@@ -28,6 +28,22 @@ try:
 except ImportError:
     QTERMWIDGET_AVAILABLE = False
     print("Warning: QTermWidget not available, using fallback QTextEdit")
+
+
+class _LeftAlignedTabStyle(QProxyStyle):
+    """Wyrównuje pasek zakładek do LEWEJ na każdej platformie.
+
+    Na macOS natywny styl (QMacStyle) centruje pasek zakładek przez style-hint
+    SH_TabBar_Alignment, którego arkusz stylów Qt (``QTabWidget::tab-bar {alignment}``)
+    NIE przebija. Nadpisujemy ten style-hint bezpośrednio — kolory/kształt/ikona X
+    z QSS działają dalej, zmienia się tylko wyrównanie. Na Linuksie/Fusion domyślnie
+    i tak jest lewo, więc zero regresji.
+    """
+
+    def styleHint(self, hint, option=None, widget=None, returnData=None):
+        if hint == QStyle.SH_TabBar_Alignment:
+            return Qt.AlignLeft
+        return super().styleHint(hint, option, widget, returnData)
 
 
 class SignalBridge(QObject):
@@ -517,6 +533,11 @@ class MainWindow(QMainWindow):
 
         # Tab widget for agents
         self.tab_widget = QTabWidget()
+        # Wyrównaj pasek zakładek do lewej także na macOS (QMacStyle centruje go
+        # przez style-hint, którego CSS nie przebija). Referencję TRZYMAMY na self,
+        # inaczej garbage collector skasuje styl i wyrównanie wróci na środek.
+        self._tab_style = _LeftAlignedTabStyle()
+        self.tab_widget.tabBar().setStyle(self._tab_style)
         self.tab_widget.setTabsClosable(True)
         self.tab_widget.setMovable(True)
         self.tab_widget.tabCloseRequested.connect(self._close_agent_tab)
