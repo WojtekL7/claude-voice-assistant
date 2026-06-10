@@ -69,6 +69,13 @@ def configure_qt_environment():
         os.environ.setdefault("QT_IM_MODULE", "none")
     # macOS: backend 'cocoa' i IM systemowy są poprawne — nic nie ruszamy.
     if is_windows():
+        # W spakowanej aplikacji (PyInstaller) proces renderowania Chromium
+        # ginął NATYCHMIAST (renderProcessTerminated status=2, kod 0x80000003)
+        # → terminal zostawał pustym polem (bug 1.0.12; diagnoza CI 2026-06-10).
+        # Sandbox Chromium nie współpracuje z układem katalogów PyInstallera.
+        # Wyświetlamy WYŁĄCZNIE lokalny terminal.html (zero treści z sieci),
+        # więc wyłączenie sandboxa jest tu bezpieczne.
+        os.environ.setdefault("QTWEBENGINE_DISABLE_SANDBOX", "1")
         # Diagnostyka WebTerminala: aplikacja okienkowa (console=False) nie ma
         # stderr, więc Chromium (QtWebEngine) padał bez śladu → "puste pole"
         # w 1.0.12. Kierujemy log Chromium do pliku obok konfiguracji

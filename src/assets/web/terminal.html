@@ -50,6 +50,25 @@
 </head>
 <body>
   <div id="terminal"></div>
+  <script>
+    // Polyfill: PyQtWebEngine-Qt5 5.15.2 na Windows niesie Chromium 83, a
+    // xterm.js 5.x używa Element.replaceChildren (Chromium 86+). Bez tego
+    // xterm.js padał ("replaceChildren is not a function") → terminal zostawał
+    // pustym polem bez kursora (bug 1.0.12). Na nowszych Chromium = no-op.
+    (function () {
+      function polyfill(proto) {
+        if (proto && !proto.replaceChildren) {
+          proto.replaceChildren = function () {
+            while (this.lastChild) this.removeChild(this.lastChild);
+            if (arguments.length) this.append.apply(this, arguments);
+          };
+        }
+      }
+      polyfill(window.Element && Element.prototype);
+      polyfill(window.Document && Document.prototype);
+      polyfill(window.DocumentFragment && DocumentFragment.prototype);
+    })();
+  </script>
   <script src="vendor/xterm.js"></script>
   <script src="vendor/addon-fit.js"></script>
   <script src="qrc:///qtwebchannel/qwebchannel.js"></script>

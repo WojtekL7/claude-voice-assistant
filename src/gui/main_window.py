@@ -3368,7 +3368,13 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
 
     def _update_status(self, text: str):
         """Update status bar."""
-        self.status_bar.showMessage(text)
+        # Przy starcie pierwszy addTab() emituje currentChanged ZANIM powstanie
+        # status_bar — na ścieżce WebTerminal (Windows/macOS) _on_tab_changed
+        # dochodził tu i AttributeError PRZERYWAŁ resztę slotu (agent się nie
+        # uruchamiał). Brak paska = po prostu pomiń komunikat.
+        bar = getattr(self, "status_bar", None)
+        if bar is not None:
+            bar.showMessage(text)
 
     def _update_context_usage(self, additional_chars: int = 0):
         """Dolicz znaki do licznika aktywnej zakładki + globalnego sumatora aplikacji.
