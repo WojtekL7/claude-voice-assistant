@@ -45,6 +45,11 @@ class TranscriptReader:
         self._project_dir: Optional[Path] = None
         self._session_file: Optional[str] = None
         self._offset = 0
+        # Stan dla waiting_for_user(): ostatni zaobserwowany rozmiar pliku sesji
+        # (-1 = jeszcze nie obserwowano) oraz licznik kolejnych sprawdzeń, w
+        # których plik był STATYCZNY (do odrzucenia krótkich pauz w streamingu).
+        self._wait_last_size = -1
+        self._wait_stable = 0
         self.set_working_directory(working_directory)
 
     # ---------- konfiguracja ----------
@@ -55,6 +60,21 @@ class TranscriptReader:
         self._project_dir = self._find_project_dir()
         self._session_file = None
         self._offset = 0
+        # Sesją ZAKŁADKI jest plik, który powstanie PO jej starcie (czytnik
+        # tworzymy w chwili uruchamiania claude). Pliki istniejące wcześniej —
+        # w tym RÓWNOLEGŁE sesje Claude Code w tym samym katalogu (np. osobne
+        # okno terminala) — ignorujemy na zawsze. Bez tego "najnowszy plik
+        # po mtime" przeskakiwał na obcą, aktywnie pisaną sesję i zakładka
+        # czytała cudzy dziennik (auto-czytanie/flaga "?" ślepe na własny).
+        self._preexisting = self._existing_session_files()
+
+    def _existing_session_files(self) -> set:
+        if not self._project_dir or not self._project_dir.is_dir():
+            return set()
+        try:
+            return set(glob.glob(str(self._project_dir / "*.jsonl")))
+        except Exception:
+            return set()
 
     def _find_project_dir(self) -> Optional[Path]:
         """Znajdź folder transkryptu odpowiadający katalogowi roboczemu."""
@@ -95,9 +115,12 @@ class TranscriptReader:
             if not self._project_dir:
                 return None
         files = glob.glob(str(self._project_dir / "*.jsonl"))
-        if not files:
+        # Tylko pliki powstałe PO starcie zakładki (patrz set_working_directory).
+        # /clear w zakładce tworzy kolejny nowy plik → naturalnie przejmujemy.
+        candidates = [f for f in files if f not in getattr(self, "_preexisting", set())]
+        if not candidates:
             return None
-        return max(files, key=lambda p: os.path.getmtime(p))
+        return max(candidates, key=lambda p: os.path.getmtime(p))
 
     def _ensure_session(self):
         """Upewnij się, że śledzimy najnowszy plik sesji (obsługa rotacji)."""
@@ -192,6 +215,85 @@ class TranscriptReader:
         except Exception:
             return None
         return last
+
+    def waiting_for_user(self) -> bool:
+        """Czy agent ZATRZYMAŁ się i czeka na odpowiedź użytkownika?
+
+        Definicja oparta o PRAWDĘ z dziennika sesji (odporna na zniekształcenia
+        strumienia terminala i format popupów):
+
+          agent czeka  ⇔  plik sesji STOI (nic nie dopisuje) przez ~kilka sekund,
+                          a rozmowa już się zaczęła (jest wpis user/assistant).
+
+        Dlaczego cisza w pliku, a NIE „ostatni wpis = assistant": Claude Code
+        zapisuje wpis `tool_use` dla AskUserQuestion DOPIERO po odpowiedzi —
+        więc przy pytaniu z opcjami ostatnim wpisem zostaje `user` (polecenie,
+        które wywołało pytanie), a plik stoi. Tak samo „cisza" łapie prośbę o
+        zgodę na Write/Edit/Bash, pytanie tekstem i „skończyłem — co dalej?".
+
+        Rosnący plik = agent pracuje/pisze (myślenie, tool_use, streaming) →
+        NIE czeka. Gdy odpowiesz, plik rośnie (nowy wpis) → False (flaga gaśnie).
+        Wymagamy 2 kolejnych statycznych sprawdzeń (~1,6 s), by odrzucić krótkie
+        pauzy między porcjami strumienia.
+        """
+        self._ensure_session()
+        if not self._session_file or not os.path.exists(self._session_file):
+            self._wait_last_size = -1
+            self._wait_stable = 0
+            return False
+        try:
+            size = os.path.getsize(self._session_file)
+        except Exception:
+            return False
+        grew = (size != self._wait_last_size)
+        self._wait_last_size = size
+        if grew:
+            self._wait_stable = 0
+            return False  # plik się zmienił od ostatniego sprawdzenia = agent pracuje
+        self._wait_stable += 1
+        if self._wait_stable < 2:
+            return False
+        # Plik stoi od ~1,6 s. Upewnij się tylko, że rozmowa w ogóle ruszyła
+        # (jest wpis user/assistant) — żeby nie zapalać flagi na pustej sesji
+        # z samymi wpisami technicznymi (snapshot/mode itp.).
+        return self._last_entry_role() is not None
+
+    def _last_entry_role(self) -> Optional[str]:
+        """Rola ostatniego SENSOWNEGO wpisu ('assistant'/'user'/None).
+
+        Pomija wpisy bez roli (np. file-history-snapshot) oraz pod-agentów
+        (isSidechain). Czyta tylko ogon pliku — tanie przy dużych sesjach.
+        """
+        if not self._session_file:
+            return None
+        try:
+            with open(self._session_file, "rb") as f:
+                f.seek(0, os.SEEK_END)
+                end = f.tell()
+                start = max(0, end - 65536)   # ostatnie ~64 KB wystarczą na kilka wpisów
+                f.seek(start)
+                tail = f.read()
+        except Exception:
+            return None
+        lines = tail.split(b"\n")
+        if start > 0 and lines:
+            lines = lines[1:]   # pierwsza linia mogła być ucięta w połowie
+        for bline in reversed(lines):
+            bline = bline.strip()
+            if not bline:
+                continue
+            try:
+                obj = json.loads(bline.decode("utf-8", "ignore"))
+            except Exception:
+                continue
+            if obj.get("isSidechain"):
+                continue
+            msg = obj.get("message")
+            role = msg.get("role") if isinstance(msg, dict) else None
+            if role in ("assistant", "user"):
+                return role
+            # wpis bez roli (snapshot itp.) — szukaj dalej wstecz
+        return None
 
     @staticmethod
     def _extract_text(obj: dict) -> Optional[str]:

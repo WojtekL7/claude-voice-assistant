@@ -4,6 +4,7 @@ PyQt5-based GUI for the application.
 """
 import sys
 import json
+import re
 from pathlib import Path
 from typing import Optional
 from datetime import datetime
@@ -462,6 +463,14 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
+        # False przez cały __init__: pierwszy addTab()/setCurrentIndex emituje
+        # currentChanged JESZCZE W TRAKCIE budowy okna, a aktywacja zakładki
+        # w niezamontowanym kontekście tworzy NIEWIDOCZNY QTermWidget (terminal
+        # działa w tle, ekran pusty). Aktywację primary robi odroczony QTimer
+        # (patrz komentarz przy setCurrentIndex w _load_agents). Szczegóły:
+        # guard na początku _on_tab_changed.
+        self._ui_ready = False
+
         # Thread-safe signal bridge
         self.signals = SignalBridge()
 
@@ -534,6 +543,10 @@ class MainWindow(QMainWindow):
 
         # NOTE: Claude jest teraz uruchamiany w _create_agent_tab() dla każdej zakładki
         # Stare globalne wywołanie usunięte, bo powodowało podwójne uruchomienie
+
+        # Okno zbudowane — od teraz _on_tab_changed obsługuje zmiany zakładek
+        # normalnie (emisje currentChanged z trakcie __init__ są ignorowane).
+        self._ui_ready = True
 
     def _setup_ui(self):
         """Setup user interface."""
@@ -1145,6 +1158,21 @@ class MainWindow(QMainWindow):
         terminal_ready) startuje claude. Bez tego 4 agenty startują równolegle
         przy uruchomieniu aplikacji i OOM-killer ubija proces.
         """
+        # Start aplikacji: pierwszy addTab()/setCurrentIndex emituje currentChanged
+        # JESZCZE W __init__ — aktywacja zakładki tutaj tworzy QTermWidget w
+        # niezamontowanym kontekście → terminal NIEWIDOCZNY (bash/claude działają
+        # w tle, ekran pusty). Primary aktywuje odroczony QTimer w _load_agents.
+        # Uwaga historyczna: ten slot przerywał się tu PRZYPADKIEM (AttributeError
+        # na status_bar, zanim powstał) — po naprawieniu tamtego crasha guardem
+        # w _update_status objaw wrócił (2026-06-10), stąd jawna flaga.
+        if not getattr(self, "_ui_ready", False):
+            return
+
+        # Zmieniła się aktywna zakładka → przelicz flagi WSZYSTKICH: nowa
+        # aktywna gasi ikonę (zobaczyłeś pytanie), a zakładka, z której właśnie
+        # zszedłeś, zapali ikonę, jeśli agent w niej wciąż czeka na odpowiedź.
+        self._refresh_all_question_flags()
+
         current = self.tab_widget.currentWidget()
         if isinstance(current, AgentTab):
             if not current.is_activated():
@@ -1230,6 +1258,13 @@ class MainWindow(QMainWindow):
                     reader.seek_to_end()
                     tab._transcript_primed = True
                     continue
+                # Flaga "?": czy agent ZATRZYMAŁ się i czeka na odpowiedź?
+                # Sprawdzane KAŻDY tick (nie zależy od nowej prozy) — stan
+                # "czeka" zmienia się też bez nowego tekstu (tool_use, zgoda).
+                # Liczone niezależnie od aktywności; ikona pokaże się dopiero,
+                # gdy zakładka nie jest na wierzchu (patrz _refresh_question_flag).
+                self._arm_question(tab, reader.waiting_for_user())
+
                 new_blocks = reader.poll()
             except Exception:
                 continue
@@ -1413,6 +1448,13 @@ class MainWindow(QMainWindow):
 
     def _on_message_sent(self, message: str):
         """Handle message sent from agent tab."""
+        # Odpowiedziałeś agentowi → rozbrój flagę "?" od razu (nie czekaj na
+        # następny tick poll). Dziennik i tak potwierdzi to przy kolejnym
+        # sprawdzeniu (plik rośnie → waiting_for_user()=False).
+        src_tab = self.sender()
+        if isinstance(src_tab, AgentTab):
+            self._arm_question(src_tab, False)
+
         # Wykryj komendy Claude Code, które resetują kontekst rozmowy:
         # /clear (czyści historię) i /compact (kompaktuje, zaczyna od nowa).
         # Sprawdzamy pierwsze słowo, by nie reagować na np. "/clearance".
@@ -2006,6 +2048,11 @@ class MainWindow(QMainWindow):
         clean_text = clean_text.strip()
 
         if clean_text:
+            # (Flaga "agent czeka" jest wykrywana z dziennika sesji w
+            # _poll_transcripts — patrz reader.waiting_for_user(). Strumień
+            # terminala jest do tego niepewny: zniekształcone kodowanie ramek/
+            # ❯ i różny format popupów. Tu zostaje tylko liczenie tokenów.)
+
             # Add to buffer with newline separator
             self._terminal_output_buffer += clean_text + "\n"
 
@@ -3365,6 +3412,56 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         cursor.insertText("\n", QTextCharFormat())
 
         self.conversation_area.setTextCursor(cursor)
+
+    # ============ Flaga "agent czeka na odpowiedź" (pomarańczowy ?) ============
+    # Wykrywanie "agent czeka" idzie z dziennika sesji (reader.waiting_for_user()
+    # w _poll_transcripts), NIE ze strumienia terminala — patrz tamten komentarz.
+
+    def _question_icon(self) -> QIcon:
+        icon = getattr(self, "_question_icon_cached", None)
+        if icon is None:
+            # SVG, nie emoji — emoji na Linuksie renderują się monochromatycznie.
+            icon = QIcon(str(ASSETS_DIR / "icons" / "question.svg"))
+            self._question_icon_cached = icon
+        return icon
+
+    def _arm_question(self, tab, armed: bool):
+        """Ustaw stan 'agent czeka na odpowiedź' dla zakładki i odśwież ikonę.
+
+        Stan jest niezależny od tego, czy zakładka jest aktywna — ikona pokaże
+        się dopiero, gdy zakładka NIE jest na wierzchu (patrz _refresh). Dzięki
+        temu pytanie, które padło, gdy patrzyłeś na zakładkę, zapali flagę
+        zaraz po przełączeniu się gdzie indziej (nie ginie po konsumpcji).
+        """
+        if tab is None:
+            return
+        tab._armed_question = bool(armed)
+        self._refresh_question_flag(tab)
+
+    def _refresh_question_flag(self, tab):
+        """Pokaż ikonę '?' wtw. gdy zakładka jest uzbrojona I nieaktywna."""
+        if tab is None:
+            return
+        index = self.tab_widget.indexOf(tab)
+        if index < 0:
+            return
+        show = getattr(tab, "_armed_question", False) \
+            and tab is not self.tab_widget.currentWidget()
+        if show == getattr(tab, "_question_flag_shown", False):
+            return  # bez zmian — nie ruszaj ikony niepotrzebnie
+        tab._question_flag_shown = show
+        if show:
+            self.tab_widget.setTabIcon(index, self._question_icon())
+            self.tab_widget.tabBar().setTabToolTip(index, "Agent czeka na odpowiedź")
+        else:
+            self.tab_widget.setTabIcon(index, QIcon())
+            self.tab_widget.tabBar().setTabToolTip(index, "")
+
+    def _refresh_all_question_flags(self):
+        """Przelicz flagi wszystkich zakładek (np. po zmianie aktywnej)."""
+        for tab in list(getattr(self, "agent_tabs", {}).values()):
+            if isinstance(tab, AgentTab):
+                self._refresh_question_flag(tab)
 
     def _update_status(self, text: str):
         """Update status bar."""
