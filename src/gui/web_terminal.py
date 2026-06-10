@@ -133,6 +133,7 @@ class WebTerminal(QWidget):
         self._pending_theme = None
         self._pending_font = None
         self._frontend_ready = False
+        self._logged_first_output = False
         self._decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
 
         self._failure_shown = False
@@ -337,6 +338,9 @@ class WebTerminal(QWidget):
             # winpty zwraca str (już zdekodowany), ptyprocess — bytes.
             text = data if _PTY_KIND == "winpty" else self._decoder.decode(data)
             if text:
+                if not self._logged_first_output:
+                    self._logged_first_output = True
+                    _log(f"PTY: pierwsze dane z powłoki ({len(text)} znaków)")
                 self._data_ready.emit(text)
         _log("read_loop: koniec (proces powłoki zakończony)")
         self.finished.emit()
@@ -361,6 +365,7 @@ class WebTerminal(QWidget):
                 pass
 
     def _resize_pty(self, cols, rows):
+        _log(f"resize: {cols}x{rows}")
         self._pending_size = (cols, rows)
         if self._proc is not None:
             try:
