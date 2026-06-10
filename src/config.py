@@ -66,16 +66,18 @@ except Exception:
 # Version numbers in labels are informational — aliases (sonnet/opus/haiku)
 # always resolve to the newest available version on Claude Code's side.
 CLAUDE_MODELS = {
-    "default": "Domyślny — Opus 4.7 (z konfiguracji Claude Code)",
+    "default": "Domyślny — Opus 4.8 (z konfiguracji Claude Code)",
+    "fable": "Fable 5 (najpotężniejszy, do najtrudniejszych zadań)",
+    "opus": "Opus 4.8 (najbardziej zdolny)",
     "sonnet": "Sonnet 4.6 (szybki, zbalansowany)",
-    "opus": "Opus 4.7 (najbardziej zdolny)",
     "haiku": "Haiku 4.5 (najszybszy)",
 }
 # Short labels used in compact lists (e.g. agent manager).
 CLAUDE_MODELS_SHORT = {
-    "default": "Domyślny — Opus 4.7",
+    "default": "Domyślny — Opus 4.8",
+    "fable": "Fable 5",
+    "opus": "Opus 4.8",
     "sonnet": "Sonnet 4.6",
-    "opus": "Opus 4.7",
     "haiku": "Haiku 4.5",
 }
 # Fallback for agents that don't have a `model` field saved (backward compat).
@@ -86,11 +88,12 @@ NEW_AGENT_DEFAULT_MODEL = "opus"
 # Okna kontekstu modeli (w tokenach). Claude Code uruchamia auto-compact
 # przy ~80–90% tej wartości — wartości używane do koloryzacji licznika
 # tokenów per-zakładka w pasku statusu.
-# "default" w Claude Code rozwiązuje się na Opus 4.7 z 1M oknem kontekstu.
+# "default" w Claude Code rozwiązuje się na Opus 4.8 z 1M oknem kontekstu.
 CLAUDE_MODEL_CONTEXT_LIMITS = {
     "default": 1_000_000,
-    "sonnet":    200_000,
+    "fable":   1_000_000,
     "opus":    1_000_000,
+    "sonnet":    200_000,
     "haiku":     200_000,
 }
 
