@@ -76,19 +76,21 @@ def configure_qt_environment():
         # Wyświetlamy WYŁĄCZNIE lokalny terminal.html (zero treści z sieci),
         # więc wyłączenie sandboxa jest tu bezpieczne.
         os.environ.setdefault("QTWEBENGINE_DISABLE_SANDBOX", "1")
-        # Diagnostyka WebTerminala: aplikacja okienkowa (console=False) nie ma
-        # stderr, więc Chromium (QtWebEngine) padał bez śladu → "puste pole"
-        # w 1.0.12. Kierujemy log Chromium do pliku obok konfiguracji
-        # użytkownika. setdefault → da się nadpisać z zewnątrz.
-        try:
-            log_dir = Path.home() / ".claude-voice-assistant"
-            log_dir.mkdir(parents=True, exist_ok=True)
-            os.environ.setdefault(
-                "QTWEBENGINE_CHROMIUM_FLAGS",
-                "--enable-logging --log-file="
-                + str(log_dir / "webengine_chromium.log"))
-        except Exception:
-            pass
+        # Log Chromium TYLKO na żądanie (CVA_WEBENGINE_LOG=1): flaga
+        # --enable-logging na Windows otwiera CZARNE OKNA KONSOLI procesów
+        # QtWebEngineProcess.exe na wierzchu aplikacji (potwierdzone na CI).
+        # Do diagnozy zwykle wystarcza webterminal.log (konsola JS + zdarzenia
+        # cyklu życia strony — pisze go gui/web_terminal.py).
+        if os.environ.get("CVA_WEBENGINE_LOG") == "1":
+            try:
+                log_dir = Path.home() / ".claude-voice-assistant"
+                log_dir.mkdir(parents=True, exist_ok=True)
+                os.environ.setdefault(
+                    "QTWEBENGINE_CHROMIUM_FLAGS",
+                    "--enable-logging --log-file="
+                    + str(log_dir / "webengine_chromium.log"))
+            except Exception:
+                pass
 
 
 def use_native_menu_bar() -> bool:
