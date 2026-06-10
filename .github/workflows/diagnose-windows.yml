@@ -1,0 +1,71 @@
+name: Diagnose Windows terminal
+
+# Diagnostyka "pustego terminala" (bug 1.0.12) na czystej maszynie Windows:
+#  1) test pywinpty BEZ pakowania (packaging/windows/diag_winpty.py),
+#  2) build PyInstallerem jak w wydaniu + kontrola kompletu plikow winpty,
+#  3) uruchomienie aplikacji Z KODU oraz SPAKOWANEJ - zrzuty ekranu + logi
+#     (webterminal.log, log Chromium) trafiaja do artefaktu "diagnose-windows".
+# Uruchamiany TYLKO recznie (gh workflow run diagnose-windows.yml).
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    name: Diagnoza terminala (Windows x64)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Pobierz kod
+        uses: actions/checkout@v4
+
+      - name: Zainstaluj Pythona 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Zaleznosci
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pyinstaller pillow
+
+      - name: Test pywinpty bez pakowania (spawn + echo)
+        shell: pwsh
+        continue-on-error: true
+        run: python packaging\windows\diag_winpty.py
+
+      - name: Build PyInstaller (onedir, jak wydanie)
+        shell: pwsh
+        run: |
+          python packaging\windows\make_ico.py
+          python -m PyInstaller --noconfirm --clean packaging\windows\ClaudeVoiceAssistant.spec
+
+      - name: Komplet plikow winpty w paczce
+        shell: pwsh
+        run: Get-ChildItem "dist\Claude Voice Assistant\_internal\winpty" | Format-Table Name,Length -AutoSize
+
+      - name: Uruchom Z KODU + zrzut ekranu + logi
+        shell: pwsh
+        continue-on-error: true
+        run: >-
+          powershell -ExecutionPolicy Bypass
+          -File packaging\windows\diag_run_and_screenshot.ps1
+          -Exe python -ArgList "src\main.py" -OutPrefix dev -WaitSeconds 30
+
+      - name: Uruchom SPAKOWANA + zrzut ekranu + logi
+        shell: pwsh
+        continue-on-error: true
+        run: >-
+          powershell -ExecutionPolicy Bypass
+          -File packaging\windows\diag_run_and_screenshot.ps1
+          -Exe "dist\Claude Voice Assistant\Claude Voice Assistant.exe"
+          -OutPrefix packaged -WaitSeconds 35
+
+      - name: Artefakt diagnostyczny
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnose-windows
+          path: diag/
+          if-no-files-found: warn

@@ -68,7 +68,20 @@ def configure_qt_environment():
         # podpowiedzi Claude Code → wyłączamy Input Method TYLKO na Linuksie.
         os.environ.setdefault("QT_IM_MODULE", "none")
     # macOS: backend 'cocoa' i IM systemowy są poprawne — nic nie ruszamy.
-    # Windows: backend 'windows' domyślny — nic nie ustawiamy.
+    if is_windows():
+        # Diagnostyka WebTerminala: aplikacja okienkowa (console=False) nie ma
+        # stderr, więc Chromium (QtWebEngine) padał bez śladu → "puste pole"
+        # w 1.0.12. Kierujemy log Chromium do pliku obok konfiguracji
+        # użytkownika. setdefault → da się nadpisać z zewnątrz.
+        try:
+            log_dir = Path.home() / ".claude-voice-assistant"
+            log_dir.mkdir(parents=True, exist_ok=True)
+            os.environ.setdefault(
+                "QTWEBENGINE_CHROMIUM_FLAGS",
+                "--enable-logging --log-file="
+                + str(log_dir / "webengine_chromium.log"))
+        except Exception:
+            pass
 
 
 def use_native_menu_bar() -> bool:

@@ -15,16 +15,19 @@ import sys
 import json
 import codecs
 import threading
+from datetime import datetime
 from pathlib import Path
 
-from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QUrl, Qt
+from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QUrl, Qt, QTimer
 from PyQt5.QtWidgets import QWidget, QVBoxLayout
-from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineSettings
+from PyQt5.QtWebEngineWidgets import (
+    QWebEngineView, QWebEngineSettings, QWebEnginePage,
+)
 from PyQt5.QtWebChannel import QWebChannel
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from core.platform_utils import default_shell, is_windows
-from config import ASSETS_DIR
+from config import ASSETS_DIR, CONFIG_DIR
 
 # PTY: dwa warianty za jednym interfejsem.
 #  - Unix (Linux/macOS): ptyprocess (read=bytes, write=bytes, terminate(force=)).
@@ -50,6 +53,37 @@ else:
 # Jedno źródło prawdy o ścieżce zasobów (config.ASSETS_DIR jest świadomy
 # wersji spakowanej — sys._MEIPASS — więc terminal.html działa też w .app/.exe).
 ASSET_DIR = ASSETS_DIR / "web"
+
+# Log diagnostyczny WebTerminala — w spakowanej aplikacji okienkowej (zwłaszcza
+# Windows, console=False) stderr nie istnieje, więc awarie QtWebEngine/PTY były
+# niewidoczne ("puste pole" w 1.0.12). Każde zdarzenie cyklu życia trafia tutaj.
+WEBTERMINAL_LOG = CONFIG_DIR / "webterminal.log"
+try:  # prosta rotacja: nie pozwól plikowi rosnąć w nieskończoność
+    if WEBTERMINAL_LOG.exists() and WEBTERMINAL_LOG.stat().st_size > 512 * 1024:
+        WEBTERMINAL_LOG.unlink()
+except Exception:
+    pass
+
+
+def _log(message: str):
+    """Dopisz linię do logu diagnostycznego (nigdy nie wywala aplikacji)."""
+    try:
+        with open(WEBTERMINAL_LOG, "a", encoding="utf-8") as f:
+            f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {message}\n")
+    except Exception:
+        pass
+
+
+class _LoggingWebEnginePage(QWebEnginePage):
+    """Strona przechwytująca komunikaty konsoli JS do logu diagnostycznego.
+
+    Bez tego błąd JavaScriptu (np. nie załadowany xterm.js) umiera po cichu,
+    a użytkownik widzi tylko puste pole bez kursora.
+    """
+    _LEVELS = {0: "INFO", 1: "WARN", 2: "ERROR"}
+
+    def javaScriptConsoleMessage(self, level, message, line, source):
+        _log(f"JS[{self._LEVELS.get(int(level), level)}] {source}:{line}: {message}")
 
 
 class _Bridge(QObject):
@@ -101,9 +135,15 @@ class WebTerminal(QWidget):
         self._frontend_ready = False
         self._decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
 
+        self._failure_shown = False
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self.view = QWebEngineView(self)
+        # Własna strona: loguje konsolę JS (diagnoza "pustego pola"). Ustawiana
+        # PRZED settings/webchannel — one działają na bieżącej stronie widoku.
+        self._page = _LoggingWebEnginePage(self.view)
+        self.view.setPage(self._page)
         st = self.view.settings()
         st.setAttribute(QWebEngineSettings.LocalContentCanAccessFileUrls, True)
         st.setAttribute(QWebEngineSettings.LocalContentCanAccessRemoteUrls, True)
@@ -118,7 +158,15 @@ class WebTerminal(QWidget):
         self._data_ready.connect(self._push_to_js)
         self.finished.connect(self._on_finished_gui)
 
-        self.view.load(QUrl.fromLocalFile(str(ASSET_DIR / "terminal.html")))
+        # Diagnostyka cyklu życia strony: nieudane ładowanie / śmierć procesu
+        # renderowania mają pokazać czytelny komunikat, nie martwe puste pole.
+        self.view.loadFinished.connect(self._on_load_finished)
+        self._page.renderProcessTerminated.connect(self._on_render_terminated)
+
+        url = ASSET_DIR / "terminal.html"
+        _log(f"WebTerminal: start, html={url} (istnieje={url.exists()}), "
+             f"PTY={_PTY_KIND or 'BRAK'}, shell={self._shell}")
+        self.view.load(QUrl.fromLocalFile(str(url)))
 
     # ==================== API zbliżone do QTermWidget ====================
 
@@ -181,7 +229,50 @@ class WebTerminal(QWidget):
 
     # ==================== Wewnętrzne ====================
 
+    def _on_load_finished(self, ok: bool):
+        _log(f"loadFinished ok={ok}")
+        if not ok:
+            self._show_failure_page(
+                "Strona terminala nie załadowała się (loadFinished=false).")
+            return
+        # Strona wstała — jeśli xterm.js nie zgłosi gotowości w 10 s, to JS
+        # umarł po cichu (np. brak pliku vendor) → pokaż komunikat zamiast
+        # pustego pola. Watchdog tylko przy pierwszym ładowaniu (nie po setHtml).
+        if not self._failure_shown and not self._frontend_ready:
+            QTimer.singleShot(10000, self._frontend_watchdog)
+
+    def _frontend_watchdog(self):
+        if self._frontend_ready or self._failure_shown:
+            return
+        _log("watchdog: frontend_ready NIE nadeszło w 10 s od załadowania strony")
+        self._show_failure_page(
+            "Strona terminala załadowała się, ale xterm.js nie zgłosił "
+            "gotowości w 10 sekund (prawdopodobnie błąd JavaScript).")
+
+    def _on_render_terminated(self, status, exit_code):
+        _log(f"renderProcessTerminated status={int(status)} exitCode={exit_code}")
+        self._show_failure_page(
+            f"Proces renderowania terminala zakończył się nieoczekiwanie "
+            f"(status={int(status)}, kod={exit_code}).")
+
+    def _show_failure_page(self, reason: str):
+        """Zamiast martwego pustego pola — czytelny komunikat + ścieżka logu."""
+        if self._failure_shown:
+            return
+        self._failure_shown = True
+        _log(f"FAILURE: {reason}")
+        html = (
+            "<html><body style='background:#1b1b1d;color:#e0e0e0;"
+            "font-family:sans-serif;padding:18px'>"
+            "<h3 style='color:#ef8080'>Terminal nie wystartował</h3>"
+            f"<p>{reason}</p>"
+            "<p style='color:#999'>Szczegóły w pliku:<br>"
+            f"<code>{WEBTERMINAL_LOG}</code></p>"
+            "</body></html>")
+        self.view.setHtml(html)
+
     def _on_frontend_ready(self, cols, rows):
+        _log(f"frontend_ready cols={cols} rows={rows}")
         self._frontend_ready = True
         self._pending_size = (cols, rows)
         # Wyślij zbuforowany motyw/czcionkę, gdy xterm.js jest już gotowy.
@@ -192,6 +283,7 @@ class WebTerminal(QWidget):
 
     def _spawn(self):
         if not _PTY_AVAILABLE:
+            _log("spawn: PTY niedostępne (import nie powiódł się)")
             hint = ("\r\n\x1b[33m[Terminal niedostępny: brak pakietu 'pywinpty' "
                     "— zainstaluj: pip install pywinpty]\x1b[0m\r\n") if is_windows() else \
                    "\r\n\x1b[33m[Terminal niedostępny: brak PTY na tym systemie]\x1b[0m\r\n"
@@ -224,8 +316,10 @@ class WebTerminal(QWidget):
                 self._proc = ptyprocess.PtyProcess.spawn(
                     argv, dimensions=(rows, cols), env=env, cwd=self._cwd)
         except Exception as e:
+            _log(f"spawn: BŁĄD uruchamiania powłoki ({self._shell}): {e!r}")
             self._data_ready.emit(f"\r\n\x1b[31m[Nie udało się uruchomić powłoki: {e}]\x1b[0m\r\n")
             return
+        _log(f"spawn: powłoka uruchomiona ({self._shell}, {cols}x{rows})")
         self._stop.clear()
         self._reader = threading.Thread(target=self._read_loop, daemon=True)
         self._reader.start()
@@ -244,6 +338,7 @@ class WebTerminal(QWidget):
             text = data if _PTY_KIND == "winpty" else self._decoder.decode(data)
             if text:
                 self._data_ready.emit(text)
+        _log("read_loop: koniec (proces powłoki zakończony)")
         self.finished.emit()
 
     def _push_to_js(self, text: str):

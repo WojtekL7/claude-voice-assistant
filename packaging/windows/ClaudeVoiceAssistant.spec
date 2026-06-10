@@ -15,6 +15,8 @@ Uwaga:
 import os
 import re
 
+from PyInstaller.utils.hooks import collect_all
+
 # SPECPATH = katalog tego pliku (packaging/windows). Korzeń repo = dwa poziomy wyżej.
 PROJECT_ROOT = os.path.abspath(os.path.join(SPECPATH, "..", ".."))
 SRC = os.path.join(PROJECT_ROOT, "src")
@@ -47,10 +49,18 @@ hiddenimports = [
     "winpty",  # pywinpty — ConPTY (terminal na Windows)
 ]
 
+# pywinpty niesie NATYWNE binaria pomocnicze (winpty-agent.exe, OpenConsole.exe,
+# winpty.dll, conpty.dll). Sam hiddenimport zbiera tylko moduł .pyd — w paczce
+# 1.0.12 brakowało winpty-agent.exe i OpenConsole.exe, więc ConPTY nie mógł
+# uruchomić powłoki. collect_all dokłada WSZYSTKIE pliki pakietu.
+winpty_datas, winpty_binaries, winpty_hidden = collect_all("winpty")
+datas += winpty_datas
+hiddenimports += winpty_hidden
+
 a = Analysis(
     [os.path.join(SRC, "main.py")],
     pathex=[SRC],
-    binaries=[],
+    binaries=winpty_binaries,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
