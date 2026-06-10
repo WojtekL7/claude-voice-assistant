@@ -12,6 +12,17 @@ from pathlib import Path
 src_dir = Path(__file__).parent
 sys.path.insert(0, str(src_dir))
 
+# Windows: gdy stdout/stderr są PRZEKIEROWANE (do pliku/potoku), Python daje im
+# kodowanie cp1252 — wtedy print() z polskim znakiem rzuca UnicodeEncodeError
+# i potrafi wywalić CAŁĄ aplikację (zdarzyło się w handlerze błędu TTS).
+# errors="replace" = znak spoza kodowania staje się '?', nigdy wyjątek.
+for _stream in (sys.stdout, sys.stderr):
+    if _stream is not None and hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(errors="replace")
+        except Exception:
+            pass
+
 # Tweaki środowiska Qt zależne od systemu MUSZĄ pójść przed importem PyQt5
 # i utworzeniem QApplication. Cała logika per-OS żyje w platform_utils:
 # - Linux: backend X11 (XWayland) + wyłączony iBus (zjada Enter w terminalu;

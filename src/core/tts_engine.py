@@ -64,7 +64,13 @@ class TTSEngine:
             self.audio_available = True
         except Exception as e:
             self.audio_available = False
-            print(f"TTS: brak urządzenia audio — czytanie wyłączone ({e})")
+            # Komunikat celowo ASCII + print w try/except: na Windows
+            # przekierowany stdout ma cp1252 i print() z polskim znakiem
+            # sam potrafiłby wywalić aplikację (UnicodeEncodeError).
+            try:
+                print(f"TTS: no audio device - TTS disabled ({e})")
+            except Exception:
+                pass
 
         # --- Współbieżność ---
         self._lock = threading.Lock()
