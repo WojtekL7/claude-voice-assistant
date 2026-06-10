@@ -1,20 +1,20 @@
 {
   "_comment": "Feed auto-aktualizacji Claude Voice Assistant. PUBLICZNY na VPS: /opt/cva-web/html/cva/appcast.json -> https://pobierz.srv1251441.hstgr.cloud/cva/appcast.json . Aplikacja porownuje config.APP_VERSION z 'version' wpisu dla swojej platformy (core.platform_utils.update_platform_id). macOS uzywa paczki .zip (samo-podmiana). Wpisy aktualizuj generatorem: packaging/make-appcast-entry.py PACZKA.zip --version X.Y.Z --base-url https://pobierz.srv1251441.hstgr.cloud/cva/ --appcast packaging/appcast.json --merge",
   "latest": {
-    "version": "1.0.12",
+    "version": "1.0.13",
     "notes_url": "",
     "mandatory": false,
     "platforms": {
       "macos-arm64": {
-        "url": "https://pobierz.srv1251441.hstgr.cloud/cva/ClaudeVoiceAssistant-1.0.12-macos-arm64.zip",
-        "size": 122975977,
-        "sha256": "1c4436643efab3a4d58da71496d2a6bbb2cec702a83a8e3f5d519d8c57c2af77",
+        "url": "https://pobierz.srv1251441.hstgr.cloud/cva/ClaudeVoiceAssistant-1.0.13-macos-arm64.zip",
+        "size": 122983607,
+        "sha256": "8acf7e3190560059c26c61b1794a2ac600165a32897df8a71bb1025ab644696d",
         "signature": ""
       },
       "windows-x64": {
-        "url": "https://pobierz.srv1251441.hstgr.cloud/cva/ClaudeVoiceAssistant-Setup-1.0.12.exe",
-        "size": 102227035,
-        "sha256": "f69709118c8bbee022099e7cc6f0d1218ea02bedffbec0d50f72b698b37623c4",
+        "url": "https://pobierz.srv1251441.hstgr.cloud/cva/ClaudeVoiceAssistant-Setup-1.0.13.exe",
+        "size": 102788301,
+        "sha256": "aeb67fd111bc7fc51863d260a6a88078e408b0a85db99da0f2ee176c6661642e",
         "signature": ""
       }
     }
