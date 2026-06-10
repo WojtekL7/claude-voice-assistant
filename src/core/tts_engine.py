@@ -54,8 +54,17 @@ class TTSEngine:
         self.on_finished: Optional[Callable[[], None]] = None
         self.on_error: Optional[Callable[[str], None]] = None
 
-        # Initialize pygame mixer
-        pygame.mixer.init()
+        # Initialize pygame mixer — defensywnie: na komputerze BEZ urządzenia
+        # audio (brak głośników/sterownika, pulpit zdalny, maszyna CI) init()
+        # rzuca pygame.error i wywalał CAŁĄ aplikację przy starcie (crash
+        # zanim pojawiło się okno). Brak audio = czytanie wyłączone, reszta
+        # aplikacji działa normalnie.
+        try:
+            pygame.mixer.init()
+            self.audio_available = True
+        except Exception as e:
+            self.audio_available = False
+            print(f"TTS: brak urządzenia audio — czytanie wyłączone ({e})")
 
         # --- Współbieżność ---
         self._lock = threading.Lock()
@@ -94,6 +103,16 @@ class TTSEngine:
         co pozwala generować audio z wyprzedzeniem i grać bez przerw.
         """
         if not text or not text.strip():
+            return
+
+        # Bez urządzenia audio nie kolejkujemy (workery i tak nie zagrają);
+        # zgłoś czytelny błąd zamiast cicho mielić tekst.
+        if not getattr(self, "audio_available", True):
+            if self.on_error:
+                try:
+                    self.on_error("Brak urządzenia audio — czytanie niedostępne")
+                except Exception:
+                    pass
             return
 
         sentences = self._split_into_sentences(text)
