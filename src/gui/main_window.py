@@ -5,6 +5,7 @@ PyQt5-based GUI for the application.
 import sys
 import json
 import re
+import time
 from pathlib import Path
 from typing import Optional
 from datetime import datetime
@@ -460,6 +461,11 @@ SKIN_ICON_NAMES = {
 
 class MainWindow(QMainWindow):
     """Main application window."""
+
+    # Flaga „?": ile sekund CISZY w terminalu uznajemy za „agent nie pracuje".
+    # Pracujący Claude Code odświeża pasek (licznik sekund) co ~1 s — 3 s daje
+    # trzykrotny margines, a flaga i tak ma sens dopiero po paru sekundach.
+    QUESTION_TERMINAL_QUIET_SECS = 3.0
 
     def __init__(self):
         super().__init__()
@@ -1269,7 +1275,25 @@ class MainWindow(QMainWindow):
                 # "czeka" zmienia się też bez nowego tekstu (tool_use, zgoda).
                 # Liczone niezależnie od aktywności; ikona pokaże się dopiero,
                 # gdy zakładka nie jest na wierzchu (patrz _refresh_question_flag).
-                self._arm_question(tab, reader.waiting_for_user())
+                #
+                # Wymagane są OBIE cisze naraz:
+                #  • dziennika (reader.waiting_for_user) — ale dziennik dostaje
+                #    tylko UKOŃCZONE wpisy, więc stoi też podczas myślenia/
+                #    pisania/narzędzi (zmierzone: 20 s ciszy W TRAKCIE pisania
+                #    odpowiedzi) — sama z siebie zapalała flagę przy każdej
+                #    dłuższej pracy agenta;
+                #  • TERMINALA (puls aktywności) — pracujący Claude Code animuje
+                #    pasek (spinner + licznik sekund ~1×/s), więc dane płyną
+                #    ciągle; czekający — ekran stoi. To czujnik ruchu, NIE
+                #    czytanie treści (treści z terminala nie parsujemy — kruche).
+                # reader.waiting_for_user() wołamy ZAWSZE (nie za '... and'),
+                # żeby jego wewnętrzny licznik stabilności był świeży.
+                journal_quiet = reader.waiting_for_user()
+                terminal_quiet = (
+                    time.monotonic()
+                    - getattr(tab, '_last_terminal_data_ts', 0.0)
+                ) >= self.QUESTION_TERMINAL_QUIET_SECS
+                self._arm_question(tab, journal_quiet and terminal_quiet)
 
                 new_blocks = reader.poll()
             except Exception:

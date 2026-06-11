@@ -3,6 +3,7 @@ Claude Voice Assistant - Agent Tab
 Single agent tab with terminal and input panel.
 """
 import json
+import time
 from pathlib import Path
 from typing import Optional, Dict, List, Callable
 
@@ -124,6 +125,14 @@ class AgentTab(QWidget):
         self.terminal = None
         self.conversation_area = None
         self._terminal_output_buffer = ""
+        # Czas OSTATNIEJ porcji danych z terminala (puls aktywności). Pracujący
+        # Claude Code animuje pasek (spinner + licznik sekund ~1×/s) → dane
+        # płyną ciągle; czekający na użytkownika — ekran stoi. Używane przez
+        # flagę „?" (MainWindow._poll_transcripts) jako CZUJNIK RUCHU, bo sam
+        # dziennik sesji stoi też podczas pracy (wpisy lądują dopiero po
+        # ukończeniu bloku). Start = teraz, żeby świeża zakładka nie była
+        # od razu „cicha".
+        self._last_terminal_data_ts = time.monotonic()
         self._tts_timer = None
         self._memory_sent = False
         # Lazy activation: zakładka tworzy tylko UI shell w __init__; ciężki
@@ -467,6 +476,7 @@ class AgentTab(QWidget):
             return
 
         # Emit signal for MainWindow
+        self._last_terminal_data_ts = time.monotonic()
         self.terminal_output.emit(data)
 
         text = data if isinstance(data, str) else str(data)
