@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Instrukcja instalacji — macOS | Claude Voice Assistant</title>
+  <meta name="description" content="Instalacja Claude Voice Assistant na Macu krok po kroku — dla każdego, bez wiedzy technicznej.">
+  <style>
+    :root{
+      --bg1:#2a1140; --bg2:#3d1a5b; --accent:#a855f7; --accent2:#7c3aed;
+      --ink:#1b1226; --muted:#6b6478; --card:#ffffff; --soft:#f5f2fb;
+      --ok:#16a34a; --warn-bg:#fff7e6; --warn-line:#f0c36d; --line:#e9e3f3;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Ubuntu,Helvetica,Arial,sans-serif;
+      color:var(--ink);
+      background:linear-gradient(160deg,var(--bg1),var(--bg2));
+      min-height:100vh;line-height:1.6;
+    }
+    .wrap{max-width:860px;margin:0 auto;padding:40px 20px 64px}
+    header{text-align:center;color:#fff;margin-bottom:30px}
+    .logo{
+      width:72px;height:72px;border-radius:20px;margin:0 auto 14px;
+      background:linear-gradient(145deg,#c084fc,#7c3aed);
+      display:flex;align-items:center;justify-content:center;font-size:36px;
+      box-shadow:0 12px 30px rgba(124,58,237,.45);
+    }
+    h1{font-size:1.9rem;font-weight:800;letter-spacing:-.5px}
+    .tagline{font-size:1.05rem;opacity:.9;margin-top:8px}
+    .back{display:inline-block;margin-top:14px;color:#e9d5ff;font-size:.95rem}
+
+    .panel{background:var(--card);border-radius:20px;padding:28px;box-shadow:0 18px 40px rgba(20,8,40,.28);margin-bottom:22px}
+    .panel h2{font-size:1.3rem;margin-bottom:10px;display:flex;align-items:center;gap:12px}
+    .num{display:inline-flex;flex:none;width:34px;height:34px;border-radius:50%;
+      background:var(--accent);color:#fff;font-weight:800;font-size:1.05rem;
+      align-items:center;justify-content:center}
+    .panel p, .panel li{font-size:1rem;color:#332b40;margin-bottom:10px}
+    .panel ol, .panel ul{padding-left:24px;margin-bottom:8px}
+    .panel li{margin-bottom:8px}
+
+    .see{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin:10px 0;font-size:.95rem}
+    .see b{color:var(--accent2)}
+    .warn{background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:12px;padding:12px 16px;margin:10px 0;font-size:.95rem}
+    .ok{background:#ecfdf3;border:1px solid #b7e4c7;border-radius:12px;padding:12px 16px;margin:10px 0;font-size:.95rem}
+
+    .cmd{display:flex;gap:10px;align-items:center;background:#1e1530;border-radius:12px;padding:12px 14px;margin:10px 0}
+    .cmd code{color:#d8c7ff;font-family:"Ubuntu Mono",Menlo,Consolas,monospace;font-size:1rem;flex:1;overflow-x:auto;white-space:nowrap}
+    .cmd button{border:0;border-radius:8px;background:var(--accent);color:#fff;font-weight:700;
+      padding:8px 14px;cursor:pointer;font-size:.9rem;flex:none}
+    .cmd button:hover{filter:brightness(1.1)}
+
+    kbd{background:#eee;border:1px solid #ccc;border-bottom-width:3px;border-radius:6px;
+      padding:1px 7px;font-family:inherit;font-size:.92em;font-weight:600}
+
+    .faq td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:.95rem;vertical-align:top}
+    .faq td:first-child{font-weight:700;width:45%}
+    .faq{width:100%;border-collapse:collapse;margin-top:6px}
+    footer{text-align:center;color:#fff;opacity:.8;margin-top:36px;font-size:.9rem}
+    footer a{color:#e9d5ff}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo">🍎</div>
+      <h1>Instalacja na Macu — krok po kroku</h1>
+      <p class="tagline">Przeprowadzimy Cię od pobrania pliku do pierwszej rozmowy z Claude Code.
+        Nie musisz znać się na komputerach — wystarczy robić dokładnie to, co poniżej.</p>
+      <a class="back" href="https://pobierz.srv1251441.hstgr.cloud/">← Wróć do strony pobierania</a>
+    </header>
+
+    <section class="panel">
+      <h2>Zanim zaczniesz — co będzie potrzebne</h2>
+      <ul>
+        <li>Mac z procesorem <b>Apple Silicon</b> (M1, M2, M3 lub M4) i dostęp do internetu.</li>
+        <li>Około <b>15 minut</b>.</li>
+        <li><b>Konto Claude</b> (claude.ai) z aktywnym planem (np. Pro) — to do niego
+          zaloguje się Claude Code w ostatnim kroku. Jeśli nie masz konta, załóż je na
+          <a href="https://claude.ai" target="_blank" rel="noopener">claude.ai</a>.</li>
+      </ul>
+      <div class="see">Oprócz naszego programu zainstalujemy <b>dwa darmowe dodatki</b>:
+        <b>Node.js</b> (program pomocniczy) i <b>Claude Code</b> (właściwy „mózg”, którym
+        nasz program steruje). Bez nich program się uruchomi, ale nie będzie z kim rozmawiać.</div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">1</span> Pobierz i zainstaluj program</h2>
+      <ol>
+        <li>Wejdź na <a href="https://pobierz.srv1251441.hstgr.cloud/" target="_blank" rel="noopener">stronę pobierania</a>
+          (jeśli poprosi o login i hasło — wpisz dane, które otrzymałeś od nas) i kliknij
+          <b>„⬇ Pobierz na Maca”</b>.</li>
+        <li>Otwórz pobrany plik <b>ClaudeVoiceAssistant-macos.dmg</b> (folder <b>Pobrane</b>).</li>
+        <li>W oknie, które się pojawi, <b>przeciągnij ikonę programu do folderu „Programy”</b>
+          (Applications).</li>
+        <li>Otwórz <b>Programy</b> i kliknij dwukrotnie <b>Claude Voice Assistant</b>.</li>
+      </ol>
+      <div class="warn">⚠️ <b>Przy pierwszym uruchomieniu</b> macOS pokaże ostrzeżenie, że nie może
+        sprawdzić programu (nie ma on jeszcze podpisu Apple) — i może NIE dać przycisku „Otwórz”.
+        Zrób tak:
+        <ol style="margin-top:8px">
+          <li>Kliknij <b>OK</b> w ostrzeżeniu.</li>
+          <li>Otwórz <b>Ustawienia systemowe → Prywatność i bezpieczeństwo</b>.</li>
+          <li>Przewiń na sam dół — będzie tam informacja o zablokowanym programie
+            i przycisk <b>„Otwórz mimo to”</b>. Kliknij go i potwierdź (hasło lub Touch ID).</li>
+        </ol>
+        To trzeba zrobić tylko raz.</div>
+      <div class="see"><b>Co zobaczysz:</b> okno programu z <b>czarnym polem</b> w środku.
+        To pole to <b>terminal</b> — miejsce, w którym wpisuje się polecenia dla komputera.
+        Piszesz, naciskasz <kbd>Enter</kbd>, komputer odpowiada.</div>
+      <div class="see">Przy pierwszym uruchomieniu program może też pokazać okno
+        <b>„Dokończ instalację — potrzebny Claude Code”</b>. To nasz pomocnik — prowadzi przez
+        te same kroki, które opisujemy poniżej.</div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">2</span> Zainstaluj Node.js (darmowy dodatek)</h2>
+      <ol>
+        <li>Wejdź na <a href="https://nodejs.org/" target="_blank" rel="noopener">nodejs.org</a>
+          i kliknij <b>zielony przycisk z napisem „LTS”</b> (wersja stabilna). Plik się pobierze.</li>
+        <li>Otwórz pobrany plik (np. <b>node-v22….pkg</b>) i klikaj <b>Dalej / Kontynuuj</b>,
+          zgódź się na licencję, na końcu <b>Zainstaluj</b> (Mac poprosi o hasło).</li>
+        <li>Po napisie „Instalacja zakończona pomyślnie” kliknij <b>Zamknij</b>.</li>
+      </ol>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">3</span> Zainstaluj Claude Code</h2>
+      <ol>
+        <li><b>Zamknij nasz program całkowicie</b> (Cmd+Q) <b>i uruchom go ponownie</b>.
+          To ważne — program musi „zobaczyć” świeżo zainstalowany Node.js.</li>
+        <li>Skopiuj poniższą komendę przyciskiem <b>Kopiuj</b>:</li>
+      </ol>
+      <div class="cmd">
+        <code id="npmcmd">npm install -g @anthropic-ai/claude-code</code>
+        <button onclick="copyCmd('npmcmd', this)">⧉ Kopiuj</button>
+      </div>
+      <ol start="3">
+        <li>Kliknij myszką w <b>czarne pole</b> (terminal) w oknie programu,
+          wklej komendę (<kbd>Cmd</kbd>+<kbd>V</kbd>) i naciśnij <kbd>Enter</kbd>.</li>
+        <li>Poczekaj 1–2 minuty. Na ekranie będą przewijać się napisy — to normalne.</li>
+      </ol>
+      <div class="ok">✅ <b>Sukces wygląda tak:</b> na końcu pojawi się napis w stylu
+        <b>„added 2 packages in 40s”</b>.</div>
+      <div class="warn">⚠️ Jeśli zobaczysz <b>„npm: command not found”</b> — Node.js nie został
+        zainstalowany (wróć do kroku 2) albo program nie został uruchomiony ponownie (zamknij go
+        przez Cmd+Q i otwórz jeszcze raz).</div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">4</span> Uruchom Claude Code i zaloguj się</h2>
+      <ol>
+        <li>W terminalu (czarne pole) wpisz <b>claude</b> i naciśnij <kbd>Enter</kbd>.
+          <b>Uwaga na literówki</b> — „claude”, nie „cloude”. Najlepiej skopiuj:
+          <span class="cmd" style="display:inline-flex;padding:4px 8px;margin:0">
+            <code id="claudecmd" style="font-size:.95rem">claude</code>
+            <button onclick="copyCmd('claudecmd', this)" style="padding:4px 10px">⧉</button>
+          </span>
+        </li>
+        <li>Jeśli pojawi się pytanie o <b>zaufanie do folderu</b> („Do you trust the files in this
+          folder?”) — naciśnij <kbd>Enter</kbd> (tak).</li>
+        <li>Claude Code poprosi o <b>zalogowanie</b>. Powinna otworzyć się przeglądarka —
+          zaloguj się na swoje konto Claude i kliknij <b>Autoryzuj</b>.</li>
+        <li>Przeglądarka pokaże <b>kod</b> — skopiuj go, wróć do programu, wklej w miejscu
+          <b>„Paste code here”</b> i naciśnij <kbd>Enter</kbd>.</li>
+      </ol>
+      <div class="warn">⚠️ <b>Jeśli przeglądarka NIE otworzy się sama:</b> Claude Code wyświetli
+        długi link i podpowiedź <b>„c to copy”</b>. Naciśnij na klawiaturze literę <kbd>c</kbd> —
+        link skopiuje się do schowka. Otwórz przeglądarkę, kliknij w pasek adresu, wklej
+        (<kbd>Cmd</kbd>+<kbd>V</kbd>) i naciśnij <kbd>Enter</kbd>.
+        <b>Nie przepisuj linku ręcznie</b> — ma ponad 300 znaków i jedna literówka go psuje.</div>
+      <div class="ok">✅ Po udanym logowaniu zobaczysz powitanie Claude Code w terminalu.
+        Od teraz możesz pisać do niego jak do człowieka.</div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">5</span> Gotowe! Co dalej</h2>
+      <ul>
+        <li><b>Pisz polecenia</b> w polu na dole okna albo wprost w terminalu i naciskaj <kbd>Enter</kbd>.</li>
+        <li><b>Czytanie odpowiedzi na głos</b> działa od razu — włącz „auto-czytanie” przy zakładce.</li>
+        <li><b>Dyktowanie głosem</b> (mikrofon 🎤) wymaga darmowego klucza Groq —
+          menu <b>Ustawienia → Klucz API Groq…</b> prowadzi przez jego założenie.
+          Przy pierwszym użyciu macOS zapyta o <b>zgodę na mikrofon</b> — kliknij „Zezwól”.</li>
+        <li>Program <b>aktualizuje się sam</b> — gdy wyjdzie nowa wersja, zapyta jednym oknem,
+          pobierze, podmieni się i uruchomi ponownie.</li>
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h2>Najczęstsze problemy</h2>
+      <table class="faq">
+        <tr><td>„claude: command not found”</td>
+          <td>Claude Code nie jest jeszcze zainstalowany (krok 3) albo program nie był
+            uruchomiony ponownie po instalacji Node.js. Zamknij program (Cmd+Q) i otwórz go jeszcze raz.</td></tr>
+        <tr><td>Brak przycisku „Otwórz” przy pierwszym starcie</td>
+          <td>Ustawienia systemowe → Prywatność i bezpieczeństwo → na dole „Otwórz mimo to”.</td></tr>
+        <tr><td>Mikrofon nic nie robi</td>
+          <td>Brakuje klucza Groq (Ustawienia → Klucz API Groq…) albo brak zgody systemowej
+            (Ustawienia systemowe → Prywatność i bezpieczeństwo → Mikrofon → włącz dla programu).</td></tr>
+        <tr><td>Program zniknął po aktualizacji i nie wraca</td>
+          <td>Otwórz folder Programy i uruchom go ręcznie — to jednorazowe; zgłoś nam, jeśli się powtórzy.</td></tr>
+      </table>
+    </section>
+
+    <footer>
+      <p><a href="https://pobierz.srv1251441.hstgr.cloud/">← Wróć do strony pobierania</a></p>
+      <p>Claude Voice Assistant • kontakt@fulfillment-polska.pl</p>
+    </footer>
+  </div>
+
+  <script>
+    function copyCmd(id, btn) {
+      var text = document.getElementById(id).textContent;
+      function done(){ var t = btn.textContent; btn.textContent = "✓"; setTimeout(function(){ btn.textContent = t; }, 1500); }
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(done);
+      } else {
+        var ta = document.createElement("textarea");
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        document.execCommand("copy"); document.body.removeChild(ta); done();
+      }
+    }
+  </script>
+</body>
+</html>

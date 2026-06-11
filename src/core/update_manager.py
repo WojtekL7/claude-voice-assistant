@@ -157,46 +157,148 @@ class UpdateManager(QObject):
 
     # ==================== Pobieranie + weryfikacja (wątek tła) ====================
 
+    # Maks. danych przesyłanych jednym połączeniem (nagłówek Range) — krótkie
+    # połączenia omijają psucie rekordu TLS przez antywirusy/proxy przy długich
+    # transferach i pozwalają wznowić od miejsca przerwania zamiast od zera.
+    _SEGMENT_BYTES = 8 * 1024 * 1024
+    # Ile KOLEJNYCH nieudanych prób (bez żadnego postępu) kończy pobieranie.
+    _DOWNLOAD_RETRIES = 3
+
     def download_async(self, info: UpdateInfo):
         threading.Thread(target=self._download_worker, args=(info,), daemon=True).start()
 
-    def _download_worker(self, info: UpdateInfo):
+    @staticmethod
+    def _tls12_session():
+        """Sesja HTTPS z wymuszonym TLS 1.2.
+
+        OpenSSL spakowanego Pythona (PyInstaller) wykłada się na TLS 1.3
+        KeyUpdate — serwer odświeża klucz w trakcie dużego pobierania i klient
+        pada z `SSL: DECRYPTION_FAILED_OR_BAD_RECORD_MAC` konsekwentnie pod
+        koniec pliku (potwierdzone na Windows przy ~100 MB). TLS 1.2 nie ma
+        KeyUpdate, więc transfer przechodzi w całości."""
+        import ssl
         import requests
+        from requests.adapters import HTTPAdapter
+
+        def _ctx():
+            ctx = ssl.create_default_context()
+            ctx.maximum_version = ssl.TLSVersion.TLSv1_2
+            return ctx
+
+        class _TLS12Adapter(HTTPAdapter):
+            def init_poolmanager(self, *args, **kwargs):
+                kwargs["ssl_context"] = _ctx()
+                return super().init_poolmanager(*args, **kwargs)
+
+            def proxy_manager_for(self, *args, **kwargs):
+                kwargs["ssl_context"] = _ctx()
+                return super().proxy_manager_for(*args, **kwargs)
+
+        session = requests.Session()
+        session.mount("https://", _TLS12Adapter())
+        return session
+
+    def _download_resumable(self, info: UpdateInfo, part: Path) -> int:
+        """Pobierz `info.url` do pliku `part` (dopisywanie). Zwraca rozmiar.
+
+        Odporność: TLS 1.2, segmenty przez `Range` (wznawianie po zerwaniu),
+        do _DOWNLOAD_RETRIES kolejnych prób BEZ postępu (próba, która coś
+        dociągnęła, zeruje licznik). Serwer bez obsługi Range (HTTP 200 zamiast
+        206) → pobieranie całości jednym strumieniem, retry od zera."""
+        total = int(info.size or 0)
+        failures = 0
+        range_supported = True
+        while True:
+            done = part.stat().st_size if part.exists() else 0
+            if total and done >= total:
+                return done
+            done_at_start = done
+            session = self._tls12_session()
+            try:
+                headers = {}
+                if range_supported:
+                    headers["Range"] = f"bytes={done}-{done + self._SEGMENT_BYTES - 1}"
+                with session.get(info.url, headers=headers, stream=True,
+                                 timeout=(10, 60)) as r:
+                    if r.status_code == 206:
+                        m = re.search(r"/(\d+)\s*$",
+                                      r.headers.get("Content-Range", ""))
+                        if m:
+                            total = int(m.group(1))
+                    elif r.status_code == 200:
+                        # Serwer ignoruje Range — całość jednym strumieniem.
+                        range_supported = False
+                        if done:
+                            self._safe_unlink(part)
+                            done = 0
+                        if not total:
+                            total = int(r.headers.get("Content-Length") or 0)
+                    else:
+                        r.raise_for_status()
+                    with open(part, "ab") as f:
+                        for chunk in r.iter_content(65536):
+                            if not chunk:
+                                continue
+                            f.write(chunk)
+                            done += len(chunk)
+                            self.download_progress.emit(done, total)
+                if not range_supported:
+                    if total and done < total:
+                        raise IOError(
+                            f"połączenie przerwane ({done}/{total} bajtów)")
+                    return done
+                if not total:
+                    # 206 bez znanego rozmiaru: segment krótszy niż żądany = koniec.
+                    if done - done_at_start < self._SEGMENT_BYTES:
+                        return done
+                failures = 0
+            except Exception:
+                # Próba z postępem nie liczy się jako porażka (transfer żyje).
+                failures = 1 if done > done_at_start else failures + 1
+                if not range_supported:
+                    self._safe_unlink(part)
+                if failures >= self._DOWNLOAD_RETRIES:
+                    raise
+            finally:
+                session.close()
+
+    def _download_worker(self, info: UpdateInfo):
         try:
             self.download_dir.mkdir(parents=True, exist_ok=True)
             filename = info.url.split("/")[-1] or f"update-{info.version}"
             dest = self.download_dir / filename
-            sha = hashlib.sha256()
-            downloaded = 0
-            with requests.get(info.url, stream=True, timeout=60) as r:
-                r.raise_for_status()
-                total = int(r.headers.get("Content-Length") or info.size or 0)
-                with open(dest, "wb") as f:
-                    for chunk in r.iter_content(65536):
-                        if not chunk:
-                            continue
-                        f.write(chunk)
-                        sha.update(chunk)
-                        downloaded += len(chunk)
-                        self.download_progress.emit(downloaded, total)
+            part = Path(str(dest) + ".part")
+            # Stara niedokończona paczka mogła dotyczyć innej wersji — od zera.
+            self._safe_unlink(part)
+            self._download_resumable(info, part)
         except Exception as e:
             self.download_failed.emit(f"Pobieranie nie powiodło się: {e}")
             return
 
-        # sha256 — obowiązkowe, gdy appcast je podaje.
-        if info.sha256 and sha.hexdigest().lower() != info.sha256.lower():
-            self._safe_unlink(dest)
+        # sha256 — obowiązkowe, gdy appcast je podaje (liczone po całości pliku,
+        # bo przy wznawianiu strumień nie przechodzi przez jedno `sha.update`).
+        if info.sha256 and not self.verify_sha256(part, info.sha256):
+            self._safe_unlink(part)
             self.download_failed.emit(
                 "Suma kontrolna pliku (sha256) się nie zgadza — paczka odrzucona.")
             return
 
         # Podpis Ed25519 — tylko gdy włączony (klucz + podpis obecne).
         if self.public_key and info.signature:
-            if not self._verify_signature(dest, info.signature, self.public_key):
-                self._safe_unlink(dest)
+            if not self._verify_signature(part, info.signature, self.public_key):
+                self._safe_unlink(part)
                 self.download_failed.emit(
                     "Podpis aktualizacji jest nieprawidłowy — paczka odrzucona.")
                 return
+
+        # Dopiero ZWERYFIKOWANY plik dostaje docelową nazwę (nigdy nie zostawiamy
+        # pod nią niekompletnej paczki).
+        try:
+            self._safe_unlink(dest)
+            part.rename(dest)
+        except Exception as e:
+            self.download_failed.emit(f"Nie udało się zapisać paczki: {e}")
+            return
 
         # macOS: zdejmij kwarantannę, by instalacja była „gładka".
         self._remove_quarantine(dest)

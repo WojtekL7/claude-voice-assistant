@@ -52,6 +52,12 @@ UPDATE_PUBLIC_KEY = ""
 # Katalog pobranych paczek aktualizacji.
 UPDATE_DOWNLOAD_DIR = CONFIG_DIR / "updates"
 
+# Instrukcje instalacji „krok po kroku" (te same podstrony co na stronie
+# pobierania). Leżą pod /cva — PUBLICZNE (bez hasła), więc aplikacja może je
+# otwierać u użytkownika bez logowania. Plik per system: instrukcja-<os>.html
+# (os = platform_utils.os_key(): windows / macos / linux).
+INSTALL_GUIDE_BASE_URL = "https://pobierz.srv1251441.hstgr.cloud/cva/"
+
 # Claude Code — ścieżka rozstrzygana wieloplatformowo (Linux/macOS/Windows):
 # PATH, potem typowe lokalizacje (~/.local/bin, Homebrew, npm). Fallback: 'claude'.
 try:

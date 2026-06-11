@@ -65,6 +65,11 @@
     .btn.disabled{
       background:#e7e2ef;color:#a99fbb;cursor:not-allowed;filter:none;
     }
+    .guide{
+      margin-top:10px;display:inline-block;font-size:.95rem;font-weight:700;
+      color:var(--accent2);text-decoration:none;
+    }
+    .guide:hover{text-decoration:underline}
     .hint{margin-top:16px;font-size:.86rem;color:var(--muted);text-align:left;width:100%}
     .hint b{color:var(--ink)}
     .soon{margin-top:14px;font-size:.85rem;color:var(--muted)}
@@ -100,10 +105,11 @@
         <div class="os-name">macOS</div>
         <div class="os-sub">Apple Silicon (M1–M4)</div>
         <a class="btn" id="dl-mac" href="downloads/ClaudeVoiceAssistant-macos.dmg" download>⬇ Pobierz na Maca</a>
+        <a class="guide" href="cva/instrukcja-macos.html">📖 Instrukcja krok po kroku (dla każdego)</a>
         <div class="hint">
           <b>Jak zainstalować:</b> otwórz pobrany plik <b>.dmg</b> i przeciągnij ikonę
-          do folderu <b>Programy</b>. Przy pierwszym uruchomieniu kliknij ikonę
-          <b>prawym przyciskiem → Otwórz</b>.
+          do folderu <b>Programy</b>. Przy pierwszym uruchomieniu: Ustawienia →
+          Prywatność i bezpieczeństwo → <b>„Otwórz mimo to"</b>.
         </div>
       </article>
 
@@ -112,11 +118,12 @@
         <div class="badge" hidden>Twój system</div>
         <div class="os-ico">🐧</div>
         <div class="os-name">Linux</div>
-        <div class="os-sub">Plik AppImage — działa bez instalacji</div>
-        <a class="btn" id="dl-linux" href="downloads/ClaudeVoiceAssistant-linux.AppImage" download>⬇ Pobierz na Linux</a>
+        <div class="os-sub">Plik AppImage — w przygotowaniu</div>
+        <a class="btn disabled" id="dl-linux">⏳ Wkrótce</a>
+        <a class="guide" href="cva/instrukcja-linux.html">📖 Co możesz przygotować już teraz</a>
         <div class="hint">
-          <b>Jak uruchomić:</b> kliknij pobrany plik <b>prawym → Właściwości →
-          zezwól na uruchamianie</b>, a potem kliknij go <b>dwukrotnie</b>.
+          <b>Pracujemy nad paczką dla Linuksa.</b> W instrukcji powyżej znajdziesz,
+          co warto zainstalować już dziś (Node.js + Claude Code).
         </div>
       </article>
 
@@ -127,6 +134,7 @@
         <div class="os-name">Windows</div>
         <div class="os-sub">Windows 10/11 (64-bit) — instalator</div>
         <a class="btn" id="dl-windows" href="downloads/ClaudeVoiceAssistant-Setup.exe" download>⬇ Pobierz na Windows</a>
+        <a class="guide" href="cva/instrukcja-windows.html">📖 Instrukcja krok po kroku (dla każdego)</a>
         <div class="hint">
           <b>Jak zainstalować:</b> otwórz pobrany plik <b>.exe</b> i przejdź przez
           instalator (kilka kliknięć „Dalej"). Jeśli pojawi się ekran
@@ -158,7 +166,7 @@
     </section>
 
     <footer>
-      <p>Claude Voice Assistant • wersja 1.0.0</p>
+      <p>Claude Voice Assistant • wersja <span id="ver">…</span></p>
     </footer>
   </div>
 
@@ -177,6 +185,15 @@
         det.innerHTML = "Wykryliśmy Twój system: <b>" + label + "</b>";
         det.hidden = false;
       }
+      // Wersja w stopce — zawsze aktualna, prosto z feedu aktualizacji.
+      fetch("cva/appcast.json").then(function (r) { return r.json(); })
+        .then(function (j) {
+          var v = j && j.latest && j.latest.version;
+          if (v) document.getElementById("ver").textContent = v;
+        }).catch(function () {
+          document.getElementById("ver").textContent = "—";
+        });
+
       var card = document.getElementById("card-" + os);
       if (card) {
         card.classList.add("recommended");

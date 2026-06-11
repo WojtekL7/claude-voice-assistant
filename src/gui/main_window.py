@@ -334,6 +334,7 @@ from gui import icon_set
 from gui.dialogs import (
     MemoryProjectsDialog, AgentConfigDialog, AgentsManagerDialog,
     SkillsManagerDialog, McpManagerDialog, UpdateAvailableDialog,
+    ClaudeSetupDialog,
     styled_get_open_file_names, styled_get_open_file_name, styled_get_save_file_name
 )
 from gui.mcp_status_widget import McpStatusWidget
@@ -540,6 +541,11 @@ class MainWindow(QMainWindow):
         # Ciche sprawdzenie aktualizacji ~3 s po starcie (po rozruchu terminala),
         # w tle; brak nowszej/błąd przy cichym = bez popupów.
         QTimer.singleShot(3000, self._maybe_auto_check_updates)
+
+        # Brak Claude Code CLI (świeży komputer) → kreator „dokończ instalację"
+        # zamiast surowego „command not found" w terminalu. Po rozruchu okna,
+        # żeby dialog stanął NAD głównym oknem, nie przed nim.
+        QTimer.singleShot(1500, self._maybe_show_claude_setup)
 
         # NOTE: Claude jest teraz uruchamiany w _create_agent_tab() dla każdej zakładki
         # Stare globalne wywołanie usunięte, bo powodowało podwójne uruchomienie
@@ -1616,6 +1622,10 @@ class MainWindow(QMainWindow):
         about_action.triggered.connect(self._show_about)
         help_menu.addAction(about_action)
 
+        claude_setup_action = QAction("Jak zainstalować Claude Code…", self)
+        claude_setup_action.triggered.connect(self._show_claude_setup_dialog)
+        help_menu.addAction(claude_setup_action)
+
         license_action = QAction("Licencja...", self)
         license_action.triggered.connect(self._show_license_dialog)
         help_menu.addAction(license_action)
@@ -1670,6 +1680,51 @@ class MainWindow(QMainWindow):
         # Ctrl+R to read
         # Escape to stop
         pass
+
+    # ==================== Kreator instalacji Claude Code ====================
+
+    def _claude_cli_available(self) -> bool:
+        """Czy skonfigurowana komenda Claude Code realnie istnieje w systemie.
+
+        `claude_command` bywa pełną ścieżką (także ze spacjami — Windows) albo
+        gołą nazwą rozwiązywaną przez PATH; sprawdzamy oba warianty."""
+        import shutil
+        cmd = (self.claude_command or "").strip()
+        if not cmd:
+            return False
+        try:
+            if Path(cmd).exists():
+                return True
+        except Exception:
+            pass
+        first = cmd.split()[0]
+        if shutil.which(first):
+            return True
+        try:
+            return Path(first).exists()
+        except Exception:
+            return False
+
+    def _maybe_show_claude_setup(self):
+        """Przy starcie: brak CLI → pokaż kreator (raz na uruchomienie)."""
+        if getattr(self, '_claude_setup_shown', False):
+            return
+        if self._claude_cli_available():
+            return
+        self._claude_setup_shown = True
+        self._show_claude_setup_dialog()
+
+    def _show_claude_setup_dialog(self):
+        """Kreator „dokończ instalację" (też ręcznie z menu Pomoc)."""
+        dlg = ClaudeSetupDialog(self)
+        dlg.claude_found.connect(self._on_claude_cli_found)
+        dlg.exec_()
+
+    def _on_claude_cli_found(self, path: str):
+        """Kreator znalazł CLI — przejmij ścieżkę bez restartu aplikacji."""
+        self.claude_command = path
+        self._save_settings()
+        self._update_status(f"Znaleziono Claude Code: {path}")
 
     # ==================== Auto-aktualizacja (M3) ====================
 

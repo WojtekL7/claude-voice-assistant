@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Instrukcja instalacji — Linux | Claude Voice Assistant</title>
+  <meta name="description" content="Instalacja Claude Voice Assistant na Linuksie krok po kroku.">
+  <style>
+    :root{
+      --bg1:#2a1140; --bg2:#3d1a5b; --accent:#a855f7; --accent2:#7c3aed;
+      --ink:#1b1226; --muted:#6b6478; --card:#ffffff; --soft:#f5f2fb;
+      --ok:#16a34a; --warn-bg:#fff7e6; --warn-line:#f0c36d; --line:#e9e3f3;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Ubuntu,Helvetica,Arial,sans-serif;
+      color:var(--ink);
+      background:linear-gradient(160deg,var(--bg1),var(--bg2));
+      min-height:100vh;line-height:1.6;
+    }
+    .wrap{max-width:860px;margin:0 auto;padding:40px 20px 64px}
+    header{text-align:center;color:#fff;margin-bottom:30px}
+    .logo{
+      width:72px;height:72px;border-radius:20px;margin:0 auto 14px;
+      background:linear-gradient(145deg,#c084fc,#7c3aed);
+      display:flex;align-items:center;justify-content:center;font-size:36px;
+      box-shadow:0 12px 30px rgba(124,58,237,.45);
+    }
+    h1{font-size:1.9rem;font-weight:800;letter-spacing:-.5px}
+    .tagline{font-size:1.05rem;opacity:.9;margin-top:8px}
+    .back{display:inline-block;margin-top:14px;color:#e9d5ff;font-size:.95rem}
+
+    .panel{background:var(--card);border-radius:20px;padding:28px;box-shadow:0 18px 40px rgba(20,8,40,.28);margin-bottom:22px}
+    .panel h2{font-size:1.3rem;margin-bottom:10px;display:flex;align-items:center;gap:12px}
+    .num{display:inline-flex;flex:none;width:34px;height:34px;border-radius:50%;
+      background:var(--accent);color:#fff;font-weight:800;font-size:1.05rem;
+      align-items:center;justify-content:center}
+    .panel p, .panel li{font-size:1rem;color:#332b40;margin-bottom:10px}
+    .panel ol, .panel ul{padding-left:24px;margin-bottom:8px}
+    .panel li{margin-bottom:8px}
+
+    .see{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin:10px 0;font-size:.95rem}
+    .see b{color:var(--accent2)}
+    .warn{background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:12px;padding:12px 16px;margin:10px 0;font-size:.95rem}
+    .ok{background:#ecfdf3;border:1px solid #b7e4c7;border-radius:12px;padding:12px 16px;margin:10px 0;font-size:.95rem}
+
+    .cmd{display:flex;gap:10px;align-items:center;background:#1e1530;border-radius:12px;padding:12px 14px;margin:10px 0}
+    .cmd code{color:#d8c7ff;font-family:"Ubuntu Mono",Consolas,monospace;font-size:1rem;flex:1;overflow-x:auto;white-space:nowrap}
+    .cmd button{border:0;border-radius:8px;background:var(--accent);color:#fff;font-weight:700;
+      padding:8px 14px;cursor:pointer;font-size:.9rem;flex:none}
+    .cmd button:hover{filter:brightness(1.1)}
+
+    kbd{background:#eee;border:1px solid #ccc;border-bottom-width:3px;border-radius:6px;
+      padding:1px 7px;font-family:inherit;font-size:.92em;font-weight:600}
+    footer{text-align:center;color:#fff;opacity:.8;margin-top:36px;font-size:.9rem}
+    footer a{color:#e9d5ff}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo">🐧</div>
+      <h1>Instalacja na Linuksie</h1>
+      <p class="tagline">Wersja do pobrania jednym kliknięciem (AppImage) jest w przygotowaniu.
+        Poniżej znajdziesz to, co możesz przygotować już teraz.</p>
+      <a class="back" href="https://pobierz.srv1251441.hstgr.cloud/">← Wróć do strony pobierania</a>
+    </header>
+
+    <section class="panel">
+      <h2>⏳ Paczka dla Linuksa — wkrótce</h2>
+      <p>Pracujemy nad gotowym plikiem <b>AppImage</b>, który uruchomi program na Linuksie bez
+        instalacji — tak samo prosto jak na Windows i Macu. Gdy będzie gotowy, pojawi się na
+        <a href="https://pobierz.srv1251441.hstgr.cloud/">stronie pobierania</a>, a ta instrukcja
+        zostanie uzupełniona o szczegółowe kroki.</p>
+      <div class="see">Masz Windows lub Maca? Zobacz gotowe instrukcje:
+        <a href="instrukcja-windows.html">Windows</a> •
+        <a href="instrukcja-macos.html">macOS</a></div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">1</span> Co możesz przygotować już teraz — Node.js i Claude Code</h2>
+      <p>Program (jak na każdym systemie) potrzebuje dwóch darmowych dodatków:
+        <b>Node.js</b> i <b>Claude Code</b>. Możesz zainstalować je już dziś — będą gotowe
+        na premierę paczki. Otwórz terminal (Ctrl+Alt+T na Ubuntu) i wykonaj kolejno:</p>
+      <p><b>Node.js</b> (Ubuntu/Debian):</p>
+      <div class="cmd">
+        <code id="nodecmd">sudo apt update &amp;&amp; sudo apt install -y nodejs npm</code>
+        <button onclick="copyCmd('nodecmd', this)">⧉ Kopiuj</button>
+      </div>
+      <p><b>Claude Code</b>:</p>
+      <div class="cmd">
+        <code id="npmcmd">sudo npm install -g @anthropic-ai/claude-code</code>
+        <button onclick="copyCmd('npmcmd', this)">⧉ Kopiuj</button>
+      </div>
+      <div class="ok">✅ Sprawdzenie: wpisz <b>claude --version</b> i naciśnij <kbd>Enter</kbd> —
+        jeśli pokaże się numer wersji, wszystko gotowe.</div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">2</span> Logowanie do Claude Code</h2>
+      <ol>
+        <li>W terminalu wpisz <b>claude</b> i naciśnij <kbd>Enter</kbd>.</li>
+        <li>Jeśli pojawi się pytanie o zaufanie do folderu — naciśnij <kbd>Enter</kbd> (tak).</li>
+        <li>Claude Code poprosi o zalogowanie. Powinna otworzyć się przeglądarka — zaloguj się
+          na konto Claude (claude.ai, plan np. Pro) i kliknij <b>Autoryzuj</b>.</li>
+        <li>Skopiuj pokazany kod i wklej go w terminalu w miejscu „Paste code here”.</li>
+      </ol>
+      <div class="warn">⚠️ Jeśli przeglądarka nie otworzy się sama — Claude Code pokaże długi link
+        i podpowiedź „c to copy”. Naciśnij <kbd>c</kbd> (link skopiuje się do schowka), wklej go
+        w przeglądarce. <b>Nie przepisuj linku ręcznie.</b></div>
+    </section>
+
+    <footer>
+      <p><a href="https://pobierz.srv1251441.hstgr.cloud/">← Wróć do strony pobierania</a></p>
+      <p>Claude Voice Assistant • kontakt@fulfillment-polska.pl</p>
+    </footer>
+  </div>
+
+  <script>
+    function copyCmd(id, btn) {
+      var text = document.getElementById(id).textContent;
+      function done(){ var t = btn.textContent; btn.textContent = "✓"; setTimeout(function(){ btn.textContent = t; }, 1500); }
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(done);
+      } else {
+        var ta = document.createElement("textarea");
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        document.execCommand("copy"); document.body.removeChild(ta); done();
+      }
+    }
+  </script>
+</body>
+</html>

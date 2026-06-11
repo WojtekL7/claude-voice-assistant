@@ -3581,3 +3581,162 @@ class UpdateAvailableDialog(QDialog):
         self.download_btn.setEnabled(True)
         self.later_btn.setEnabled(True)
         QMessageBox.warning(self, "Błąd aktualizacji", msg)
+
+
+class ClaudeSetupDialog(QDialog):
+    """Kreator „dokończ instalację" — w systemie nie znaleziono Claude Code.
+
+    Aplikacja jest „pilotem" nad CLI Claude Code: bez zainstalowanego `claude`
+    terminal pokazuje tylko surowe „command not found" / „'claude' is not
+    recognized", z którego laik nic nie wyczyta. Ten dialog tłumaczy prostym
+    językiem, że potrzebny jest darmowy dodatek (Node.js + Claude Code),
+    prowadzi przez instalację krok po kroku i linkuje pełną instrukcję online
+    (publiczna podstrona /cva — bez logowania).
+
+    Pokazywany przez MainWindow przy starcie, gdy CLI nie znaleziono; dostępny
+    też ręcznie z menu Pomoc.
+    """
+
+    NPM_COMMAND = "npm install -g @anthropic-ai/claude-code"
+
+    # Ścieżka znalezionego CLI po kliknięciu „Sprawdź ponownie" — MainWindow
+    # podmienia claude_command bez restartu aplikacji.
+    claude_found = pyqtSignal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        from core.platform_utils import os_key
+        from config import INSTALL_GUIDE_BASE_URL
+        self._os = os_key()
+        self._guide_url = f"{INSTALL_GUIDE_BASE_URL}instrukcja-{self._os}.html"
+
+        self.setWindowTitle("Dokończ instalację — potrzebny Claude Code")
+        self.setMinimumWidth(560)
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+
+        title = QLabel("Jeszcze jeden krok — zainstaluj Claude Code")
+        tf = QFont()
+        tf.setPointSize(13)
+        tf.setBold(True)
+        title.setFont(tf)
+        layout.addWidget(title)
+
+        intro = QLabel(
+            "Ten program jest „pilotem” do narzędzia <b>Claude Code</b> — to ono "
+            "rozmawia z Tobą i pisze kod. Na tym komputerze jeszcze go nie ma, "
+            "dlatego terminal nie zadziała. Instalacja jest darmowa i zajmuje "
+            "kilka minut. Wystarczy wykonać te trzy kroki:")
+        intro.setWordWrap(True)
+        intro.setTextFormat(Qt.RichText)
+        layout.addWidget(intro)
+
+        # ---- Krok 1: Node.js ----
+        step1_box = QGroupBox("Krok 1 — zainstaluj Node.js (darmowy program pomocniczy)")
+        s1 = QVBoxLayout(step1_box)
+        s1_label = QLabel(
+            "Kliknij przycisk poniżej, pobierz wersję <b>LTS</b> (zielony "
+            "przycisk) i zainstaluj jak każdy program (Dalej → Dalej → Zakończ).")
+        s1_label.setWordWrap(True)
+        s1_label.setTextFormat(Qt.RichText)
+        s1.addWidget(s1_label)
+        if self._os == "windows":
+            s1_warn = QLabel(
+                "⚠️ W instalatorze Node.js <b>NIE zaznaczaj</b> opcji "
+                "„Tools for Native Modules”. Jeśli mimo to pojawi się czarne "
+                "okno z groźnie wyglądającymi błędami — po prostu je zamknij, "
+                "to nieszkodliwe (Node.js jest już zainstalowany).")
+            s1_warn.setWordWrap(True)
+            s1_warn.setTextFormat(Qt.RichText)
+            s1.addWidget(s1_warn)
+        node_btn = QPushButton("🌐 Otwórz stronę nodejs.org")
+        node_btn.clicked.connect(
+            lambda: QDesktopServices.openUrl(QUrl("https://nodejs.org/")))
+        s1.addWidget(node_btn)
+        layout.addWidget(step1_box)
+
+        # ---- Krok 2: npm install ----
+        step2_box = QGroupBox("Krok 2 — zainstaluj Claude Code")
+        s2 = QVBoxLayout(step2_box)
+        s2_label = QLabel(
+            "Po zainstalowaniu Node.js <b>uruchom ten program od nowa</b>, "
+            "wklej do terminala (czarne pole w oknie) poniższą komendę "
+            "i naciśnij Enter. Napis „added … packages” oznacza sukces.")
+        s2_label.setWordWrap(True)
+        s2_label.setTextFormat(Qt.RichText)
+        s2.addWidget(s2_label)
+        cmd_row = QHBoxLayout()
+        self.cmd_field = QLineEdit(self.NPM_COMMAND)
+        self.cmd_field.setReadOnly(True)
+        cmd_row.addWidget(self.cmd_field)
+        self.copy_btn = QPushButton("⧉ Kopiuj")
+        self.copy_btn.clicked.connect(self._copy_command)
+        cmd_row.addWidget(self.copy_btn)
+        s2.addLayout(cmd_row)
+        layout.addWidget(step2_box)
+
+        # ---- Krok 3: logowanie ----
+        step3_box = QGroupBox("Krok 3 — uruchom i zaloguj się")
+        s3 = QVBoxLayout(step3_box)
+        s3_label = QLabel(
+            "Wpisz w terminalu <b>claude</b> i naciśnij Enter. Przy pierwszym "
+            "uruchomieniu Claude Code poprosi o zalogowanie — jeśli przeglądarka "
+            "nie otworzy się sama, naciśnij klawisz <b>c</b> (skopiuje link), "
+            "wklej go w przeglądarce i dokończ logowanie. "
+            "<b>Nie przepisuj linku ręcznie</b> — jest bardzo długi.")
+        s3_label.setWordWrap(True)
+        s3_label.setTextFormat(Qt.RichText)
+        s3.addWidget(s3_label)
+        layout.addWidget(step3_box)
+
+        # ---- Przyciski ----
+        btn_row = QHBoxLayout()
+        guide_btn = QPushButton("📖 Pełna instrukcja (krok po kroku)")
+        guide_btn.clicked.connect(
+            lambda: QDesktopServices.openUrl(QUrl(self._guide_url)))
+        btn_row.addWidget(guide_btn)
+        btn_row.addStretch()
+        check_btn = QPushButton("🔄 Sprawdź ponownie")
+        check_btn.clicked.connect(self._check_again)
+        btn_row.addWidget(check_btn)
+        close_btn = QPushButton("Zamknij")
+        close_btn.setDefault(True)
+        close_btn.clicked.connect(self.reject)
+        btn_row.addWidget(close_btn)
+        layout.addLayout(btn_row)
+
+    def _copy_command(self):
+        from PyQt5.QtWidgets import QApplication
+        QApplication.clipboard().setText(self.NPM_COMMAND)
+        self.copy_btn.setText("✓ Skopiowano")
+        QTimer.singleShot(2000, lambda: self.copy_btn.setText("⧉ Kopiuj"))
+
+    def _check_again(self):
+        """Poszukaj CLI jeszcze raz (PATH + typowe lokalizacje). Znalezione →
+        sygnał do MainWindow (podmiana komendy bez restartu) i zamknięcie."""
+        import shutil
+        from core.platform_utils import find_claude_command
+        found = find_claude_command()
+        resolved = shutil.which(found)
+        if not resolved:
+            try:
+                if Path(found).is_absolute() and Path(found).exists():
+                    resolved = found
+            except Exception:
+                resolved = None
+        if resolved:
+            QMessageBox.information(
+                self, "Znaleziono Claude Code",
+                "Claude Code jest zainstalowany. 🎉\n\n"
+                "Możesz teraz uruchomić agenta (zakładka → Uruchom) albo wpisać "
+                "„claude” w terminalu.")
+            self.claude_found.emit(str(resolved))
+            self.accept()
+        else:
+            QMessageBox.information(
+                self, "Jeszcze nie widać Claude Code",
+                "Nie znalazłem jeszcze Claude Code w systemie.\n\n"
+                "Upewnij się, że Krok 1 (Node.js) i Krok 2 (komenda npm) zostały "
+                "wykonane, a jeśli właśnie zainstalowano Node.js — uruchom ten "
+                "program od nowa i spróbuj jeszcze raz.")
