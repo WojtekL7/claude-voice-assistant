@@ -84,7 +84,7 @@ Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags
 
 var
   DownloadPage: TDownloadWizardPage;
-  NodeMsiReady: Boolean;   { MSI pobrane i czeka w {tmp} }
+  NodeMsiReady: Boolean;   { MSI pobrane i czeka w katalogu tymczasowym }
 
 { Czy komenda jest w PATH użytkownika (`where`)? Łapie KAŻDY sposób instalacji:
   oficjalny MSI, winget, chocolatey, nvm-windows, scoop… — nie tylko domyślny
