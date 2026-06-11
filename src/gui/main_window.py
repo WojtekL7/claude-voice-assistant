@@ -1626,6 +1626,10 @@ class MainWindow(QMainWindow):
         claude_setup_action.triggered.connect(self._show_claude_setup_dialog)
         help_menu.addAction(claude_setup_action)
 
+        agents_guide_action = QAction("Instrukcja: Zarządzaj agentami…", self)
+        agents_guide_action.triggered.connect(self._open_agents_guide)
+        help_menu.addAction(agents_guide_action)
+
         license_action = QAction("Licencja...", self)
         license_action.triggered.connect(self._show_license_dialog)
         help_menu.addAction(license_action)
@@ -1719,6 +1723,13 @@ class MainWindow(QMainWindow):
         dlg = ClaudeSetupDialog(self)
         dlg.claude_found.connect(self._on_claude_cli_found)
         dlg.exec_()
+
+    def _open_agents_guide(self):
+        """Instrukcja online „Zarządzaj agentami" (publiczna podstrona /cva)."""
+        from PyQt5.QtGui import QDesktopServices
+        from PyQt5.QtCore import QUrl
+        from config import INSTALL_GUIDE_BASE_URL
+        QDesktopServices.openUrl(QUrl(f"{INSTALL_GUIDE_BASE_URL}instrukcja-agenci.html"))
 
     def _on_claude_cli_found(self, path: str):
         """Kreator znalazł CLI — przejmij ścieżkę bez restartu aplikacji."""

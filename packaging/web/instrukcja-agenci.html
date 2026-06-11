@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zarządzaj agentami — instrukcja | Claude Voice Assistant</title>
+  <meta name="description" content="Jak działa funkcja Zarządzaj agentami w Claude Voice Assistant — dodawanie, edycja i konfiguracja agentów krok po kroku, dla każdego.">
+  <style>
+    :root{
+      --bg1:#2a1140; --bg2:#3d1a5b; --accent:#a855f7; --accent2:#7c3aed;
+      --ink:#1b1226; --muted:#6b6478; --card:#ffffff; --soft:#f5f2fb;
+      --ok:#16a34a; --warn-bg:#fff7e6; --warn-line:#f0c36d; --line:#e9e3f3;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Ubuntu,Helvetica,Arial,sans-serif;
+      color:var(--ink);
+      background:linear-gradient(160deg,var(--bg1),var(--bg2));
+      min-height:100vh;line-height:1.6;
+    }
+    .wrap{max-width:860px;margin:0 auto;padding:40px 20px 64px}
+    header{text-align:center;color:#fff;margin-bottom:30px}
+    .logo{
+      width:72px;height:72px;border-radius:20px;margin:0 auto 14px;
+      background:linear-gradient(145deg,#c084fc,#7c3aed);
+      display:flex;align-items:center;justify-content:center;font-size:36px;
+      box-shadow:0 12px 30px rgba(124,58,237,.45);
+    }
+    h1{font-size:1.9rem;font-weight:800;letter-spacing:-.5px}
+    .tagline{font-size:1.05rem;opacity:.9;margin-top:8px}
+    .back{display:inline-block;margin-top:14px;color:#e9d5ff;font-size:.95rem}
+
+    .panel{background:var(--card);border-radius:20px;padding:28px;box-shadow:0 18px 40px rgba(20,8,40,.28);margin-bottom:22px}
+    .panel h2{font-size:1.3rem;margin-bottom:10px;display:flex;align-items:center;gap:12px}
+    .panel h3{font-size:1.05rem;margin:16px 0 8px}
+    .num{display:inline-flex;flex:none;width:34px;height:34px;border-radius:50%;
+      background:var(--accent);color:#fff;font-weight:800;font-size:1.05rem;
+      align-items:center;justify-content:center}
+    .panel p, .panel li{font-size:1rem;color:#332b40;margin-bottom:10px}
+    .panel ol, .panel ul{padding-left:24px;margin-bottom:8px}
+    .panel li{margin-bottom:8px}
+
+    .see{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin:10px 0;font-size:.95rem}
+    .see b{color:var(--accent2)}
+    .warn{background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:12px;padding:12px 16px;margin:10px 0;font-size:.95rem}
+    .ok{background:#ecfdf3;border:1px solid #b7e4c7;border-radius:12px;padding:12px 16px;margin:10px 0;font-size:.95rem}
+
+    /* tabela przycisków / opcji */
+    .opts{width:100%;border-collapse:collapse;margin-top:6px}
+    .opts td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:.95rem;vertical-align:top}
+    .opts td:first-child{font-weight:700;width:34%;white-space:nowrap}
+
+    .faq{width:100%;border-collapse:collapse;margin-top:6px}
+    .faq td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:.95rem;vertical-align:top}
+    .faq td:first-child{font-weight:700;width:45%}
+
+    kbd{background:#eee;border:1px solid #ccc;border-bottom-width:3px;border-radius:6px;
+      padding:1px 7px;font-family:inherit;font-size:.92em;font-weight:600}
+    .chip{display:inline-block;background:#2d0a1e;color:#fff;border-radius:8px;padding:2px 10px;font-size:.9em}
+    .green{display:inline-block;width:14px;height:14px;border-radius:4px;background:rgba(34,160,84,.6);vertical-align:-2px}
+    .gray{display:inline-block;width:14px;height:14px;border-radius:4px;background:rgba(120,125,135,.55);vertical-align:-2px}
+
+    footer{text-align:center;color:#fff;opacity:.8;margin-top:36px;font-size:.9rem}
+    footer a{color:#e9d5ff}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo">🤖</div>
+      <h1>Zarządzaj agentami — krok po kroku</h1>
+      <p class="tagline">Jak dodać nowego agenta i co znaczy każda opcja w tym oknie —
+        wytłumaczone tak, żeby zrozumiał każdy, bez żadnej wiedzy technicznej.</p>
+      <a class="back" href="https://pobierz.srv1251441.hstgr.cloud/">← Wróć do strony pobierania</a>
+    </header>
+
+    <section class="panel">
+      <h2>Co to w ogóle jest „agent”?</h2>
+      <p>Wyobraź sobie, że <b>agent to osobny pracownik</b>, którego zatrudniasz do jednego
+        projektu. Każdy agent ma w programie <b>własną zakładkę</b> (jak karty w przeglądarce),
+        a w niej:</p>
+      <ul>
+        <li><b>własny terminal</b> — swoje „biurko”, przy którym pracuje,</li>
+        <li><b>własną teczkę projektu</b> (katalog roboczy) — folder na dysku, w którym działa,</li>
+        <li><b>własny „mózg”</b> (model Claude) — szybszy i tańszy albo potężniejszy,</li>
+        <li><b>własne notatki</b> (pliki pamięci) — które dostaje do przeczytania na start.</li>
+      </ul>
+      <div class="see"><b>Po co mieć kilku agentów?</b> Na przykład: jeden zajmuje się sklepem
+        internetowym, drugi stroną firmową — każdy w swoim folderze, nic im się nie miesza.
+        Albo: jeden z szybkim, tanim mózgiem do drobiazgów, a drugi z najpotężniejszym do
+        najtrudniejszych zadań. Przełączasz się między nimi klikając zakładki u góry okna.</div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">1</span> Jak otworzyć „Zarządzaj agentami”</h2>
+      <p>Są dwie drogi — obie prowadzą do tego samego okna:</p>
+      <ul>
+        <li>menu <b>Zakładki → Zarządzaj agentami…</b> (górny pasek menu), albo</li>
+        <li>kliknij <b>„+”</b> na pasku zakładek i wybierz <b>Zarządzaj agentami…</b></li>
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">2</span> Okno „Zarządzaj agentami” — co tu widzisz</h2>
+      <p>Po lewej jest <b>lista wszystkich agentów</b>. Każdy wiersz pokazuje:</p>
+      <ul>
+        <li><b>nazwę agenta</b> (większą czcionką),</li>
+        <li>pod spodem drobnym drukiem: <b>📁 ile ma plików pamięci</b> (najedź myszką, żeby
+          zobaczyć które), <b>🤖 jaki ma model</b> (mózg), <b>🧩 ile skilli</b> i
+          <b>🔌 ile wtyczek MCP</b> (chwilę się ładują — to normalne).</li>
+      </ul>
+      <div class="see"><b>Kolor tła wiersza ma znaczenie:</b><br>
+        <span class="green"></span>&nbsp;<b>zielone tło</b> = agent uruchamia się sam przy każdym
+        starcie programu,<br>
+        <span class="gray"></span>&nbsp;<b>szare tło</b> = agent jest zapisany, ale czeka — uruchomisz
+        go ręcznie, gdy będzie potrzebny.</div>
+
+      <h3>Przyciski po prawej stronie listy</h3>
+      <table class="opts">
+        <tr><td>▲ W górę / ▼ W dół</td>
+          <td>Zmienia <b>kolejność</b> agentów na liście — w tej samej kolejności ułożą się
+            zakładki u góry okna. Zaznacz agenta i klikaj strzałki.</td></tr>
+        <tr><td>▶️ Uruchom</td>
+          <td>Otwiera zakładkę zaznaczonego agenta <b>od razu</b> (okno się zamknie, a zmiany
+            zapiszą). Najszybszy sposób, żeby obudzić agenta z szarym tłem.</td></tr>
+        <tr><td>➕ Dodaj</td>
+          <td>Tworzy <b>nowego agenta</b> — otwiera okno konfiguracji opisane w punkcie 3 poniżej.</td></tr>
+        <tr><td>✏️ Edytuj</td>
+          <td>Otwiera <b>to samo okno konfiguracji</b>, ale z ustawieniami zaznaczonego agenta —
+            możesz zmienić mu nazwę, folder, model itd.</td></tr>
+        <tr><td>📋 Duplikuj</td>
+          <td>Tworzy <b>kopię</b> zaznaczonego agenta (z dopiskiem „(kopia)” w nazwie).
+            Wygodne, gdy chcesz drugiego prawie identycznego — np. ten sam projekt,
+            ale z innym mózgiem.</td></tr>
+        <tr><td>🗑️ Usuń</td>
+          <td>Usuwa zaznaczonego agenta (program zapyta, czy na pewno).
+            <b>Co najmniej jeden agent musi zostać</b> — ostatniego nie da się usunąć.</td></tr>
+        <tr><td>Anuluj / Zapisz (na dole)</td>
+          <td><b>Zapisz</b> zatwierdza wszystkie zmiany. Jeśli nie użyłeś „Uruchom” ani
+            „Zapisz i uruchom”, nowe zakładki pojawią się <b>po ponownym uruchomieniu
+            programu</b> (program o tym przypomni). <b>Anuluj</b> wycofuje zmiany.</td></tr>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">3</span> Dodajemy nowego agenta — okno konfiguracji</h2>
+      <p>Po kliknięciu <b>➕ Dodaj</b> (albo ✏️ Edytuj) otwiera się okno z <b>czterema
+        zakładkami</b> u góry: 📝 Podstawowe, 💾 Pamięć, 🧩 Skille, 🔌 MCP.
+        Do zwykłej pracy wystarczy pierwsza — pozostałe to dodatki dla chętnych.</p>
+
+      <h3>📝 Zakładka „Podstawowe” — tu dzieje się najważniejsze</h3>
+      <table class="opts">
+        <tr><td>Nazwa agenta</td>
+          <td>Dowolna nazwa, która podpowie Ci, czym ten agent się zajmuje —
+            np. „Sklep internetowy” albo „Strona firmowa”. Pojawi się na zakładce.</td></tr>
+        <tr><td>Katalog roboczy</td>
+          <td>„Teczka projektu” — folder na dysku, w którym agent będzie pracował (czytał
+            i tworzył pliki). Kliknij <b>📁</b> obok pola i wskaż folder. Jeśli zaczynasz
+            od zera — utwórz najpierw pusty folder, np. <i>Dokumenty\MojProjekt</i>.</td></tr>
+        <tr><td>Model Claude Code</td>
+          <td>„Mózg” agenta. Z listy wybierzesz:
+            <ul style="margin-top:6px">
+              <li><b>Domyślny — Opus 4.8</b> — dobry do wszystkiego, od tego zacznij;</li>
+              <li><b>Fable 5</b> — najpotężniejszy, do najtrudniejszych zadań
+                (zużywa limit Twojego konta ok. 2× szybciej — używaj świadomie);</li>
+              <li><b>Opus 4.8</b> — jak domyślny, wybrany na sztywno;</li>
+              <li><b>Sonnet 4.6</b> — szybki i zbalansowany, do lżejszych prac;</li>
+              <li><b>Haiku 4.5</b> — najszybszy i najoszczędniejszy, do prostych pytań.</li>
+            </ul>
+            Pod listą jest podpowiedź: <b>zmiana modelu działającego agenta wymaga jego
+            restartu</b> (przycisk Stop, potem Uruchom w zakładce).</td></tr>
+        <tr><td>☑ Uruchamiaj automatycznie przy starcie aplikacji</td>
+          <td>Zaznaczone = agent budzi się sam razem z programem (zielone tło na liście).
+            Odznaczone = czeka, aż go uruchomisz ręcznie. Jeśli masz wielu agentów,
+            zostaw zaznaczone tylko tym, których używasz codziennie — program będzie
+            startował szybciej.</td></tr>
+        <tr><td>☑ Wczytaj pliki pamięci po starcie Claude Code</td>
+          <td>Zaznaczone = po uruchomieniu agent od razu „przeczyta” notatki z zakładki
+            💾 Pamięć. Odznacz tylko, jeśli chcesz wyjątkowo wystartować bez nich.</td></tr>
+      </table>
+
+      <h3>💾 Zakładka „Pamięć” — notatki na start</h3>
+      <p>Tu dodajesz <b>pliki, które agent dostaje do przeczytania na początku pracy</b> —
+        jak teczkę z notatkami dla nowego pracownika: co to za projekt, jakie są zasady,
+        co już ustalono. Dzięki temu nie musisz tłumaczyć wszystkiego od nowa w każdej rozmowie.</p>
+      <ul>
+        <li>Kliknij <b>+ Dodaj plik</b> i wybierz plik z dysku — mogą to być pliki
+          <b>.md</b> (tekst z formatowaniem), <b>.txt</b> (zwykły tekst) lub <b>.json</b>.</li>
+        <li>Każdy dodany plik pojawia się jako pasek z nazwą; <b>✕</b> po prawej go usuwa
+          (z listy agenta — plik na dysku zostaje nietknięty).</li>
+        <li>Najedź myszką na nazwę, żeby zobaczyć pełną ścieżkę pliku.</li>
+      </ul>
+      <div class="see">Nie masz żadnych notatek? Nic nie szkodzi — zostaw pusto. Agent działa
+        też bez tego; pamięć to wygoda, nie wymóg.</div>
+
+      <h3>🧩 Zakładka „Skille” — dodatkowe umiejętności (dla chętnych)</h3>
+      <p><b>Skill to gotowy „przepis”</b>, który uczy agenta konkretnej umiejętności — np.
+        tworzenia dokumentów Word, prezentacji albo przeszukiwania internetu wg określonych zasad.</p>
+      <ul>
+        <li>Każdy agent <b>automatycznie dziedziczy skille globalne</b> (te z menu
+          Rozszerzenia — wspólne dla wszystkich agentów).</li>
+        <li>Przycisk <b>„Zarządzaj lokalnymi skillami”</b> pozwala dodać skille
+          <b>tylko dla tego jednego agenta</b>.</li>
+        <li>Lista na dole („🚫 Wyłącz globalne skille…”) pozwala <b>odznaczyć</b> te wspólne
+          skille, których akurat ten agent ma <b>nie używać</b>. Zmiany zapisują się od razu.</li>
+      </ul>
+
+      <h3>🔌 Zakładka „MCP” — wtyczki do narzędzi (dla chętnych)</h3>
+      <p><b>MCP to wtyczki</b>, które dają agentowi dostęp do zewnętrznych narzędzi — np. do
+        bazy danych, przeglądarki internetowej czy kalendarza. Działa to identycznie jak skille:</p>
+      <ul>
+        <li>agent dziedziczy <b>globalne serwery MCP</b> z menu Rozszerzenia,</li>
+        <li><b>„Zarządzaj lokalnymi MCP”</b> dodaje wtyczki tylko dla tego agenta
+          (działają w jego katalogu roboczym),</li>
+        <li>lista „🚫 Wyłącz globalne MCP…” odłącza wybrane wspólne wtyczki od tego agenta
+          (zapis natychmiast).</li>
+      </ul>
+      <div class="see">Jeśli nie wiesz, czym są skille i MCP — <b>po prostu pomiń te dwie
+        zakładki</b>. Agent będzie świetnie działał bez nich.</div>
+
+      <h3>Przyciski na dole okna konfiguracji</h3>
+      <table class="opts">
+        <tr><td>Anuluj</td><td>Zamyka okno bez zapisywania.</td></tr>
+        <tr><td>Zapisz</td>
+          <td>Dodaje agenta do listy (wraca do okna „Zarządzaj agentami”). Jego zakładka
+            otworzy się po restarcie programu — albo zaznacz go i kliknij ▶️ Uruchom.</td></tr>
+        <tr><td>Zapisz i uruchom</td>
+          <td>Zapisuje <b>i od razu otwiera zakładkę</b> nowego agenta. Najwygodniejsze,
+            gdy chcesz zacząć pracę natychmiast.</td></tr>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">4</span> Szybki przepis: pierwszy własny agent w 6 krokach</h2>
+      <ol>
+        <li>Utwórz na dysku pusty folder dla projektu, np. <i>Dokumenty\MojaStrona</i>.</li>
+        <li>W programie: menu <b>Zakładki → Zarządzaj agentami…</b></li>
+        <li>Kliknij <b>➕ Dodaj</b>.</li>
+        <li>Wpisz nazwę (np. „Moja strona”), kliknij <b>📁</b> i wskaż utworzony folder.
+          Model zostaw <b>Domyślny</b>.</li>
+        <li>Kliknij <b>Zapisz i uruchom</b>.</li>
+        <li>Gotowe — masz nową zakładkę. Napisz w niej, co chcesz zrobić, i naciśnij <kbd>Enter</kbd>.</li>
+      </ol>
+      <div class="ok">✅ <b>Wskazówka na co dzień:</b> wygodny układ to dwóch agentów —
+        jeden z modelem <b>Opus</b> (domyślnym) do bieżącej pracy i drugi z <b>Fable 5</b>
+        do najtrudniejszych zadań. Zrób kopię przyciskiem 📋 Duplikuj i zmień kopii tylko model.</div>
+    </section>
+
+    <section class="panel">
+      <h2>Najczęstsze pytania</h2>
+      <table class="faq">
+        <tr><td>Dodałem agenta, ale nie widzę jego zakładki</td>
+          <td>Kliknąłeś „Zapisz” bez uruchamiania — zakładka pojawi się po restarcie programu.
+            Albo wróć do „Zarządzaj agentami”, zaznacz go i kliknij <b>▶️ Uruchom</b>.</td></tr>
+        <tr><td>Zmieniłem model, a agent dalej odpowiada po staremu</td>
+          <td>Działającego agenta trzeba zrestartować: w jego zakładce <b>Stop</b>,
+            potem <b>Uruchom</b>.</td></tr>
+        <tr><td>Nie mogę usunąć agenta</td>
+          <td>Ostatniego agenta nie da się usunąć — co najmniej jeden musi zostać.</td></tr>
+        <tr><td>Przy 🧩 i 🔌 długo wisi „⏳ ładowanie…”</td>
+          <td>To normalne — program odpytuje Claude Code o listę skilli i wtyczek każdego
+            agenta. Po kilku sekundach pojawią się liczby.</td></tr>
+        <tr><td>Co oznacza zielone, a co szare tło na liście?</td>
+          <td>Zielone = agent uruchamia się sam przy starcie programu. Szare = czeka na
+            ręczne uruchomienie. Zmienisz to w ✏️ Edytuj → „Uruchamiaj automatycznie…”.</td></tr>
+        <tr><td>Czy agenci widzą nawzajem swoje rozmowy?</td>
+          <td>Nie — każdy pracuje osobno, we własnym terminalu i własnym folderze.</td></tr>
+      </table>
+    </section>
+
+    <footer>
+      <p><a href="https://pobierz.srv1251441.hstgr.cloud/">← Wróć do strony pobierania</a></p>
+      <p>Claude Voice Assistant • kontakt@fulfillment-polska.pl</p>
+    </footer>
+  </div>
+</body>
+</html>
