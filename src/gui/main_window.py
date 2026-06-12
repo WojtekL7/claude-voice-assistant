@@ -521,6 +521,11 @@ class MainWindow(QMainWindow):
         self.memory_projects = self._load_memory_projects()
         self.agent_tabs = {}  # Dict of agent_id -> AgentTab
 
+        # Historia używania zakładek (MRU — ostatnio używana na początku).
+        # Po zamknięciu zakładki wracamy do ostatnio używanej, a nie do
+        # sąsiada wybranego przez Qt (który bywa pustą atrapą "+").
+        self._tab_mru = []  # lista agent_id
+
         # Load settings
         self._load_settings()
 
@@ -1119,9 +1124,40 @@ class MainWindow(QMainWindow):
             agent_id = widget.agent_id
             if agent_id in self.agent_tabs:
                 del self.agent_tabs[agent_id]
+            if agent_id in self._tab_mru:
+                self._tab_mru.remove(agent_id)
+
+        # Gdy zamykamy AKTYWNĄ zakładkę, NAJPIERW przełącz się na ostatnio
+        # używaną z pozostałych, a dopiero potem usuń. Bez tego Qt po
+        # removeTab samo wybiera sąsiada — przy ostatniej zakładce przed "+"
+        # jest nim pusta atrapa "+" (czarna strona), a przy środkowej Qt
+        # aktywowałoby (lazy activation → start claude) zakładkę, której
+        # użytkownik nie wybrał.
+        if index == self.tab_widget.currentIndex():
+            target = self._most_recent_tab(exclude=widget)
+            if target is not None:
+                self.tab_widget.setCurrentWidget(target)
 
         self.tab_widget.removeTab(index)
         widget.deleteLater()
+
+    def _most_recent_tab(self, exclude=None) -> Optional[AgentTab]:
+        """Ostatnio używana z istniejących zakładek (wg historii MRU).
+
+        `exclude` — zakładka pomijana (ta właśnie zamykana; wciąż wisi
+        w pasku do czasu removeTab). Fallback (pusta/nieaktualna historia):
+        ostatnia prawdziwa zakładka przed atrapą "+" — nigdy sama "+".
+        """
+        for agent_id in self._tab_mru:
+            tab = self.agent_tabs.get(agent_id)
+            if tab is not None and tab is not exclude \
+                    and self.tab_widget.indexOf(tab) != -1:
+                return tab
+        for i in range(self.tab_widget.count() - 1, -1, -1):
+            candidate = self.tab_widget.widget(i)
+            if isinstance(candidate, AgentTab) and candidate is not exclude:
+                return candidate
+        return None
 
     def _active_agent_count(self) -> int:
         """Ile zakładek z uruchomionym `claude` jest aktywnych (żre RAM).
@@ -1220,6 +1256,10 @@ class MainWindow(QMainWindow):
             # Zapamiętaj ostatnio aktywnego — zostanie zapisane przez
             # _apply_tab_change → _save_settings (debounced 50ms).
             self.last_active_agent_id = current.agent_id
+            # Aktualizuj historię MRU: bieżąca zakładka na początek listy.
+            if current.agent_id in self._tab_mru:
+                self._tab_mru.remove(current.agent_id)
+            self._tab_mru.insert(0, current.agent_id)
         self._update_current_tab_references()
         if not hasattr(self, '_tab_change_debounce'):
             self._tab_change_debounce = QTimer(self)
