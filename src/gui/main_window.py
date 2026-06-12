@@ -841,6 +841,21 @@ class MainWindow(QMainWindow):
                 self._save_agents()
                 return
 
+    def _inherit_splitter_sizes(self, config: dict):
+        """Nowa zakładka dziedziczy proporcje suwaka z aktywnej zakładki.
+
+        Działa tylko gdy config nie ma jeszcze własnych splitter_sizes
+        (nowy agent / nowy terminal „+"). Bez aktywnej zakładki (start
+        aplikacji) zostaje fallback config.DEFAULT_SPLITTER_SIZES w AgentTab.
+        """
+        if config.get('splitter_sizes'):
+            return
+        widget = self.tab_widget.currentWidget()
+        if isinstance(widget, AgentTab):
+            sizes = widget.splitter_sizes
+            if sizes and len(sizes) == 2 and all(s > 0 for s in sizes):
+                config['splitter_sizes'] = list(sizes)
+
     def _load_memory_projects(self) -> list:
         """Load memory projects from file."""
         if MEMORY_PROJECTS_FILE.exists():
@@ -1014,6 +1029,7 @@ class MainWindow(QMainWindow):
         dialog = AgentConfigDialog(self, memory_projects=self.memory_projects)
         if dialog.exec_() == QDialog.Accepted:
             agent_config = dialog.get_data()
+            self._inherit_splitter_sizes(agent_config)
             self.agents.append(agent_config)
             self._save_agents()
 
@@ -1045,6 +1061,7 @@ class MainWindow(QMainWindow):
             'send_memory_on_start': False,  # No memory files
             'is_plain_terminal': True  # Flag for plain terminal
         }
+        self._inherit_splitter_sizes(terminal_config)
 
         # Create tab (don't save to agents list - it's temporary)
         agent_tab = AgentTab(terminal_config, self)
@@ -1524,6 +1541,7 @@ class MainWindow(QMainWindow):
             for agent in agents_to_run:
                 # Remove temporary flag
                 agent.pop('_run_immediately', None)
+                self._inherit_splitter_sizes(agent)
                 # Create tab and switch to it
                 last_tab = self._create_agent_tab(agent)
 

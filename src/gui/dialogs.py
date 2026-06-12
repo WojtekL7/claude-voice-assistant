@@ -1120,7 +1120,7 @@ class AgentConfigDialog(QDialog):
 
     def get_data(self) -> dict:
         """Return agent configuration."""
-        return {
+        data = {
             'id': self.agent.get('id', str(uuid.uuid4())[:8]),
             'name': self.name_input.text().strip(),
             'working_directory': self.dir_input.text().strip(),
@@ -1128,8 +1128,13 @@ class AgentConfigDialog(QDialog):
             'auto_start': self.auto_start_checkbox.isChecked(),
             'send_memory_on_start': self.send_memory_checkbox.isChecked(),
             'model': self.model_combo.currentData() or DEFAULT_AGENT_MODEL,
-            'splitter_sizes': self.agent.get('splitter_sizes', [600, 150]),  # domyślne proporcje
         }
+        # splitter_sizes tylko dla agenta, który już je ma (edycja istniejącego).
+        # Nowy agent zostaje bez klucza — MainWindow dziedziczy proporcje
+        # z aktywnej zakładki, a fallbackiem jest config.DEFAULT_SPLITTER_SIZES.
+        if self.agent.get('splitter_sizes'):
+            data['splitter_sizes'] = self.agent['splitter_sizes']
+        return data
 
     # ---------- Per-agent skills (project-local) ----------
 

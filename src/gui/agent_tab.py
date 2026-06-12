@@ -29,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config import (
     MEMORY_PROJECTS_FILE, MEMORY_FILE_EXTENSIONS,
-    DEFAULT_QUICK_ACTIONS, QUICK_ACTIONS_FILE
+    DEFAULT_QUICK_ACTIONS, QUICK_ACTIONS_FILE, DEFAULT_SPLITTER_SIZES
 )
 from core.platform_utils import default_shell
 from gui.dialogs import styled_get_open_file_names
@@ -114,7 +114,8 @@ class AgentTab(QWidget):
         self.memory_files = agent_config.get('memory_files', [])  # list of file paths
         self.auto_start = agent_config.get('auto_start', True)
         self.model = agent_config.get('model', 'default')
-        self.splitter_sizes = agent_config.get('splitter_sizes', [600, 150])
+        self.splitter_sizes = agent_config.get(
+            'splitter_sizes', list(DEFAULT_SPLITTER_SIZES))
 
         # State
         # terminal_backend — wspólny interfejs (M2.2); terminal — opakowany

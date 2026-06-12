@@ -234,6 +234,12 @@ UI_TRANSLATIONS = {
     },
 }
 
+# Domyślne proporcje rozdzielacza terminal/panel dolny: [terminal, panel].
+# QSplitter skaluje je proporcjonalnie do wysokości okna — ~89/11 daje cienki
+# panel dolny (suwak nisko). Nowe zakładki dziedziczą proporcje z aktywnej
+# zakładki; ta stała to fallback dla świeżej instalacji.
+DEFAULT_SPLITTER_SIZES = [1500, 190]
+
 # Default Agents Configuration
 DEFAULT_AGENTS = [
     {
@@ -242,7 +248,7 @@ DEFAULT_AGENTS = [
         "auto_start": True,
         "memory_files": [],  # list of file paths to load as context
         "working_directory": str(Path.home()),
-        "splitter_sizes": [600, 150],  # [terminal_height, bottom_panel_height]
+        "splitter_sizes": list(DEFAULT_SPLITTER_SIZES),
     }
 ]
 
