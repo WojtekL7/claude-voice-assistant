@@ -2182,8 +2182,9 @@ def t(key: str) -> str:
 def detect_system_language() -> str:
     """Wykryj język interfejsu przy PIERWSZYM starcie (brak zapisanego configu).
 
-    Reguła (ustalona z użytkownikiem): system angielski → en-US/en-GB,
-    każdy inny → pl-PL. Czyta `locale` oraz zmienne środowiskowe LANG/LC_*.
+    Reguła (ustalona z użytkownikiem 2026-06-15): DOMYŚLNIE angielski (en-US);
+    rozpoznany polski system → pl-PL; brytyjski angielski → en-GB.
+    Czyta `locale` oraz zmienne środowiskowe LANG/LC_*.
     """
     import locale
     raw = ""
@@ -2203,9 +2204,12 @@ def detect_system_language() -> str:
         except Exception:
             raw = ""
     norm = raw.replace("_", "-").lower()
-    if norm.startswith("en"):
-        return "en-GB" if ("-gb" in norm or "-uk" in norm) else "en-US"
-    return DEFAULT_UI_LANGUAGE
+    # Domyślnie ANGIELSKI; tylko rozpoznany polski system → polski.
+    if norm.startswith("pl"):
+        return "pl-PL"
+    if norm.startswith("en") and ("-gb" in norm or "-uk" in norm):
+        return "en-GB"
+    return "en-US"
 
 
 def model_label(key: str) -> str:
