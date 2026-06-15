@@ -175,6 +175,43 @@ UI_TRANSLATIONS = {
         "enter_license": "Wprowadź klucz licencji",
         "license_valid": "Licencja aktywna",
         "license_expired": "Licencja wygasła",
+        # --- Dolny panel zakładki ---
+        "input_placeholder": "Wpisz polecenie lub użyj dyktowania... (Shift+Enter = nowa linia)",
+        "send_tooltip": "Wyślij (Enter)",
+        "dictate_tooltip": "Dyktuj (nagrywanie głosu)",
+        "read_tooltip": "Czytaj ostatnią odpowiedź",
+        "pause_tooltip": "Pauza / Wznów",
+        "stop_tooltip": "Zatrzymaj wszystko",
+        "copy_tooltip": "Kopiuj zaznaczony tekst",
+        "clear_input_tooltip": "Wyczyść pole tekstowe",
+        "add_media_tooltip": "Dodaj media (zdjęcia, dokumenty, pliki)",
+        "analyze_files_prefix": "Przeanalizuj te pliki:",
+        "read_memory_context": "Przeczytaj pliki pamięci projektu i zapamiętaj ich zawartość jako kontekst:",
+        "sent_memory_files": "Wysłano {n} plików pamięci",
+        # --- Pasek menu ---
+        "menu_file": "Plik",
+        "menu_new_session": "Nowa sesja",
+        "menu_exit": "Wyjście",
+        "menu_tabs": "Zakładki",
+        "menu_new_agent": "Nowy agent...",
+        "menu_new_terminal": "Nowy terminal",
+        "menu_manage_agents": "Zarządzaj agentami...",
+        "menu_skills": "Umiejętności (Skills)...",
+        "menu_mcp": "Serwery MCP...",
+        "menu_skin_colors": "Zmień kolory skórki...",
+        "menu_groq_api": "Klucz API Groq...",
+        "menu_anthropic_api": "Klucz API Anthropic...",
+        "menu_claude_command": "Komenda Claude Code...",
+        "menu_manage_actions": "Zarządzaj szybkimi akcjami...",
+        "menu_help": "Pomoc",
+        "menu_about": "O programie",
+        "menu_claude_setup": "Jak zainstalować Claude Code…",
+        "menu_agents_guide": "Instrukcja: Zarządzaj agentami…",
+        "menu_license": "Licencja...",
+        "menu_check_updates": "Sprawdź aktualizacje",
+        "menu_auto_update": "Sprawdzaj aktualizacje przy starcie",
+        # --- TTS ---
+        "tts_no_audio": "Brak urządzenia audio — czytanie niedostępne",
     },
     "en-US": {
         "app_title": "Claude Voice Assistant",
@@ -203,6 +240,43 @@ UI_TRANSLATIONS = {
         "enter_license": "Enter license key",
         "license_valid": "License active",
         "license_expired": "License expired",
+        # --- Tab bottom panel ---
+        "input_placeholder": "Type a command or use dictation... (Shift+Enter = new line)",
+        "send_tooltip": "Send (Enter)",
+        "dictate_tooltip": "Dictate (voice recording)",
+        "read_tooltip": "Read last response",
+        "pause_tooltip": "Pause / Resume",
+        "stop_tooltip": "Stop everything",
+        "copy_tooltip": "Copy selected text",
+        "clear_input_tooltip": "Clear input field",
+        "add_media_tooltip": "Add media (images, documents, files)",
+        "analyze_files_prefix": "Analyze these files:",
+        "read_memory_context": "Read the project memory files and remember their contents as context:",
+        "sent_memory_files": "Sent {n} memory files",
+        # --- Menu bar ---
+        "menu_file": "File",
+        "menu_new_session": "New session",
+        "menu_exit": "Exit",
+        "menu_tabs": "Tabs",
+        "menu_new_agent": "New agent...",
+        "menu_new_terminal": "New terminal",
+        "menu_manage_agents": "Manage agents...",
+        "menu_skills": "Skills...",
+        "menu_mcp": "MCP servers...",
+        "menu_skin_colors": "Change skin colors...",
+        "menu_groq_api": "Groq API key...",
+        "menu_anthropic_api": "Anthropic API key...",
+        "menu_claude_command": "Claude Code command...",
+        "menu_manage_actions": "Manage quick actions...",
+        "menu_help": "Help",
+        "menu_about": "About",
+        "menu_claude_setup": "How to install Claude Code…",
+        "menu_agents_guide": "Guide: Manage agents…",
+        "menu_license": "License...",
+        "menu_check_updates": "Check for updates",
+        "menu_auto_update": "Check for updates on startup",
+        # --- TTS ---
+        "tts_no_audio": "No audio device — reading unavailable",
     },
     "en-GB": {
         "app_title": "Claude Voice Assistant",
@@ -231,8 +305,111 @@ UI_TRANSLATIONS = {
         "enter_license": "Enter licence key",
         "license_valid": "Licence active",
         "license_expired": "Licence expired",
+        # --- Tab bottom panel ---
+        "input_placeholder": "Type a command or use dictation... (Shift+Enter = new line)",
+        "send_tooltip": "Send (Enter)",
+        "dictate_tooltip": "Dictate (voice recording)",
+        "read_tooltip": "Read last response",
+        "pause_tooltip": "Pause / Resume",
+        "stop_tooltip": "Stop everything",
+        "copy_tooltip": "Copy selected text",
+        "clear_input_tooltip": "Clear input field",
+        "add_media_tooltip": "Add media (images, documents, files)",
+        "analyze_files_prefix": "Analyse these files:",
+        "read_memory_context": "Read the project memory files and remember their contents as context:",
+        "sent_memory_files": "Sent {n} memory files",
+        # --- Menu bar ---
+        "menu_file": "File",
+        "menu_new_session": "New session",
+        "menu_exit": "Exit",
+        "menu_tabs": "Tabs",
+        "menu_new_agent": "New agent...",
+        "menu_new_terminal": "New terminal",
+        "menu_manage_agents": "Manage agents...",
+        "menu_skills": "Skills...",
+        "menu_mcp": "MCP servers...",
+        "menu_skin_colors": "Change skin colours...",
+        "menu_groq_api": "Groq API key...",
+        "menu_anthropic_api": "Anthropic API key...",
+        "menu_claude_command": "Claude Code command...",
+        "menu_manage_actions": "Manage quick actions...",
+        "menu_help": "Help",
+        "menu_about": "About",
+        "menu_claude_setup": "How to install Claude Code…",
+        "menu_agents_guide": "Guide: Manage agents…",
+        "menu_license": "Licence...",
+        "menu_check_updates": "Check for updates",
+        "menu_auto_update": "Check for updates on startup",
+        # --- TTS ---
+        "tts_no_audio": "No audio device — reading unavailable",
     },
 }
+
+# ===== Centralny tłumacz UI (runtime) =====
+# `_CURRENT_UI_LANGUAGE` to JEDYNE źródło prawdy o języku interfejsu w czasie
+# działania aplikacji. Ustawia je MainWindow przy starcie (wykrycie/odczyt z
+# configu) i przy zmianie w menu. Dzięki funkcji modułowej `t()` także osobne
+# klasy okien dialogowych tłumaczą napisy bez dostępu do MainWindow.
+DEFAULT_UI_LANGUAGE = "pl-PL"
+_CURRENT_UI_LANGUAGE = DEFAULT_UI_LANGUAGE
+
+
+def set_ui_language(code: str) -> None:
+    """Ustaw globalny język interfejsu (tylko jeśli mamy dla niego tłumaczenia)."""
+    global _CURRENT_UI_LANGUAGE
+    if code in UI_TRANSLATIONS:
+        _CURRENT_UI_LANGUAGE = code
+
+
+def current_ui_language() -> str:
+    """Bieżący język interfejsu (kod, np. 'pl-PL')."""
+    return _CURRENT_UI_LANGUAGE
+
+
+def t(key: str) -> str:
+    """Tłumaczenie napisu UI dla bieżącego języka.
+
+    Kolejność awaryjna (fallback): bieżący język → en-US → pl-PL → sam klucz.
+    Wzorce z nawiasami klamrowymi (np. '{n}') wołający robi `.format(...)` sam.
+    """
+    lang = _CURRENT_UI_LANGUAGE
+    if lang in UI_TRANSLATIONS and key in UI_TRANSLATIONS[lang]:
+        return UI_TRANSLATIONS[lang][key]
+    if key in UI_TRANSLATIONS.get("en-US", {}):
+        return UI_TRANSLATIONS["en-US"][key]
+    if key in UI_TRANSLATIONS.get("pl-PL", {}):
+        return UI_TRANSLATIONS["pl-PL"][key]
+    return key
+
+
+def detect_system_language() -> str:
+    """Wykryj język interfejsu przy PIERWSZYM starcie (brak zapisanego configu).
+
+    Reguła (ustalona z użytkownikiem): system angielski → en-US/en-GB,
+    każdy inny → pl-PL. Czyta `locale` oraz zmienne środowiskowe LANG/LC_*.
+    """
+    import locale
+    raw = ""
+    try:
+        raw = locale.getlocale()[0] or ""
+    except Exception:
+        raw = ""
+    if not raw:
+        for env in ("LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE"):
+            val = os.environ.get(env, "")
+            if val:
+                raw = val
+                break
+    if not raw:
+        try:
+            raw = locale.getdefaultlocale()[0] or ""
+        except Exception:
+            raw = ""
+    norm = raw.replace("_", "-").lower()
+    if norm.startswith("en"):
+        return "en-GB" if ("-gb" in norm or "-uk" in norm) else "en-US"
+    return DEFAULT_UI_LANGUAGE
+
 
 # Domyślne proporcje rozdzielacza terminal/panel dolny: [terminal, panel].
 # QSplitter skaluje je proporcjonalnie do wysokości okna — ~89/11 daje cienki

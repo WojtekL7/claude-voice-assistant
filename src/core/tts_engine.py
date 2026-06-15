@@ -116,7 +116,8 @@ class TTSEngine:
         if not getattr(self, "audio_available", True):
             if self.on_error:
                 try:
-                    self.on_error("Brak urządzenia audio — czytanie niedostępne")
+                    from config import t as tr
+                    self.on_error(tr('tts_no_audio'))
                 except Exception:
                     pass
             return

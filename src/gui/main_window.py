@@ -321,6 +321,7 @@ from config import (
     ASSETS_DIR, CLAUDE_MODEL_CONTEXT_LIMITS, DEFAULT_AGENT_MODEL,
     UPDATE_APPCAST_URL, UPDATE_PUBLIC_KEY, UPDATE_DOWNLOAD_DIR,
     MAX_ACTIVE_AGENTS,
+    t as tr, set_ui_language, detect_system_language,
 )
 from core.claude_bridge import ClaudeBridgeAsync
 from core.tts_engine import TTSEngine, TTSState
@@ -658,21 +659,7 @@ class MainWindow(QMainWindow):
             }
         """)
 
-        new_agent_action = QAction("🤖 Nowy agent...", self)
-        new_agent_action.setShortcut(QKeySequence("Ctrl+T"))
-        new_agent_action.triggered.connect(self._add_new_agent)
-        self._add_tab_menu.addAction(new_agent_action)
-
-        new_terminal_action = QAction("🖥️ Nowy terminal", self)
-        new_terminal_action.setShortcut(QKeySequence("Ctrl+Shift+T"))
-        new_terminal_action.triggered.connect(self._add_new_terminal)
-        self._add_tab_menu.addAction(new_terminal_action)
-
-        self._add_tab_menu.addSeparator()
-
-        manage_agents_action = QAction("Zarządzaj agentami...", self)
-        manage_agents_action.triggered.connect(self._show_agents_manager_dialog)
-        self._add_tab_menu.addAction(manage_agents_action)
+        self._populate_add_tab_menu()
 
         # Connect tab bar click to handle "+" tab
         self.tab_widget.tabBarClicked.connect(self._on_tab_bar_clicked)
@@ -1598,41 +1585,67 @@ class MainWindow(QMainWindow):
         # odśwież status żeby panel pokazał aktualne dane.
         self.mcp_status_widget.force_refresh()
 
+    def _populate_add_tab_menu(self):
+        """(Re)buduje pozycje menu rozwijanego zakładki „+" w bieżącym języku.
+
+        Usuwa stare akcje (i ich skróty) PRZED odbudową — patrz uwaga o kumulacji
+        skrótów w _update_ui_language."""
+        for a in self._add_tab_menu.actions():
+            a.setShortcut(QKeySequence())
+            a.deleteLater()
+        self._add_tab_menu.clear()
+
+        new_agent_action = QAction(f"🤖 {tr('menu_new_agent')}", self)
+        new_agent_action.setShortcut(QKeySequence("Ctrl+T"))
+        new_agent_action.triggered.connect(self._add_new_agent)
+        self._add_tab_menu.addAction(new_agent_action)
+
+        new_terminal_action = QAction(f"🖥️ {tr('menu_new_terminal')}", self)
+        new_terminal_action.setShortcut(QKeySequence("Ctrl+Shift+T"))
+        new_terminal_action.triggered.connect(self._add_new_terminal)
+        self._add_tab_menu.addAction(new_terminal_action)
+
+        self._add_tab_menu.addSeparator()
+
+        manage_agents_action = QAction(tr('menu_manage_agents'), self)
+        manage_agents_action.triggered.connect(self._show_agents_manager_dialog)
+        self._add_tab_menu.addAction(manage_agents_action)
+
     def _create_menu_bar(self):
         """Create menu bar."""
         menubar = self.menuBar()
 
         # File menu
-        file_menu = menubar.addMenu("Plik")
+        file_menu = menubar.addMenu(tr('menu_file'))
 
-        new_session = QAction("Nowa sesja", self)
+        new_session = QAction(tr('menu_new_session'), self)
         new_session.setShortcut("Ctrl+N")
         new_session.triggered.connect(self._new_session)
         file_menu.addAction(new_session)
 
         file_menu.addSeparator()
 
-        exit_action = QAction("Wyjście", self)
+        exit_action = QAction(tr('menu_exit'), self)
         exit_action.setShortcut("Ctrl+Q")
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
 
         # Agents menu
-        agents_menu = menubar.addMenu("Zakładki")
+        agents_menu = menubar.addMenu(tr('menu_tabs'))
 
-        new_agent_action = QAction("➕ Nowy agent...", self)
+        new_agent_action = QAction(f"➕ {tr('menu_new_agent')}", self)
         new_agent_action.setShortcut("Ctrl+T")
         new_agent_action.triggered.connect(self._add_new_agent)
         agents_menu.addAction(new_agent_action)
 
-        new_terminal_action = QAction("🖥️ Nowy terminal", self)
+        new_terminal_action = QAction(f"🖥️ {tr('menu_new_terminal')}", self)
         new_terminal_action.setShortcut("Ctrl+Shift+T")
         new_terminal_action.triggered.connect(self._add_new_terminal)
         agents_menu.addAction(new_terminal_action)
 
         agents_menu.addSeparator()
 
-        manage_agents_action = QAction("Zarządzaj agentami...", self)
+        manage_agents_action = QAction(tr('menu_manage_agents'), self)
         manage_agents_action.triggered.connect(self._show_agents_manager_dialog)
         agents_menu.addAction(manage_agents_action)
 
@@ -1642,11 +1655,11 @@ class MainWindow(QMainWindow):
         # agents_menu.addAction(memory_projects_action)
 
         # Settings menu (Język, Skills, MCP, API keys, Claude command)
-        settings_menu = menubar.addMenu("Ustawienia")
+        settings_menu = menubar.addMenu(tr('settings'))
 
         # Submenu Język (przeniesione z top-level — używane przez _set_language
         # i pętlę aktualizującą checkmarki w l. ~1383).
-        self.language_menu = settings_menu.addMenu("🌐 Język")
+        self.language_menu = settings_menu.addMenu(f"🌐 {tr('language')}")
         self.language_actions = {}
         for code, (native, english, voice) in SUPPORTED_LANGUAGES.items():
             action = QAction(f"{native} ({english})", self)
@@ -1658,34 +1671,34 @@ class MainWindow(QMainWindow):
 
         settings_menu.addSeparator()
 
-        skills_action = QAction("🧩 Umiejętności (Skills)...", self)
+        skills_action = QAction(f"🧩 {tr('menu_skills')}", self)
         skills_action.triggered.connect(self._show_skills_manager_dialog)
         settings_menu.addAction(skills_action)
 
-        mcp_action = QAction("🔌 Serwery MCP...", self)
+        mcp_action = QAction(f"🔌 {tr('menu_mcp')}", self)
         mcp_action.triggered.connect(self._show_mcp_manager_dialog)
         settings_menu.addAction(mcp_action)
 
         settings_menu.addSeparator()
 
         # UI / aplikacja (przeniesione z dawnego menu Edycja)
-        skin_colors_action = QAction("🎨 Zmień kolory skórki...", self)
+        skin_colors_action = QAction(f"🎨 {tr('menu_skin_colors')}", self)
         skin_colors_action.triggered.connect(self._show_skin_settings)
         settings_menu.addAction(skin_colors_action)
 
         settings_menu.addSeparator()
 
-        groq_api_action = QAction("Klucz API Groq...", self)
+        groq_api_action = QAction(tr('menu_groq_api'), self)
         groq_api_action.triggered.connect(self._show_groq_api_dialog)
         settings_menu.addAction(groq_api_action)
 
-        anthropic_api_action = QAction("Klucz API Anthropic...", self)
+        anthropic_api_action = QAction(tr('menu_anthropic_api'), self)
         anthropic_api_action.triggered.connect(self._show_anthropic_api_dialog)
         settings_menu.addAction(anthropic_api_action)
 
         settings_menu.addSeparator()
 
-        claude_command_action = QAction("Komenda Claude Code...", self)
+        claude_command_action = QAction(tr('menu_claude_command'), self)
         claude_command_action.triggered.connect(self._show_claude_command_dialog)
         settings_menu.addAction(claude_command_action)
 
@@ -1693,36 +1706,36 @@ class MainWindow(QMainWindow):
 
         # Szybkie akcje na samym dole — to ergonomia użytkowania, oddzielona
         # od konfiguracji systemowej (klucze API, komenda Claude Code).
-        manage_actions = QAction("Zarządzaj szybkimi akcjami...", self)
+        manage_actions = QAction(tr('menu_manage_actions'), self)
         manage_actions.triggered.connect(self._manage_quick_actions)
         settings_menu.addAction(manage_actions)
 
         # Help menu
-        help_menu = menubar.addMenu("Pomoc")
+        help_menu = menubar.addMenu(tr('menu_help'))
 
-        about_action = QAction("O programie", self)
+        about_action = QAction(tr('menu_about'), self)
         about_action.triggered.connect(self._show_about)
         help_menu.addAction(about_action)
 
-        claude_setup_action = QAction("Jak zainstalować Claude Code…", self)
+        claude_setup_action = QAction(tr('menu_claude_setup'), self)
         claude_setup_action.triggered.connect(self._show_claude_setup_dialog)
         help_menu.addAction(claude_setup_action)
 
-        agents_guide_action = QAction("Instrukcja: Zarządzaj agentami…", self)
+        agents_guide_action = QAction(tr('menu_agents_guide'), self)
         agents_guide_action.triggered.connect(self._open_agents_guide)
         help_menu.addAction(agents_guide_action)
 
-        license_action = QAction("Licencja...", self)
+        license_action = QAction(tr('menu_license'), self)
         license_action.triggered.connect(self._show_license_dialog)
         help_menu.addAction(license_action)
 
         help_menu.addSeparator()
 
-        check_updates_action = QAction("Sprawdź aktualizacje", self)
+        check_updates_action = QAction(tr('menu_check_updates'), self)
         check_updates_action.triggered.connect(self._check_updates_manual)
         help_menu.addAction(check_updates_action)
 
-        self.auto_update_action = QAction("Sprawdzaj aktualizacje przy starcie", self)
+        self.auto_update_action = QAction(tr('menu_auto_update'), self)
         self.auto_update_action.setCheckable(True)
         self.auto_update_action.setChecked(getattr(self, 'auto_check_updates', True))
         self.auto_update_action.toggled.connect(self._on_auto_check_updates_toggled)
@@ -1900,12 +1913,16 @@ class MainWindow(QMainWindow):
     def _load_settings(self):
         """Load settings from file."""
         self.anthropic_api_key = ""  # Initialize
+        # Pierwszy start (brak zapisanego configu) → język wg systemu:
+        # angielski system = interfejs EN, każdy inny = PL. Zapisany 'language'
+        # (poniżej) ma pierwszeństwo, więc obecni użytkownicy zostają na swoim.
+        self.current_language = detect_system_language()
 
         if CONFIG_FILE.exists():
             try:
                 with open(CONFIG_FILE, 'r') as f:
                     settings = json.load(f)
-                    self.current_language = settings.get('language', 'pl-PL')
+                    self.current_language = settings.get('language', self.current_language)
                     self.auto_read_responses = settings.get('auto_read', False)
 
                     # Load custom skin colors including terminal colors (merge with defaults)
@@ -1944,6 +1961,10 @@ class MainWindow(QMainWindow):
 
             except Exception as e:
                 print(f"Error loading settings: {e}")
+
+        # Zsynchronizuj globalny język tłumacza (config.t) z wynikiem powyżej —
+        # zanim powstaną menu i zakładki (kolejność w __init__: load → setup_ui).
+        set_ui_language(self.current_language)
 
     def _save_settings(self):
         """Save settings to file."""
@@ -1996,7 +2017,7 @@ class MainWindow(QMainWindow):
 
                 menu.addSeparator()
 
-                add_action = QAction("➕ Dodaj własną...", self)
+                add_action = QAction(f"➕ {tr('add_action')}", self)
                 add_action.triggered.connect(self._add_quick_action)
                 menu.addAction(add_action)
 
@@ -2077,6 +2098,8 @@ class MainWindow(QMainWindow):
     def _set_language(self, lang_code: str):
         """Handle language change from menu."""
         self.current_language = lang_code
+        # Globalny tłumacz (config.t) — z niego korzystają też okna dialogowe.
+        set_ui_language(lang_code)
 
         # Update checkmarks in menu
         for code, action in self.language_actions.items():
@@ -2097,41 +2120,63 @@ class MainWindow(QMainWindow):
         self._save_settings()
 
     def _get_text(self, key: str) -> str:
-        """Get translated text for current language."""
-        # Try current language
-        if self.current_language in UI_TRANSLATIONS:
-            if key in UI_TRANSLATIONS[self.current_language]:
-                return UI_TRANSLATIONS[self.current_language][key]
-        # Fallback to English
-        if "en-US" in UI_TRANSLATIONS and key in UI_TRANSLATIONS["en-US"]:
-            return UI_TRANSLATIONS["en-US"][key]
-        # Fallback to Polish
-        if "pl-PL" in UI_TRANSLATIONS and key in UI_TRANSLATIONS["pl-PL"]:
-            return UI_TRANSLATIONS["pl-PL"][key]
-        return key
+        """Get translated text for current language (delegates to config.t)."""
+        return tr(key)
 
     def _update_ui_language(self):
         """Update all UI elements to current language."""
-        # Update tooltips in current tab
-        tab = self._get_current_agent_tab()
-        if tab:
-            # Buttons are icon-only, update only tooltips
-            tab.dictate_btn.setToolTip(self._get_text('dictate'))
-            tab.read_btn.setToolTip(self._get_text('read'))
-            tab.copy_btn.setToolTip(self._get_text('copy'))
-            tab.clear_input_btn.setToolTip(self._get_text('clear_input'))
-            tab.add_media_btn.setToolTip(self._get_text('add_media'))
-            tab.pause_btn.setToolTip(self._get_text('pause'))
-            tab.stop_btn.setToolTip(self._get_text('stop'))
-            tab.send_btn.setToolTip(self._get_text('send'))
-            tab.auto_read_checkbox.setText(self._get_text('auto_read'))
+        # Pasek menu odtwarzamy w nowym języku. PUŁAPKA Qt: QAction-y są
+        # parentowane do okna (nie do menu), więc samo menuBar().clear() ich NIE
+        # usuwa — zostają żywe i ich skróty (Ctrl+N, Ctrl+T…) KUMULUJĄ się przy
+        # każdej zmianie języka („ambiguous shortcut"). Dlatego najpierw zbieramy
+        # stare akcje, zdejmujemy skróty i kasujemy je, dopiero potem odbudowa.
+        mb = self.menuBar()
+        old_actions = []
 
-            # Update input placeholder
-            placeholder = "Type a command or use dictation..." if self.current_language.startswith("en") else "Wpisz polecenie lub użyj dyktowania..."
-            tab.input_field.setPlaceholderText(placeholder)
+        def _collect(menu):
+            for a in menu.actions():
+                old_actions.append(a)
+                sub = a.menu()
+                if sub is not None:
+                    _collect(sub)
 
-        # Update window title
-        self.setWindowTitle(f"{self._get_text('app_title')} v{APP_VERSION}")
+        for a in mb.actions():
+            old_actions.append(a)
+            sub = a.menu()
+            if sub is not None:
+                _collect(sub)
+        mb.clear()
+        for a in old_actions:
+            a.setShortcut(QKeySequence())
+            a.deleteLater()
+        self._create_menu_bar()
+        # Menu rozwijane zakładki „+" (budowane osobno w _setup_ui; samo czyści stare akcje).
+        if hasattr(self, '_add_tab_menu'):
+            self._populate_add_tab_menu()
+        # Dolny panel KAŻDEJ zakładki (nie tylko aktywnej).
+        for tab in self.agent_tabs.values():
+            self._apply_tab_language(tab)
+        # Etykieta „Dodaj własną…" w menu szybkich akcji wszystkich zakładek.
+        self._update_quick_actions_menu()
+        # Tytuł okna
+        self.setWindowTitle(f"{tr('app_title')} v{APP_VERSION}")
+
+    def _apply_tab_language(self, tab):
+        """Ustaw napisy dolnego panelu zakładki wg bieżącego języka."""
+        try:
+            tab.input_field.setPlaceholderText(tr('input_placeholder'))
+            tab.send_btn.setToolTip(tr('send_tooltip'))
+            tab.dictate_btn.setToolTip(tr('dictate_tooltip'))
+            tab.read_btn.setToolTip(tr('read_tooltip'))
+            tab.pause_btn.setToolTip(tr('pause_tooltip'))
+            tab.stop_btn.setToolTip(tr('stop_tooltip'))
+            tab.copy_btn.setToolTip(tr('copy_tooltip'))
+            tab.clear_input_btn.setToolTip(tr('clear_input_tooltip'))
+            tab.add_media_btn.setToolTip(tr('add_media_tooltip'))
+            tab.quick_actions_btn.setToolTip(tr('quick_actions'))
+            tab.auto_read_checkbox.setText(tr('auto_read'))
+        except Exception:
+            pass
 
     def _on_auto_read_changed(self, state: int):
         """Handle auto-read checkbox change."""

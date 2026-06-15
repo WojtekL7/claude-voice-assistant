@@ -29,7 +29,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config import (
     MEMORY_PROJECTS_FILE, MEMORY_FILE_EXTENSIONS,
-    DEFAULT_QUICK_ACTIONS, QUICK_ACTIONS_FILE, DEFAULT_SPLITTER_SIZES
+    DEFAULT_QUICK_ACTIONS, QUICK_ACTIONS_FILE, DEFAULT_SPLITTER_SIZES,
+    t as tr,
 )
 from core.platform_utils import default_shell
 from gui.dialogs import styled_get_open_file_names
@@ -316,7 +317,7 @@ class AgentTab(QWidget):
         layout = QHBoxLayout()
 
         self.input_field = AutoResizeTextEdit()
-        self.input_field.setPlaceholderText("Wpisz polecenie lub użyj dyktowania... (Shift+Enter = nowa linia)")
+        self.input_field.setPlaceholderText(tr('input_placeholder'))
         input_font = QFont("Ubuntu Mono", 13)
         input_font.setStyleHint(QFont.Monospace)
         self.input_field.setFont(input_font)
@@ -327,7 +328,7 @@ class AgentTab(QWidget):
         # Send button
         self.send_btn = QPushButton("↵ Enter")
         self.send_btn.setFixedSize(100, 48)
-        self.send_btn.setToolTip("Wyślij (Enter)")
+        self.send_btn.setToolTip(tr('send_tooltip'))
         self.send_btn.clicked.connect(self._send_message)
         layout.addWidget(self.send_btn)
 
@@ -344,7 +345,7 @@ class AgentTab(QWidget):
         self.dictate_btn.setIconSize(PANEL_ICON_SIZE)
         self.dictate_btn.setFixedSize(btn_size, btn_size)
         self.dictate_btn.setCheckable(True)
-        self.dictate_btn.setToolTip("Dyktuj (nagrywanie głosu)")
+        self.dictate_btn.setToolTip(tr('dictate_tooltip'))
         self.dictate_btn.clicked.connect(self._toggle_dictation)
         layout.addWidget(self.dictate_btn)
 
@@ -353,7 +354,7 @@ class AgentTab(QWidget):
         self.read_btn.setIcon(icon_set.button_icon('read'))
         self.read_btn.setIconSize(PANEL_ICON_SIZE)
         self.read_btn.setFixedSize(btn_size, btn_size)
-        self.read_btn.setToolTip("Czytaj ostatnią odpowiedź")
+        self.read_btn.setToolTip(tr('read_tooltip'))
         self.read_btn.clicked.connect(self._read_last_response)
         layout.addWidget(self.read_btn)
 
@@ -362,7 +363,7 @@ class AgentTab(QWidget):
         self.pause_btn.setIcon(icon_set.button_icon('pause'))
         self.pause_btn.setIconSize(PANEL_ICON_SIZE)
         self.pause_btn.setFixedSize(btn_size, btn_size)
-        self.pause_btn.setToolTip("Pauza / Wznów")
+        self.pause_btn.setToolTip(tr('pause_tooltip'))
         self.pause_btn.clicked.connect(self._toggle_pause)
         self.pause_btn.setEnabled(False)
         self.pause_btn.setVisible(False)
@@ -373,7 +374,7 @@ class AgentTab(QWidget):
         self.stop_btn.setIcon(icon_set.button_icon('stop'))
         self.stop_btn.setIconSize(PANEL_ICON_SIZE)
         self.stop_btn.setFixedSize(btn_size, btn_size)
-        self.stop_btn.setToolTip("Zatrzymaj wszystko")
+        self.stop_btn.setToolTip(tr('stop_tooltip'))
         self.stop_btn.clicked.connect(self._stop_all)
         self.stop_btn.setVisible(False)
         layout.addWidget(self.stop_btn)
@@ -383,7 +384,7 @@ class AgentTab(QWidget):
         self.copy_btn.setIcon(icon_set.button_icon('copy'))
         self.copy_btn.setIconSize(PANEL_ICON_SIZE)
         self.copy_btn.setFixedSize(btn_size, btn_size)
-        self.copy_btn.setToolTip("Kopiuj zaznaczony tekst")
+        self.copy_btn.setToolTip(tr('copy_tooltip'))
         self.copy_btn.clicked.connect(self._copy_selection)
         layout.addWidget(self.copy_btn)
 
@@ -392,7 +393,7 @@ class AgentTab(QWidget):
         self.clear_input_btn.setIcon(icon_set.button_icon('clear_input'))
         self.clear_input_btn.setIconSize(PANEL_ICON_SIZE)
         self.clear_input_btn.setFixedSize(btn_size, btn_size)
-        self.clear_input_btn.setToolTip("Wyczyść pole tekstowe")
+        self.clear_input_btn.setToolTip(tr('clear_input_tooltip'))
         self.clear_input_btn.clicked.connect(self._clear_input_field)
         layout.addWidget(self.clear_input_btn)
 
@@ -401,7 +402,7 @@ class AgentTab(QWidget):
         self.add_media_btn.setIcon(icon_set.button_icon('add_media'))
         self.add_media_btn.setIconSize(PANEL_ICON_SIZE)
         self.add_media_btn.setFixedSize(btn_size, btn_size)
-        self.add_media_btn.setToolTip("Dodaj media (zdjęcia, dokumenty, pliki)")
+        self.add_media_btn.setToolTip(tr('add_media_tooltip'))
         self.add_media_btn.clicked.connect(self._add_media)
         layout.addWidget(self.add_media_btn)
 
@@ -409,7 +410,7 @@ class AgentTab(QWidget):
         self.quick_actions_btn = QToolButton()
         self.quick_actions_btn.setIcon(icon_set.button_icon('quick_actions'))
         self.quick_actions_btn.setIconSize(PANEL_ICON_SIZE)
-        self.quick_actions_btn.setToolTip("Szybkie akcje")
+        self.quick_actions_btn.setToolTip(tr('quick_actions'))
         self.quick_actions_btn.setPopupMode(QToolButton.InstantPopup)
         self.quick_actions_btn.setFixedSize(btn_size, btn_size)
         self._update_quick_actions_menu()
@@ -418,7 +419,7 @@ class AgentTab(QWidget):
         layout.addStretch()
 
         # Auto-read checkbox
-        self.auto_read_checkbox = QCheckBox("Auto-czytaj odpowiedzi")
+        self.auto_read_checkbox = QCheckBox(tr('auto_read'))
         self.auto_read_checkbox.setChecked(self.auto_read_responses)
         self.auto_read_checkbox.stateChanged.connect(self._on_auto_read_changed)
         layout.addWidget(self.auto_read_checkbox)
@@ -449,7 +450,7 @@ class AgentTab(QWidget):
 
         menu.addSeparator()
 
-        add_action = QAction("➕ Dodaj własną...", self)
+        add_action = QAction(f"➕ {tr('add_action')}", self)
         add_action.triggered.connect(self._add_quick_action)
         menu.addAction(add_action)
 
@@ -544,11 +545,11 @@ class AgentTab(QWidget):
         if self.attached_files:
             files_list = " ".join(self.attached_files)
             if text:
-                parts.append(f"Przeanalizuj te pliki: {files_list}")
+                parts.append(f"{tr('analyze_files_prefix')} {files_list}")
                 parts.append("")
                 parts.append(text)
             else:
-                parts.append(f"Przeanalizuj te pliki: {files_list}")
+                parts.append(f"{tr('analyze_files_prefix')} {files_list}")
 
         return "\n".join(parts) if parts else text
 
@@ -578,9 +579,9 @@ class AgentTab(QWidget):
         if valid_paths:
             # Send only paths - Claude Code will read them itself
             paths_list = " ".join(valid_paths)
-            context_message = f"Przeczytaj pliki pamięci projektu i zapamiętaj ich zawartość jako kontekst: {paths_list}"
+            context_message = f"{tr('read_memory_context')} {paths_list}"
             self.send_text_to_terminal(context_message)
-            self.status_changed.emit(f"Wysłano {len(valid_paths)} plików pamięci")
+            self.status_changed.emit(tr('sent_memory_files').format(n=len(valid_paths)))
 
         self._memory_sent = True
 
