@@ -460,6 +460,24 @@ SKIN_ICON_NAMES = {
 }
 
 
+def _skin_color_name(color_key: str) -> str:
+    """Przetłumaczona nazwa koloru skórki (fallback: SKIN_COLOR_NAMES / klucz)."""
+    # UI_TRANSLATIONS jest importowane na górze modułu (absolutnie, `from config import`).
+    tkey = 'skin_color_' + color_key
+    if tkey in UI_TRANSLATIONS.get('pl-PL', {}):
+        return tr(tkey)
+    return SKIN_COLOR_NAMES.get(color_key, color_key)
+
+
+def _skin_icon_name(icon_key: str) -> str:
+    """Przetłumaczona nazwa ikony skórki (fallback: SKIN_ICON_NAMES / klucz)."""
+    # UI_TRANSLATIONS jest importowane na górze modułu (absolutnie, `from config import`).
+    tkey = 'skin_icon_' + icon_key
+    if tkey in UI_TRANSLATIONS.get('pl-PL', {}):
+        return tr(tkey)
+    return SKIN_ICON_NAMES.get(icon_key, icon_key)
+
+
 class MainWindow(QMainWindow):
     """Main application window."""
 
@@ -860,7 +878,7 @@ class MainWindow(QMainWindow):
         self._plus_tab_index = self.tab_widget.addTab(plus_widget, "+")
 
         # Style the "+" tab to look like a button
-        self.tab_widget.tabBar().setTabToolTip(self._plus_tab_index, "Nowa zakładka")
+        self.tab_widget.tabBar().setTabToolTip(self._plus_tab_index, tr('dlg_new_tab_tooltip'))
 
         # Make "+" tab non-closable (hide close button)
         self.tab_widget.tabBar().setTabButton(self._plus_tab_index, QTabBar.RightSide, None)
@@ -1027,9 +1045,8 @@ class MainWindow(QMainWindow):
             else:
                 # Just saved - will be available after restart
                 QMessageBox.information(
-                    self, "Zapisano",
-                    f"Agent \"{agent_config.get('name')}\" został zapisany.\n"
-                    "Zakładka pojawi się po restarcie aplikacji lub użyj 'Zarządzaj agentami'."
+                    self, tr('dlg_saved_title'),
+                    tr('dlg_agent_saved_msg').format(name=agent_config.get('name'))
                 )
 
     def _add_new_terminal(self):
@@ -1096,8 +1113,8 @@ class MainWindow(QMainWindow):
 
         # Must keep at least one real tab (+ doesn't count)
         if self.tab_widget.count() <= 2:
-            QMessageBox.warning(self, "Nie można zamknąć",
-                "Musi pozostać co najmniej jedna zakładka.")
+            QMessageBox.warning(self, tr('dlg_cannot_close_title'),
+                tr('dlg_must_keep_one_tab'))
             return
 
         # Get agent tab and remove from dict
@@ -1159,11 +1176,8 @@ class MainWindow(QMainWindow):
         active = self._active_agent_count()
         reply = QMessageBox.question(
             self,
-            "Dużo aktywnych agentów",
-            f"Masz już {active} aktywnych agentów. Każdy uruchamia osobny "
-            f"proces Claude zużywający ok. 1,5–2 GB pamięci RAM.\n\n"
-            f"Uruchomienie kolejnego może spowolnić lub zawiesić komputer.\n\n"
-            f"Czy na pewno uruchomić tego agenta?",
+            tr('dlg_many_agents_title'),
+            tr('dlg_many_agents_msg').format(active=active),
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )
@@ -1278,9 +1292,7 @@ class MainWindow(QMainWindow):
         backlog = getattr(tab, 'pending_backlog', None) or []
         if getattr(tab, 'auto_read_responses', False) and backlog:
             n = len(backlog)
-            self._update_status(
-                f"🔔 {n} nieprzeczytanych wypowiedzi w tej zakładce — kliknij 🔊, aby doczytać"
-            )
+            self._update_status(tr('status_unread_backlog').format(n=n))
 
     def _poll_transcripts(self):
         """Etap 3: czytaj nową prozę Claude'a z dziennika sesji (Droga A).
@@ -1574,8 +1586,8 @@ class MainWindow(QMainWindow):
                 if last_tab:
                     self.tab_widget.setCurrentWidget(last_tab)
             else:
-                QMessageBox.information(self, "Zapisano",
-                    "Zmiany zostaną zastosowane po restarcie aplikacji.")
+                QMessageBox.information(self, tr('dlg_saved_title'),
+                    tr('dlg_changes_after_restart'))
         # MCP toggle / lokalne MCP w dialogu agenta zapisywane są na bieżąco —
         # odśwież status żeby panel pokazał aktualne dane.
         self.mcp_status_widget.force_refresh()
@@ -2540,15 +2552,8 @@ class MainWindow(QMainWindow):
                 #  świeżej instalacji bez klucza.)
                 answer = QMessageBox.question(
                     self,
-                    "Dyktowanie wymaga klucza Groq",
-                    "Aby dyktowanie głosem działało, dodaj darmowy klucz API Groq "
-                    "— służy do rozpoznawania mowy (zamiana głosu na tekst).\n\n"
-                    "Uwaga: czytanie na głos działa bez klucza. Groq jest "
-                    "potrzebny WYŁĄCZNIE do dyktowania.\n\n"
-                    "Darmowy klucz zdobędziesz w minutę na:\n"
-                    "https://console.groq.com/keys\n"
-                    "(zaloguj się, kliknij 'Create API Key', skopiuj klucz 'gsk_...').\n\n"
-                    "Czy chcesz dodać klucz teraz?",
+                    tr('dlg_groq_required_title'),
+                    tr('dlg_groq_required_msg'),
                     QMessageBox.Yes | QMessageBox.No,
                     QMessageBox.Yes,
                 )
@@ -2692,17 +2697,17 @@ class MainWindow(QMainWindow):
     def _add_media(self):
         """Open file dialog to add media files."""
         file_filter = (
-            "Wszystkie obsługiwane (*.png *.jpg *.jpeg *.gif *.bmp *.webp *.pdf *.doc *.docx *.txt *.csv *.xlsx *.xls *.json *.xml *.zip *.tar *.gz);;"
-            "Obrazy (*.png *.jpg *.jpeg *.gif *.bmp *.webp);;"
-            "Dokumenty (*.pdf *.doc *.docx *.txt *.csv *.xlsx *.xls);;"
-            "Dane (*.json *.xml *.csv);;"
-            "Archiwa (*.zip *.tar *.gz);;"
-            "Wszystkie pliki (*.*)"
+            f"{tr('dlg_media_all_supported')} (*.png *.jpg *.jpeg *.gif *.bmp *.webp *.pdf *.doc *.docx *.txt *.csv *.xlsx *.xls *.json *.xml *.zip *.tar *.gz);;"
+            f"{tr('dlg_media_images')} (*.png *.jpg *.jpeg *.gif *.bmp *.webp);;"
+            f"{tr('dlg_media_documents')} (*.pdf *.doc *.docx *.txt *.csv *.xlsx *.xls);;"
+            f"{tr('dlg_media_data')} (*.json *.xml *.csv);;"
+            f"{tr('dlg_media_archives')} (*.zip *.tar *.gz);;"
+            f"{tr('dlg_media_all_files')} (*.*)"
         )
 
         files, _ = styled_get_open_file_names(
             self,
-            "Dodaj media",
+            tr('dlg_media_add_title'),
             "",
             file_filter
         )
@@ -2862,7 +2867,7 @@ class MainWindow(QMainWindow):
     def _add_quick_action(self):
         """Add new quick action via dialog with both fields."""
         dialog = QDialog(self)
-        dialog.setWindowTitle("Dodaj szybką akcję")
+        dialog.setWindowTitle(tr('dlg_quick_add_title'))
         dialog.setMinimumWidth(400)
 
         layout = QVBoxLayout(dialog)
@@ -2871,7 +2876,7 @@ class MainWindow(QMainWindow):
         form_layout = QFormLayout()
 
         label_input = QLineEdit()
-        label_input.setPlaceholderText("np. Sprawdź błędy")
+        label_input.setPlaceholderText(tr('dlg_quick_label_placeholder'))
         label_input.setStyleSheet("""
             QLineEdit {
                 background-color: #2d0a1e;
@@ -2881,10 +2886,10 @@ class MainWindow(QMainWindow):
                 padding: 8px;
             }
         """)
-        form_layout.addRow("Nazwa akcji:", label_input)
+        form_layout.addRow(tr('dlg_quick_action_name_label'), label_input)
 
         command_input = QLineEdit()
-        command_input.setPlaceholderText("np. Sprawdź czy w kodzie są błędy i je napraw")
+        command_input.setPlaceholderText(tr('dlg_quick_command_placeholder'))
         command_input.setStyleSheet("""
             QLineEdit {
                 background-color: #2d0a1e;
@@ -2894,7 +2899,7 @@ class MainWindow(QMainWindow):
                 padding: 8px;
             }
         """)
-        form_layout.addRow("Komenda:", command_input)
+        form_layout.addRow(tr('dlg_quick_command_label'), command_input)
 
         layout.addLayout(form_layout)
 
@@ -2909,10 +2914,10 @@ class MainWindow(QMainWindow):
             command = command_input.text().strip()
 
             if not label:
-                QMessageBox.warning(self, "Brak nazwy", "Podaj nazwę akcji.")
+                QMessageBox.warning(self, tr('dlg_no_name_title'), tr('dlg_quick_no_name_msg'))
                 return
             if not command:
-                QMessageBox.warning(self, "Brak komendy", "Podaj komendę.")
+                QMessageBox.warning(self, tr('dlg_quick_no_command_title'), tr('dlg_quick_no_command_msg'))
                 return
 
             self.quick_actions.append({'label': label, 'command': command})
@@ -2931,8 +2936,8 @@ class MainWindow(QMainWindow):
 
     def _new_session(self):
         """Start new terminal/Claude session."""
-        reply = QMessageBox.question(self, "Nowa sesja",
-            "Czy na pewno chcesz rozpocząć nową sesję?",
+        reply = QMessageBox.question(self, tr('dlg_new_session_title'),
+            tr('dlg_new_session_msg'),
             QMessageBox.Yes | QMessageBox.No)
 
         if reply == QMessageBox.Yes:
@@ -2957,25 +2962,21 @@ class MainWindow(QMainWindow):
 
     def _show_about(self):
         """Show about dialog."""
-        QMessageBox.about(self, f"O programie {APP_NAME}",
-            f"<h2>{APP_NAME}</h2>"
-            f"<p>Wersja {APP_VERSION}</p>"
-            f"<p>Asystent głosowy dla Claude Code.</p>"
-            f"<p>© 2024 Fulfillment Polska</p>")
+        QMessageBox.about(self, tr('dlg_about_title').format(name=APP_NAME),
+            tr('dlg_about_body').format(name=APP_NAME, version=APP_VERSION))
 
     def _show_trial_dialog(self):
         """Show trial registration dialog."""
-        email, ok = QInputDialog.getText(self, "Rozpocznij trial",
-            "Podaj adres email aby rozpocząć 30-dniowy trial:")
+        email, ok = QInputDialog.getText(self, tr('dlg_trial_start_title'),
+            tr('dlg_trial_start_prompt'))
 
         if ok and email:
             if self.license_manager.start_trial(email):
                 self._check_license()
-                QMessageBox.information(self, "Trial aktywowany",
-                    f"Twój 30-dniowy trial został aktywowany!\n"
-                    f"Email: {email}")
+                QMessageBox.information(self, tr('dlg_trial_active_title'),
+                    tr('dlg_trial_active_msg').format(email=email))
             else:
-                QMessageBox.warning(self, "Błąd", "Nie udało się aktywować trial.")
+                QMessageBox.warning(self, tr('dlg_error_title'), tr('dlg_trial_activate_failed'))
 
     def _show_license_dialog(self):
         """Show license management dialog."""
@@ -2985,9 +2986,8 @@ class MainWindow(QMainWindow):
 
     def _show_license_expired_dialog(self):
         """Show dialog when license/trial expired."""
-        reply = QMessageBox.warning(self, "Licencja wygasła",
-            "Twoja licencja lub okres próbny wygasł.\n"
-            "Czy chcesz kupić licencję?",
+        reply = QMessageBox.warning(self, tr('dlg_license_expired_title'),
+            tr('dlg_license_expired_msg'),
             QMessageBox.Yes | QMessageBox.No)
 
         if reply == QMessageBox.Yes:
@@ -3423,23 +3423,15 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         # Show masked key if exists
         display_key = current_key[:8] + "..." if len(current_key) > 8 else current_key
 
-        key, ok = QInputDialog.getText(self, "Klucz API Groq",
-            "Klucz API Groq jest potrzebny do dyktowania (zamiana mowy na tekst).\n"
-            "Czytanie na głos działa bez klucza.\n\n"
-            "Jak zdobyć DARMOWY klucz — krok po kroku:\n"
-            "1. Wejdź na stronę:  https://console.groq.com/keys\n"
-            "2. Zaloguj się lub załóż konto (najszybciej kontem Google) — jest darmowe.\n"
-            "3. Kliknij 'Create API Key' i nadaj dowolną nazwę (np. voice-assistant).\n"
-            "4. Skopiuj klucz (zaczyna się od 'gsk_...') - UWAGA: pokazany jest tylko RAZ!\n"
-            "5. Wklej go w pole poniżej i kliknij OK.\n\n"
-            f"Aktualny klucz: {display_key if display_key else 'brak'}",
+        key, ok = QInputDialog.getText(self, tr('dlg_groq_key_title'),
+            tr('dlg_groq_key_prompt').format(key=display_key if display_key else tr('dlg_key_none')),
             QLineEdit.Normal)
 
         if ok and key:
             self.stt.set_api_key(key)
             self._save_settings()
-            QMessageBox.information(self, "Zapisano",
-                "Klucz API Groq został zapisany.")
+            QMessageBox.information(self, tr('dlg_saved_title'),
+                tr('dlg_groq_key_saved'))
 
     def _show_anthropic_api_dialog(self):
         """Show dialog to enter Anthropic API key."""
@@ -3447,20 +3439,20 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         # Show masked key if exists
         display_key = current_key[:8] + "..." if len(current_key) > 8 else current_key
 
-        key, ok = QInputDialog.getText(self, "Klucz API Anthropic",
-            f"Podaj klucz API Anthropic (Claude):\n\nAktualny: {display_key if display_key else 'brak'}",
+        key, ok = QInputDialog.getText(self, tr('dlg_anthropic_key_title'),
+            tr('dlg_anthropic_key_prompt').format(key=display_key if display_key else tr('dlg_key_none')),
             QLineEdit.Normal)
 
         if ok and key:
             self.anthropic_api_key = key
             self._save_settings()
-            QMessageBox.information(self, "Zapisano",
-                "Klucz API Anthropic został zapisany.")
+            QMessageBox.information(self, tr('dlg_saved_title'),
+                tr('dlg_anthropic_key_saved'))
 
     def _show_claude_command_dialog(self):
         """Show dialog to configure Claude Code command."""
         dialog = QDialog(self)
-        dialog.setWindowTitle("Komenda Claude Code")
+        dialog.setWindowTitle(tr('dlg_claude_cmd_title'))
         dialog.setMinimumWidth(500)
 
         # Path to checkmark icon
@@ -3469,16 +3461,13 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         layout = QVBoxLayout(dialog)
 
         # Description
-        desc_label = QLabel(
-            "Podaj komendę uruchamiającą Claude Code w terminalu.\n"
-            "Ta komenda zostanie automatycznie wpisana po uruchomieniu programu."
-        )
+        desc_label = QLabel(tr('dlg_claude_cmd_desc'))
         desc_label.setWordWrap(True)
         layout.addWidget(desc_label)
 
         # Command input
         cmd_layout = QHBoxLayout()
-        cmd_label = QLabel("Komenda:")
+        cmd_label = QLabel(tr('dlg_claude_cmd_command_label'))
         cmd_input = QLineEdit(self.claude_command)
         cmd_input.setPlaceholderText("/usr/bin/claude")
         cmd_layout.addWidget(cmd_label)
@@ -3486,15 +3475,15 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         layout.addLayout(cmd_layout)
 
         # Auto-run checkbox
-        auto_run_checkbox = QCheckBox("Automatycznie uruchom po starcie programu")
+        auto_run_checkbox = QCheckBox(tr('dlg_claude_cmd_autorun'))
         auto_run_checkbox.setChecked(self.auto_run_claude)
         layout.addWidget(auto_run_checkbox)
 
         # Buttons
         button_layout = QHBoxLayout()
-        cancel_btn = QPushButton("Anuluj")
+        cancel_btn = QPushButton(tr('dlg_cancel'))
         cancel_btn.clicked.connect(dialog.reject)
-        save_btn = QPushButton("Zapisz")
+        save_btn = QPushButton(tr('dlg_save'))
         save_btn.clicked.connect(dialog.accept)
         save_btn.setDefault(True)
         button_layout.addStretch()
@@ -3555,10 +3544,10 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
             self.claude_command = cmd_input.text().strip() or "/usr/bin/claude"
             self.auto_run_claude = auto_run_checkbox.isChecked()
             self._save_settings()
-            QMessageBox.information(self, "Zapisano",
-                f"Komenda Claude Code została zapisana.\n\n"
-                f"Komenda: {self.claude_command}\n"
-                f"Auto-uruchomienie: {'Tak' if self.auto_run_claude else 'Nie'}")
+            QMessageBox.information(self, tr('dlg_saved_title'),
+                tr('dlg_claude_cmd_saved').format(
+                    command=self.claude_command,
+                    autorun=tr('dlg_yes') if self.auto_run_claude else tr('dlg_no')))
 
     # ==================== Helpers ====================
 
@@ -3640,7 +3629,7 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         tab._question_flag_shown = show
         if show:
             self.tab_widget.setTabIcon(index, self._question_icon())
-            self.tab_widget.tabBar().setTabToolTip(index, "Agent czeka na odpowiedź")
+            self.tab_widget.tabBar().setTabToolTip(index, tr('dlg_agent_waiting_tooltip'))
         else:
             self.tab_widget.setTabIcon(index, QIcon())
             self.tab_widget.tabBar().setTabToolTip(index, "")
@@ -3850,7 +3839,7 @@ class QuickActionsDialog(QDialog):
 
     def __init__(self, parent, quick_actions: list):
         super().__init__(parent)
-        self.setWindowTitle("Zarządzaj szybkimi akcjami")
+        self.setWindowTitle(tr('dlg_qa_manage_title'))
         self.setMinimumSize(500, 450)
         self.quick_actions = [a.copy() for a in quick_actions]  # Deep copy
         self._setup_ui()
@@ -3861,7 +3850,7 @@ class QuickActionsDialog(QDialog):
         layout.setSpacing(10)
 
         # Header
-        header = QLabel("Zarządzaj swoimi szybkimi akcjami")
+        header = QLabel(tr('dlg_qa_manage_header'))
         header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
         layout.addWidget(header)
 
@@ -3871,7 +3860,7 @@ class QuickActionsDialog(QDialog):
         # Table-like list with two columns
         self.table = QTableWidget()
         self.table.setColumnCount(2)
-        self.table.setHorizontalHeaderLabels(["Etykieta", "Komenda"])
+        self.table.setHorizontalHeaderLabels([tr('dlg_qa_col_label'), tr('dlg_qa_col_command')])
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -3907,21 +3896,21 @@ class QuickActionsDialog(QDialog):
         btn_layout = QVBoxLayout()
         btn_layout.setSpacing(5)
 
-        self.up_btn = QPushButton("▲ W górę")
+        self.up_btn = QPushButton(tr('dlg_qa_up'))
         self.up_btn.clicked.connect(self._move_up)
         btn_layout.addWidget(self.up_btn)
 
-        self.down_btn = QPushButton("▼ W dół")
+        self.down_btn = QPushButton(tr('dlg_qa_down'))
         self.down_btn.clicked.connect(self._move_down)
         btn_layout.addWidget(self.down_btn)
 
         btn_layout.addSpacing(10)
 
-        self.edit_btn = QPushButton("✏️ Edytuj")
+        self.edit_btn = QPushButton(f"✏️ {tr('dlg_edit')}")
         self.edit_btn.clicked.connect(self._edit_action)
         btn_layout.addWidget(self.edit_btn)
 
-        self.delete_btn = QPushButton("🗑️ Usuń")
+        self.delete_btn = QPushButton(f"🗑️ {tr('dlg_delete')}")
         self.delete_btn.clicked.connect(self._delete_action)
         self.delete_btn.setStyleSheet("QPushButton { color: #ef4444; }")
         btn_layout.addWidget(self.delete_btn)
@@ -3931,7 +3920,7 @@ class QuickActionsDialog(QDialog):
         layout.addLayout(list_layout)
 
         # Add new action section
-        add_group = QGroupBox("Dodaj nową akcję")
+        add_group = QGroupBox(tr('dlg_qa_add_group'))
         add_group.setStyleSheet("""
             QGroupBox {
                 font-weight: bold;
@@ -3950,7 +3939,7 @@ class QuickActionsDialog(QDialog):
         add_layout = QFormLayout(add_group)
 
         self.label_input = QLineEdit()
-        self.label_input.setPlaceholderText("np. Sprawdź błędy")
+        self.label_input.setPlaceholderText(tr('dlg_quick_label_placeholder'))
         self.label_input.setStyleSheet("""
             QLineEdit {
                 background-color: #2d0a1e;
@@ -3960,10 +3949,10 @@ class QuickActionsDialog(QDialog):
                 padding: 5px;
             }
         """)
-        add_layout.addRow("Etykieta:", self.label_input)
+        add_layout.addRow(tr('dlg_qa_label_label'), self.label_input)
 
         self.command_input = QLineEdit()
-        self.command_input.setPlaceholderText("np. Sprawdź czy w kodzie są błędy i je napraw")
+        self.command_input.setPlaceholderText(tr('dlg_quick_command_placeholder'))
         self.command_input.setStyleSheet("""
             QLineEdit {
                 background-color: #2d0a1e;
@@ -3973,11 +3962,11 @@ class QuickActionsDialog(QDialog):
                 padding: 5px;
             }
         """)
-        add_layout.addRow("Komenda:", self.command_input)
+        add_layout.addRow(tr('dlg_quick_command_label'), self.command_input)
 
         add_btn_layout = QHBoxLayout()
         add_btn_layout.addStretch()
-        self.add_btn = QPushButton("➕ Dodaj")
+        self.add_btn = QPushButton(f"➕ {tr('dlg_add')}")
         self.add_btn.clicked.connect(self._add_action)
         self.add_btn.setStyleSheet("QPushButton { color: #22c55e; font-weight: bold; }")
         add_btn_layout.addWidget(self.add_btn)
@@ -3988,13 +3977,13 @@ class QuickActionsDialog(QDialog):
         # Bottom buttons
         bottom_layout = QHBoxLayout()
 
-        restore_btn = QPushButton("Przywróć domyślne")
+        restore_btn = QPushButton(tr('dlg_qa_restore_defaults'))
         restore_btn.clicked.connect(self._restore_defaults)
         bottom_layout.addWidget(restore_btn)
 
         bottom_layout.addStretch()
 
-        close_btn = QPushButton("Zamknij")
+        close_btn = QPushButton(tr('dlg_close'))
         close_btn.clicked.connect(self.accept)
         bottom_layout.addWidget(close_btn)
 
@@ -4038,18 +4027,18 @@ class QuickActionsDialog(QDialog):
         """Edit selected action."""
         row = self._get_selected_row()
         if row < 0:
-            QMessageBox.warning(self, "Brak wyboru", "Wybierz akcję do edycji.")
+            QMessageBox.warning(self, tr('dlg_no_selection_title'), tr('dlg_qa_select_to_edit'))
             return
 
         action = self.quick_actions[row]
 
         label, ok1 = QInputDialog.getText(
-            self, "Edytuj akcję", "Etykieta:",
+            self, tr('dlg_qa_edit_title'), tr('dlg_qa_label_label'),
             text=action['label']
         )
         if ok1 and label:
             command, ok2 = QInputDialog.getText(
-                self, "Edytuj akcję", "Komenda:",
+                self, tr('dlg_qa_edit_title'), tr('dlg_quick_command_label'),
                 text=action['command']
             )
             if ok2 and command:
@@ -4061,13 +4050,13 @@ class QuickActionsDialog(QDialog):
         """Delete selected action."""
         row = self._get_selected_row()
         if row < 0:
-            QMessageBox.warning(self, "Brak wyboru", "Wybierz akcję do usunięcia.")
+            QMessageBox.warning(self, tr('dlg_no_selection_title'), tr('dlg_qa_select_to_delete'))
             return
 
         action = self.quick_actions[row]
         reply = QMessageBox.question(
-            self, "Potwierdź usunięcie",
-            f"Czy na pewno usunąć akcję \"{action['label']}\"?",
+            self, tr('dlg_confirm_delete_title'),
+            tr('dlg_qa_confirm_delete_msg').format(label=action['label']),
             QMessageBox.Yes | QMessageBox.No
         )
         if reply == QMessageBox.Yes:
@@ -4080,12 +4069,12 @@ class QuickActionsDialog(QDialog):
         command = self.command_input.text().strip()
 
         if not label:
-            QMessageBox.warning(self, "Brak etykiety", "Podaj etykietę dla akcji.")
+            QMessageBox.warning(self, tr('dlg_qa_no_label_title'), tr('dlg_qa_no_label_msg'))
             self.label_input.setFocus()
             return
 
         if not command:
-            QMessageBox.warning(self, "Brak komendy", "Podaj komendę dla akcji.")
+            QMessageBox.warning(self, tr('dlg_qa_no_command_title'), tr('dlg_qa_no_command_msg'))
             self.command_input.setFocus()
             return
 
@@ -4103,12 +4092,12 @@ class QuickActionsDialog(QDialog):
     def _restore_defaults(self):
         """Restore default quick actions."""
         reply = QMessageBox.question(
-            self, "Przywróć domyślne",
-            "Czy na pewno przywrócić domyślne akcje?\nWszystkie Twoje akcje zostaną usunięte.",
+            self, tr('dlg_qa_restore_defaults'),
+            tr('dlg_qa_restore_confirm_msg'),
             QMessageBox.Yes | QMessageBox.No
         )
         if reply == QMessageBox.Yes:
-            from ..config import DEFAULT_QUICK_ACTIONS
+            # DEFAULT_QUICK_ACTIONS jest importowane na górze modułu (absolutnie).
             self.quick_actions = [a.copy() for a in DEFAULT_QUICK_ACTIONS]
             self._populate_table()
 
@@ -4122,7 +4111,7 @@ class SkinSettingsDialog(QDialog):
 
     def __init__(self, parent, current_colors: dict, current_icons: dict = None):
         super().__init__(parent)
-        self.setWindowTitle("Ustawienia skórki - Kolory i ikony")
+        self.setWindowTitle(tr('dlg_skin_title'))
         self.setMinimumSize(550, 700)
         self.setStyleSheet("""
             QToolTip {
@@ -4147,14 +4136,14 @@ class SkinSettingsDialog(QDialog):
         layout.setSpacing(15)
 
         # Header
-        header = QLabel("Dostosuj kolory i ikony aplikacji")
+        header = QLabel(tr('dlg_skin_header'))
         header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
         layout.addWidget(header)
 
         # Import/Export buttons row
         import_export_layout = QHBoxLayout()
 
-        import_btn = QPushButton("📥 Importuj skórkę")
+        import_btn = QPushButton(tr('dlg_skin_import'))
         import_btn.clicked.connect(self._import_skin)
         import_btn.setStyleSheet("""
             QPushButton {
@@ -4171,7 +4160,7 @@ class SkinSettingsDialog(QDialog):
         """)
         import_export_layout.addWidget(import_btn)
 
-        export_btn = QPushButton("📤 Eksportuj skórkę")
+        export_btn = QPushButton(tr('dlg_skin_export'))
         export_btn.clicked.connect(self._export_skin)
         export_btn.setStyleSheet("""
             QPushButton {
@@ -4189,7 +4178,7 @@ class SkinSettingsDialog(QDialog):
         import_export_layout.addWidget(export_btn)
 
         # Help button
-        help_btn = QPushButton("❓ Pomoc - Ikony")
+        help_btn = QPushButton(tr('dlg_skin_help_btn'))
         help_btn.clicked.connect(self._show_icons_help)
         help_btn.setStyleSheet("""
             QPushButton {
@@ -4227,7 +4216,7 @@ class SkinSettingsDialog(QDialog):
         colors_layout.setSpacing(10)
 
         # Group: Main colors
-        main_group = QGroupBox("Główne elementy")
+        main_group = QGroupBox(tr('dlg_skin_group_main'))
         main_group.setStyleSheet("""
             QGroupBox {
                 font-weight: bold;
@@ -4255,7 +4244,7 @@ class SkinSettingsDialog(QDialog):
         colors_layout.addWidget(main_group)
 
         # Group: Borders and effects
-        borders_group = QGroupBox("Obramowania i efekty")
+        borders_group = QGroupBox(tr('dlg_skin_group_borders'))
         borders_group.setStyleSheet(main_group.styleSheet())
         borders_layout = QGridLayout(borders_group)
 
@@ -4266,7 +4255,7 @@ class SkinSettingsDialog(QDialog):
         colors_layout.addWidget(borders_group)
 
         # Group: Text and buttons
-        text_group = QGroupBox("Tekst i przyciski")
+        text_group = QGroupBox(tr('dlg_skin_group_text'))
         text_group.setStyleSheet(main_group.styleSheet())
         text_layout = QGridLayout(text_group)
 
@@ -4277,7 +4266,7 @@ class SkinSettingsDialog(QDialog):
         colors_layout.addWidget(text_group)
 
         # Group: Terminal background and text
-        terminal_bg_group = QGroupBox("Terminal - tło i tekst")
+        terminal_bg_group = QGroupBox(tr('dlg_skin_group_terminal'))
         terminal_bg_group.setStyleSheet(main_group.styleSheet())
         terminal_bg_layout = QGridLayout(terminal_bg_group)
 
@@ -4288,7 +4277,7 @@ class SkinSettingsDialog(QDialog):
         colors_layout.addWidget(terminal_bg_group)
 
         # Group: Icon colors
-        icon_colors_group = QGroupBox("Kolory ikon przycisków")
+        icon_colors_group = QGroupBox(tr('dlg_skin_group_icon_colors'))
         icon_colors_group.setStyleSheet(main_group.styleSheet())
         icon_colors_layout = QGridLayout(icon_colors_group)
 
@@ -4301,7 +4290,7 @@ class SkinSettingsDialog(QDialog):
         colors_layout.addWidget(icon_colors_group)
 
         # Group: Button icons
-        icons_group = QGroupBox("Ikony przycisków")
+        icons_group = QGroupBox(tr('dlg_skin_group_icons'))
         icons_group.setStyleSheet(main_group.styleSheet())
         icons_layout = QGridLayout(icons_group)
 
@@ -4320,7 +4309,7 @@ class SkinSettingsDialog(QDialog):
         buttons_layout = QHBoxLayout()
 
         # Reset to defaults button
-        reset_btn = QPushButton("Przywróć domyślne (Ubuntu)")
+        reset_btn = QPushButton(tr('dlg_skin_reset'))
         reset_btn.clicked.connect(self._reset_to_defaults)
         reset_btn.setStyleSheet("""
             QPushButton {
@@ -4340,7 +4329,7 @@ class SkinSettingsDialog(QDialog):
         buttons_layout.addStretch()
 
         # Cancel button
-        cancel_btn = QPushButton("Anuluj")
+        cancel_btn = QPushButton(tr('dlg_cancel'))
         cancel_btn.clicked.connect(self.reject)
         cancel_btn.setStyleSheet("""
             QPushButton {
@@ -4357,7 +4346,7 @@ class SkinSettingsDialog(QDialog):
         buttons_layout.addWidget(cancel_btn)
 
         # Apply button
-        apply_btn = QPushButton("Zastosuj")
+        apply_btn = QPushButton(tr('dlg_skin_apply'))
         apply_btn.clicked.connect(self._apply_colors)
         apply_btn.setStyleSheet("""
             QPushButton {
@@ -4379,7 +4368,7 @@ class SkinSettingsDialog(QDialog):
     def _add_color_row(self, layout: QGridLayout, row: int, color_key: str):
         """Add a color picker row to the layout."""
         # Label
-        label = QLabel(SKIN_COLOR_NAMES.get(color_key, color_key))
+        label = QLabel(_skin_color_name(color_key))
         label.setStyleSheet("color: #ffffff; font-weight: 500;")
         layout.addWidget(label, row, 0)
 
@@ -4427,7 +4416,7 @@ class SkinSettingsDialog(QDialog):
         color = QColorDialog.getColor(
             current_color,
             self,
-            f"Wybierz kolor: {SKIN_COLOR_NAMES.get(color_key, color_key)}",
+            tr('dlg_skin_pick_color').format(name=_skin_color_name(color_key)),
             QColorDialog.ShowAlphaChannel
         )
 
@@ -4451,7 +4440,7 @@ class SkinSettingsDialog(QDialog):
     def _add_icon_row(self, layout: QGridLayout, row: int, icon_key: str):
         """Add an icon picker row to the layout."""
         # Label
-        label = QLabel(SKIN_ICON_NAMES.get(icon_key, icon_key))
+        label = QLabel(_skin_icon_name(icon_key))
         label.setStyleSheet("color: #ffffff; font-weight: 500;")
         layout.addWidget(label, row, 0)
 
@@ -4465,7 +4454,7 @@ class SkinSettingsDialog(QDialog):
         # Normal icon button with its color
         normal_btn = QPushButton(icon_data.get('normal', '?'))
         normal_btn.setFixedSize(50, 30)
-        normal_btn.setToolTip("Ikona normalna (kliknij aby zmienić)")
+        normal_btn.setToolTip(tr('dlg_skin_icon_normal_tooltip'))
         normal_btn.setCursor(Qt.PointingHandCursor)
         normal_btn.setStyleSheet(self._get_icon_btn_style(normal_color))
         normal_btn.clicked.connect(lambda: self._edit_icon(icon_key, 'normal'))
@@ -4474,7 +4463,7 @@ class SkinSettingsDialog(QDialog):
         # Active icon button with its color
         active_btn = QPushButton(icon_data.get('active', icon_data.get('normal', '?')))
         active_btn.setFixedSize(50, 30)
-        active_btn.setToolTip("Ikona aktywna (kliknij aby zmienić)")
+        active_btn.setToolTip(tr('dlg_skin_icon_active_tooltip'))
         active_btn.setCursor(Qt.PointingHandCursor)
         active_btn.setStyleSheet(self._get_icon_btn_style(active_color))
         active_btn.clicked.connect(lambda: self._edit_icon(icon_key, 'active'))
@@ -4487,7 +4476,7 @@ class SkinSettingsDialog(QDialog):
             processing_color = icon_data.get('processing_color', self.colors.get(f'icon_{icon_key}_color', '#ffffff'))
             processing_btn = QPushButton(icon_data.get('processing', default_icon_data.get('processing', '⏳')))
             processing_btn.setFixedSize(50, 30)
-            processing_btn.setToolTip("Ikona procesowania (kliknij aby zmienić)")
+            processing_btn.setToolTip(tr('dlg_skin_icon_processing_tooltip'))
             processing_btn.setCursor(Qt.PointingHandCursor)
             processing_btn.setStyleSheet(self._get_icon_btn_style(processing_color))
             processing_btn.clicked.connect(lambda: self._edit_icon(icon_key, 'processing'))
@@ -4518,7 +4507,7 @@ class SkinSettingsDialog(QDialog):
 
         # Create custom dialog
         dialog = QDialog(self)
-        dialog.setWindowTitle(f"Zmień ikonę: {SKIN_ICON_NAMES.get(icon_key, icon_key)}")
+        dialog.setWindowTitle(tr('dlg_skin_change_icon_title').format(name=_skin_icon_name(icon_key)))
         dialog.setFixedWidth(300)
         dialog.setStyleSheet("""
             QDialog {
@@ -4545,7 +4534,7 @@ class SkinSettingsDialog(QDialog):
         layout = QVBoxLayout(dialog)
 
         # Label
-        label = QLabel(f"Wpisz emoji lub tekst dla stanu '{state}':\n(np. 🎤 lub tekst)")
+        label = QLabel(tr('dlg_skin_icon_input_label').format(state=state))
         layout.addWidget(label)
 
         # Text input with color preview
@@ -4558,7 +4547,7 @@ class SkinSettingsDialog(QDialog):
         color_btn = QPushButton()
         color_btn.setFixedSize(40, 40)
         color_btn.setCursor(Qt.PointingHandCursor)
-        color_btn.setToolTip("Zmień kolor ikony")
+        color_btn.setToolTip(tr('dlg_skin_pick_icon_color_tooltip'))
 
         selected_color = [current_color]  # Use list to allow modification in nested function
 
@@ -4593,7 +4582,7 @@ class SkinSettingsDialog(QDialog):
             color = QColorDialog.getColor(
                 QColor(selected_color[0]),
                 dialog,
-                "Wybierz kolor ikony",
+                tr('dlg_skin_pick_icon_color_title'),
                 QColorDialog.ShowAlphaChannel
             )
             if color.isValid():
@@ -4658,53 +4647,10 @@ class SkinSettingsDialog(QDialog):
 
     def _show_icons_help(self):
         """Show help dialog with instructions for icons."""
-        help_text = """
-<h2>🎨 Jak zmienić ikony przycisków</h2>
-
-<h3>📝 Instrukcja:</h3>
-<ol>
-<li>Kliknij na przycisk z ikoną którą chcesz zmienić</li>
-<li>Wpisz nowe emoji lub tekst</li>
-<li>Kliknij OK</li>
-</ol>
-
-<p><b>Ikona "normalna"</b> - wyświetlana gdy przycisk jest nieaktywny<br>
-<b>Ikona "aktywna"</b> - wyświetlana gdy przycisk jest wciśnięty/aktywny</p>
-
-<h3>⌨️ Jak wpisać emoji:</h3>
-<ul>
-<li><b>Windows:</b> Naciśnij <code>Win + .</code> (kropka)</li>
-<li><b>Linux:</b> Naciśnij <code>Ctrl + .</code> lub <code>Ctrl + Shift + E</code></li>
-<li><b>macOS:</b> Naciśnij <code>Ctrl + Cmd + Space</code></li>
-</ul>
-
-<h3>🌐 Strony z ikonami (skopiuj i wklej):</h3>
-<ul>
-<li><a href="https://emojipedia.org">emojipedia.org</a> - wszystkie emoji</li>
-<li><a href="https://getemoji.com">getemoji.com</a> - emoji do kopiowania</li>
-<li><a href="https://symbl.cc/en/">symbl.cc</a> - symbole Unicode</li>
-<li><a href="https://unicode-table.com">unicode-table.com</a> - tabela Unicode</li>
-<li><a href="https://fontawesome.com/search?o=r&m=free">fontawesome.com</a> - ikony (skopiuj jako Unicode)</li>
-</ul>
-
-<h3>💡 Przykładowe ikony:</h3>
-<table>
-<tr><td><b>Mikrofon:</b></td><td>🎤 🎙️ 🎚️ 📢 🔴</td></tr>
-<tr><td><b>Głośnik:</b></td><td>🔊 🔉 🔈 🔇 📣 🎵</td></tr>
-<tr><td><b>Pauza/Play:</b></td><td>⏸️ ▶️ ⏯️ ⏹️ ⏺️</td></tr>
-<tr><td><b>Stop:</b></td><td>⬜ ⏹️ 🛑 ❌ ✖️</td></tr>
-<tr><td><b>Kopiuj:</b></td><td>⧉ 📋 📄 📑 ✂️</td></tr>
-<tr><td><b>Wyślij:</b></td><td>↵ ➡️ 📤 📨 ✈️</td></tr>
-<tr><td><b>Akcje:</b></td><td>⚡ ⭐ 💫 🔥 ✨</td></tr>
-</table>
-
-<h3>📁 Import/Eksport skórki:</h3>
-<p>Możesz zapisać swoją skórkę do pliku <code>.skin.json</code> i udostępnić innym,
-lub wczytać skórkę od kogoś innego.</p>
-"""
+        help_text = tr('dlg_skin_help_body')
 
         msg = QMessageBox(self)
-        msg.setWindowTitle("Pomoc - Ikony i skórki")
+        msg.setWindowTitle(tr('dlg_skin_help_title'))
         msg.setTextFormat(Qt.RichText)
         msg.setText(help_text)
         msg.setStyleSheet("""
@@ -4733,9 +4679,9 @@ lub wczytać skórkę od kogoś innego.</p>
         """Import skin from JSON file."""
         file_path, _ = styled_get_open_file_name(
             self,
-            "Importuj skórkę",
+            tr('dlg_skin_import_title'),
             str(Path.home()),
-            "Pliki skórki (*.skin.json);;Wszystkie pliki (*)"
+            tr('dlg_skin_filter')
         )
         if file_path:
             try:
@@ -4766,23 +4712,23 @@ lub wczytać skórkę od kogoś innego.</p>
                             buttons['active'].setText(icon_data.get('active', icon_data.get('normal', '?')))
 
                 self._preview_colors()
-                QMessageBox.information(self, "Sukces", f"Skórka wczytana z:\n{file_path}")
+                QMessageBox.information(self, tr('dlg_skin_success_title'), tr('dlg_skin_loaded_msg').format(path=file_path))
 
             except Exception as e:
-                QMessageBox.warning(self, "Błąd", f"Nie udało się wczytać skórki:\n{e}")
+                QMessageBox.warning(self, tr('dlg_error_title'), tr('dlg_skin_load_failed_msg').format(error=e))
 
     def _export_skin(self):
         """Export skin to JSON file."""
         file_path, _ = styled_get_save_file_name(
             self,
-            "Eksportuj skórkę",
+            tr('dlg_skin_export_title'),
             str(Path.home() / "moja_skorka.skin.json"),
-            "Pliki skórki (*.skin.json);;Wszystkie pliki (*)"
+            tr('dlg_skin_filter')
         )
         if file_path:
             try:
                 skin_data = {
-                    'name': 'Moja skórka',
+                    'name': tr('dlg_skin_default_name'),
                     'version': '1.0',
                     'colors': self.colors,
                     'icons': self.icons
@@ -4790,10 +4736,10 @@ lub wczytać skórkę od kogoś innego.</p>
                 with open(file_path, 'w', encoding='utf-8') as f:
                     json.dump(skin_data, f, indent=2, ensure_ascii=False)
 
-                QMessageBox.information(self, "Sukces", f"Skórka zapisana do:\n{file_path}")
+                QMessageBox.information(self, tr('dlg_skin_success_title'), tr('dlg_skin_saved_msg').format(path=file_path))
 
             except Exception as e:
-                QMessageBox.warning(self, "Błąd", f"Nie udało się zapisać skórki:\n{e}")
+                QMessageBox.warning(self, tr('dlg_error_title'), tr('dlg_skin_save_failed_msg').format(error=e))
 
     def _reset_to_defaults(self):
         """Reset all colors and icons to Ubuntu defaults."""
@@ -4834,7 +4780,7 @@ class SettingsDialog(QDialog):
 
     def __init__(self, parent, current_api_key: str = ""):
         super().__init__(parent)
-        self.setWindowTitle("Ustawienia")
+        self.setWindowTitle(tr('dlg_settings_title'))
         self.setMinimumWidth(400)
 
         layout = QFormLayout(self)
@@ -4844,7 +4790,7 @@ class SettingsDialog(QDialog):
         self.api_key_field.setEchoMode(QLineEdit.Password)
         self.api_key_field.setText(current_api_key)
         self.api_key_field.setPlaceholderText("gsk_...")
-        layout.addRow("Klucz API Groq:", self.api_key_field)
+        layout.addRow(tr('dlg_settings_groq_label'), self.api_key_field)
 
         # Buttons
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -4862,46 +4808,46 @@ class LicenseDialog(QDialog):
     def __init__(self, parent, license_manager: LicenseManager):
         super().__init__(parent)
         self.license_manager = license_manager
-        self.setWindowTitle("Licencja")
+        self.setWindowTitle(tr('dlg_license_title'))
         self.setMinimumWidth(400)
 
         layout = QVBoxLayout(self)
 
         # Status
         status = license_manager.get_status()
-        status_label = QLabel(f"Status: {status.value}")
+        status_label = QLabel(tr('dlg_license_status').format(status=status.value))
         layout.addWidget(status_label)
 
         # Email
         email = license_manager.get_email()
         if email:
-            email_label = QLabel(f"Email: {email}")
+            email_label = QLabel(tr('dlg_license_email').format(email=email))
             layout.addWidget(email_label)
 
         # Trial days
         if status == LicenseStatus.TRIAL:
             days = license_manager.get_trial_days_left()
-            days_label = QLabel(f"Pozostało dni trial: {days}")
+            days_label = QLabel(tr('dlg_license_trial_days').format(days=days))
             layout.addWidget(days_label)
 
         # License key input
-        layout.addWidget(QLabel("Wprowadź klucz licencji:"))
+        layout.addWidget(QLabel(tr('dlg_license_key_label')))
         self.key_field = QLineEdit()
         self.key_field.setPlaceholderText("XXXX-XXXX-XXXX-XXXX")
         layout.addWidget(self.key_field)
 
         # Activate button
-        activate_btn = QPushButton("Aktywuj licencję")
+        activate_btn = QPushButton(tr('dlg_license_activate'))
         activate_btn.clicked.connect(self._activate)
         layout.addWidget(activate_btn)
 
         # Buy button
-        buy_btn = QPushButton("Kup licencję")
+        buy_btn = QPushButton(tr('dlg_license_buy'))
         buy_btn.clicked.connect(self._buy)
         layout.addWidget(buy_btn)
 
         # Close button
-        close_btn = QPushButton("Zamknij")
+        close_btn = QPushButton(tr('dlg_close'))
         close_btn.clicked.connect(self.accept)
         layout.addWidget(close_btn)
 
@@ -4910,10 +4856,10 @@ class LicenseDialog(QDialog):
         if key:
             success, message = self.license_manager.activate_license(key)
             if success:
-                QMessageBox.information(self, "Sukces", message)
+                QMessageBox.information(self, tr('dlg_license_success_title'), message)
                 self.accept()
             else:
-                QMessageBox.warning(self, "Błąd", message)
+                QMessageBox.warning(self, tr('dlg_error_title'), message)
 
     def _buy(self):
         import webbrowser

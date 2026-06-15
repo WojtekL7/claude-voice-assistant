@@ -27,7 +27,8 @@ from config import (
     MEMORY_PROJECTS_FILE, AGENTS_FILE, MEMORY_FILE_EXTENSIONS,
     DEFAULT_AGENTS, DEFAULT_MEMORY_PROJECTS, ASSETS_DIR,
     CLAUDE_MODELS, CLAUDE_MODELS_SHORT, DEFAULT_AGENT_MODEL,
-    NEW_AGENT_DEFAULT_MODEL
+    NEW_AGENT_DEFAULT_MODEL,
+    t as tr, model_label, model_label_short,
 )
 from core.skills_manager import SkillsManager, Skill, SkillInstallError
 from core.agent_skills_settings import AgentSkillsSettings
@@ -166,11 +167,11 @@ def get_file_dialog_stylesheet() -> str:
 
 def setup_file_dialog_labels(dialog: QFileDialog):
     """Ustawia polskie etykiety dla dialogu plików."""
-    dialog.setLabelText(QFileDialog.LookIn, "Szukaj w:")
-    dialog.setLabelText(QFileDialog.FileName, "Nazwa:")
-    dialog.setLabelText(QFileDialog.FileType, "Typ plików:")
-    dialog.setLabelText(QFileDialog.Accept, "Wybierz")
-    dialog.setLabelText(QFileDialog.Reject, "Anuluj")
+    dialog.setLabelText(QFileDialog.LookIn, tr('dlg_file_look_in'))
+    dialog.setLabelText(QFileDialog.FileName, tr('dlg_file_name'))
+    dialog.setLabelText(QFileDialog.FileType, tr('dlg_file_type'))
+    dialog.setLabelText(QFileDialog.Accept, tr('dlg_file_select'))
+    dialog.setLabelText(QFileDialog.Reject, tr('dlg_cancel'))
 
 
 def styled_get_existing_directory(parent, title: str, directory: str = "") -> str:
@@ -227,7 +228,7 @@ def styled_get_save_file_name(parent, title: str, directory: str = "",
     dialog.setStyleSheet(get_file_dialog_stylesheet())
     setup_file_dialog_labels(dialog)
     # Zmień etykietę "Wybierz" na "Zapisz" dla dialogu zapisu
-    dialog.setLabelText(QFileDialog.Accept, "Zapisz")
+    dialog.setLabelText(QFileDialog.Accept, tr('dlg_file_save'))
 
     if dialog.exec_() == QFileDialog.Accepted:
         selected = dialog.selectedFiles()
@@ -240,7 +241,7 @@ class MemoryProjectsDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Pliki pamięci projektów")
+        self.setWindowTitle(tr('dlg_mem_title'))
         self.setMinimumSize(650, 550)
 
         self.memory_projects = self._load_memory_projects()
@@ -262,7 +263,7 @@ class MemoryProjectsDialog(QDialog):
             with open(MEMORY_PROJECTS_FILE, 'w') as f:
                 json.dump(self.memory_projects, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            QMessageBox.warning(self, "Błąd", f"Nie można zapisać: {e}")
+            QMessageBox.warning(self, tr('dlg_error_title'), tr('dlg_mem_cannot_save').format(error=e))
 
     def _setup_ui(self):
         """Setup dialog UI."""
@@ -273,19 +274,19 @@ class MemoryProjectsDialog(QDialog):
         checkmark_path = str(ASSETS_DIR / "checkmark.png").replace("\\", "/")
 
         # Header
-        header = QLabel("Zarządzaj projektami i ich plikami pamięci")
+        header = QLabel(tr('dlg_mem_header'))
         header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
         layout.addWidget(header)
 
         # Description
-        desc = QLabel("Pliki pamięci są automatycznie wysyłane do Claude Code jako kontekst przy starcie sesji.")
+        desc = QLabel(tr('dlg_mem_desc'))
         desc.setStyleSheet("color: #aaaaaa; font-size: 11px;")
         desc.setWordWrap(True)
         layout.addWidget(desc)
 
         # Tree widget for projects and files
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["Nazwa", "Ścieżka"])
+        self.tree.setHeaderLabels([tr('dlg_mem_col_name'), tr('dlg_mem_col_path')])
         self.tree.setColumnWidth(0, 250)
         self.tree.setStyleSheet(f"""
             QTreeWidget {{
@@ -340,25 +341,25 @@ class MemoryProjectsDialog(QDialog):
         # Buttons for projects
         project_btn_layout = QHBoxLayout()
 
-        add_project_btn = QPushButton("➕ Dodaj projekt")
+        add_project_btn = QPushButton(f"➕ {tr('dlg_mem_add_project')}")
         add_project_btn.clicked.connect(self._add_project)
         project_btn_layout.addWidget(add_project_btn)
 
-        add_file_btn = QPushButton("📄 Dodaj plik")
+        add_file_btn = QPushButton(f"📄 {tr('dlg_mem_add_file')}")
         add_file_btn.clicked.connect(self._add_file)
         project_btn_layout.addWidget(add_file_btn)
 
-        add_folder_btn = QPushButton("📁 Dodaj folder")
+        add_folder_btn = QPushButton(f"📁 {tr('dlg_mem_add_folder')}")
         add_folder_btn.clicked.connect(self._add_folder)
         project_btn_layout.addWidget(add_folder_btn)
 
         project_btn_layout.addStretch()
 
-        edit_btn = QPushButton("✏️ Edytuj")
+        edit_btn = QPushButton(f"✏️ {tr('dlg_edit')}")
         edit_btn.clicked.connect(self._edit_selected)
         project_btn_layout.addWidget(edit_btn)
 
-        delete_btn = QPushButton("🗑️ Usuń")
+        delete_btn = QPushButton(f"🗑️ {tr('dlg_delete')}")
         delete_btn.setStyleSheet("QPushButton { color: #ef4444; }")
         delete_btn.clicked.connect(self._delete_selected)
         project_btn_layout.addWidget(delete_btn)
@@ -369,11 +370,11 @@ class MemoryProjectsDialog(QDialog):
         bottom_layout = QHBoxLayout()
         bottom_layout.addStretch()
 
-        cancel_btn = QPushButton("Anuluj")
+        cancel_btn = QPushButton(tr('dlg_cancel'))
         cancel_btn.clicked.connect(self.reject)
         bottom_layout.addWidget(cancel_btn)
 
-        save_btn = QPushButton("Zapisz")
+        save_btn = QPushButton(tr('dlg_save'))
         save_btn.clicked.connect(self._save_and_close)
         save_btn.setStyleSheet("QPushButton { color: #22c55e; font-weight: bold; }")
         bottom_layout.addWidget(save_btn)
@@ -386,7 +387,7 @@ class MemoryProjectsDialog(QDialog):
 
         for project in self.memory_projects:
             project_item = QTreeWidgetItem([
-                f"📁 {project.get('name', 'Bez nazwy')}",
+                f"📁 {project.get('name', tr('dlg_mem_unnamed'))}",
                 ""
             ])
             project_item.setData(0, Qt.UserRole, {'type': 'project', 'data': project})
@@ -394,7 +395,7 @@ class MemoryProjectsDialog(QDialog):
 
             for file_info in project.get('files', []):
                 file_path = file_info.get('path', '')
-                file_name = Path(file_path).name if file_path else 'Brak pliku'
+                file_name = Path(file_path).name if file_path else tr('dlg_mem_no_file')
 
                 file_item = QTreeWidgetItem([
                     f"  📄 {file_name}",
@@ -422,7 +423,7 @@ class MemoryProjectsDialog(QDialog):
         """Add file to selected project."""
         selected = self.tree.currentItem()
         if not selected:
-            QMessageBox.warning(self, "Brak wyboru", "Wybierz projekt, do którego chcesz dodać plik.")
+            QMessageBox.warning(self, tr('dlg_no_selection_title'), tr('dlg_mem_select_project_for_file'))
             return
 
         # Get project (either selected or parent)
@@ -433,9 +434,9 @@ class MemoryProjectsDialog(QDialog):
             project = item_data['data']
 
         # File dialog (stylizowany)
-        file_filter = "Pliki pamięci (*.md *.txt *.json);;Wszystkie pliki (*)"
+        file_filter = tr('dlg_mem_file_filter')
         files, _ = styled_get_open_file_names(
-            self, "Wybierz pliki pamięci", str(Path.home()), file_filter
+            self, tr('dlg_mem_choose_files'), str(Path.home()), file_filter
         )
 
         if files:
@@ -454,7 +455,7 @@ class MemoryProjectsDialog(QDialog):
         """Add all compatible files from folder to selected project."""
         selected = self.tree.currentItem()
         if not selected:
-            QMessageBox.warning(self, "Brak wyboru", "Wybierz projekt, do którego chcesz dodać pliki.")
+            QMessageBox.warning(self, tr('dlg_no_selection_title'), tr('dlg_mem_select_project_for_files'))
             return
 
         # Get project
@@ -466,7 +467,7 @@ class MemoryProjectsDialog(QDialog):
 
         # Folder dialog (stylizowany)
         folder = styled_get_existing_directory(
-            self, "Wybierz folder z plikami", str(Path.home())
+            self, tr('dlg_mem_choose_folder'), str(Path.home())
         )
 
         if folder:
@@ -485,15 +486,15 @@ class MemoryProjectsDialog(QDialog):
 
             if files_added > 0:
                 self._populate_tree()
-                QMessageBox.information(self, "Dodano pliki", f"Dodano {files_added} plików z folderu.")
+                QMessageBox.information(self, tr('dlg_mem_files_added_title'), tr('dlg_mem_files_added_n').format(n=files_added))
             else:
-                QMessageBox.information(self, "Brak plików", "Nie znaleziono nowych plików do dodania.")
+                QMessageBox.information(self, tr('dlg_mem_no_files_title'), tr('dlg_mem_no_new_files'))
 
     def _edit_selected(self):
         """Edit selected project or file."""
         selected = self.tree.currentItem()
         if not selected:
-            QMessageBox.warning(self, "Brak wyboru", "Wybierz element do edycji.")
+            QMessageBox.warning(self, tr('dlg_no_selection_title'), tr('dlg_mem_select_to_edit'))
             return
 
         item_data = selected.data(0, Qt.UserRole)
@@ -510,7 +511,7 @@ class MemoryProjectsDialog(QDialog):
         """Delete selected project or file."""
         selected = self.tree.currentItem()
         if not selected:
-            QMessageBox.warning(self, "Brak wyboru", "Wybierz element do usunięcia.")
+            QMessageBox.warning(self, tr('dlg_no_selection_title'), tr('dlg_mem_select_to_delete'))
             return
 
         item_data = selected.data(0, Qt.UserRole)
@@ -518,8 +519,8 @@ class MemoryProjectsDialog(QDialog):
         if item_data['type'] == 'project':
             project = item_data['data']
             reply = QMessageBox.question(
-                self, "Potwierdź usunięcie",
-                f"Czy na pewno usunąć projekt \"{project.get('name')}\" i wszystkie jego pliki?",
+                self, tr('dlg_confirm_delete_title'),
+                tr('dlg_mem_confirm_delete_project').format(name=project.get('name')),
                 QMessageBox.Yes | QMessageBox.No
             )
             if reply == QMessageBox.Yes:
@@ -531,8 +532,8 @@ class MemoryProjectsDialog(QDialog):
             project = item_data['project']
 
             reply = QMessageBox.question(
-                self, "Potwierdź usunięcie",
-                f"Czy na pewno usunąć plik \"{Path(file_info.get('path', '')).name}\"?",
+                self, tr('dlg_confirm_delete_title'),
+                tr('dlg_mem_confirm_delete_file').format(name=Path(file_info.get('path', '')).name),
                 QMessageBox.Yes | QMessageBox.No
             )
             if reply == QMessageBox.Yes:
@@ -565,7 +566,7 @@ class ProjectEditDialog(QDialog):
 
     def __init__(self, parent=None, project: dict = None):
         super().__init__(parent)
-        self.setWindowTitle("Edytuj projekt" if project else "Nowy projekt")
+        self.setWindowTitle(tr('dlg_proj_edit_title') if project else tr('dlg_proj_new_title'))
         self.setMinimumWidth(400)
 
         self.project = project or {}
@@ -578,7 +579,7 @@ class ProjectEditDialog(QDialog):
         form = QFormLayout()
 
         self.name_input = QLineEdit(self.project.get('name', ''))
-        self.name_input.setPlaceholderText("np. Fulfillment CRM")
+        self.name_input.setPlaceholderText(tr('dlg_proj_name_placeholder'))
         self.name_input.setStyleSheet("""
             QLineEdit {
                 background-color: #2d0a1e;
@@ -588,7 +589,7 @@ class ProjectEditDialog(QDialog):
                 padding: 8px;
             }
         """)
-        form.addRow("Nazwa projektu:", self.name_input)
+        form.addRow(tr('dlg_proj_name_label'), self.name_input)
 
         layout.addLayout(form)
 
@@ -596,11 +597,11 @@ class ProjectEditDialog(QDialog):
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 
-        cancel_btn = QPushButton("Anuluj")
+        cancel_btn = QPushButton(tr('dlg_cancel'))
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
 
-        save_btn = QPushButton("Zapisz")
+        save_btn = QPushButton(tr('dlg_save'))
         save_btn.clicked.connect(self._save)
         save_btn.setStyleSheet("QPushButton { color: #22c55e; }")
         btn_layout.addWidget(save_btn)
@@ -611,7 +612,7 @@ class ProjectEditDialog(QDialog):
         """Validate and save."""
         name = self.name_input.text().strip()
         if not name:
-            QMessageBox.warning(self, "Brak nazwy", "Podaj nazwę projektu.")
+            QMessageBox.warning(self, tr('dlg_no_name_title'), tr('dlg_proj_give_name'))
             return
         self.accept()
 
@@ -646,7 +647,7 @@ class AgentConfigDialog(QDialog):
 
     def __init__(self, parent=None, agent: dict = None, memory_projects: list = None):
         super().__init__(parent)
-        self.setWindowTitle("Edytuj agenta" if agent else "Nowy agent")
+        self.setWindowTitle(tr('dlg_agent_edit_title') if agent else tr('dlg_agent_new_title'))
 
         self.is_new_agent = agent is None
         self.agent = agent or {}
@@ -748,7 +749,7 @@ class AgentConfigDialog(QDialog):
         main_layout.setContentsMargins(15, 15, 15, 15)
 
         # Header
-        header = QLabel("Konfiguracja agenta")
+        header = QLabel(tr('dlg_agent_config_header'))
         header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
         main_layout.addWidget(header)
 
@@ -780,10 +781,10 @@ class AgentConfigDialog(QDialog):
                 color: #ffffff;
             }
         """)
-        self.tabs.addTab(self._build_tab_basic(), "📝 Podstawowe")
-        self.tabs.addTab(self._build_tab_memory(), "💾 Pamięć")
-        self.tabs.addTab(self._build_tab_skills(), "🧩 Skille")
-        self.tabs.addTab(self._build_tab_mcp(), "🔌 MCP")
+        self.tabs.addTab(self._build_tab_basic(), tr('dlg_agent_tab_basic'))
+        self.tabs.addTab(self._build_tab_memory(), tr('dlg_agent_tab_memory'))
+        self.tabs.addTab(self._build_tab_skills(), tr('dlg_agent_tab_skills'))
+        self.tabs.addTab(self._build_tab_mcp(), tr('dlg_agent_tab_mcp'))
         main_layout.addWidget(self.tabs, stretch=1)
 
         # Single connection — wszystkie sekcje (skills 1A/1B + MCP 1A/1B) odświeżają się
@@ -794,16 +795,16 @@ class AgentConfigDialog(QDialog):
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 
-        cancel_btn = QPushButton("Anuluj")
+        cancel_btn = QPushButton(tr('dlg_cancel'))
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
 
-        save_btn = QPushButton("Zapisz")
+        save_btn = QPushButton(tr('dlg_save'))
         save_btn.clicked.connect(self._save)
         save_btn.setStyleSheet("QPushButton { color: #22c55e; font-weight: bold; }")
         btn_layout.addWidget(save_btn)
 
-        save_run_btn = QPushButton("Zapisz i uruchom")
+        save_run_btn = QPushButton(tr('dlg_agent_save_run'))
         save_run_btn.clicked.connect(self._save_and_run)
         save_run_btn.setStyleSheet("QPushButton { color: #22c55e; font-weight: bold; }")
         btn_layout.addWidget(save_run_btn)
@@ -824,9 +825,9 @@ class AgentConfigDialog(QDialog):
 
         # Name
         self.name_input = QLineEdit(self.agent.get('name', ''))
-        self.name_input.setPlaceholderText("np. CRM Development")
+        self.name_input.setPlaceholderText(tr('dlg_agent_name_placeholder'))
         self.name_input.setStyleSheet(self._input_style())
-        form.addRow("Nazwa agenta:", self.name_input)
+        form.addRow(tr('dlg_agent_name_label'), self.name_input)
 
         # Working directory
         dir_layout = QHBoxLayout()
@@ -838,7 +839,7 @@ class AgentConfigDialog(QDialog):
         browse_btn.setFixedWidth(40)
         browse_btn.clicked.connect(self._browse_directory)
         dir_layout.addWidget(browse_btn)
-        form.addRow("Katalog roboczy:", dir_layout)
+        form.addRow(tr('dlg_agent_working_dir_label'), dir_layout)
 
         # Model Claude Code
         chevron_path = str(ASSETS_DIR / "chevron-down.svg").replace("\\", "/")
@@ -891,16 +892,16 @@ class AgentConfigDialog(QDialog):
                 color: #ffffff;
             }}
         """)
-        for key, label in CLAUDE_MODELS.items():
-            self.model_combo.addItem(label, key)
+        for key in CLAUDE_MODELS.keys():
+            self.model_combo.addItem(model_label(key), key)
         current_model = (NEW_AGENT_DEFAULT_MODEL if self.is_new_agent
                          else self.agent.get('model', DEFAULT_AGENT_MODEL))
         idx = self.model_combo.findData(current_model)
         if idx >= 0:
             self.model_combo.setCurrentIndex(idx)
-        form.addRow("Model Claude Code:", self.model_combo)
+        form.addRow(tr('dlg_agent_model_label'), self.model_combo)
 
-        model_hint = QLabel("Zmiana modelu wymaga restartu agenta (Stop → Uruchom).")
+        model_hint = QLabel(tr('dlg_agent_model_hint'))
         model_hint.setStyleSheet("color: #888888; font-size: 11px;")
         form.addRow("", model_hint)
 
@@ -909,12 +910,12 @@ class AgentConfigDialog(QDialog):
         # Checkboxes
         cb_style = self._checkbox_style()
 
-        self.auto_start_checkbox = QCheckBox("Uruchamiaj automatycznie przy starcie aplikacji")
+        self.auto_start_checkbox = QCheckBox(tr('dlg_agent_auto_start'))
         self.auto_start_checkbox.setChecked(self.agent.get('auto_start', True))
         self.auto_start_checkbox.setStyleSheet(cb_style)
         layout.addWidget(self.auto_start_checkbox)
 
-        self.send_memory_checkbox = QCheckBox("Wczytaj pliki pamięci po starcie Claude Code")
+        self.send_memory_checkbox = QCheckBox(tr('dlg_agent_load_memory'))
         self.send_memory_checkbox.setChecked(self.agent.get('send_memory_on_start', True))
         self.send_memory_checkbox.setStyleSheet(cb_style)
         layout.addWidget(self.send_memory_checkbox)
@@ -929,14 +930,11 @@ class AgentConfigDialog(QDialog):
         layout.setSpacing(10)
         layout.setContentsMargins(12, 16, 12, 12)
 
-        memory_label = QLabel("📄 Pliki pamięci agenta:")
+        memory_label = QLabel(tr('dlg_agent_memory_files_label'))
         memory_label.setStyleSheet("color: #ffffff; font-weight: bold;")
         layout.addWidget(memory_label)
 
-        memory_info = QLabel(
-            "ℹ️ Pliki wczytywane przy starcie agenta — Claude Code dostaje je "
-            "jako kontekst rozmowy."
-        )
+        memory_info = QLabel(tr('dlg_agent_memory_info'))
         memory_info.setStyleSheet("color: #aaaaaa; font-size: 11px;")
         memory_info.setWordWrap(True)
         layout.addWidget(memory_info)
@@ -949,7 +947,7 @@ class AgentConfigDialog(QDialog):
 
         layout.addLayout(self.memory_files_container)
 
-        add_file_btn = QPushButton("+ Dodaj plik")
+        add_file_btn = QPushButton(tr('dlg_agent_add_file'))
         add_file_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2d0a1e;
@@ -976,14 +974,11 @@ class AgentConfigDialog(QDialog):
         layout.setContentsMargins(12, 16, 12, 12)
 
         # === Lokalne skille agenta ===
-        skills_label = QLabel("🧩 Skille tego agenta:")
+        skills_label = QLabel(tr('dlg_agent_skills_label'))
         skills_label.setStyleSheet("color: #ffffff; font-weight: bold;")
         layout.addWidget(skills_label)
 
-        skills_info = QLabel(
-            "ℹ️ Każdy agent dziedziczy globalne skille z menu Rozszerzenia. "
-            "Tutaj możesz dodać dodatkowe — widoczne tylko dla tego agenta."
-        )
+        skills_info = QLabel(tr('dlg_agent_skills_info'))
         skills_info.setStyleSheet("color: #aaaaaa; font-size: 11px;")
         skills_info.setWordWrap(True)
         layout.addWidget(skills_info)
@@ -995,14 +990,11 @@ class AgentConfigDialog(QDialog):
         self._update_agent_skills_button()
 
         # === Wyłączanie globalnych skilli ===
-        disable_skills_label = QLabel("🚫 Wyłącz globalne skille dla tego agenta:")
+        disable_skills_label = QLabel(tr('dlg_agent_disable_skills_label'))
         disable_skills_label.setStyleSheet("color: #ffffff; margin-top: 6px;")
         layout.addWidget(disable_skills_label)
 
-        disable_skills_info = QLabel(
-            "ℹ️ Globalne skille są domyślnie aktywne. Odznacz te, których ten "
-            "agent ma nie używać. Zapis dzieje się natychmiast."
-        )
+        disable_skills_info = QLabel(tr('dlg_agent_disable_skills_info'))
         disable_skills_info.setStyleSheet("color: #aaaaaa; font-size: 11px;")
         disable_skills_info.setWordWrap(True)
         layout.addWidget(disable_skills_info)
@@ -1030,14 +1022,11 @@ class AgentConfigDialog(QDialog):
         layout.setContentsMargins(12, 16, 12, 12)
 
         # === Lokalne MCP agenta ===
-        mcp_label = QLabel("🔌 Serwery MCP tego agenta:")
+        mcp_label = QLabel(tr('dlg_agent_mcp_label'))
         mcp_label.setStyleSheet("color: #ffffff; font-weight: bold;")
         layout.addWidget(mcp_label)
 
-        mcp_info = QLabel(
-            "ℹ️ Każdy agent dziedziczy globalne serwery MCP z menu Rozszerzenia. "
-            "Tutaj możesz dodać dodatkowe — działające tylko w katalogu tego agenta."
-        )
+        mcp_info = QLabel(tr('dlg_agent_mcp_info'))
         mcp_info.setStyleSheet("color: #aaaaaa; font-size: 11px;")
         mcp_info.setWordWrap(True)
         layout.addWidget(mcp_info)
@@ -1049,14 +1038,11 @@ class AgentConfigDialog(QDialog):
         self._update_agent_mcp_button()
 
         # === Wyłączanie globalnych MCP ===
-        disable_mcp_label = QLabel("🚫 Wyłącz globalne MCP dla tego agenta:")
+        disable_mcp_label = QLabel(tr('dlg_agent_disable_mcp_label'))
         disable_mcp_label.setStyleSheet("color: #ffffff; margin-top: 6px;")
         layout.addWidget(disable_mcp_label)
 
-        disable_mcp_info = QLabel(
-            "ℹ️ Globalne serwery MCP są domyślnie aktywne. Odznacz te, których ten "
-            "agent ma nie używać. Zapis dzieje się natychmiast."
-        )
+        disable_mcp_info = QLabel(tr('dlg_agent_disable_mcp_info'))
         disable_mcp_info.setStyleSheet("color: #aaaaaa; font-size: 11px;")
         disable_mcp_info.setWordWrap(True)
         layout.addWidget(disable_mcp_info)
@@ -1079,7 +1065,7 @@ class AgentConfigDialog(QDialog):
     def _browse_directory(self):
         """Browse for working directory."""
         directory = styled_get_existing_directory(
-            self, "Wybierz katalog roboczy",
+            self, tr('dlg_agent_choose_working_dir'),
             self.dir_input.text() or str(Path.home())
         )
         if directory:
@@ -1089,12 +1075,12 @@ class AgentConfigDialog(QDialog):
         """Validate and save."""
         name = self.name_input.text().strip()
         if not name:
-            QMessageBox.warning(self, "Brak nazwy", "Podaj nazwę agenta.")
+            QMessageBox.warning(self, tr('dlg_no_name_title'), tr('dlg_agent_give_name'))
             return
 
         directory = self.dir_input.text().strip()
         if not Path(directory).is_dir():
-            QMessageBox.warning(self, "Nieprawidłowy katalog", "Podany katalog nie istnieje.")
+            QMessageBox.warning(self, tr('dlg_agent_invalid_dir_title'), tr('dlg_agent_dir_not_exist'))
             return
 
         self.accept()
@@ -1103,12 +1089,12 @@ class AgentConfigDialog(QDialog):
         """Validate, save and mark for immediate run."""
         name = self.name_input.text().strip()
         if not name:
-            QMessageBox.warning(self, "Brak nazwy", "Podaj nazwę agenta.")
+            QMessageBox.warning(self, tr('dlg_no_name_title'), tr('dlg_agent_give_name'))
             return
 
         directory = self.dir_input.text().strip()
         if not Path(directory).is_dir():
-            QMessageBox.warning(self, "Nieprawidłowy katalog", "Podany katalog nie istnieje.")
+            QMessageBox.warning(self, tr('dlg_agent_invalid_dir_title'), tr('dlg_agent_dir_not_exist'))
             return
 
         self.run_immediately = True
@@ -1152,13 +1138,9 @@ class AgentConfigDialog(QDialog):
         """Refresh label/state of the agent-skills button based on working directory."""
         local_dir = self._agent_local_skills_dir()
         if local_dir is None:
-            self.manage_agent_skills_btn.setText(
-                "🧩 Zarządzaj lokalnymi skillami (najpierw ustaw poprawny katalog)"
-            )
+            self.manage_agent_skills_btn.setText(tr('dlg_agent_manage_skills_no_dir'))
             self.manage_agent_skills_btn.setEnabled(False)
-            self.manage_agent_skills_btn.setToolTip(
-                "Najpierw ustaw poprawny katalog roboczy."
-            )
+            self.manage_agent_skills_btn.setToolTip(tr('dlg_set_valid_dir_first'))
             return
 
         # Count installed local skills (silently — directory may not exist yet)
@@ -1168,18 +1150,18 @@ class AgentConfigDialog(QDialog):
             count = 0
 
         if count == 0:
-            label = "🧩 Zarządzaj lokalnymi skillami (brak)"
+            label = tr('dlg_agent_manage_skills_none')
         elif count == 1:
-            label = "🧩 Zarządzaj lokalnymi skillami (1 zainstalowany)"
+            label = tr('dlg_agent_manage_skills_1')
         elif count < 5:
-            label = f"🧩 Zarządzaj lokalnymi skillami ({count} zainstalowane)"
+            label = tr('dlg_agent_manage_skills_few').format(n=count)
         else:
-            label = f"🧩 Zarządzaj lokalnymi skillami ({count} zainstalowanych)"
+            label = tr('dlg_agent_manage_skills_many').format(n=count)
 
         self.manage_agent_skills_btn.setText(label)
         self.manage_agent_skills_btn.setEnabled(True)
         self.manage_agent_skills_btn.setToolTip(
-            f"Skille lokalne dla tego agenta ({local_dir})"
+            tr('dlg_agent_skills_local_tooltip').format(path=local_dir)
         )
 
     def _open_agent_skills(self):
@@ -1188,12 +1170,12 @@ class AgentConfigDialog(QDialog):
         if local_dir is None:
             QMessageBox.warning(
                 self,
-                "Brak katalogu",
-                "Najpierw ustaw poprawny katalog roboczy."
+                tr('dlg_no_dir_title'),
+                tr('dlg_set_valid_dir_first')
             )
             return
 
-        agent_name = self.name_input.text().strip() or "Agent"
+        agent_name = self.name_input.text().strip() or tr('dlg_agent_fallback_name')
         dialog = SkillsManagerDialog(self, skills_dir=local_dir, agent_name=agent_name)
         dialog.exec_()
 
@@ -1229,24 +1211,19 @@ class AgentConfigDialog(QDialog):
 
         # Update count label
         if settings is None:
-            self.global_skills_count_label.setText(
-                "⚠ Najpierw ustaw poprawny katalog roboczy."
-            )
+            self.global_skills_count_label.setText(tr('dlg_agent_skills_count_no_dir'))
             self.global_skills_count_label.setStyleSheet(
                 "color: #f59e0b; font-size: 11px;"
             )
         elif not global_skills:
-            self.global_skills_count_label.setText(
-                "Brak zainstalowanych globalnych skilli. "
-                "Zainstaluj je w menu Rozszerzenia → Umiejętności."
-            )
+            self.global_skills_count_label.setText(tr('dlg_agent_skills_count_none'))
             self.global_skills_count_label.setStyleSheet(
                 "color: #cccccc; font-size: 11px;"
             )
         else:
             disabled_count = sum(1 for s in global_skills if s.name in disabled_set)
             self.global_skills_count_label.setText(
-                f"{disabled_count} z {len(global_skills)} globalnych wyłączone dla tego agenta."
+                tr('dlg_agent_disabled_of_global').format(disabled=disabled_count, total=len(global_skills))
             )
             self.global_skills_count_label.setStyleSheet(
                 "color: #cccccc; font-size: 11px;"
@@ -1287,7 +1264,7 @@ class AgentConfigDialog(QDialog):
             )
             text_v.addWidget(name_l)
 
-            full_description = skill.description or "(brak opisu)"
+            full_description = skill.description or tr('dlg_agent_skills_no_desc')
             short_description = self._shorten_skill_description(full_description)
             desc_l = QLabel(short_description)
             desc_l.setStyleSheet(
@@ -1330,8 +1307,8 @@ class AgentConfigDialog(QDialog):
                 settings.disable(skill_name)
         except Exception as exc:
             QMessageBox.warning(
-                self, "Błąd zapisu",
-                f"Nie udało się zapisać ustawień: {exc}"
+                self, tr('dlg_save_error_title'),
+                tr('dlg_agent_skills_save_failed').format(error=exc)
             )
             return
 
@@ -1340,7 +1317,7 @@ class AgentConfigDialog(QDialog):
         global_skills = SkillsManager().list_skills()
         disabled_count = len(settings.get_disabled_global_skills())
         self.global_skills_count_label.setText(
-            f"{disabled_count} z {len(global_skills)} globalnych wyłączone dla tego agenta."
+            tr('dlg_agent_disabled_of_global').format(disabled=disabled_count, total=len(global_skills))
         )
 
     # ---------- Per-agent MCP servers (project-local) ----------
@@ -1357,13 +1334,9 @@ class AgentConfigDialog(QDialog):
         """Refresh label/state of the agent-MCP button based on working directory."""
         wd_path = self._agent_working_dir_path()
         if wd_path is None:
-            self.manage_agent_mcp_btn.setText(
-                "🔌 Zarządzaj lokalnymi MCP (najpierw ustaw poprawny katalog)"
-            )
+            self.manage_agent_mcp_btn.setText(tr('dlg_agent_manage_mcp_no_dir'))
             self.manage_agent_mcp_btn.setEnabled(False)
-            self.manage_agent_mcp_btn.setToolTip(
-                "Najpierw ustaw poprawny katalog roboczy."
-            )
+            self.manage_agent_mcp_btn.setToolTip(tr('dlg_set_valid_dir_first'))
             return
 
         # Count local-scope MCP servers for this working_dir (silently)
@@ -1374,27 +1347,27 @@ class AgentConfigDialog(QDialog):
             count = 0
 
         if count == 0:
-            label = "🔌 Zarządzaj lokalnymi MCP (brak)"
+            label = tr('dlg_agent_manage_mcp_none')
         elif count == 1:
-            label = "🔌 Zarządzaj lokalnymi MCP (1 zainstalowany)"
+            label = tr('dlg_agent_manage_mcp_1')
         elif count < 5:
-            label = f"🔌 Zarządzaj lokalnymi MCP ({count} zainstalowane)"
+            label = tr('dlg_agent_manage_mcp_few').format(n=count)
         else:
-            label = f"🔌 Zarządzaj lokalnymi MCP ({count} zainstalowanych)"
+            label = tr('dlg_agent_manage_mcp_many').format(n=count)
 
         self.manage_agent_mcp_btn.setText(label)
         self.manage_agent_mcp_btn.setEnabled(True)
         self.manage_agent_mcp_btn.setToolTip(
-            f"Serwery MCP lokalne dla tego agenta ({wd_path})"
+            tr('dlg_agent_mcp_local_tooltip').format(path=wd_path)
         )
 
     def _open_agent_mcp(self):
         """Open McpManagerDialog scoped to this agent's working_dir."""
         wd_path = self._agent_working_dir_path()
         if wd_path is None:
-            QMessageBox.warning(self, "Brak katalogu", "Najpierw ustaw poprawny katalog roboczy.")
+            QMessageBox.warning(self, tr('dlg_no_dir_title'), tr('dlg_set_valid_dir_first'))
             return
-        agent_name = self.name_input.text().strip() or "Agent"
+        agent_name = self.name_input.text().strip() or tr('dlg_agent_fallback_name')
         dialog = McpManagerDialog(self, working_dir=wd_path, agent_name=agent_name)
         dialog.exec_()
         # Refresh count after the user closed the dialog
@@ -1430,17 +1403,15 @@ class AgentConfigDialog(QDialog):
         disabled_set = set(settings.get_disabled_mcp_sanitized()) if settings else set()
 
         if settings is None:
-            self.global_mcp_count_label.setText("⚠ Najpierw ustaw poprawny katalog roboczy.")
+            self.global_mcp_count_label.setText(tr('dlg_agent_skills_count_no_dir'))
             self.global_mcp_count_label.setStyleSheet("color: #f59e0b; font-size: 11px;")
         elif not global_mcps:
-            self.global_mcp_count_label.setText(
-                "Brak globalnych serwerów MCP. Dodaj je w menu Rozszerzenia → Serwery MCP."
-            )
+            self.global_mcp_count_label.setText(tr('dlg_agent_mcp_count_none'))
             self.global_mcp_count_label.setStyleSheet("color: #cccccc; font-size: 11px;")
         else:
             disabled_count = sum(1 for s in global_mcps if s.sanitized_name in disabled_set)
             self.global_mcp_count_label.setText(
-                f"{disabled_count} z {len(global_mcps)} globalnych wyłączone dla tego agenta."
+                tr('dlg_agent_disabled_of_global').format(disabled=disabled_count, total=len(global_mcps))
             )
             self.global_mcp_count_label.setStyleSheet("color: #cccccc; font-size: 11px;")
 
@@ -1470,7 +1441,7 @@ class AgentConfigDialog(QDialog):
 
             text_v = QVBoxLayout()
             text_v.setSpacing(2)
-            scope_label = _MCP_SCOPE_LABEL.get(srv.scope, srv.scope)
+            scope_label = _mcp_scope_label(srv.scope)
             name_l = QLabel(f"{srv.name}  <span style='color:#888;'>[{scope_label}]</span>")
             name_l.setTextFormat(Qt.RichText)
             name_l.setStyleSheet(
@@ -1503,15 +1474,15 @@ class AgentConfigDialog(QDialog):
                 settings.disable(server_name)
         except Exception as exc:
             QMessageBox.warning(
-                self, "Błąd zapisu",
-                f"Nie udało się zapisać ustawień MCP: {exc}"
+                self, tr('dlg_save_error_title'),
+                tr('dlg_agent_mcp_save_failed').format(error=exc)
             )
             return
         # Refresh just the count label (avoid full list rebuild — would lose checkbox focus)
         global_mcps = self._list_global_mcp_servers()
         disabled_count = len(settings.get_disabled_mcp_sanitized())
         self.global_mcp_count_label.setText(
-            f"{disabled_count} z {len(global_mcps)} globalnych wyłączone dla tego agenta."
+            tr('dlg_agent_disabled_of_global').format(disabled=disabled_count, total=len(global_mcps))
         )
 
     def _add_memory_file_chip(self, file_path: str):
@@ -1558,9 +1529,9 @@ class AgentConfigDialog(QDialog):
 
     def _add_memory_file(self):
         """Open file dialog to add memory files."""
-        file_filter = "Pliki pamięci (*.md *.txt *.json);;Wszystkie pliki (*)"
+        file_filter = tr('dlg_mem_file_filter')
         files, _ = styled_get_open_file_names(
-            self, "Wybierz pliki pamięci", str(Path.home()), file_filter
+            self, tr('dlg_agent_choose_memory_files'), str(Path.home()), file_filter
         )
 
         if not files:
@@ -1587,7 +1558,7 @@ class AgentsManagerDialog(QDialog):
 
     def __init__(self, parent=None, agents: list = None, memory_projects: list = None):
         super().__init__(parent)
-        self.setWindowTitle("Zarządzaj agentami")
+        self.setWindowTitle(tr('dlg_agents_title'))
         self.setMinimumSize(600, 450)
 
         self.agents = [a.copy() for a in (agents or [])]
@@ -1606,12 +1577,12 @@ class AgentsManagerDialog(QDialog):
         layout.setSpacing(10)
 
         # Header
-        header = QLabel("Zarządzaj agentami (zakładkami terminala)")
+        header = QLabel(tr('dlg_agents_header'))
         header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
         layout.addWidget(header)
 
         # Description
-        desc = QLabel("Każdy agent to osobna zakładka z własnym terminalem i przypisanym projektem pamięci.")
+        desc = QLabel(tr('dlg_agents_desc'))
         desc.setStyleSheet("color: #aaaaaa; font-size: 11px;")
         desc.setWordWrap(True)
         layout.addWidget(desc)
@@ -1648,37 +1619,37 @@ class AgentsManagerDialog(QDialog):
         btn_layout = QVBoxLayout()
         btn_layout.setSpacing(5)
 
-        self.up_btn = QPushButton("▲ W górę")
+        self.up_btn = QPushButton(tr('dlg_agents_move_up'))
         self.up_btn.clicked.connect(self._move_up)
         btn_layout.addWidget(self.up_btn)
 
-        self.down_btn = QPushButton("▼ W dół")
+        self.down_btn = QPushButton(tr('dlg_agents_move_down'))
         self.down_btn.clicked.connect(self._move_down)
         btn_layout.addWidget(self.down_btn)
 
         btn_layout.addSpacing(15)
 
-        self.run_btn = QPushButton("▶️ Uruchom")
+        self.run_btn = QPushButton(tr('dlg_agents_run'))
         self.run_btn.clicked.connect(self._run_agent)
         self.run_btn.setStyleSheet("QPushButton { color: #3b82f6; }")
         btn_layout.addWidget(self.run_btn)
 
         btn_layout.addSpacing(15)
 
-        self.add_btn = QPushButton("➕ Dodaj")
+        self.add_btn = QPushButton(tr('dlg_agents_add'))
         self.add_btn.clicked.connect(self._add_agent)
         self.add_btn.setStyleSheet("QPushButton { color: #22c55e; }")
         btn_layout.addWidget(self.add_btn)
 
-        self.edit_btn = QPushButton("✏️ Edytuj")
+        self.edit_btn = QPushButton(tr('dlg_agents_edit'))
         self.edit_btn.clicked.connect(self._edit_agent)
         btn_layout.addWidget(self.edit_btn)
 
-        self.duplicate_btn = QPushButton("📋 Duplikuj")
+        self.duplicate_btn = QPushButton(tr('dlg_agents_duplicate'))
         self.duplicate_btn.clicked.connect(self._duplicate_agent)
         btn_layout.addWidget(self.duplicate_btn)
 
-        self.delete_btn = QPushButton("🗑️ Usuń")
+        self.delete_btn = QPushButton(tr('dlg_agents_delete'))
         self.delete_btn.clicked.connect(self._delete_agent)
         self.delete_btn.setStyleSheet("QPushButton { color: #ef4444; }")
         btn_layout.addWidget(self.delete_btn)
@@ -1692,11 +1663,11 @@ class AgentsManagerDialog(QDialog):
         bottom_layout = QHBoxLayout()
         bottom_layout.addStretch()
 
-        cancel_btn = QPushButton("Anuluj")
+        cancel_btn = QPushButton(tr('dlg_cancel'))
         cancel_btn.clicked.connect(self.reject)
         bottom_layout.addWidget(cancel_btn)
 
-        save_btn = QPushButton("Zapisz")
+        save_btn = QPushButton(tr('dlg_save'))
         save_btn.clicked.connect(self.accept)
         save_btn.setStyleSheet("QPushButton { color: #22c55e; font-weight: bold; }")
         bottom_layout.addWidget(save_btn)
@@ -1724,20 +1695,20 @@ class AgentsManagerDialog(QDialog):
             memory_files = agent.get('memory_files', [])
             file_count = len(memory_files)
             if file_count == 0:
-                memory_info = "Brak plików"
+                memory_info = tr('dlg_agents_no_files')
             elif file_count == 1:
-                memory_info = "1 plik"
+                memory_info = tr('dlg_agents_files_1')
             elif file_count < 5:
-                memory_info = f"{file_count} pliki"
+                memory_info = tr('dlg_agents_files_few').format(n=file_count)
             else:
-                memory_info = f"{file_count} plików"
+                memory_info = tr('dlg_agents_files_many').format(n=file_count)
 
             # Model used by this agent
             model_key = agent.get('model', DEFAULT_AGENT_MODEL)
-            model_label = CLAUDE_MODELS_SHORT.get(model_key, model_key)
+            model_label_text = model_label_short(model_key)
 
             auto_start = agent.get('auto_start', True)
-            agent_name = agent.get('name', 'Bez nazwy')
+            agent_name = agent.get('name', tr('dlg_agents_unnamed'))
 
             # Empty list item — visual content lives in the attached widget.
             item = QListWidgetItem()
@@ -1774,20 +1745,20 @@ class AgentsManagerDialog(QDialog):
             files_label.setStyleSheet(info_style)
             files_label.setToolTip(self._format_memory_files_tooltip(agent))
 
-            model_mid_label = QLabel(f"  •  🤖 {model_label}  •  ")
+            model_mid_label = QLabel(f"  •  🤖 {model_label_text}  •  ")
             model_mid_label.setStyleSheet(info_style)
 
             # Placeholder — właściwą zawartość wstawi _on_summary_ready po wątku.
-            skills_label = QLabel("🧩 ⏳ ładowanie…")
+            skills_label = QLabel(f"🧩 {tr('dlg_agents_loading')}")
             skills_label.setStyleSheet(info_style)
-            skills_label.setToolTip("Ładuję listę skilli tego agenta...")
+            skills_label.setToolTip(tr('dlg_agents_skills_loading_tooltip'))
 
             mcp_sep_label = QLabel("  •  ")
             mcp_sep_label.setStyleSheet(info_style)
 
-            mcp_label = QLabel("🔌 ⏳ ładowanie…")
+            mcp_label = QLabel(f"🔌 {tr('dlg_agents_loading')}")
             mcp_label.setStyleSheet(info_style)
-            mcp_label.setToolTip("Ładuję listę MCP tego agenta (wymaga uruchomienia 'claude mcp list')...")
+            mcp_label.setToolTip(tr('dlg_agents_mcp_loading_tooltip'))
 
             # Zapamiętaj referencje, żeby slot mógł je zaktualizować po przyjściu wyniku z wątku.
             self._row_labels[row] = {"skills": skills_label, "mcp": mcp_label}
@@ -1830,7 +1801,7 @@ class AgentsManagerDialog(QDialog):
         try:
             text, tooltip = self._format_skills_summary(agent)
         except Exception as e:
-            text, tooltip = "⚠ błąd skille", f"Nie udało się załadować skilli:\n{e}"
+            text, tooltip = tr('dlg_agents_skills_error'), tr('dlg_agents_skills_error_tooltip').format(error=e)
         if token == self._populate_token:
             self._summary_ready.emit(token, row, "skills", text, tooltip)
 
@@ -1838,7 +1809,7 @@ class AgentsManagerDialog(QDialog):
         try:
             text, tooltip = self._format_mcp_summary(agent)
         except Exception as e:
-            text, tooltip = "⚠ błąd MCP", f"Nie udało się załadować MCP:\n{e}"
+            text, tooltip = tr('dlg_agents_mcp_error'), tr('dlg_agents_mcp_error_tooltip').format(error=e)
         if token == self._populate_token:
             self._summary_ready.emit(token, row, "mcp", text, tooltip)
 
@@ -1868,33 +1839,33 @@ class AgentsManagerDialog(QDialog):
         """
         files = agent.get('memory_files') or []
         if not files:
-            return "Pliki pamięci tego agenta:\n\n   (brak plików pamięci)"
-        lines = ["Pliki pamięci tego agenta:", ""]
+            return tr('dlg_agents_mem_tooltip_none')
+        lines = [tr('dlg_agents_mem_tooltip_header'), ""]
         for path in files:
             lines.append(f"   • {Path(path).name}")
         return "\n".join(lines)
 
     @staticmethod
     def _pl_local(n: int) -> str:
-        """Polish plural for 'lokalny': 1 lokalny, 2-4 lokalne, else lokalnych."""
+        """Liczba mnoga dla 'lokalny' (PL ma formy 1/2-4/inne; EN ma jedną)."""
         if n == 1:
-            return f"{n} lokalny"
+            return tr('dlg_agents_local_1').format(n=n)
         last_digit = n % 10
         last_two = n % 100
         if 2 <= last_digit <= 4 and not 12 <= last_two <= 14:
-            return f"{n} lokalne"
-        return f"{n} lokalnych"
+            return tr('dlg_agents_local_few').format(n=n)
+        return tr('dlg_agents_local_many').format(n=n)
 
     @staticmethod
     def _pl_global_only(n: int) -> str:
-        """Polish plural for 'globalny' (no fraction): 1, 2-4, else."""
+        """Liczba mnoga dla 'globalny' (bez ułamka): 1, 2-4, inne."""
         if n == 1:
-            return f"{n} globalny"
+            return tr('dlg_agents_global_1').format(n=n)
         last_digit = n % 10
         last_two = n % 100
         if 2 <= last_digit <= 4 and not 12 <= last_two <= 14:
-            return f"{n} globalne"
-        return f"{n} globalnych"
+            return tr('dlg_agents_global_few').format(n=n)
+        return tr('dlg_agents_global_many').format(n=n)
 
     def _format_skills_summary(self, agent: dict) -> tuple:
         """Compute skills info for one agent's row.
@@ -1908,9 +1879,8 @@ class AgentsManagerDialog(QDialog):
         # Invalid working dir → can't read local skills or disabled list.
         if not working_dir or not Path(working_dir).is_dir():
             return (
-                "⚠ skille nieznane",
-                "Katalog roboczy agenta jest pusty lub nie istnieje —\n"
-                "nie da się odczytać listy skilli."
+                tr('dlg_agents_skills_unknown'),
+                tr('dlg_agents_skills_unknown_tooltip')
             )
 
         wd_path = Path(working_dir)
@@ -1935,35 +1905,33 @@ class AgentsManagerDialog(QDialog):
 
         # === Tekst wyświetlany ===
         if n_global_total == 0 and n_local == 0:
-            display = "🚫 brak skilli"
+            display = tr('dlg_agents_no_skills')
         elif n_disabled == 0 and n_local == 0:
-            display = f"🧩 {self._pl_global_only(n_global_on)}"
+            display = tr('dlg_agents_skills_global').format(**{'global': self._pl_global_only(n_global_on)})
         elif n_disabled == 0 and n_local > 0:
-            display = (
-                f"🧩 {self._pl_global_only(n_global_on)} + "
-                f"{self._pl_local(n_local)}"
+            display = tr('dlg_agents_skills_global_local').format(
+                **{'global': self._pl_global_only(n_global_on), 'local': self._pl_local(n_local)}
             )
         elif n_disabled > 0 and n_local == 0:
-            display = f"✂️ {n_global_on} z {n_global_total} globalnych"
+            display = tr('dlg_agents_skills_cut').format(on=n_global_on, total=n_global_total)
         else:
-            display = (
-                f"✂️ {n_global_on} z {n_global_total} globalnych + "
-                f"{self._pl_local(n_local)}"
+            display = tr('dlg_agents_skills_cut_local').format(
+                on=n_global_on, total=n_global_total, local=self._pl_local(n_local)
             )
 
         # === Tooltip — pełna lista nazw ===
-        tooltip_parts = ["Skille tego agenta:"]
+        tooltip_parts = [tr('dlg_agents_skills_tooltip_header')]
         if enabled_global:
-            tooltip_parts.append(f"\n✓ Globalne aktywne ({len(enabled_global)}):")
+            tooltip_parts.append(tr('dlg_agents_tooltip_global_active').format(n=len(enabled_global)))
             tooltip_parts.extend(f"   • {name}" for name in enabled_global)
         if disabled_global:
-            tooltip_parts.append(f"\n✗ Globalne wyłączone ({len(disabled_global)}):")
+            tooltip_parts.append(tr('dlg_agents_tooltip_global_disabled').format(n=len(disabled_global)))
             tooltip_parts.extend(f"   • {name}" for name in disabled_global)
         if local_names:
-            tooltip_parts.append(f"\n+ Lokalne ({len(local_names)}):")
+            tooltip_parts.append(tr('dlg_agents_tooltip_local').format(n=len(local_names)))
             tooltip_parts.extend(f"   • {name}" for name in local_names)
         if not enabled_global and not disabled_global and not local_names:
-            tooltip_parts.append("\n(brak zainstalowanych skilli)")
+            tooltip_parts.append(tr('dlg_agents_skills_tooltip_none'))
 
         return (display, "\n".join(tooltip_parts))
 
@@ -1981,9 +1949,8 @@ class AgentsManagerDialog(QDialog):
 
         if not working_dir or not Path(working_dir).is_dir():
             return (
-                "⚠ MCP nieznane",
-                "Katalog roboczy agenta jest pusty lub nie istnieje —\n"
-                "nie da się odczytać listy MCP."
+                tr('dlg_agents_mcp_unknown'),
+                tr('dlg_agents_mcp_unknown_tooltip')
             )
 
         wd_path = Path(working_dir)
@@ -1992,8 +1959,8 @@ class AgentsManagerDialog(QDialog):
             servers = McpManager(working_dir=wd_path).list_servers()
         except Exception:
             return (
-                "⚠ MCP nieznane",
-                "Nie udało się pobrać listy MCP (komenda 'claude' nieaktywna?)."
+                tr('dlg_agents_mcp_unknown'),
+                tr('dlg_agents_mcp_fetch_failed_tooltip')
             )
 
         # Wyłączone dla tego agenta — porównujemy po sanitized name
@@ -2015,35 +1982,33 @@ class AgentsManagerDialog(QDialog):
 
         # === Tekst wyświetlany ===
         if n_global_total == 0 and n_local == 0:
-            display = "🚫 brak MCP"
+            display = tr('dlg_agents_no_mcp')
         elif n_disabled == 0 and n_local == 0:
-            display = f"🔌 {self._pl_global_only(n_global_on)}"
+            display = tr('dlg_agents_mcp_global').format(**{'global': self._pl_global_only(n_global_on)})
         elif n_disabled == 0 and n_local > 0:
-            display = (
-                f"🔌 {self._pl_global_only(n_global_on)} + "
-                f"{self._pl_local(n_local)}"
+            display = tr('dlg_agents_mcp_global_local').format(
+                **{'global': self._pl_global_only(n_global_on), 'local': self._pl_local(n_local)}
             )
         elif n_disabled > 0 and n_local == 0:
-            display = f"✂️ {n_global_on} z {n_global_total} globalnych MCP"
+            display = tr('dlg_agents_mcp_cut').format(on=n_global_on, total=n_global_total)
         else:
-            display = (
-                f"✂️ {n_global_on} z {n_global_total} globalnych MCP + "
-                f"{self._pl_local(n_local)}"
+            display = tr('dlg_agents_mcp_cut_local').format(
+                on=n_global_on, total=n_global_total, local=self._pl_local(n_local)
             )
 
         # === Tooltip — pełna lista nazw ===
-        tooltip_parts = ["Serwery MCP tego agenta:"]
+        tooltip_parts = [tr('dlg_agents_mcp_tooltip_header')]
         if enabled_global:
-            tooltip_parts.append(f"\n✓ Globalne aktywne ({len(enabled_global)}):")
+            tooltip_parts.append(tr('dlg_agents_tooltip_global_active').format(n=len(enabled_global)))
             tooltip_parts.extend(f"   • {s.name}" for s in enabled_global)
         if disabled_global:
-            tooltip_parts.append(f"\n✗ Globalne wyłączone ({len(disabled_global)}):")
+            tooltip_parts.append(tr('dlg_agents_tooltip_global_disabled').format(n=len(disabled_global)))
             tooltip_parts.extend(f"   • {s.name}" for s in disabled_global)
         if local_servers:
-            tooltip_parts.append(f"\n+ Lokalne ({len(local_servers)}):")
+            tooltip_parts.append(tr('dlg_agents_tooltip_local').format(n=len(local_servers)))
             tooltip_parts.extend(f"   • {s.name}" for s in local_servers)
         if not enabled_global and not disabled_global and not local_servers:
-            tooltip_parts.append("\n(brak zarejestrowanych MCP)")
+            tooltip_parts.append(tr('dlg_agents_mcp_tooltip_none'))
 
         return (display, "\n".join(tooltip_parts))
 
@@ -2072,7 +2037,7 @@ class AgentsManagerDialog(QDialog):
         """Run selected agent (open tab immediately)."""
         row = self._get_selected_index()
         if row < 0:
-            QMessageBox.warning(self, "Brak wyboru", "Wybierz agenta do uruchomienia.")
+            QMessageBox.warning(self, tr('dlg_no_selection_title'), tr('dlg_agents_select_to_run'))
             return
 
         # Mark agent for immediate run and force Claude start
@@ -2097,7 +2062,7 @@ class AgentsManagerDialog(QDialog):
         """Edit selected agent."""
         row = self._get_selected_index()
         if row < 0:
-            QMessageBox.warning(self, "Brak wyboru", "Wybierz agenta do edycji.")
+            QMessageBox.warning(self, tr('dlg_no_selection_title'), tr('dlg_agents_select_to_edit'))
             return
 
         agent = self.agents[row]
@@ -2111,12 +2076,12 @@ class AgentsManagerDialog(QDialog):
         """Duplicate selected agent."""
         row = self._get_selected_index()
         if row < 0:
-            QMessageBox.warning(self, "Brak wyboru", "Wybierz agenta do duplikacji.")
+            QMessageBox.warning(self, tr('dlg_no_selection_title'), tr('dlg_agents_select_to_duplicate'))
             return
 
         agent = self.agents[row].copy()
         agent['id'] = str(uuid.uuid4())[:8]
-        agent['name'] = f"{agent.get('name', 'Agent')} (kopia)"
+        agent['name'] = tr('dlg_agents_copy_suffix').format(name=agent.get('name', tr('dlg_agent_fallback_name')))
         self.agents.append(agent)
         self._populate_list()
         self.list_widget.setCurrentRow(len(self.agents) - 1)
@@ -2125,17 +2090,17 @@ class AgentsManagerDialog(QDialog):
         """Delete selected agent."""
         row = self._get_selected_index()
         if row < 0:
-            QMessageBox.warning(self, "Brak wyboru", "Wybierz agenta do usunięcia.")
+            QMessageBox.warning(self, tr('dlg_no_selection_title'), tr('dlg_agents_select_to_delete'))
             return
 
         if len(self.agents) <= 1:
-            QMessageBox.warning(self, "Nie można usunąć", "Musi pozostać co najmniej jeden agent.")
+            QMessageBox.warning(self, tr('dlg_agents_cannot_delete_title'), tr('dlg_agents_must_keep_one'))
             return
 
         agent = self.agents[row]
         reply = QMessageBox.question(
-            self, "Potwierdź usunięcie",
-            f"Czy na pewno usunąć agenta \"{agent.get('name')}\"?",
+            self, tr('dlg_confirm_delete_title'),
+            tr('dlg_agents_confirm_delete').format(name=agent.get('name')),
             QMessageBox.Yes | QMessageBox.No
         )
         if reply == QMessageBox.Yes:
@@ -2166,11 +2131,11 @@ class SkillsManagerDialog(QDialog):
         self._is_per_agent = skills_dir is not None
 
         if self._is_per_agent and agent_name:
-            self.setWindowTitle(f"Skille agenta — {agent_name}")
+            self.setWindowTitle(tr('dlg_skills_agent_title_named').format(name=agent_name))
         elif self._is_per_agent:
-            self.setWindowTitle("Skille agenta")
+            self.setWindowTitle(tr('dlg_skills_agent_title'))
         else:
-            self.setWindowTitle("Umiejętności (Skills)")
+            self.setWindowTitle(tr('dlg_skills_global_title'))
 
         self.setMinimumSize(700, 500)
         self.skills_manager = SkillsManager(skills_dir=skills_dir)
@@ -2184,35 +2149,27 @@ class SkillsManagerDialog(QDialog):
 
         if self._is_per_agent:
             header_text = (
-                f"🧩 Skille agenta — {self._agent_name}"
+                tr('dlg_skills_agent_header_named').format(name=self._agent_name)
                 if self._agent_name
-                else "🧩 Skille agenta"
+                else tr('dlg_skills_agent_header')
             )
         else:
-            header_text = "Umiejętności (Skills)"
+            header_text = tr('dlg_skills_global_title')
 
         header = QLabel(header_text)
         header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
         layout.addWidget(header)
 
         if self._is_per_agent:
-            desc_text = (
-                "Skille tutaj są widoczne TYLKO dla tego agenta. "
-                "Globalne (dla wszystkich agentów) zarządzasz w menu "
-                "Rozszerzenia → Umiejętności (Skills)."
-            )
+            desc_text = tr('dlg_skills_agent_desc')
         else:
-            desc_text = (
-                "Skille rozszerzają możliwości Claude Code o gotowe procedury "
-                "(np. analiza PDF, tworzenie dokumentów). Claude sam je aktywuje "
-                "gdy ich opis pasuje do treści rozmowy."
-            )
+            desc_text = tr('dlg_skills_global_desc')
         desc = QLabel(desc_text)
         desc.setStyleSheet("color: #cccccc; font-size: 13px;")
         desc.setWordWrap(True)
         layout.addWidget(desc)
 
-        path_label = QLabel(f"📂 Lokalizacja: {self.skills_manager.skills_dir}")
+        path_label = QLabel(tr('dlg_skills_location').format(path=self.skills_manager.skills_dir))
         path_label.setStyleSheet("color: #aaaaaa; font-size: 12px;")
         layout.addWidget(path_label)
 
@@ -2241,29 +2198,29 @@ class SkillsManagerDialog(QDialog):
         btn_layout = QVBoxLayout()
         btn_layout.setSpacing(5)
 
-        self.add_zip_btn = QPushButton("📦 Dodaj z ZIP")
+        self.add_zip_btn = QPushButton(tr('dlg_skills_add_zip'))
         self.add_zip_btn.clicked.connect(self._add_from_zip)
         self.add_zip_btn.setStyleSheet("QPushButton { color: #22c55e; }")
         btn_layout.addWidget(self.add_zip_btn)
 
-        self.add_folder_btn = QPushButton("📂 Dodaj z folderu")
+        self.add_folder_btn = QPushButton(tr('dlg_skills_add_folder'))
         self.add_folder_btn.clicked.connect(self._add_from_folder)
         self.add_folder_btn.setStyleSheet("QPushButton { color: #22c55e; }")
         btn_layout.addWidget(self.add_folder_btn)
 
         btn_layout.addSpacing(15)
 
-        self.open_folder_btn = QPushButton("📁 Pokaż folder")
+        self.open_folder_btn = QPushButton(tr('dlg_skills_show_folder'))
         self.open_folder_btn.clicked.connect(self._open_folder)
         btn_layout.addWidget(self.open_folder_btn)
 
-        self.refresh_btn = QPushButton("🔄 Odśwież")
+        self.refresh_btn = QPushButton(tr('dlg_skills_refresh'))
         self.refresh_btn.clicked.connect(self._populate_list)
         btn_layout.addWidget(self.refresh_btn)
 
         btn_layout.addSpacing(15)
 
-        self.delete_btn = QPushButton("🗑️ Usuń")
+        self.delete_btn = QPushButton(tr('dlg_skills_delete'))
         self.delete_btn.clicked.connect(self._delete_skill)
         self.delete_btn.setStyleSheet("QPushButton { color: #ef4444; }")
         btn_layout.addWidget(self.delete_btn)
@@ -2276,7 +2233,7 @@ class SkillsManagerDialog(QDialog):
         bottom_layout = QHBoxLayout()
         bottom_layout.addStretch()
 
-        close_btn = QPushButton("Zamknij")
+        close_btn = QPushButton(tr('dlg_close'))
         close_btn.clicked.connect(self.accept)
         bottom_layout.addWidget(close_btn)
 
@@ -2297,10 +2254,7 @@ class SkillsManagerDialog(QDialog):
             placeholder_layout = QVBoxLayout(placeholder_widget)
             placeholder_layout.setContentsMargins(16, 8, 16, 8)
             placeholder_layout.setSpacing(4)
-            empty_label = QLabel(
-                "Brak zainstalowanych skilli.\n"
-                "Użyj „Dodaj z ZIP\" lub „Dodaj z folderu\" żeby zainstalować pierwszy."
-            )
+            empty_label = QLabel(tr('dlg_skills_empty'))
             empty_label.setStyleSheet(
                 "color: #cccccc; font-size: 14px; background: transparent;"
             )
@@ -2330,7 +2284,7 @@ class SkillsManagerDialog(QDialog):
             )
             row_layout.addWidget(name_label)
 
-            description = skill.description or "(brak opisu)"
+            description = skill.description or tr('dlg_skills_no_desc')
             desc_label = QLabel(f"   {description}")
             desc_label.setStyleSheet(
                 "color: #aaaaaa; font-size: 11px; background: transparent; border: none;"
@@ -2348,9 +2302,9 @@ class SkillsManagerDialog(QDialog):
         return data if isinstance(data, Skill) else None
 
     def _add_from_zip(self):
-        file_filter = "Plik ZIP (*.zip);;Wszystkie pliki (*)"
+        file_filter = tr('dlg_skills_zip_filter')
         zip_path, _ = styled_get_open_file_name(
-            self, "Wybierz plik ZIP ze skillem", str(Path.home()), file_filter
+            self, tr('dlg_skills_choose_zip'), str(Path.home()), file_filter
         )
         if not zip_path:
             return
@@ -2363,7 +2317,7 @@ class SkillsManagerDialog(QDialog):
 
     def _add_from_folder(self):
         folder = styled_get_existing_directory(
-            self, "Wybierz folder ze skillem", str(Path.home())
+            self, tr('dlg_skills_choose_folder'), str(Path.home())
         )
         if not folder:
             return
@@ -2379,11 +2333,11 @@ class SkillsManagerDialog(QDialog):
             skill = install_fn(False)
         except SkillInstallError as exc:
             msg = str(exc)
-            if "już istnieje" in msg:
+            if tr('dlg_skills_already_exists_marker') in msg:
                 reply = QMessageBox.question(
                     self,
-                    "Skill już istnieje",
-                    f"{msg}\n\nNadpisać istniejącego skilla?",
+                    tr('dlg_skills_already_exists_title'),
+                    tr('dlg_skills_overwrite_prompt').format(msg=msg),
                     QMessageBox.Yes | QMessageBox.No,
                     QMessageBox.No,
                 )
@@ -2392,17 +2346,17 @@ class SkillsManagerDialog(QDialog):
                 try:
                     skill = install_fn(True)
                 except SkillInstallError as exc2:
-                    QMessageBox.warning(self, "Błąd instalacji", str(exc2))
+                    QMessageBox.warning(self, tr('dlg_install_error_title'), str(exc2))
                     return
             else:
-                QMessageBox.warning(self, "Błąd instalacji", msg)
+                QMessageBox.warning(self, tr('dlg_install_error_title'), msg)
                 return
         except Exception as exc:
-            QMessageBox.warning(self, "Błąd instalacji", f"Nieoczekiwany błąd: {exc}")
+            QMessageBox.warning(self, tr('dlg_install_error_title'), tr('dlg_skills_unexpected_error').format(error=exc))
             return
 
         QMessageBox.information(
-            self, "Zainstalowano", f"Skill „{skill.name}\" został zainstalowany."
+            self, tr('dlg_installed_title'), tr('dlg_skills_installed_msg').format(name=skill.name)
         )
         self._populate_list()
 
@@ -2418,14 +2372,13 @@ class SkillsManagerDialog(QDialog):
     def _delete_skill(self):
         skill = self._selected_skill()
         if skill is None:
-            QMessageBox.warning(self, "Brak wyboru", "Wybierz skill do usunięcia.")
+            QMessageBox.warning(self, tr('dlg_no_selection_title'), tr('dlg_skills_select_to_delete'))
             return
 
         reply = QMessageBox.question(
             self,
-            "Potwierdź usunięcie",
-            f"Czy na pewno usunąć skill „{skill.name}\"?\n"
-            f"Folder zostanie nieodwracalnie usunięty:\n{skill.folder_path}",
+            tr('dlg_confirm_delete_title'),
+            tr('dlg_skills_confirm_delete').format(name=skill.name, path=skill.folder_path),
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )
@@ -2435,13 +2388,13 @@ class SkillsManagerDialog(QDialog):
         try:
             removed = self.skills_manager.remove(skill.folder_name)
         except SkillInstallError as exc:
-            QMessageBox.warning(self, "Błąd usuwania", str(exc))
+            QMessageBox.warning(self, tr('dlg_delete_error_title'), str(exc))
             return
 
         if removed:
-            QMessageBox.information(self, "Usunięto", f"Skill „{skill.name}\" został usunięty.")
+            QMessageBox.information(self, tr('dlg_removed_title'), tr('dlg_skills_removed_msg').format(name=skill.name))
         else:
-            QMessageBox.warning(self, "Nie znaleziono", "Folder skilla już nie istniał.")
+            QMessageBox.warning(self, tr('dlg_not_found_title'), tr('dlg_skills_folder_gone'))
         self._populate_list()
 
 
@@ -2449,19 +2402,35 @@ class SkillsManagerDialog(QDialog):
 # MCP Manager — zarządzanie serwerami Model Context Protocol
 # ============================================================================
 
-# Mapowanie statusu na ikonę + kolor (do listy)
-_MCP_STATUS_BADGES = {
-    STATUS_CONNECTED: ("✅", "#22c55e", "Aktywny"),
-    STATUS_NEEDS_AUTH: ("🔐", "#eab308", "Wymaga autoryzacji"),
-    STATUS_FAILED: ("❌", "#ef4444", "Błąd połączenia"),
-    STATUS_UNKNOWN: ("❓", "#94a3b8", "Status nieznany"),
+# Mapowanie statusu na ikonę + kolor (do listy). Etykieta tekstowa jest
+# tłumaczona w locie przez _mcp_status_badge() — tu trzymamy tylko ikonę,
+# kolor i klucz tłumaczenia.
+_MCP_STATUS_BADGE_DATA = {
+    STATUS_CONNECTED: ("✅", "#22c55e", "dlg_mcp_status_connected"),
+    STATUS_NEEDS_AUTH: ("🔐", "#eab308", "dlg_mcp_status_needs_auth"),
+    STATUS_FAILED: ("❌", "#ef4444", "dlg_mcp_status_failed"),
+    STATUS_UNKNOWN: ("❓", "#94a3b8", "dlg_mcp_status_unknown"),
 }
 
-_MCP_SCOPE_LABEL = {
-    "user": "globalny",
-    "local": "lokalny (agenta)",
-    "managed": "zarządzany (claude.ai)",
+_MCP_SCOPE_LABEL_KEY = {
+    "user": "dlg_mcp_scope_user",
+    "local": "dlg_mcp_scope_local",
+    "managed": "dlg_mcp_scope_managed",
 }
+
+
+def _mcp_status_badge(status):
+    """Zwraca (ikona, kolor, przetłumaczona_etykieta) dla statusu MCP."""
+    icon, color, key = _MCP_STATUS_BADGE_DATA.get(
+        status, _MCP_STATUS_BADGE_DATA[STATUS_UNKNOWN]
+    )
+    return icon, color, tr(key)
+
+
+def _mcp_scope_label(scope: str) -> str:
+    """Przetłumaczona etykieta zakresu MCP (fallback: surowy scope)."""
+    key = _MCP_SCOPE_LABEL_KEY.get(scope)
+    return tr(key) if key else scope
 
 
 class McpManagerDialog(QDialog):
@@ -2482,11 +2451,11 @@ class McpManagerDialog(QDialog):
         self._is_per_agent = working_dir is not None
 
         if self._is_per_agent and agent_name:
-            self.setWindowTitle(f"Serwery MCP agenta — {agent_name}")
+            self.setWindowTitle(tr('dlg_mcp_agent_title_named').format(name=agent_name))
         elif self._is_per_agent:
-            self.setWindowTitle("Serwery MCP agenta")
+            self.setWindowTitle(tr('dlg_mcp_agent_title'))
         else:
-            self.setWindowTitle("Serwery MCP")
+            self.setWindowTitle(tr('dlg_mcp_global_title'))
 
         self.setMinimumSize(780, 560)
         self.manager = McpManager(working_dir=self._working_dir)
@@ -2502,21 +2471,13 @@ class McpManagerDialog(QDialog):
 
         if self._is_per_agent:
             header_text = (
-                f"🔌 Serwery MCP agenta — {self._agent_name}"
-                if self._agent_name else "🔌 Serwery MCP agenta"
+                tr('dlg_mcp_agent_header_named').format(name=self._agent_name)
+                if self._agent_name else tr('dlg_mcp_agent_header')
             )
-            desc_text = (
-                "Serwery dodane tutaj działają TYLKO w katalogu tego agenta. "
-                "Globalne serwery (dla wszystkich agentów) zarządzasz w menu "
-                "Rozszerzenia → Serwery MCP."
-            )
+            desc_text = tr('dlg_mcp_agent_desc')
         else:
-            header_text = "🔌 Serwery MCP (Model Context Protocol)"
-            desc_text = (
-                "Serwery MCP to „wtyczki z narzędziami\" dla Claude Code — "
-                "pozwalają agentowi czytać Twój dysk, kalendarz, bazy danych, "
-                "wysyłać wiadomości itp. Claude sam decyduje, kiedy ich użyć."
-            )
+            header_text = tr('dlg_mcp_global_header')
+            desc_text = tr('dlg_mcp_global_desc')
 
         header = QLabel(header_text)
         header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
@@ -2553,17 +2514,17 @@ class McpManagerDialog(QDialog):
         btn_layout = QVBoxLayout()
         btn_layout.setSpacing(5)
 
-        self.add_template_btn = QPushButton("📚 Dodaj z szablonu...")
+        self.add_template_btn = QPushButton(tr('dlg_mcp_add_template'))
         self.add_template_btn.clicked.connect(self._add_from_template)
         self.add_template_btn.setStyleSheet("QPushButton { color: #22c55e; }")
         btn_layout.addWidget(self.add_template_btn)
 
-        self.add_manual_btn = QPushButton("✏️ Dodaj ręcznie...")
+        self.add_manual_btn = QPushButton(tr('dlg_mcp_add_manual'))
         self.add_manual_btn.clicked.connect(self._add_manual)
         self.add_manual_btn.setStyleSheet("QPushButton { color: #22c55e; }")
         btn_layout.addWidget(self.add_manual_btn)
 
-        self.add_json_btn = QPushButton("📋 Dodaj z JSON...")
+        self.add_json_btn = QPushButton(tr('dlg_mcp_add_json'))
         self.add_json_btn.clicked.connect(self._add_from_json)
         self.add_json_btn.setStyleSheet("QPushButton { color: #22c55e; }")
         btn_layout.addWidget(self.add_json_btn)
@@ -2571,31 +2532,31 @@ class McpManagerDialog(QDialog):
         btn_layout.addSpacing(15)
 
         # Akcje na zaznaczonym serwerze
-        self.authorize_btn = QPushButton("🔓 Autoryzuj")
+        self.authorize_btn = QPushButton(tr('dlg_mcp_authorize'))
         self.authorize_btn.clicked.connect(self._authorize_selected)
         self.authorize_btn.setStyleSheet("QPushButton { color: #eab308; }")
-        self.authorize_btn.setToolTip("Dla serwerów wymagających autoryzacji (claude.ai, OAuth)")
+        self.authorize_btn.setToolTip(tr('dlg_mcp_authorize_tooltip'))
         btn_layout.addWidget(self.authorize_btn)
 
-        self.test_btn = QPushButton("🔍 Test")
+        self.test_btn = QPushButton(tr('dlg_mcp_test'))
         self.test_btn.clicked.connect(self._test_selected)
-        self.test_btn.setToolTip("Sprawdź czy zaznaczony serwer odpowiada")
+        self.test_btn.setToolTip(tr('dlg_mcp_test_tooltip'))
         btn_layout.addWidget(self.test_btn)
 
-        self.edit_btn = QPushButton("✏️ Edytuj")
+        self.edit_btn = QPushButton(tr('dlg_mcp_edit'))
         self.edit_btn.clicked.connect(self._edit_selected)
-        self.edit_btn.setToolTip("Edytuj zaznaczony serwer (nie działa dla zarządzanych przez claude.ai)")
+        self.edit_btn.setToolTip(tr('dlg_mcp_edit_tooltip'))
         btn_layout.addWidget(self.edit_btn)
 
         btn_layout.addSpacing(15)
 
-        self.refresh_btn = QPushButton("🔄 Odśwież")
+        self.refresh_btn = QPushButton(tr('dlg_mcp_refresh'))
         self.refresh_btn.clicked.connect(self._populate_list)
         btn_layout.addWidget(self.refresh_btn)
 
         btn_layout.addSpacing(15)
 
-        self.delete_btn = QPushButton("🗑️ Usuń")
+        self.delete_btn = QPushButton(tr('dlg_mcp_delete'))
         self.delete_btn.clicked.connect(self._delete_selected)
         self.delete_btn.setStyleSheet("QPushButton { color: #ef4444; }")
         btn_layout.addWidget(self.delete_btn)
@@ -2608,7 +2569,7 @@ class McpManagerDialog(QDialog):
         # Stopka
         bottom_layout = QHBoxLayout()
         bottom_layout.addStretch()
-        close_btn = QPushButton("Zamknij")
+        close_btn = QPushButton(tr('dlg_close'))
         close_btn.clicked.connect(self.accept)
         bottom_layout.addWidget(close_btn)
         layout.addLayout(bottom_layout)
@@ -2620,7 +2581,7 @@ class McpManagerDialog(QDialog):
         try:
             all_servers = self.manager.list_servers()
         except McpError as exc:
-            QMessageBox.warning(self, "Błąd", f"Nie udało się pobrać listy MCP:\n{exc}")
+            QMessageBox.warning(self, tr('dlg_error_title'), tr('dlg_mcp_fetch_failed').format(error=exc))
             all_servers = []
 
         # Filtr per-agent: pokazuj user + managed + local (z tego working_dir)
@@ -2638,10 +2599,7 @@ class McpManagerDialog(QDialog):
             placeholder_widget.setAttribute(Qt.WA_TranslucentBackground)
             pl_layout = QVBoxLayout(placeholder_widget)
             pl_layout.setContentsMargins(16, 8, 16, 8)
-            empty_label = QLabel(
-                "Brak serwerów MCP.\n"
-                "Użyj „Dodaj z szablonu\" żeby zainstalować pierwszy."
-            )
+            empty_label = QLabel(tr('dlg_mcp_empty'))
             empty_label.setStyleSheet(
                 "color: #cccccc; font-size: 14px; background: transparent;"
             )
@@ -2662,10 +2620,8 @@ class McpManagerDialog(QDialog):
             row_layout.setContentsMargins(4, 4, 4, 4)
             row_layout.setSpacing(2)
 
-            icon, color, status_label = _MCP_STATUS_BADGES.get(
-                srv.status, _MCP_STATUS_BADGES[STATUS_UNKNOWN]
-            )
-            scope_label = _MCP_SCOPE_LABEL.get(srv.scope, srv.scope)
+            icon, color, status_label = _mcp_status_badge(srv.status)
+            scope_label = _mcp_scope_label(srv.scope)
 
             name_html = (
                 f"{icon} <b>{srv.name}</b> "
@@ -2720,12 +2676,14 @@ class McpManagerDialog(QDialog):
         try:
             config_dlg.install_into(self.manager)
         except McpError as exc:
-            QMessageBox.warning(self, "Błąd dodawania", str(exc))
+            QMessageBox.warning(self, tr('dlg_add_error_title'), str(exc))
             return
         QMessageBox.information(
-            self, "Dodano",
-            f"Serwer „{config_dlg.final_name}\" został dodany.\n\n"
-            f"{picker.selected_template.install_hint}".strip()
+            self, tr('dlg_added_title'),
+            tr('dlg_mcp_added_msg').format(
+                name=config_dlg.final_name,
+                hint=picker.selected_template.install_hint
+            ).strip()
         )
         self._populate_list()
 
@@ -2740,9 +2698,9 @@ class McpManagerDialog(QDialog):
         try:
             dlg.install_into(self.manager)
         except McpError as exc:
-            QMessageBox.warning(self, "Błąd dodawania", str(exc))
+            QMessageBox.warning(self, tr('dlg_add_error_title'), str(exc))
             return
-        QMessageBox.information(self, "Dodano", f"Serwer „{dlg.final_name}\" został dodany.")
+        QMessageBox.information(self, tr('dlg_added_title'), tr('dlg_mcp_added_simple').format(name=dlg.final_name))
         self._populate_list()
 
     def _add_from_json(self):
@@ -2756,9 +2714,9 @@ class McpManagerDialog(QDialog):
         try:
             self.manager.add_from_json(dlg.final_name, dlg.json_text, scope=dlg.final_scope)
         except McpError as exc:
-            QMessageBox.warning(self, "Błąd dodawania", str(exc))
+            QMessageBox.warning(self, tr('dlg_add_error_title'), str(exc))
             return
-        QMessageBox.information(self, "Dodano", f"Serwer „{dlg.final_name}\" został dodany.")
+        QMessageBox.information(self, tr('dlg_added_title'), tr('dlg_mcp_added_simple').format(name=dlg.final_name))
         self._populate_list()
 
     # ---------- Akcje: autoryzacja ----------
@@ -2766,29 +2724,23 @@ class McpManagerDialog(QDialog):
     def _authorize_selected(self):
         srv = self._selected_server()
         if srv is None:
-            QMessageBox.warning(self, "Brak wyboru", "Wybierz serwer do autoryzacji.")
+            QMessageBox.warning(self, tr('dlg_no_selection_title'), tr('dlg_mcp_select_to_authorize'))
             return
 
         if srv.managed:
             # claude.ai* — autoryzacja przez panel claude.ai
             QDesktopServices.openUrl(QUrl("https://claude.ai/settings/connectors"))
             QMessageBox.information(
-                self, "Otwarto przeglądarkę",
-                f"Otworzyłem panel integracji claude.ai. Tam zaloguj się i autoryzuj "
-                f"serwer „{srv.name}\". Po zakończeniu wróć tutaj i kliknij „🔄 Odśwież\"."
+                self, tr('dlg_mcp_browser_opened_title'),
+                tr('dlg_mcp_browser_opened_msg').format(name=srv.name)
             )
             return
 
         # Serwery OAuth (Notion, Sentry, GitHub OAuth) — autoryzacja w terminalu Claude Code
         target_dir = self._working_dir or Path.home()
         QMessageBox.information(
-            self, "Autoryzacja OAuth",
-            f"Aby autoryzować serwer „{srv.name}\":\n\n"
-            f"1. Otwórz Claude Code w katalogu:\n   {target_dir}\n\n"
-            f"2. Poproś go o jakiekolwiek użycie tego serwera "
-            f"(np. „pokaż mi listę narzędzi z {srv.name}\").\n\n"
-            f"3. Claude Code otworzy przeglądarkę i poprowadzi przez OAuth.\n\n"
-            f"4. Wróć tutaj i kliknij „🔄 Odśwież\"."
+            self, tr('dlg_mcp_oauth_title'),
+            tr('dlg_mcp_oauth_msg').format(name=srv.name, dir=target_dir)
         )
 
     # ---------- Akcje: test połączenia ----------
@@ -2796,7 +2748,7 @@ class McpManagerDialog(QDialog):
     def _test_selected(self):
         srv = self._selected_server()
         if srv is None:
-            QMessageBox.warning(self, "Brak wyboru", "Wybierz serwer do przetestowania.")
+            QMessageBox.warning(self, tr('dlg_no_selection_title'), tr('dlg_mcp_select_to_test'))
             return
 
         # Cursor zajęty + ponowne pobranie statusu z `claude mcp list`
@@ -2810,28 +2762,26 @@ class McpManagerDialog(QDialog):
             elapsed_ms = int((_time.monotonic() - t0) * 1000)
         except McpError as exc:
             self.unsetCursor()
-            QMessageBox.warning(self, "Błąd testu", str(exc))
+            QMessageBox.warning(self, tr('dlg_mcp_test_error_title'), str(exc))
             return
         finally:
             self.unsetCursor()
 
         if updated is None:
             QMessageBox.warning(
-                self, "Nie znaleziono",
-                f"Serwer „{srv.name}\" nie istnieje już w konfiguracji."
+                self, tr('dlg_not_found_title'),
+                tr('dlg_mcp_server_gone').format(name=srv.name)
             )
             self._populate_list()
             return
 
-        icon, color, status_label = _MCP_STATUS_BADGES.get(
-            updated.status, _MCP_STATUS_BADGES[STATUS_UNKNOWN]
-        )
+        icon, color, status_label = _mcp_status_badge(updated.status)
         QMessageBox.information(
-            self, "Wynik testu",
-            f"{icon} Serwer „{updated.name}\"\n\n"
-            f"Status: {status_label}\n"
-            f"Czas sprawdzenia: {elapsed_ms} ms\n"
-            f"Surowy status: {updated.status_text or '(brak)'}"
+            self, tr('dlg_mcp_test_result_title'),
+            tr('dlg_mcp_test_result_msg').format(
+                icon=icon, name=updated.name, status=status_label,
+                ms=elapsed_ms, raw=updated.status_text or tr('dlg_mcp_raw_status_none')
+            )
         )
         self._populate_list()
 
@@ -2840,13 +2790,12 @@ class McpManagerDialog(QDialog):
     def _edit_selected(self):
         srv = self._selected_server()
         if srv is None:
-            QMessageBox.warning(self, "Brak wyboru", "Wybierz serwer do edycji.")
+            QMessageBox.warning(self, tr('dlg_no_selection_title'), tr('dlg_mcp_select_to_edit'))
             return
         if srv.managed:
             QMessageBox.information(
-                self, "Serwer zarządzany",
-                f"Serwer „{srv.name}\" jest zarządzany przez claude.ai i nie można go "
-                "edytować z poziomu tej aplikacji."
+                self, tr('dlg_mcp_managed_title'),
+                tr('dlg_mcp_managed_edit_msg').format(name=srv.name)
             )
             return
 
@@ -2868,12 +2817,12 @@ class McpManagerDialog(QDialog):
                 old_server=srv,
             )
         except McpError as exc:
-            QMessageBox.warning(self, "Błąd edycji", str(exc))
+            QMessageBox.warning(self, tr('dlg_edit_error_title'), str(exc))
             return
 
         QMessageBox.information(
-            self, "Zapisano",
-            f"Serwer „{dlg.final_name}\" został zaktualizowany."
+            self, tr('dlg_saved_title'),
+            tr('dlg_mcp_updated_msg').format(name=dlg.final_name)
         )
         self._populate_list()
 
@@ -2882,22 +2831,19 @@ class McpManagerDialog(QDialog):
     def _delete_selected(self):
         srv = self._selected_server()
         if srv is None:
-            QMessageBox.warning(self, "Brak wyboru", "Wybierz serwer do usunięcia.")
+            QMessageBox.warning(self, tr('dlg_no_selection_title'), tr('dlg_mcp_select_to_delete'))
             return
 
         if srv.managed:
             QMessageBox.information(
-                self, "Serwer zarządzany",
-                f"Serwer „{srv.name}\" jest zarządzany przez claude.ai i nie można go "
-                "usunąć z poziomu tej aplikacji. Aby go odłączyć, zaloguj się na "
-                "claude.ai i odepnij integrację w ustawieniach."
+                self, tr('dlg_mcp_managed_title'),
+                tr('dlg_mcp_managed_delete_msg').format(name=srv.name)
             )
             return
 
         reply = QMessageBox.question(
-            self, "Potwierdź usunięcie",
-            f"Czy na pewno usunąć serwer MCP „{srv.name}\" "
-            f"(scope: {_MCP_SCOPE_LABEL.get(srv.scope, srv.scope)})?",
+            self, tr('dlg_confirm_delete_title'),
+            tr('dlg_mcp_confirm_delete').format(name=srv.name, scope=_mcp_scope_label(srv.scope)),
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
         )
         if reply != QMessageBox.Yes:
@@ -2907,10 +2853,10 @@ class McpManagerDialog(QDialog):
             scope = srv.scope if srv.scope in ("user", "local") else None
             self.manager.remove(srv.name, scope=scope)
         except McpError as exc:
-            QMessageBox.warning(self, "Błąd usuwania", str(exc))
+            QMessageBox.warning(self, tr('dlg_delete_error_title'), str(exc))
             return
 
-        QMessageBox.information(self, "Usunięto", f"Serwer „{srv.name}\" został usunięty.")
+        QMessageBox.information(self, tr('dlg_removed_title'), tr('dlg_mcp_deleted_msg').format(name=srv.name))
         self._populate_list()
 
 
@@ -2919,7 +2865,7 @@ class _McpTemplatePickerDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Wybierz szablon MCP")
+        self.setWindowTitle(tr('dlg_mcptpl_title'))
         self.setMinimumSize(640, 460)
         self.selected_template: Optional[McpTemplate] = None
         self._setup_ui()
@@ -2928,14 +2874,11 @@ class _McpTemplatePickerDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
 
-        header = QLabel("📚 Wybierz szablon serwera MCP")
+        header = QLabel(tr('dlg_mcptpl_header'))
         header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
         layout.addWidget(header)
 
-        desc = QLabel(
-            "Każdy szablon to gotowy serwer MCP — kliknij i podaj wymagane dane "
-            "(np. token, ścieżkę). Szczegóły konfiguracji w następnym kroku."
-        )
+        desc = QLabel(tr('dlg_mcptpl_desc'))
         desc.setStyleSheet("color: #cccccc; font-size: 12px;")
         desc.setWordWrap(True)
         layout.addWidget(desc)
@@ -2988,10 +2931,10 @@ class _McpTemplatePickerDialog(QDialog):
 
         bottom = QHBoxLayout()
         bottom.addStretch()
-        cancel_btn = QPushButton("Anuluj")
+        cancel_btn = QPushButton(tr('dlg_cancel'))
         cancel_btn.clicked.connect(self.reject)
         bottom.addWidget(cancel_btn)
-        next_btn = QPushButton("Dalej →")
+        next_btn = QPushButton(tr('dlg_next'))
         next_btn.setDefault(True)
         next_btn.clicked.connect(self._accept)
         bottom.addWidget(next_btn)
@@ -3000,7 +2943,7 @@ class _McpTemplatePickerDialog(QDialog):
     def _accept(self):
         item = self.list_widget.currentItem()
         if item is None:
-            QMessageBox.warning(self, "Brak wyboru", "Wybierz szablon z listy.")
+            QMessageBox.warning(self, tr('dlg_no_selection_title'), tr('dlg_mcptpl_select'))
             return
         self.selected_template = item.data(Qt.UserRole)
         self.accept()
@@ -3011,7 +2954,7 @@ class _McpTemplateConfigDialog(QDialog):
 
     def __init__(self, parent, template: McpTemplate, default_scope: str, scope_locked: bool):
         super().__init__(parent)
-        self.setWindowTitle(f"Konfiguracja: {template.title}")
+        self.setWindowTitle(tr('dlg_mcpcfg_title').format(title=template.title))
         self.setMinimumWidth(560)
         self.template = template
         self._scope_locked = scope_locked
@@ -3046,7 +2989,7 @@ class _McpTemplateConfigDialog(QDialog):
         # Nazwa serwera
         name_input = QLineEdit(self.template.default_name)
         self._inputs["__name__"] = name_input
-        form.addRow("Nazwa serwera:", name_input)
+        form.addRow(tr('dlg_mcpcfg_server_name'), name_input)
 
         # args_required (placeholdery)
         for key, label in self.template.args_required:
@@ -3067,9 +3010,9 @@ class _McpTemplateConfigDialog(QDialog):
         # env_optional
         for key, label in self.template.env_optional:
             inp = QLineEdit()
-            inp.setPlaceholderText(f"(opcjonalne) {label}")
+            inp.setPlaceholderText(tr('dlg_mcpcfg_optional_prefix').format(label=label))
             self._inputs[f"envopt::{key}"] = inp
-            form.addRow(f"{key} (opc.):", inp)
+            form.addRow(tr('dlg_mcpcfg_env_opt_label').format(key=key), inp)
 
         # headers_required
         for key, label in self.template.headers_required:
@@ -3080,27 +3023,27 @@ class _McpTemplateConfigDialog(QDialog):
 
         # Scope
         self.scope_combo = QComboBox()
-        self.scope_combo.addItem("Globalny (dla wszystkich agentów)", "user")
-        self.scope_combo.addItem("Lokalny (tylko ten agent)", "local")
+        self.scope_combo.addItem(tr('dlg_mcpcfg_scope_user'), "user")
+        self.scope_combo.addItem(tr('dlg_mcpcfg_scope_local'), "local")
         idx = 0 if self._default_scope == "user" else 1
         self.scope_combo.setCurrentIndex(idx)
         self.scope_combo.setEnabled(not self._scope_locked)
-        form.addRow("Zakres:", self.scope_combo)
+        form.addRow(tr('dlg_mcpcfg_scope_label'), self.scope_combo)
 
         layout.addLayout(form)
 
         if self.template.homepage:
-            home = QLabel(f"<a href='{self.template.homepage}' style='color:#7dd3fc;'>📖 Dokumentacja serwera</a>")
+            home = QLabel(f"<a href='{self.template.homepage}' style='color:#7dd3fc;'>{tr('dlg_mcpcfg_docs')}</a>")
             home.setTextFormat(Qt.RichText)
             home.setOpenExternalLinks(True)
             layout.addWidget(home)
 
         bottom = QHBoxLayout()
         bottom.addStretch()
-        cancel = QPushButton("Anuluj")
+        cancel = QPushButton(tr('dlg_cancel'))
         cancel.clicked.connect(self.reject)
         bottom.addWidget(cancel)
-        install = QPushButton("✅ Zainstaluj")
+        install = QPushButton(tr('dlg_mcpcfg_install'))
         install.setDefault(True)
         install.setStyleSheet("QPushButton { color: #22c55e; }")
         install.clicked.connect(self._validate_and_accept)
@@ -3110,16 +3053,16 @@ class _McpTemplateConfigDialog(QDialog):
     def _validate_and_accept(self):
         name = self._inputs["__name__"].text().strip()
         if not name:
-            QMessageBox.warning(self, "Brak nazwy", "Podaj nazwę serwera.")
+            QMessageBox.warning(self, tr('dlg_no_name_title'), tr('dlg_mcpcfg_give_server_name'))
             return
         # Walidacja wymaganych pól
         for key, label in self.template.args_required:
             if not self._inputs[f"arg::{key}"].text().strip():
-                QMessageBox.warning(self, "Brak danych", f"Pole „{label}\" jest wymagane.")
+                QMessageBox.warning(self, tr('dlg_no_data_title'), tr('dlg_mcpcfg_field_required').format(label=label))
                 return
         for key, label in self.template.env_required:
             if not self._inputs[f"env::{key}"].text().strip():
-                QMessageBox.warning(self, "Brak danych", f"Pole „{key}\" jest wymagane.")
+                QMessageBox.warning(self, tr('dlg_no_data_title'), tr('dlg_mcpcfg_field_required').format(label=key))
                 return
         self.final_name = name
         self.final_scope = self.scope_combo.currentData()
@@ -3171,7 +3114,7 @@ class _McpTemplateConfigDialog(QDialog):
             else:
                 manager.add_sse(self.final_name, url=url, headers=headers or None, scope=self.final_scope)
         else:
-            raise McpError(f"Nieznany transport szablonu: {tpl.transport}")
+            raise McpError(tr('dlg_mcpcfg_unknown_transport').format(transport=tpl.transport))
 
 
 class _McpAddManualDialog(QDialog):
@@ -3187,7 +3130,7 @@ class _McpAddManualDialog(QDialog):
         super().__init__(parent)
         self._edit_server = edit_server
         self._is_edit = edit_server is not None
-        title = f"Edytuj serwer MCP — {edit_server.name}" if self._is_edit else "Dodaj serwer MCP ręcznie"
+        title = tr('dlg_mcpman_edit_title').format(name=edit_server.name) if self._is_edit else tr('dlg_mcpman_add_title')
         self.setWindowTitle(title)
         self.setMinimumWidth(580)
         self._scope_locked = scope_locked
@@ -3205,16 +3148,13 @@ class _McpAddManualDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
 
-        header_text = "✏️ Edytuj serwer MCP" if self._is_edit else "✏️ Dodaj serwer MCP ręcznie"
+        header_text = tr('dlg_mcpman_edit_header') if self._is_edit else tr('dlg_mcpman_add_header')
         header = QLabel(header_text)
         header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
         layout.addWidget(header)
 
         if self._is_edit:
-            note = QLabel(
-                "ℹ️ Zmiany zostaną zapisane jako: usunięcie starego wpisu + dodanie "
-                "z nowymi danymi. W razie błędu — automatyczny powrót do poprzedniej konfiguracji."
-            )
+            note = QLabel(tr('dlg_mcpman_edit_note'))
             note.setStyleSheet("color: #aaaaaa; font-size: 11px;")
             note.setWordWrap(True)
             layout.addWidget(note)
@@ -3223,63 +3163,63 @@ class _McpAddManualDialog(QDialog):
         form.setSpacing(8)
 
         self.name_input = QLineEdit()
-        self.name_input.setPlaceholderText("np. moje-narzedzie")
-        form.addRow("Nazwa:", self.name_input)
+        self.name_input.setPlaceholderText(tr('dlg_mcpman_name_placeholder'))
+        form.addRow(tr('dlg_mcpman_name_label'), self.name_input)
 
         self.transport_combo = QComboBox()
-        self.transport_combo.addItem("stdio (komenda lokalna)", "stdio")
-        self.transport_combo.addItem("http (serwer HTTP)", "http")
-        self.transport_combo.addItem("sse (Server-Sent Events)", "sse")
+        self.transport_combo.addItem(tr('dlg_mcpman_transport_stdio'), "stdio")
+        self.transport_combo.addItem(tr('dlg_mcpman_transport_http'), "http")
+        self.transport_combo.addItem(tr('dlg_mcpman_transport_sse'), "sse")
         self.transport_combo.currentIndexChanged.connect(self._on_transport_change)
-        form.addRow("Transport:", self.transport_combo)
+        form.addRow(tr('dlg_mcpman_transport_label'), self.transport_combo)
 
         # stdio: command + args
         self.command_input = QLineEdit()
         self.command_input.setPlaceholderText("npx")
-        form.addRow("Komenda:", self.command_input)
+        form.addRow(tr('dlg_mcpman_command_label'), self.command_input)
 
         self.args_input = QLineEdit()
-        self.args_input.setPlaceholderText("-y @scope/package arg1 arg2  (oddziel spacjami)")
-        form.addRow("Argumenty:", self.args_input)
+        self.args_input.setPlaceholderText(tr('dlg_mcpman_args_placeholder'))
+        form.addRow(tr('dlg_mcpman_args_label'), self.args_input)
 
         # http/sse: url
         self.url_input = QLineEdit()
         self.url_input.setPlaceholderText("https://example.com/mcp")
-        form.addRow("URL:", self.url_input)
+        form.addRow(tr('dlg_mcpman_url_label'), self.url_input)
 
         # env (multi-line: KEY=value)
         self.env_input = QPlainTextEdit()
-        self.env_input.setPlaceholderText("KEY1=value1\nKEY2=value2")
+        self.env_input.setPlaceholderText(tr('dlg_mcpman_env_placeholder'))
         self.env_input.setMaximumHeight(70)
         self.env_input.setStyleSheet(
             "QPlainTextEdit { background-color: #4a1a3a; color: #ffffff; "
             "border: 1px solid #6a2a5a; border-radius: 4px; padding: 4px; }"
         )
-        form.addRow("ENV (po linii):", self.env_input)
+        form.addRow(tr('dlg_mcpman_env_label'), self.env_input)
 
         # headers (multi-line: Key: value)
         self.headers_input = QPlainTextEdit()
-        self.headers_input.setPlaceholderText("Authorization: Bearer xxx\nX-Api-Key: yyy")
+        self.headers_input.setPlaceholderText(tr('dlg_mcpman_headers_placeholder'))
         self.headers_input.setMaximumHeight(70)
         self.headers_input.setStyleSheet(self.env_input.styleSheet())
-        form.addRow("Nagłówki (po linii):", self.headers_input)
+        form.addRow(tr('dlg_mcpman_headers_label'), self.headers_input)
 
         # scope
         self.scope_combo = QComboBox()
-        self.scope_combo.addItem("Globalny (dla wszystkich agentów)", "user")
-        self.scope_combo.addItem("Lokalny (tylko ten agent)", "local")
+        self.scope_combo.addItem(tr('dlg_mcpcfg_scope_user'), "user")
+        self.scope_combo.addItem(tr('dlg_mcpcfg_scope_local'), "local")
         self.scope_combo.setCurrentIndex(0 if self._default_scope == "user" else 1)
         self.scope_combo.setEnabled(not self._scope_locked)
-        form.addRow("Zakres:", self.scope_combo)
+        form.addRow(tr('dlg_mcpman_scope_label'), self.scope_combo)
 
         layout.addLayout(form)
 
         bottom = QHBoxLayout()
         bottom.addStretch()
-        cancel = QPushButton("Anuluj")
+        cancel = QPushButton(tr('dlg_cancel'))
         cancel.clicked.connect(self.reject)
         bottom.addWidget(cancel)
-        ok_label = "💾 Zapisz" if self._is_edit else "✅ Dodaj"
+        ok_label = tr('dlg_mcpman_ok_save') if self._is_edit else tr('dlg_mcpman_ok_add')
         ok = QPushButton(ok_label)
         ok.setDefault(True)
         ok.setStyleSheet("QPushButton { color: #22c55e; }")
@@ -3295,7 +3235,7 @@ class _McpAddManualDialog(QDialog):
         # W edycji blokujemy zmianę nazwy — to upraszcza rollback
         self.name_input.setReadOnly(True)
         self.name_input.setStyleSheet("QLineEdit { color: #aaaaaa; }")
-        self.name_input.setToolTip("W trybie edycji nazwa jest niezmienna.")
+        self.name_input.setToolTip(tr('dlg_mcpman_name_immutable_tooltip'))
 
         # Transport
         transport_idx = {"stdio": 0, "http": 1, "sse": 2}.get(srv.transport, 0)
@@ -3342,17 +3282,17 @@ class _McpAddManualDialog(QDialog):
     def _validate_and_accept(self):
         name = self.name_input.text().strip()
         if not name:
-            QMessageBox.warning(self, "Brak nazwy", "Podaj nazwę serwera.")
+            QMessageBox.warning(self, tr('dlg_no_name_title'), tr('dlg_mcpman_give_server_name'))
             return
         transport = self.transport_combo.currentData()
         if transport == "stdio":
             if not self.command_input.text().strip():
-                QMessageBox.warning(self, "Brak komendy", "Podaj komendę do uruchomienia.")
+                QMessageBox.warning(self, tr('dlg_mcpman_no_command_title'), tr('dlg_mcpman_give_command'))
                 return
         else:
             url = self.url_input.text().strip()
             if not url.startswith(("http://", "https://")):
-                QMessageBox.warning(self, "Zły URL", "URL musi zaczynać się od http:// lub https://")
+                QMessageBox.warning(self, tr('dlg_mcpman_bad_url_title'), tr('dlg_mcpman_bad_url_msg'))
                 return
         self.final_name = name
         self.final_scope = self.scope_combo.currentData()
@@ -3382,7 +3322,7 @@ class _McpJsonImportDialog(QDialog):
 
     def __init__(self, parent, default_scope: str, scope_locked: bool):
         super().__init__(parent)
-        self.setWindowTitle("Dodaj serwer MCP z JSON")
+        self.setWindowTitle(tr('dlg_mcpjson_title'))
         self.setMinimumWidth(560)
         self._scope_locked = scope_locked
         self._default_scope = default_scope
@@ -3395,14 +3335,11 @@ class _McpJsonImportDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
 
-        header = QLabel("📋 Dodaj serwer MCP z JSON")
+        header = QLabel(tr('dlg_mcpjson_header'))
         header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
         layout.addWidget(header)
 
-        desc = QLabel(
-            "Wklej JSON konfiguracji serwera MCP (np. z dokumentacji). "
-            "Format: <code>{\"type\":\"stdio\",\"command\":\"npx\",\"args\":[...],\"env\":{...}}</code>"
-        )
+        desc = QLabel(tr('dlg_mcpjson_desc'))
         desc.setTextFormat(Qt.RichText)
         desc.setStyleSheet("color: #cccccc; font-size: 12px;")
         desc.setWordWrap(True)
@@ -3410,15 +3347,15 @@ class _McpJsonImportDialog(QDialog):
 
         form = QFormLayout()
         self.name_input = QLineEdit()
-        self.name_input.setPlaceholderText("np. moj-serwer")
-        form.addRow("Nazwa:", self.name_input)
+        self.name_input.setPlaceholderText(tr('dlg_mcpjson_name_placeholder'))
+        form.addRow(tr('dlg_mcpjson_name_label'), self.name_input)
 
         self.scope_combo = QComboBox()
-        self.scope_combo.addItem("Globalny (dla wszystkich agentów)", "user")
-        self.scope_combo.addItem("Lokalny (tylko ten agent)", "local")
+        self.scope_combo.addItem(tr('dlg_mcpcfg_scope_user'), "user")
+        self.scope_combo.addItem(tr('dlg_mcpcfg_scope_local'), "local")
         self.scope_combo.setCurrentIndex(0 if self._default_scope == "user" else 1)
         self.scope_combo.setEnabled(not self._scope_locked)
-        form.addRow("Zakres:", self.scope_combo)
+        form.addRow(tr('dlg_mcpjson_scope_label'), self.scope_combo)
         layout.addLayout(form)
 
         self.json_input = QPlainTextEdit()
@@ -3434,10 +3371,10 @@ class _McpJsonImportDialog(QDialog):
 
         bottom = QHBoxLayout()
         bottom.addStretch()
-        cancel = QPushButton("Anuluj")
+        cancel = QPushButton(tr('dlg_cancel'))
         cancel.clicked.connect(self.reject)
         bottom.addWidget(cancel)
-        ok = QPushButton("✅ Dodaj")
+        ok = QPushButton(tr('dlg_mcpjson_ok_add'))
         ok.setDefault(True)
         ok.setStyleSheet("QPushButton { color: #22c55e; }")
         ok.clicked.connect(self._validate_and_accept)
@@ -3447,16 +3384,16 @@ class _McpJsonImportDialog(QDialog):
     def _validate_and_accept(self):
         name = self.name_input.text().strip()
         if not name:
-            QMessageBox.warning(self, "Brak nazwy", "Podaj nazwę serwera.")
+            QMessageBox.warning(self, tr('dlg_no_name_title'), tr('dlg_mcpjson_give_server_name'))
             return
         text = self.json_input.toPlainText().strip()
         if not text:
-            QMessageBox.warning(self, "Brak JSON", "Wklej JSON konfiguracji serwera.")
+            QMessageBox.warning(self, tr('dlg_mcpjson_no_json_title'), tr('dlg_mcpjson_paste_json'))
             return
         try:
             json.loads(text)
         except json.JSONDecodeError as exc:
-            QMessageBox.warning(self, "Zły JSON", f"Nieprawidłowy JSON: {exc}")
+            QMessageBox.warning(self, tr('dlg_mcpjson_bad_json_title'), tr('dlg_mcpjson_bad_json_msg').format(error=exc))
             return
         self.final_name = name
         self.final_scope = self.scope_combo.currentData()
@@ -3476,26 +3413,26 @@ class UpdateAvailableDialog(QDialog):
         super().__init__(parent)
         self.manager = update_manager
         self.info = info
-        self.setWindowTitle("Dostępna aktualizacja")
+        self.setWindowTitle(tr('dlg_update_title'))
         self.setMinimumWidth(440)
 
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
 
-        title = QLabel(f"Dostępna nowa wersja: {info.version}")
+        title = QLabel(tr('dlg_update_new_version').format(version=info.version))
         tf = QFont()
         tf.setPointSize(13)
         tf.setBold(True)
         title.setFont(tf)
         layout.addWidget(title)
 
-        layout.addWidget(QLabel(f"Masz zainstalowaną wersję {current_version}."))
+        layout.addWidget(QLabel(tr('dlg_update_current_version').format(version=current_version)))
 
         if info.mandatory:
-            layout.addWidget(QLabel("⚠️ To jest aktualizacja wymagana."))
+            layout.addWidget(QLabel(tr('dlg_update_mandatory')))
 
         if info.notes_url:
-            notes_btn = QPushButton("Informacje o wydaniu…")
+            notes_btn = QPushButton(tr('dlg_update_release_notes'))
             notes_btn.clicked.connect(
                 lambda: QDesktopServices.openUrl(QUrl(info.notes_url)))
             layout.addWidget(notes_btn)
@@ -3509,10 +3446,10 @@ class UpdateAvailableDialog(QDialog):
 
         btn_row = QHBoxLayout()
         btn_row.addStretch()
-        self.later_btn = QPushButton("Później")
+        self.later_btn = QPushButton(tr('dlg_update_later'))
         self.later_btn.clicked.connect(self.reject)
         btn_row.addWidget(self.later_btn)
-        self.download_btn = QPushButton("Pobierz i zainstaluj")
+        self.download_btn = QPushButton(tr('dlg_update_download_install'))
         self.download_btn.setDefault(True)
         self.download_btn.clicked.connect(self._start_download)
         btn_row.addWidget(self.download_btn)
@@ -3531,7 +3468,7 @@ class UpdateAvailableDialog(QDialog):
         self.later_btn.setEnabled(False)
         self.progress.setVisible(True)
         self.progress.setRange(0, 0)  # nieokreślony do pierwszej porcji
-        self.status_label.setText("Pobieranie…")
+        self.status_label.setText(tr('dlg_update_downloading'))
         self.manager.download_async(self.info)
 
     def _on_progress(self, downloaded, total):
@@ -3539,10 +3476,10 @@ class UpdateAvailableDialog(QDialog):
             self.progress.setRange(0, total)
             self.progress.setValue(downloaded)
             self.status_label.setText(
-                f"Pobieranie… {downloaded/1048576:.1f}/{total/1048576:.1f} MB")
+                tr('dlg_update_downloading_progress').format(done=downloaded/1048576, total=total/1048576))
         else:
             self.progress.setRange(0, 0)
-            self.status_label.setText(f"Pobieranie… {downloaded/1048576:.1f} MB")
+            self.status_label.setText(tr('dlg_update_downloading_simple').format(done=downloaded/1048576))
 
     def _on_finished(self, path):
         self.progress.setRange(0, 1)
@@ -3550,27 +3487,26 @@ class UpdateAvailableDialog(QDialog):
         # macOS (.zip): aplikacja podmieni się sama i wystartuje ponownie.
         # Inne systemy: otworzy się instalator. Decyzję podejmuje manager.
         if self.manager.can_self_replace(path):
-            self.status_label.setText("Pobrano. Instaluję nową wersję…")
+            self.status_label.setText(tr('dlg_update_installing'))
         else:
-            self.status_label.setText("Pobrano i zweryfikowano. Otwieram instalator…")
+            self.status_label.setText(tr('dlg_update_downloaded_opening'))
         self.manager.apply_update_async(path)
 
     def _on_relaunch_ready(self):
         """macOS: podmiana przygotowana — zamknij aplikację, pomocnik ją wznowi."""
         from PyQt5.QtWidgets import QApplication
-        self.status_label.setText("Gotowe. Uruchamiam nową wersję…")
+        self.status_label.setText(tr('dlg_update_relaunch_status'))
         QMessageBox.information(
-            self, "Aktualizacja gotowa",
-            "Nowa wersja zostanie zainstalowana, a aplikacja uruchomi się ponownie "
-            "za chwilę.")
+            self, tr('dlg_update_ready_title'),
+            tr('dlg_update_ready_msg'))
         self.accept()
         # Zamknij całą aplikację — pomocnik czeka na to, by podmienić pakiet.
         QApplication.instance().quit()
 
     def _on_installer_opened(self, path):
         QMessageBox.information(
-            self, "Aktualizacja pobrana",
-            "Instalator został otwarty. Dokończ instalację i uruchom aplikację ponownie.")
+            self, tr('dlg_update_downloaded_title'),
+            tr('dlg_update_installer_opened_msg'))
         self.accept()
 
     def _on_apply_failed(self, msg):
@@ -3578,14 +3514,14 @@ class UpdateAvailableDialog(QDialog):
         self.status_label.setText("")
         self.download_btn.setEnabled(True)
         self.later_btn.setEnabled(True)
-        QMessageBox.warning(self, "Błąd aktualizacji", msg)
+        QMessageBox.warning(self, tr('dlg_update_error_title'), msg)
 
     def _on_failed(self, msg):
         self.progress.setVisible(False)
         self.status_label.setText("")
         self.download_btn.setEnabled(True)
         self.later_btn.setEnabled(True)
-        QMessageBox.warning(self, "Błąd aktualizacji", msg)
+        QMessageBox.warning(self, tr('dlg_update_error_title'), msg)
 
 
 class ClaudeSetupDialog(QDialog):
@@ -3615,59 +3551,46 @@ class ClaudeSetupDialog(QDialog):
         self._os = os_key()
         self._guide_url = f"{INSTALL_GUIDE_BASE_URL}instrukcja-{self._os}.html"
 
-        self.setWindowTitle("Dokończ instalację — potrzebny Claude Code")
+        self.setWindowTitle(tr('dlg_setup_title'))
         self.setMinimumWidth(560)
 
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
 
-        title = QLabel("Jeszcze jeden krok — zainstaluj Claude Code")
+        title = QLabel(tr('dlg_setup_header'))
         tf = QFont()
         tf.setPointSize(13)
         tf.setBold(True)
         title.setFont(tf)
         layout.addWidget(title)
 
-        intro = QLabel(
-            "Ten program jest „pilotem” do narzędzia <b>Claude Code</b> — to ono "
-            "rozmawia z Tobą i pisze kod. Na tym komputerze jeszcze go nie ma, "
-            "dlatego terminal nie zadziała. Instalacja jest darmowa i zajmuje "
-            "kilka minut. Wystarczy wykonać te trzy kroki:")
+        intro = QLabel(tr('dlg_setup_intro'))
         intro.setWordWrap(True)
         intro.setTextFormat(Qt.RichText)
         layout.addWidget(intro)
 
         # ---- Krok 1: Node.js ----
-        step1_box = QGroupBox("Krok 1 — zainstaluj Node.js (darmowy program pomocniczy)")
+        step1_box = QGroupBox(tr('dlg_setup_step1_title'))
         s1 = QVBoxLayout(step1_box)
-        s1_label = QLabel(
-            "Kliknij przycisk poniżej, pobierz wersję <b>LTS</b> (zielony "
-            "przycisk) i zainstaluj jak każdy program (Dalej → Dalej → Zakończ).")
+        s1_label = QLabel(tr('dlg_setup_step1_label'))
         s1_label.setWordWrap(True)
         s1_label.setTextFormat(Qt.RichText)
         s1.addWidget(s1_label)
         if self._os == "windows":
-            s1_warn = QLabel(
-                "⚠️ W instalatorze Node.js <b>NIE zaznaczaj</b> opcji "
-                "„Tools for Native Modules”. Jeśli mimo to pojawi się czarne "
-                "okno z groźnie wyglądającymi błędami — po prostu je zamknij, "
-                "to nieszkodliwe (Node.js jest już zainstalowany).")
+            s1_warn = QLabel(tr('dlg_setup_step1_warn'))
             s1_warn.setWordWrap(True)
             s1_warn.setTextFormat(Qt.RichText)
             s1.addWidget(s1_warn)
-        node_btn = QPushButton("🌐 Otwórz stronę nodejs.org")
+        node_btn = QPushButton(tr('dlg_setup_node_btn'))
         node_btn.clicked.connect(
             lambda: QDesktopServices.openUrl(QUrl("https://nodejs.org/")))
         s1.addWidget(node_btn)
         layout.addWidget(step1_box)
 
         # ---- Krok 2: npm install ----
-        step2_box = QGroupBox("Krok 2 — zainstaluj Claude Code")
+        step2_box = QGroupBox(tr('dlg_setup_step2_title'))
         s2 = QVBoxLayout(step2_box)
-        s2_label = QLabel(
-            "Po zainstalowaniu Node.js <b>uruchom ten program od nowa</b>, "
-            "wklej do terminala (czarne pole w oknie) poniższą komendę "
-            "i naciśnij Enter. Napis „added … packages” oznacza sukces.")
+        s2_label = QLabel(tr('dlg_setup_step2_label'))
         s2_label.setWordWrap(True)
         s2_label.setTextFormat(Qt.RichText)
         s2.addWidget(s2_label)
@@ -3675,21 +3598,16 @@ class ClaudeSetupDialog(QDialog):
         self.cmd_field = QLineEdit(self.NPM_COMMAND)
         self.cmd_field.setReadOnly(True)
         cmd_row.addWidget(self.cmd_field)
-        self.copy_btn = QPushButton("⧉ Kopiuj")
+        self.copy_btn = QPushButton(tr('dlg_setup_copy'))
         self.copy_btn.clicked.connect(self._copy_command)
         cmd_row.addWidget(self.copy_btn)
         s2.addLayout(cmd_row)
         layout.addWidget(step2_box)
 
         # ---- Krok 3: logowanie ----
-        step3_box = QGroupBox("Krok 3 — uruchom i zaloguj się")
+        step3_box = QGroupBox(tr('dlg_setup_step3_title'))
         s3 = QVBoxLayout(step3_box)
-        s3_label = QLabel(
-            "Wpisz w terminalu <b>claude</b> i naciśnij Enter. Przy pierwszym "
-            "uruchomieniu Claude Code poprosi o zalogowanie — jeśli przeglądarka "
-            "nie otworzy się sama, naciśnij klawisz <b>c</b> (skopiuje link), "
-            "wklej go w przeglądarce i dokończ logowanie. "
-            "<b>Nie przepisuj linku ręcznie</b> — jest bardzo długi.")
+        s3_label = QLabel(tr('dlg_setup_step3_label'))
         s3_label.setWordWrap(True)
         s3_label.setTextFormat(Qt.RichText)
         s3.addWidget(s3_label)
@@ -3697,15 +3615,15 @@ class ClaudeSetupDialog(QDialog):
 
         # ---- Przyciski ----
         btn_row = QHBoxLayout()
-        guide_btn = QPushButton("📖 Pełna instrukcja (krok po kroku)")
+        guide_btn = QPushButton(tr('dlg_setup_full_guide'))
         guide_btn.clicked.connect(
             lambda: QDesktopServices.openUrl(QUrl(self._guide_url)))
         btn_row.addWidget(guide_btn)
         btn_row.addStretch()
-        check_btn = QPushButton("🔄 Sprawdź ponownie")
+        check_btn = QPushButton(tr('dlg_setup_check_again'))
         check_btn.clicked.connect(self._check_again)
         btn_row.addWidget(check_btn)
-        close_btn = QPushButton("Zamknij")
+        close_btn = QPushButton(tr('dlg_close'))
         close_btn.setDefault(True)
         close_btn.clicked.connect(self.reject)
         btn_row.addWidget(close_btn)
@@ -3714,8 +3632,8 @@ class ClaudeSetupDialog(QDialog):
     def _copy_command(self):
         from PyQt5.QtWidgets import QApplication
         QApplication.clipboard().setText(self.NPM_COMMAND)
-        self.copy_btn.setText("✓ Skopiowano")
-        QTimer.singleShot(2000, lambda: self.copy_btn.setText("⧉ Kopiuj"))
+        self.copy_btn.setText(tr('dlg_setup_copied'))
+        QTimer.singleShot(2000, lambda: self.copy_btn.setText(tr('dlg_setup_copy')))
 
     def _check_again(self):
         """Poszukaj CLI jeszcze raz (PATH + typowe lokalizacje). Znalezione →
@@ -3732,16 +3650,11 @@ class ClaudeSetupDialog(QDialog):
                 resolved = None
         if resolved:
             QMessageBox.information(
-                self, "Znaleziono Claude Code",
-                "Claude Code jest zainstalowany. 🎉\n\n"
-                "Możesz teraz uruchomić agenta (zakładka → Uruchom) albo wpisać "
-                "„claude” w terminalu.")
+                self, tr('dlg_setup_found_title'),
+                tr('dlg_setup_found_msg'))
             self.claude_found.emit(str(resolved))
             self.accept()
         else:
             QMessageBox.information(
-                self, "Jeszcze nie widać Claude Code",
-                "Nie znalazłem jeszcze Claude Code w systemie.\n\n"
-                "Upewnij się, że Krok 1 (Node.js) i Krok 2 (komenda npm) zostały "
-                "wykonane, a jeśli właśnie zainstalowano Node.js — uruchom ten "
-                "program od nowa i spróbuj jeszcze raz.")
+                self, tr('dlg_setup_not_found_title'),
+                tr('dlg_setup_not_found_msg'))
