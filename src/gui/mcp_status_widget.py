@@ -34,7 +34,10 @@ from core.mcp_manager import (
 from core.agent_mcp_settings import AgentMcpSettings
 from core.skills_manager import SkillsManager, Skill
 from core.agent_skills_settings import AgentSkillsSettings
-from config import CLAUDE_MODELS_SHORT, CLAUDE_MODELS, DEFAULT_AGENT_MODEL
+from config import (
+    CLAUDE_MODELS_SHORT, CLAUDE_MODELS, DEFAULT_AGENT_MODEL,
+    t as tr, model_label, model_label_short, model_default_prefix,
+)
 
 
 CACHE_TTL_SECONDS = 30
@@ -196,12 +199,7 @@ class McpStatusWidget(QWidget):
                 font-weight: 500;
             }
         """)
-        self.total_tokens_label.setToolTip(
-            "Łączne (przybliżone) tokeny ze wszystkich zakładek od startu aplikacji.\n"
-            "Wzór: liczba znaków ÷ 3,5.\n"
-            "Reset przy: restarcie aplikacji.\n"
-            "(Indywidualny licznik agenta — po prawej, z kolorem zależnym od % okna kontekstu.)"
-        )
+        self.total_tokens_label.setToolTip(tr('total_tokens_tooltip'))
         # Stała zarezerwowana szerokość pod największą realną sumę — bez tego
         # rosnąca liczba cyfr przesuwałaby sąsiednie kafelki i przycisk 🔄 przy
         # każdej aktualizacji licznika („skakanie" paska statusu). Σ zostaje
@@ -224,10 +222,7 @@ class McpStatusWidget(QWidget):
         else:
             # Fallback gdyby brakowało pliku
             self.refresh_btn.setText("⟳")
-        self.refresh_btn.setToolTip(
-            "Odśwież status agenta (MCP, skille, pliki, model).\n"
-            "Klika się gdy zmieniłeś coś w menedżerach lub edycji agenta."
-        )
+        self.refresh_btn.setToolTip(tr('refresh_status_tooltip'))
         self.refresh_btn.setCursor(QCursor(Qt.PointingHandCursor))
         self.refresh_btn.setStyleSheet(_TILE_STYLE)
         self.refresh_btn.clicked.connect(self.force_refresh)
@@ -246,23 +241,23 @@ class McpStatusWidget(QWidget):
         """Brak aktywnej zakładki agenta."""
         self._render_idle_mcp()
         self.skills_btn.setText("🧩 —")
-        self.skills_btn.setToolTip("Wybierz zakładkę agenta, aby zobaczyć liczbę aktywnych skilli.")
+        self.skills_btn.setToolTip(tr('status_idle_skills'))
         self.skills_btn.setEnabled(False)
         self.files_btn.setText("📁 —")
-        self.files_btn.setToolTip("Wybierz zakładkę agenta, aby zobaczyć pliki pamięci.")
+        self.files_btn.setToolTip(tr('status_idle_files'))
         self.files_btn.setEnabled(False)
         self.model_btn.setText("🤖 —")
-        self.model_btn.setToolTip("Wybierz zakładkę agenta, aby zobaczyć model AI.")
+        self.model_btn.setToolTip(tr('status_idle_model'))
         self.model_btn.setEnabled(False)
 
     def _render_idle_mcp(self):
         self.mcp_btn.setText("🔌 —")
-        self.mcp_btn.setToolTip("Wybierz zakładkę agenta, aby zobaczyć aktywne serwery MCP.")
+        self.mcp_btn.setToolTip(tr('status_idle_mcp'))
         self.mcp_btn.setEnabled(False)
 
     def _render_loading_mcp(self):
         self.mcp_btn.setText("🔌 …")
-        self.mcp_btn.setToolTip("Sprawdzam status MCP...")
+        self.mcp_btn.setToolTip(tr('mcp_checking'))
         self.mcp_btn.setEnabled(True)
 
     def _render_invalid_mcp(self, msg: str):
@@ -293,19 +288,19 @@ class McpStatusWidget(QWidget):
     ) -> str:
         agent_label = self._agent_name or "—"
         lines = [
-            f"<b>Serwery MCP — agent „{agent_label}\":</b>",
-            f"  ✅ Połączone: {counts.get(STATUS_CONNECTED, 0)}",
+            f"<b>{tr('mcp_servers_title').format(agent=agent_label)}</b>",
+            f"  ✅ {tr('mcp_connected')} {counts.get(STATUS_CONNECTED, 0)}",
         ]
         if counts.get(STATUS_NEEDS_AUTH, 0):
-            lines.append(f"  🔐 Wymagają autoryzacji: {counts[STATUS_NEEDS_AUTH]}")
+            lines.append(f"  🔐 {tr('mcp_needs_auth')} {counts[STATUS_NEEDS_AUTH]}")
         if counts.get(STATUS_FAILED, 0):
-            lines.append(f"  ❌ Błąd: {counts[STATUS_FAILED]}")
+            lines.append(f"  ❌ {tr('mcp_failed')} {counts[STATUS_FAILED]}")
         if counts.get(STATUS_UNKNOWN, 0):
-            lines.append(f"  ❓ Nieznany: {counts[STATUS_UNKNOWN]}")
+            lines.append(f"  ❓ {tr('mcp_unknown')} {counts[STATUS_UNKNOWN]}")
 
         if active:
             lines.append("")
-            lines.append("<b>Aktywne:</b>")
+            lines.append(f"<b>{tr('mcp_active_header')}</b>")
             for s in active:
                 icon = self._status_icon(s.status)
                 scope_label = self._scope_label(s.scope)
@@ -313,12 +308,12 @@ class McpStatusWidget(QWidget):
 
         if disabled:
             lines.append("")
-            lines.append("<b>Wyłączone dla tego agenta:</b>")
+            lines.append(f"<b>{tr('mcp_disabled_header')}</b>")
             for s in disabled:
                 lines.append(f"  🚫 {s.name}")
 
         lines.append("")
-        lines.append("<i>Kliknij aby otworzyć menedżer MCP.</i>")
+        lines.append(f"<i>{tr('mcp_click_open')}</i>")
         return "<br>".join(lines)
 
     @staticmethod
@@ -331,7 +326,11 @@ class McpStatusWidget(QWidget):
 
     @staticmethod
     def _scope_label(scope: str) -> str:
-        return {"user": "globalny", "local": "lokalny", "managed": "zarządzany"}.get(scope, scope)
+        return {
+            "user": tr('scope_user'),
+            "local": tr('scope_local'),
+            "managed": tr('scope_managed'),
+        }.get(scope, scope)
 
     # ---------- Renderowanie: Skille ----------
 
@@ -343,7 +342,7 @@ class McpStatusWidget(QWidget):
             all_skills = SkillsManager().list_skills()
         except Exception:
             self.skills_btn.setText("🧩 ?")
-            self.skills_btn.setToolTip("Nie udało się odczytać katalogu ~/.claude/skills/")
+            self.skills_btn.setToolTip(tr('skills_read_error'))
             return
 
         disabled_names = self._get_disabled_skills_set()
@@ -355,28 +354,28 @@ class McpStatusWidget(QWidget):
 
     def _build_skills_tooltip(self, active: List[Skill], disabled: List[Skill]) -> str:
         agent_label = self._agent_name or "—"
-        lines = [f"<b>Skille — agent „{agent_label}\":</b>"]
+        lines = [f"<b>{tr('skills_title').format(agent=agent_label)}</b>"]
         if active:
             lines.append("")
-            lines.append(f"<b>Aktywne ({len(active)}):</b>")
+            lines.append(f"<b>{tr('skills_active_n').format(n=len(active))}</b>")
             for s in active[:30]:
                 lines.append(f"  🧩 {s.name}")
             if len(active) > 30:
-                lines.append(f"  <i>… i {len(active) - 30} więcej</i>")
+                lines.append(f"  <i>{tr('and_n_more').format(n=len(active) - 30)}</i>")
         else:
             lines.append("")
-            lines.append("<i>(brak aktywnych skilli)</i>")
+            lines.append(f"<i>{tr('no_active_skills')}</i>")
 
         if disabled:
             lines.append("")
-            lines.append(f"<b>Wyłączone dla tego agenta ({len(disabled)}):</b>")
+            lines.append(f"<b>{tr('skills_disabled_n').format(n=len(disabled))}</b>")
             for s in disabled[:10]:
                 lines.append(f"  🚫 {s.name}")
             if len(disabled) > 10:
-                lines.append(f"  <i>… i {len(disabled) - 10} więcej</i>")
+                lines.append(f"  <i>{tr('and_n_more').format(n=len(disabled) - 10)}</i>")
 
         lines.append("")
-        lines.append("<i>Kliknij aby otworzyć menedżer skilli.</i>")
+        lines.append(f"<i>{tr('skills_click_open')}</i>")
         return "<br>".join(lines)
 
     # ---------- Renderowanie: Pliki ----------
@@ -390,7 +389,7 @@ class McpStatusWidget(QWidget):
 
     def _build_files_tooltip(self) -> str:
         agent_label = self._agent_name or "—"
-        lines = [f"<b>Pliki pamięci — agent „{agent_label}\":</b>"]
+        lines = [f"<b>{tr('files_title').format(agent=agent_label)}</b>"]
         if self._memory_files:
             lines.append("")
             for path_str in self._memory_files[:30]:
@@ -399,18 +398,18 @@ class McpStatusWidget(QWidget):
                 if p.exists():
                     lines.append(f"  📄 {p.name} <span style='color:#888'>({p.parent})</span>")
                 else:
-                    lines.append(f"  ⚠️ {p.name} <span style='color:#cc4444'>(brak pliku)</span>")
+                    lines.append(f"  ⚠️ {p.name} <span style='color:#cc4444'>({tr('file_missing')})</span>")
             if len(self._memory_files) > 30:
-                lines.append(f"  <i>… i {len(self._memory_files) - 30} więcej</i>")
+                lines.append(f"  <i>{tr('and_n_more').format(n=len(self._memory_files) - 30)}</i>")
         else:
             lines.append("")
-            lines.append("<i>(brak plików pamięci)</i>")
+            lines.append(f"<i>{tr('no_memory_files')}</i>")
 
         lines.append("")
         if self._agent_id:
-            lines.append("<i>Kliknij aby edytować agenta (zakładka „Pliki\").</i>")
+            lines.append(f"<i>{tr('files_click_edit')}</i>")
         else:
-            lines.append("<i>Wybierz zakładkę agenta.</i>")
+            lines.append(f"<i>{tr('select_agent_tab')}</i>")
         return "<br>".join(lines)
 
     # ---------- Renderowanie: Model ----------
@@ -418,24 +417,25 @@ class McpStatusWidget(QWidget):
     def _render_model(self):
         """Pokazuje wybrany model Claude Code dla agenta."""
         self.model_btn.setEnabled(self._agent_id is not None)
-        short = CLAUDE_MODELS_SHORT.get(self._model_key, self._model_key)
-        full = CLAUDE_MODELS.get(self._model_key, self._model_key)
-        # Na pasku jest mało miejsca — pomijamy prefiks "Domyślny — ".
-        # W tooltipie pokazujemy pełną etykietę z "Domyślny" zachowaną.
-        if short.startswith("Domyślny — "):
-            short = short[len("Domyślny — "):]
+        short = model_label_short(self._model_key)
+        full = model_label(self._model_key)
+        # Na pasku jest mało miejsca — pomijamy prefiks "Domyślny —/Default —".
+        # W tooltipie pokazujemy pełną etykietę z prefiksem zachowanym.
+        prefix = model_default_prefix()
+        if short.startswith(prefix):
+            short = short[len(prefix):]
         self.model_btn.setText(f"🤖 {short}")
         agent_label = self._agent_name or "—"
         tooltip_lines = [
-            f"<b>Model AI — agent „{agent_label}\":</b>",
+            f"<b>{tr('model_title').format(agent=agent_label)}</b>",
             "",
             f"  🤖 {full}",
             "",
         ]
         if self._agent_id:
-            tooltip_lines.append("<i>Kliknij aby zmienić model w edycji agenta.</i>")
+            tooltip_lines.append(f"<i>{tr('model_click_change')}</i>")
         else:
-            tooltip_lines.append("<i>Wybierz zakładkę agenta.</i>")
+            tooltip_lines.append(f"<i>{tr('select_agent_tab')}</i>")
         self.model_btn.setToolTip("<br>".join(tooltip_lines))
 
     # ---------- Cache MCP ----------
@@ -461,7 +461,7 @@ class McpStatusWidget(QWidget):
         if self._working_dir is None:
             return
         if not self._working_dir.is_dir():
-            self._render_invalid_mcp(f"Katalog roboczy nie istnieje: {self._working_dir}")
+            self._render_invalid_mcp(tr('mcp_dir_missing').format(path=self._working_dir))
             return
 
         self._loading = True
@@ -483,10 +483,7 @@ class McpStatusWidget(QWidget):
     def _on_mcp_loaded(self, servers):
         self._loading = False
         if servers is None:
-            self._render_invalid_mcp(
-                "Nie udało się sprawdzić statusu MCP. "
-                "Sprawdź czy Claude Code (komenda 'claude') jest zainstalowany."
-            )
+            self._render_invalid_mcp(tr('mcp_check_failed'))
             return
         if self._working_dir is not None:
             self._write_cache(self._working_dir, servers)

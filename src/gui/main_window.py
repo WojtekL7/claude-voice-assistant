@@ -712,7 +712,7 @@ class MainWindow(QMainWindow):
         # Status bar
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
-        self._update_status("Gotowy")
+        self._update_status(tr('status_ready'))
 
         # Context usage counter (per-agent — pokazuje licznik aktywnej zakładki).
         # Każdy AgentTab przechowuje własny total_context_tokens; tu trzymamy
@@ -724,12 +724,7 @@ class MainWindow(QMainWindow):
         # leciał tysiącami i blokował UI.
         self._refresh_tokens_pending = False
         self._context_label = QLabel("0")
-        self._context_label.setToolTip(
-            "Przybliżony licznik tokenów aktywnego agenta + procent okna kontekstu modelu.\n"
-            "Kolory: do 50% zielony, 50–70% żółty, 70–90% pomarańczowy, ≥90% czerwony.\n"
-            "Auto-compact w Claude Code: ~80–90% tej wartości.\n"
-            "Reset przy: /clear, /compact, restarcie aplikacji."
-        )
+        self._context_label.setToolTip(tr('context_label_tooltip'))
         self._context_label.setStyleSheet("""
             QLabel {
                 color: #4ade80;
@@ -1091,7 +1086,7 @@ class MainWindow(QMainWindow):
         # Dopiero teraz aktywuj — terminal powstanie w już ostylowanym splitterze.
         self.tab_widget.setCurrentIndex(index)
 
-        self._update_status(f"Utworzono nowy terminal: {terminal_config['name']}")
+        self._update_status(tr('status_new_terminal').format(name=terminal_config['name']))
 
     def _close_agent_tab(self, index: int):
         """Close agent tab."""
@@ -1238,7 +1233,7 @@ class MainWindow(QMainWindow):
                         # zakładki BEZ uruchamiania claude w bieżącej.
                         self._revert_tab_activation()
                         return
-                self._update_status(f"⏳ Uruchamiam {current.agent_name}...")
+                self._update_status(f"⏳ {tr('status_starting_agent').format(name=current.agent_name)}")
                 current.activate()
             # Zapamiętaj ostatnio aktywnego — zostanie zapisane przez
             # _apply_tab_change → _save_settings (debounced 50ms).
@@ -1511,7 +1506,7 @@ class MainWindow(QMainWindow):
             cleaned_text = text_cleaner.clean(text, use_dictionary=False)
             if cleaned_text:
                 self.tts.speak(cleaned_text)
-                self._update_status("Czytam...")
+                self._update_status(tr('reading'))
 
     def _handle_dictation_request(self, start: bool):
         """Handle dictation request from agent tab."""
@@ -1830,14 +1825,14 @@ class MainWindow(QMainWindow):
         """Kreator znalazł CLI — przejmij ścieżkę bez restartu aplikacji."""
         self.claude_command = path
         self._save_settings()
-        self._update_status(f"Znaleziono Claude Code: {path}")
+        self._update_status(tr('status_claude_found').format(path=path))
 
     # ==================== Auto-aktualizacja (M3) ====================
 
     def _check_updates_manual(self):
         """Ręczne 'Sprawdź aktualizacje' z menu — pokazuje też wynik negatywny."""
         self._manual_update_check = True
-        self._update_status("Sprawdzanie aktualizacji…")
+        self._update_status(tr('status_checking_updates'))
         self.update_manager.check_async()
 
     def _maybe_auto_check_updates(self):
@@ -2031,14 +2026,14 @@ class MainWindow(QMainWindow):
 
     def _start_claude(self):
         """Start Claude Code process (legacy - not used with QTermWidget)."""
-        self._update_status("Uruchamianie Claude Code...")
+        self._update_status(tr('status_starting_claude'))
         self._append_system_message("Uruchamianie Claude Code...")
 
         if self.claude.start():
-            self._update_status("Claude Code uruchomiony")
+            self._update_status(tr('status_claude_started'))
             self._append_system_message("Claude Code gotowy. Możesz pisać lub dyktować polecenia.")
         else:
-            self._update_status("Błąd uruchamiania Claude Code")
+            self._update_status(tr('status_claude_start_error'))
             self._append_system_message("Błąd: Nie można uruchomić Claude Code. Upewnij się, że jest zainstalowany.")
 
     def _build_claude_command(self, agent_tab) -> str:
@@ -2060,14 +2055,14 @@ class MainWindow(QMainWindow):
         if not self.claude_command:
             return
 
-        self._update_status(f"Uruchamianie: {self.claude_command}")
+        self._update_status(tr('status_starting_cmd').format(cmd=self.claude_command))
 
         # Send command to all auto-start agent terminals
         for agent_id, tab in self.agent_tabs.items():
             if tab.terminal_backend and tab.auto_start:
                 cmd = self._build_claude_command(tab)
                 tab.terminal_backend.send_text(cmd + "\r")
-                self._update_status("Claude Code uruchomiony")
+                self._update_status(tr('status_claude_started'))
 
     def _run_claude_in_tab(self, agent_tab, force=False):
         """Run Claude command in a specific agent tab.
@@ -2083,7 +2078,7 @@ class MainWindow(QMainWindow):
         if agent_tab.terminal_backend and (agent_tab.auto_start or force):
             cmd = self._build_claude_command(agent_tab)
             agent_tab.terminal_backend.send_text(cmd + "\r")
-            self._update_status(f"Claude Code uruchomiony w: {agent_tab.agent_name}")
+            self._update_status(tr('status_claude_started_in').format(name=agent_tab.agent_name))
 
     # ==================== Event Handlers ====================
 
@@ -2222,7 +2217,7 @@ class MainWindow(QMainWindow):
     def _on_claude_error(self, error: str):
         """Handle Claude error."""
         self._append_system_message(f"Błąd: {error}")
-        self._update_status(f"Błąd: {error}")
+        self._update_status(tr('status_error').format(error=error))
 
     # ==================== Terminal Handlers ====================
 
@@ -2265,7 +2260,7 @@ class MainWindow(QMainWindow):
 
     def _on_terminal_finished(self):
         """Handle terminal session finished."""
-        self._update_status("Terminal zakończony")
+        self._update_status(tr('status_terminal_ended'))
         # Optionally restart
         if self.terminal_backend:
             self.terminal_backend.start_shell_program()
@@ -2289,7 +2284,7 @@ class MainWindow(QMainWindow):
             self._speaker_anim_timer.start(300)
             # Stop pause blink if running
             self._pause_blink_timer.stop()
-            self._update_status("Czytam...")
+            self._update_status(tr('reading'))
         elif state == TTSState.PAUSED:
             # Keep buttons visible during pause
             tab.pause_btn.setVisible(True)
@@ -2300,11 +2295,11 @@ class MainWindow(QMainWindow):
             tab.read_btn.setIcon(icon_set.button_icon('read', 'normal'))
             # Start pause blink animation
             self._pause_blink_timer.start(500)
-            self._update_status("Wstrzymano")
+            self._update_status(tr('paused'))
         elif state == TTSState.GENERATING:
             # Show stop button during generation (to allow cancel)
             tab.stop_btn.setVisible(True)
-            self._update_status("Generowanie mowy...")
+            self._update_status(tr('status_generating_speech'))
         else:
             # Hide pause and stop buttons when idle
             tab.pause_btn.setVisible(False)
@@ -2315,7 +2310,7 @@ class MainWindow(QMainWindow):
             self._speaker_anim_timer.stop()
             self._pause_blink_timer.stop()
             tab.read_btn.setIcon(icon_set.button_icon('read', 'normal'))
-            self._update_status("Gotowy")
+            self._update_status(tr('status_ready'))
 
     def _on_tts_finished(self):
         """Handle TTS finished."""
@@ -2329,7 +2324,7 @@ class MainWindow(QMainWindow):
         # Stop speaker animation
         self._speaker_anim_timer.stop()
         tab.read_btn.setIcon(icon_set.button_icon('read', 'normal'))
-        self._update_status("Gotowy")
+        self._update_status(tr('status_ready'))
 
     def _on_stt_state_changed(self, state: STTState):
         """Handle STT state change."""
@@ -2341,19 +2336,19 @@ class MainWindow(QMainWindow):
             tab.dictate_btn.setChecked(True)
             # Start microphone pulse animation
             self._mic_pulse_timer.start(400)
-            self._update_status("Nagrywanie... (kliknij ponownie aby zakończyć)")
+            self._update_status(tr('status_recording_click'))
         elif state == STTState.PROCESSING:
             tab.dictate_btn.setIcon(icon_set.button_icon('dictate', 'processing'))
             # Stop pulse animation
             self._mic_pulse_timer.stop()
-            self._update_status("Przetwarzanie mowy...")
+            self._update_status(tr('status_processing_speech'))
         else:
             tab.dictate_btn.setIcon(icon_set.button_icon('dictate', 'normal'))
             tab.dictate_btn.setChecked(False)
             # Stop pulse animation and reset style
             self._mic_pulse_timer.stop()
             self._reset_mic_style()
-            self._update_status("Gotowy")
+            self._update_status(tr('status_ready'))
 
     # ==================== Animation Methods ====================
 
@@ -2457,7 +2452,7 @@ class MainWindow(QMainWindow):
     def _on_stt_error(self, error: str):
         """Handle STT error."""
         self._append_system_message(f"Błąd rozpoznawania: {error}")
-        self._update_status("Błąd rozpoznawania mowy")
+        self._update_status(tr('status_stt_error'))
 
     # ==================== Actions ====================
 
@@ -2489,7 +2484,7 @@ class MainWindow(QMainWindow):
             # NOTE: Removed 30-second auto-scroll timer - was causing unwanted jumps
             # User now has full control over scrolling after sending a message
 
-            self._update_status("Wysłano do terminala...")
+            self._update_status(tr('status_sent_to_terminal'))
             return
 
         # Fallback for non-terminal mode - require text
@@ -2503,7 +2498,7 @@ class MainWindow(QMainWindow):
         self.claude.send(full_message)
         # Update context usage with user input
         self._update_context_usage(len(full_message))
-        self._update_status("Wysłano...")
+        self._update_status(tr('status_sent'))
 
     def _build_message_with_attachments(self, text: str) -> str:
         """Build message with attached file paths."""
@@ -2579,9 +2574,9 @@ class MainWindow(QMainWindow):
                 cleaned_text = text_cleaner.clean(selected, use_dictionary=False)
                 if cleaned_text:
                     self.tts.speak(cleaned_text)
-                    self._update_status("Czytam zaznaczony tekst...")
+                    self._update_status(tr('status_reading_selected'))
                 else:
-                    self._update_status("Zaznaczony tekst nie zawiera treści do odczytania")
+                    self._update_status(tr('status_selection_no_content'))
                 return
 
             # Etap 3: bez zaznaczenia — najpierw zaległości tej zakładki.
@@ -2593,7 +2588,7 @@ class MainWindow(QMainWindow):
                 cleaned_text = prose_from_markdown(joined)
                 if cleaned_text:
                     self.tts.speak(cleaned_text)
-                    self._update_status(f"Czytam {len(backlog)} zaległych wypowiedzi...")
+                    self._update_status(tr('status_reading_backlog').format(n=len(backlog)))
                     return
 
             # Następnie: ostatnia wypowiedź z dziennika sesji (czysta proza,
@@ -2608,7 +2603,7 @@ class MainWindow(QMainWindow):
                     cleaned_text = prose_from_markdown(last)
                     if cleaned_text:
                         self.tts.speak(cleaned_text)
-                        self._update_status("Czytam ostatnią odpowiedź...")
+                        self._update_status(tr('status_reading_last'))
                         return
 
             # Fallback (stary tor) — ekstrakcja z bufora terminala.
@@ -2625,17 +2620,17 @@ class MainWindow(QMainWindow):
                         if hasattr(self, '_tts_timer') and self._tts_timer is not None:
                             self._tts_timer.stop()
                         self.tts.speak(cleaned_text)
-                        self._update_status("Czytam ostatnią odpowiedź...")
+                        self._update_status(tr('status_reading_last'))
                         # Clear buffer after reading
                         self._terminal_output_buffer = ""
                     else:
-                        self._update_status("Odpowiedź nie zawiera treści do odczytania")
+                        self._update_status(tr('status_response_no_content'))
                 else:
-                    self._update_status("Nie znaleziono odpowiedzi do odczytania")
+                    self._update_status(tr('status_no_response_found'))
                     # Clear buffer anyway to prevent accumulation
                     self._terminal_output_buffer = ""
             else:
-                self._update_status("Brak tekstu do odczytania")
+                self._update_status(tr('status_no_text'))
             return
 
         # Fallback for QTextEdit mode
@@ -2656,9 +2651,9 @@ class MainWindow(QMainWindow):
             if cleaned_text:
                 self.tts.speak(cleaned_text)
             else:
-                self._update_status("Odpowiedź nie zawiera treści do odczytania")
+                self._update_status(tr('status_response_no_content'))
         else:
-            self._update_status("Nie znaleziono odpowiedzi do odczytania")
+            self._update_status(tr('status_no_response_found'))
 
     def _copy_selection(self):
         """Copy selected text from terminal to system clipboard."""
@@ -2669,11 +2664,11 @@ class MainWindow(QMainWindow):
                 # Copy to system clipboard
                 clipboard = QApplication.clipboard()
                 clipboard.setText(selected)
-                self._update_status(f"Skopiowano do schowka ({len(selected)} znaków)")
+                self._update_status(tr('status_copied').format(n=len(selected)))
                 # Flash green effect
                 self._flash_copy_success()
             else:
-                self._update_status("Najpierw zaznacz tekst w terminalu")
+                self._update_status(tr('status_select_text_first_terminal'))
         else:
             # Fallback for QTextEdit mode
             if self.conversation_area:
@@ -2683,11 +2678,11 @@ class MainWindow(QMainWindow):
                 if selected and selected.strip():
                     clipboard = QApplication.clipboard()
                     clipboard.setText(selected)
-                    self._update_status(f"Skopiowano do schowka ({len(selected)} znaków)")
+                    self._update_status(tr('status_copied').format(n=len(selected)))
                     # Flash green effect
                     self._flash_copy_success()
                 else:
-                    self._update_status("Najpierw zaznacz tekst")
+                    self._update_status(tr('status_select_text_first'))
 
     def _clear_input_field(self):
         """Clear the input text field."""
@@ -2717,7 +2712,7 @@ class MainWindow(QMainWindow):
                 if file_path not in self.attached_files:
                     self.attached_files.append(file_path)
             self._update_attachments_display()
-            self._update_status(f"Dodano {len(files)} plik(ów)")
+            self._update_status(tr('status_files_added').format(n=len(files)))
 
     def _remove_attachment(self, file_path: str):
         """Remove an attachment from the list."""
@@ -2857,7 +2852,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, '_tts_timer') and self._tts_timer is not None:
             self._tts_timer.stop()
 
-        self._update_status("Zatrzymano czytanie")
+        self._update_status(tr('status_reading_stopped'))
 
     def _insert_quick_action(self, command: str):
         """Insert quick action command."""
@@ -2932,7 +2927,7 @@ class MainWindow(QMainWindow):
             self.quick_actions = dialog.get_quick_actions()
             self._save_quick_actions()
             self._update_quick_actions_menu()
-            self._update_status("Szybkie akcje zostały zapisane")
+            self._update_status(tr('status_quick_actions_saved'))
 
     def _new_session(self):
         """Start new terminal/Claude session."""
@@ -3013,7 +3008,7 @@ class MainWindow(QMainWindow):
             self.skin_icons = dialog.get_icons()
             self._apply_skin_icons()  # Apply new icons to buttons
             self._save_settings()
-            self._update_status("Skórka została zapisana")
+            self._update_status(tr('status_skin_saved'))
         else:
             # User cancelled - restore originals
             self.skin_colors = original_colors
@@ -3788,7 +3783,7 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
             self._update_checked_on_close = True
             self._close_check_in_progress = True
             self._manual_update_check = False
-            self._update_status("Sprawdzanie aktualizacji przed zamknięciem…")
+            self._update_status(tr('status_checking_updates_close'))
             QTimer.singleShot(4000, self._close_check_timeout)
             self.update_manager.check_async()
             event.ignore()
