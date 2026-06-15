@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Manage agents — guide | Claude Voice Assistant</title>
+  <meta name="description" content="How the Manage agents feature works in Claude Voice Assistant — adding, editing and configuring agents step by step, for everyone.">
+  <style>
+    :root{
+      --bg1:#2a1140; --bg2:#3d1a5b; --accent:#a855f7; --accent2:#7c3aed;
+      --ink:#1b1226; --muted:#6b6478; --card:#ffffff; --soft:#f5f2fb;
+      --ok:#16a34a; --warn-bg:#fff7e6; --warn-line:#f0c36d; --line:#e9e3f3;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Ubuntu,Helvetica,Arial,sans-serif;
+      color:var(--ink);
+      background:linear-gradient(160deg,var(--bg1),var(--bg2));
+      min-height:100vh;line-height:1.6;
+    }
+    .wrap{max-width:860px;margin:0 auto;padding:40px 20px 64px}
+    header{text-align:center;color:#fff;margin-bottom:30px}
+    .logo{
+      width:72px;height:72px;border-radius:20px;margin:0 auto 14px;
+      background:linear-gradient(145deg,#c084fc,#7c3aed);
+      display:flex;align-items:center;justify-content:center;font-size:36px;
+      box-shadow:0 12px 30px rgba(124,58,237,.45);
+    }
+    h1{font-size:1.9rem;font-weight:800;letter-spacing:-.5px}
+    .tagline{font-size:1.05rem;opacity:.9;margin-top:8px}
+    .back{display:inline-block;margin-top:14px;color:#e9d5ff;font-size:.95rem}
+
+    .panel{background:var(--card);border-radius:20px;padding:28px;box-shadow:0 18px 40px rgba(20,8,40,.28);margin-bottom:22px}
+    .panel h2{font-size:1.3rem;margin-bottom:10px;display:flex;align-items:center;gap:12px}
+    .panel h3{font-size:1.05rem;margin:16px 0 8px}
+    .num{display:inline-flex;flex:none;width:34px;height:34px;border-radius:50%;
+      background:var(--accent);color:#fff;font-weight:800;font-size:1.05rem;
+      align-items:center;justify-content:center}
+    .panel p, .panel li{font-size:1rem;color:#332b40;margin-bottom:10px}
+    .panel ol, .panel ul{padding-left:24px;margin-bottom:8px}
+    .panel li{margin-bottom:8px}
+
+    .see{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin:10px 0;font-size:.95rem}
+    .see b{color:var(--accent2)}
+    .warn{background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:12px;padding:12px 16px;margin:10px 0;font-size:.95rem}
+    .ok{background:#ecfdf3;border:1px solid #b7e4c7;border-radius:12px;padding:12px 16px;margin:10px 0;font-size:.95rem}
+
+    /* tabela przycisków / opcji */
+    .opts{width:100%;border-collapse:collapse;margin-top:6px}
+    .opts td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:.95rem;vertical-align:top}
+    .opts td:first-child{font-weight:700;width:34%;white-space:nowrap}
+
+    .faq{width:100%;border-collapse:collapse;margin-top:6px}
+    .faq td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:.95rem;vertical-align:top}
+    .faq td:first-child{font-weight:700;width:45%}
+
+    kbd{background:#eee;border:1px solid #ccc;border-bottom-width:3px;border-radius:6px;
+      padding:1px 7px;font-family:inherit;font-size:.92em;font-weight:600}
+    .chip{display:inline-block;background:#2d0a1e;color:#fff;border-radius:8px;padding:2px 10px;font-size:.9em}
+    .green{display:inline-block;width:14px;height:14px;border-radius:4px;background:rgba(34,160,84,.6);vertical-align:-2px}
+    .gray{display:inline-block;width:14px;height:14px;border-radius:4px;background:rgba(120,125,135,.55);vertical-align:-2px}
+
+    footer{text-align:center;color:#fff;opacity:.8;margin-top:36px;font-size:.9rem}
+    footer a{color:#e9d5ff}
+
+    /* Przełącznik języka — rozwijane menu (skalowalne na kolejne języki) */
+    .lang-switch{position:fixed;top:12px;right:14px;z-index:100;font-size:.85rem;font-weight:700;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Ubuntu,sans-serif}
+    .lang-switch summary{list-style:none;cursor:pointer;color:#fff;background:rgba(20,8,40,.6);backdrop-filter:blur(6px);border-radius:999px;padding:7px 15px;display:inline-flex;align-items:center;gap:7px;user-select:none}
+    .lang-switch summary::-webkit-details-marker{display:none}
+    .lang-switch summary::marker{content:""}
+    .lang-switch[open] summary{background:rgba(20,8,40,.9)}
+    .lang-menu{position:absolute;top:calc(100% + 6px);right:0;min-width:150px;background:#2a1140;border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:6px;box-shadow:0 14px 34px rgba(20,8,40,.55);display:flex;flex-direction:column;gap:2px}
+    .lang-menu a{color:#e9d5ff;text-decoration:none;padding:9px 13px;border-radius:8px;white-space:nowrap;line-height:1}
+    .lang-menu a:hover{background:rgba(255,255,255,.08);color:#fff}
+    .lang-menu a.active{background:#a855f7;color:#fff}
+  </style>
+</head>
+<body>
+  <details class="lang-switch">
+    <summary>🌐 English ▾</summary>
+    <div class="lang-menu">
+      <a href="instrukcja-agenci-en.html" class="active">English</a>
+      <a href="instrukcja-agenci.html">Polski</a>
+    </div>
+  </details>
+  <div class="wrap">
+    <header>
+      <div class="logo">🤖</div>
+      <h1>Manage agents — step by step</h1>
+      <p class="tagline">How to add a new agent and what every option in this window means —
+        explained so anyone can understand it, with no technical knowledge at all.</p>
+      <a class="back" href="https://pobierz.srv1251441.hstgr.cloud/">← Back to the download page</a>
+    </header>
+
+    <section class="panel">
+      <h2>What even is an “agent”?</h2>
+      <p>Picture an <b>agent as a separate employee</b> you hire for one
+        project. Each agent has its <b>own tab</b> in the app (like tabs in a browser),
+        and inside it:</p>
+      <ul>
+        <li>its <b>own terminal</b> — the “desk” it works at,</li>
+        <li>its <b>own project folder</b> (working directory) — the folder on disk where it operates,</li>
+        <li>its <b>own “brain”</b> (a Claude model) — faster and cheaper, or more powerful,</li>
+        <li>its <b>own notes</b> (memory files) — which it gets to read at the start.</li>
+      </ul>
+      <div class="see"><b>Why have several agents?</b> For example: one handles an online
+        store, another the company website — each in its own folder, nothing gets mixed up.
+        Or: one with a fast, cheap brain for small stuff, and another with the most powerful one for
+        the hardest tasks. You switch between them by clicking the tabs at the top of the window.</div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">1</span> How to open “Manage agents”</h2>
+      <p>There are two ways — both lead to the same window:</p>
+      <ul>
+        <li>the <b>Tabs → Manage agents…</b> menu (top menu bar), or</li>
+        <li>click <b>“+”</b> on the tab bar and choose <b>Manage agents…</b></li>
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">2</span> The “Manage agents” window — what you see here</h2>
+      <p>On the left is a <b>list of all agents</b>. Each row shows:</p>
+      <ul>
+        <li>the <b>agent's name</b> (in a larger font),</li>
+        <li>below it in fine print: <b>📁 how many memory files it has</b> (hover to
+          see which ones), <b>🤖 which model</b> (brain) it has, <b>🧩 how many skills</b> and
+          <b>🔌 how many MCP plugins</b> (they take a moment to load — that's normal).</li>
+      </ul>
+      <div class="see"><b>The row's background color means something:</b><br>
+        <span class="green"></span>&nbsp;<b>green background</b> = the agent starts on its own every
+        time the app launches,<br>
+        <span class="gray"></span>&nbsp;<b>gray background</b> = the agent is saved but waiting — you'll start
+        it manually when you need it.</div>
+
+      <h3>The buttons to the right of the list</h3>
+      <table class="opts">
+        <tr><td>▲ Up / ▼ Down</td>
+          <td>Changes the <b>order</b> of agents in the list — the tabs at the top of the window
+            will be arranged in the same order. Select an agent and click the arrows.</td></tr>
+        <tr><td>▶️ Run</td>
+          <td>Opens the selected agent's tab <b>right away</b> (the window closes, and your changes
+            are saved). The fastest way to wake up an agent with a gray background.</td></tr>
+        <tr><td>➕ Add</td>
+          <td>Creates a <b>new agent</b> — opens the configuration window described in point 3 below.</td></tr>
+        <tr><td>✏️ Edit</td>
+          <td>Opens <b>the same configuration window</b>, but with the selected agent's settings —
+            you can change its name, folder, model, and so on.</td></tr>
+        <tr><td>📋 Duplicate</td>
+          <td>Creates a <b>copy</b> of the selected agent (with “(copy)” added to the name).
+            Handy when you want a second, nearly identical one — e.g. the same project
+            but with a different brain.</td></tr>
+        <tr><td>🗑️ Delete</td>
+          <td>Deletes the selected agent (the app will ask if you're sure).
+            <b>At least one agent must remain</b> — you can't delete the last one.</td></tr>
+        <tr><td>Cancel / Save (at the bottom)</td>
+          <td><b>Save</b> confirms all changes. If you didn't use “Run” or
+            “Save and run,” the new tabs will appear <b>after you restart
+            the app</b> (the app will remind you). <b>Cancel</b> discards changes.</td></tr>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">3</span> Adding a new agent — the configuration window</h2>
+      <p>After you click <b>➕ Add</b> (or ✏️ Edit), a window opens with <b>four
+        tabs</b> at the top: 📝 Basics, 💾 Memory, 🧩 Skills, 🔌 MCP.
+        For ordinary work the first one is enough — the rest are extras for those who want them.</p>
+
+      <h3>📝 The “Basics” tab — where the most important stuff happens</h3>
+      <table class="opts">
+        <tr><td>Agent name</td>
+          <td>Any name that reminds you what this agent does —
+            e.g. “Online store” or “Company website.” It'll appear on the tab.</td></tr>
+        <tr><td>Working directory</td>
+          <td>The “project folder” — the folder on disk where the agent will work (reading
+            and creating files). Click <b>📁</b> next to the field and pick a folder. If you're starting
+            from scratch — first create an empty folder, e.g. <i>Documents\MyProject</i>.</td></tr>
+        <tr><td>Claude Code model</td>
+          <td>The agent's “brain.” From the list you can pick:
+            <ul style="margin-top:6px">
+              <li><b>Default — Opus 4.8</b> — good for everything, start with this;</li>
+              <li><b>Fable 5</b> — the most powerful, for the hardest tasks
+                (uses up your account's limit about 2× faster — use it consciously);</li>
+              <li><b>Opus 4.8</b> — same as the default, locked in explicitly;</li>
+              <li><b>Sonnet 4.6</b> — fast and balanced, for lighter work;</li>
+              <li><b>Haiku 4.5</b> — the fastest and most economical, for simple questions.</li>
+            </ul>
+            Below the list there's a hint: <b>changing the model of a running agent requires
+            restarting it</b> (the Stop button, then Run in the tab).</td></tr>
+        <tr><td>☑ Start automatically when the app launches</td>
+          <td>Checked = the agent wakes up on its own together with the app (green background in the list).
+            Unchecked = it waits until you start it by hand. If you have many agents,
+            leave this checked only for the ones you use every day — the app will
+            start faster.</td></tr>
+        <tr><td>☑ Load memory files after Claude Code starts</td>
+          <td>Checked = right after starting, the agent immediately “reads” the notes from the
+            💾 Memory tab. Uncheck only if you want to exceptionally start without them.</td></tr>
+      </table>
+
+      <h3>💾 The “Memory” tab — notes for the start</h3>
+      <p>Here you add <b>files the agent gets to read at the beginning of its work</b> —
+        like a folder of notes for a new employee: what this project is, what the rules are,
+        what's already been decided. This way you don't have to explain everything from scratch in every conversation.</p>
+      <ul>
+        <li>Click <b>+ Add file</b> and pick a file from disk — these can be
+          <b>.md</b> files (formatted text), <b>.txt</b> (plain text) or <b>.json</b>.</li>
+        <li>Each added file appears as a bar with its name; the <b>✕</b> on the right removes it
+          (from the agent's list — the file on disk stays untouched).</li>
+        <li>Hover over the name to see the file's full path.</li>
+      </ul>
+      <div class="see">No notes at all? No problem — leave it empty. The agent works
+        without this too; memory is a convenience, not a requirement.</div>
+
+      <h3>🧩 The “Skills” tab — extra abilities (for those who want them)</h3>
+      <p>A <b>skill is a ready-made “recipe”</b> that teaches the agent a specific ability — e.g.
+        creating Word documents, presentations, or searching the internet according to certain rules.</p>
+      <ul>
+        <li>Every agent <b>automatically inherits the global skills</b> (the ones from the
+          Extensions menu — shared across all agents).</li>
+        <li>The <b>“Manage local skills”</b> button lets you add skills
+          <b>for this one agent only</b>.</li>
+        <li>The list at the bottom (“🚫 Disable global skills…”) lets you <b>uncheck</b> those shared
+          skills that this particular agent should <b>not use</b>. Changes are saved right away.</li>
+      </ul>
+
+      <h3>🔌 The “MCP” tab — plugins for tools (for those who want them)</h3>
+      <p><b>MCP plugins</b> give the agent access to external tools — e.g. a
+        database, a web browser, or a calendar. It works exactly like skills:</p>
+      <ul>
+        <li>the agent inherits the <b>global MCP servers</b> from the Extensions menu,</li>
+        <li><b>“Manage local MCP”</b> adds plugins for this agent only
+          (they run in its working directory),</li>
+        <li>the “🚫 Disable global MCP…” list detaches selected shared plugins from this agent
+          (saved instantly).</li>
+      </ul>
+      <div class="see">If you don't know what skills and MCP are — <b>just skip these two
+        tabs</b>. The agent will work great without them.</div>
+
+      <h3>The buttons at the bottom of the configuration window</h3>
+      <table class="opts">
+        <tr><td>Cancel</td><td>Closes the window without saving.</td></tr>
+        <tr><td>Save</td>
+          <td>Adds the agent to the list (returns to the “Manage agents” window). Its tab
+            will open after you restart the app — or select it and click ▶️ Run.</td></tr>
+        <tr><td>Save and run</td>
+          <td>Saves <b>and immediately opens the tab</b> of the new agent. The most convenient option
+            when you want to start working right away.</td></tr>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">4</span> Quick recipe: your first own agent in 6 steps</h2>
+      <ol>
+        <li>Create an empty folder on disk for the project, e.g. <i>Documents\MySite</i>.</li>
+        <li>In the app: the <b>Tabs → Manage agents…</b> menu.</li>
+        <li>Click <b>➕ Add</b>.</li>
+        <li>Type a name (e.g. “My site”), click <b>📁</b> and point to the folder you created.
+          Leave the model on <b>Default</b>.</li>
+        <li>Click <b>Save and run</b>.</li>
+        <li>Done — you have a new tab. Write what you want to do in it and press <kbd>Enter</kbd>.</li>
+      </ol>
+      <div class="ok">✅ <b>An everyday tip:</b> a handy setup is two agents —
+        one with the <b>Opus</b> model (the default) for day-to-day work and another with <b>Fable 5</b>
+        for the hardest tasks. Make a copy with the 📋 Duplicate button and change only the model on the copy.</div>
+    </section>
+
+    <section class="panel">
+      <h2>Frequently asked questions</h2>
+      <table class="faq">
+        <tr><td>I added an agent but I don't see its tab</td>
+          <td>You clicked “Save” without running it — the tab will appear after you restart the app.
+            Or go back to “Manage agents,” select it and click <b>▶️ Run</b>.</td></tr>
+        <tr><td>I changed the model but the agent still answers the old way</td>
+          <td>A running agent needs to be restarted: in its tab click <b>Stop</b>,
+            then <b>Run</b>.</td></tr>
+        <tr><td>I can't delete an agent</td>
+          <td>You can't delete the last agent — at least one must remain.</td></tr>
+        <tr><td>“⏳ loading…” hangs for a long time next to 🧩 and 🔌</td>
+          <td>That's normal — the app is asking Claude Code for the list of skills and plugins of each
+            agent. After a few seconds the numbers will appear.</td></tr>
+        <tr><td>What does a green and a gray background in the list mean?</td>
+          <td>Green = the agent starts on its own when the app launches. Gray = it's waiting for a
+            manual start. You change this in ✏️ Edit → “Start automatically…”.</td></tr>
+        <tr><td>Do agents see each other's conversations?</td>
+          <td>No — each one works separately, in its own terminal and its own folder.</td></tr>
+      </table>
+    </section>
+
+    <footer>
+      <p><a href="https://pobierz.srv1251441.hstgr.cloud/">← Back to the download page</a></p>
+      <p>Claude Voice Assistant • kontakt@fulfillment-polska.pl</p>
+    </footer>
+  </div>
+</body>
+</html>

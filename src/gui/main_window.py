@@ -1830,8 +1830,8 @@ class MainWindow(QMainWindow):
         """Instrukcja online „Zarządzaj agentami" (publiczna podstrona /cva)."""
         from PyQt5.QtGui import QDesktopServices
         from PyQt5.QtCore import QUrl
-        from config import INSTALL_GUIDE_BASE_URL
-        QDesktopServices.openUrl(QUrl(f"{INSTALL_GUIDE_BASE_URL}instrukcja-agenci.html"))
+        from config import install_guide_url
+        QDesktopServices.openUrl(QUrl(install_guide_url('agenci')))
 
     def _on_claude_cli_found(self, path: str):
         """Kreator znalazł CLI — przejmij ścieżkę bez restartu aplikacji."""

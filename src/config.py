@@ -2229,6 +2229,15 @@ def model_default_prefix() -> str:
     return t("model_default_prefix")
 
 
+def install_guide_url(name: str) -> str:
+    """URL instrukcji „krok po kroku" dla danej strony (windows/macos/linux/agenci).
+
+    Gdy interfejs jest po angielsku → wersja '-en' (np. instrukcja-windows-en.html),
+    inaczej polska. Obie wersje leżą obok siebie na publicznym /cva (bez hasła)."""
+    suffix = "-en" if current_ui_language().startswith("en") else ""
+    return f"{INSTALL_GUIDE_BASE_URL}instrukcja-{name}{suffix}.html"
+
+
 # Domyślne proporcje rozdzielacza terminal/panel dolny: [terminal, panel].
 # QSplitter skaluje je proporcjonalnie do wysokości okna — ~89/11 daje cienki
 # panel dolny (suwak nisko). Nowe zakładki dziedziczą proporcje z aktywnej

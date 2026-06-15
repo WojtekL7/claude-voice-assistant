@@ -3547,9 +3547,10 @@ class ClaudeSetupDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         from core.platform_utils import os_key
-        from config import INSTALL_GUIDE_BASE_URL
+        from config import install_guide_url
         self._os = os_key()
-        self._guide_url = f"{INSTALL_GUIDE_BASE_URL}instrukcja-{self._os}.html"
+        # Język interfejsu decyduje o wersji instrukcji (-en dla angielskiego).
+        self._guide_url = install_guide_url(self._os)
 
         self.setWindowTitle(tr('dlg_setup_title'))
         self.setMinimumWidth(560)

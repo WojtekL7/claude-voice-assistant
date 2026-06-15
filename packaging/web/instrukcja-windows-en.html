@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Installation guide — Windows | Claude Voice Assistant</title>
+  <meta name="description" content="Installing Claude Voice Assistant on Windows, step by step — for everyone, no technical knowledge needed.">
+  <style>
+    :root{
+      --bg1:#2a1140; --bg2:#3d1a5b; --accent:#a855f7; --accent2:#7c3aed;
+      --ink:#1b1226; --muted:#6b6478; --card:#ffffff; --soft:#f5f2fb;
+      --ok:#16a34a; --warn-bg:#fff7e6; --warn-line:#f0c36d; --line:#e9e3f3;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Ubuntu,Helvetica,Arial,sans-serif;
+      color:var(--ink);
+      background:linear-gradient(160deg,var(--bg1),var(--bg2));
+      min-height:100vh;line-height:1.6;
+    }
+    .wrap{max-width:860px;margin:0 auto;padding:40px 20px 64px}
+    header{text-align:center;color:#fff;margin-bottom:30px}
+    .logo{
+      width:72px;height:72px;border-radius:20px;margin:0 auto 14px;
+      background:linear-gradient(145deg,#c084fc,#7c3aed);
+      display:flex;align-items:center;justify-content:center;font-size:36px;
+      box-shadow:0 12px 30px rgba(124,58,237,.45);
+    }
+    h1{font-size:1.9rem;font-weight:800;letter-spacing:-.5px}
+    .tagline{font-size:1.05rem;opacity:.9;margin-top:8px}
+    .back{display:inline-block;margin-top:14px;color:#e9d5ff;font-size:.95rem}
+
+    .panel{background:var(--card);border-radius:20px;padding:28px;box-shadow:0 18px 40px rgba(20,8,40,.28);margin-bottom:22px}
+    .panel h2{font-size:1.3rem;margin-bottom:10px;display:flex;align-items:center;gap:12px}
+    .num{display:inline-flex;flex:none;width:34px;height:34px;border-radius:50%;
+      background:var(--accent);color:#fff;font-weight:800;font-size:1.05rem;
+      align-items:center;justify-content:center}
+    .panel p, .panel li{font-size:1rem;color:#332b40;margin-bottom:10px}
+    .panel ol, .panel ul{padding-left:24px;margin-bottom:8px}
+    .panel li{margin-bottom:8px}
+
+    .see{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin:10px 0;font-size:.95rem}
+    .see b{color:var(--accent2)}
+    .warn{background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:12px;padding:12px 16px;margin:10px 0;font-size:.95rem}
+    .ok{background:#ecfdf3;border:1px solid #b7e4c7;border-radius:12px;padding:12px 16px;margin:10px 0;font-size:.95rem}
+
+    .cmd{display:flex;gap:10px;align-items:center;background:#1e1530;border-radius:12px;padding:12px 14px;margin:10px 0}
+    .cmd code{color:#d8c7ff;font-family:"Ubuntu Mono",Consolas,monospace;font-size:1rem;flex:1;overflow-x:auto;white-space:nowrap}
+    .cmd button{border:0;border-radius:8px;background:var(--accent);color:#fff;font-weight:700;
+      padding:8px 14px;cursor:pointer;font-size:.9rem;flex:none}
+    .cmd button:hover{filter:brightness(1.1)}
+
+    kbd{background:#eee;border:1px solid #ccc;border-bottom-width:3px;border-radius:6px;
+      padding:1px 7px;font-family:inherit;font-size:.92em;font-weight:600}
+
+    .faq td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:.95rem;vertical-align:top}
+    .faq td:first-child{font-weight:700;width:45%}
+    .faq{width:100%;border-collapse:collapse;margin-top:6px}
+
+    .btn{display:inline-flex;align-items:center;gap:8px;padding:12px 20px;border-radius:12px;
+      background:linear-gradient(145deg,var(--accent),var(--accent2));color:#fff;font-weight:700;
+      text-decoration:none;margin:6px 0}
+    .btn:hover{filter:brightness(1.07)}
+    footer{text-align:center;color:#fff;opacity:.8;margin-top:36px;font-size:.9rem}
+    footer a{color:#e9d5ff}
+
+    /* Przełącznik języka — rozwijane menu (skalowalne na kolejne języki) */
+    .lang-switch{position:fixed;top:12px;right:14px;z-index:100;font-size:.85rem;font-weight:700;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Ubuntu,sans-serif}
+    .lang-switch summary{list-style:none;cursor:pointer;color:#fff;background:rgba(20,8,40,.6);backdrop-filter:blur(6px);border-radius:999px;padding:7px 15px;display:inline-flex;align-items:center;gap:7px;user-select:none}
+    .lang-switch summary::-webkit-details-marker{display:none}
+    .lang-switch summary::marker{content:""}
+    .lang-switch[open] summary{background:rgba(20,8,40,.9)}
+    .lang-menu{position:absolute;top:calc(100% + 6px);right:0;min-width:150px;background:#2a1140;border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:6px;box-shadow:0 14px 34px rgba(20,8,40,.55);display:flex;flex-direction:column;gap:2px}
+    .lang-menu a{color:#e9d5ff;text-decoration:none;padding:9px 13px;border-radius:8px;white-space:nowrap;line-height:1}
+    .lang-menu a:hover{background:rgba(255,255,255,.08);color:#fff}
+    .lang-menu a.active{background:#a855f7;color:#fff}
+  </style>
+</head>
+<body>
+  <details class="lang-switch">
+    <summary>🌐 English ▾</summary>
+    <div class="lang-menu">
+      <a href="instrukcja-windows-en.html" class="active">English</a>
+      <a href="instrukcja-windows.html">Polski</a>
+    </div>
+  </details>
+  <div class="wrap">
+    <header>
+      <div class="logo">🪟</div>
+      <h1>Installing on Windows — step by step</h1>
+      <p class="tagline">We'll walk you all the way from downloading the file to your first chat with Claude Code.
+        You don't need to know your way around computers — just do exactly what's below.</p>
+      <a class="back" href="https://pobierz.srv1251441.hstgr.cloud/">← Back to the download page</a>
+    </header>
+
+    <section class="panel">
+      <h2>Before you start — what you'll need</h2>
+      <ul>
+        <li>A computer with <b>Windows 10 or 11</b> and an internet connection.</li>
+        <li>About <b>15 minutes</b>.</li>
+        <li>A <b>Claude account</b> (claude.ai) with an active plan (e.g. Pro) — that's the account
+          Claude Code will sign in to in the last step. If you don't have an account, create one at
+          <a href="https://claude.ai" target="_blank" rel="noopener">claude.ai</a>.</li>
+      </ul>
+      <div class="see">Besides our app, we'll install <b>two free add-ons</b>:
+        <b>Node.js</b> (a helper program) and <b>Claude Code</b> (the actual “brain” that
+        our app controls). Without them the app will launch, but there'll be no one to talk to.</div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">1</span> Download and install the app</h2>
+      <ol>
+        <li>Go to the <a href="https://pobierz.srv1251441.hstgr.cloud/" target="_blank" rel="noopener">download page</a>
+          (if it asks for a username and password — enter the details you received from us) and click
+          <b>“⬇ Download for Windows”</b>.</li>
+        <li>Once downloaded, open the file — click it in your browser's bar, or find it in your
+          <b>Downloads</b> folder and double-click it. The file is named <b>ClaudeVoiceAssistant-Setup.exe</b>.</li>
+        <li>A blue screen may appear that says <b>“Windows protected your PC.”</b>
+          This is a standard warning for new apps — click <b>“More info,”</b>
+          then the <b>“Run anyway”</b> button.</li>
+        <li>In the installer, click <b>Next → Install → Finish</b>. The app will start on its own.</li>
+      </ol>
+      <div class="see"><b>What you'll see:</b> the app window with a <b>black box</b> in the middle.
+        That box is the <b>terminal</b> — the place where you type commands for the computer.
+        You type, press <kbd>Enter</kbd>, and the computer answers. We'll use it in a moment.</div>
+      <div class="see">On the first launch, the app may also show a window saying
+        <b>“Finish setup — Claude Code is required.”</b> That's our helper — it walks you through
+        the same steps we describe below. You can follow it or this page, it's the same thing.</div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">2</span> Install Node.js (a free add-on)</h2>
+      <ol>
+        <li>Go to <a href="https://nodejs.org/" target="_blank" rel="noopener">nodejs.org</a>
+          and click the <b>green button labeled “LTS”</b> (that's the stable version). The file will download.</li>
+        <li>Open the downloaded file (e.g. <b>node-v22…-x64.msi</b>) and click <b>Next</b>,
+          accept the license, then <b>Next</b> again — don't change anything.</li>
+        <li>On the <b>“Tools for Native Modules”</b> screen, <u>do NOT check</u> the box —
+          just click <b>Next</b>, then <b>Install</b> and <b>Finish</b>.</li>
+      </ol>
+      <div class="warn">⚠️ <b>If you check that box anyway</b> (or already did):
+        after the installation a black window will open and print scary-looking errors
+        (e.g. “Didn't find any channel feed”). <b>It's harmless</b> — Node.js is already
+        installed. Just close that window with the X and move on.</div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">3</span> Install Claude Code</h2>
+      <ol>
+        <li><b>Close our app completely and start it again</b> (the desktop icon).
+          This matters — the app needs to “see” the freshly installed Node.js.</li>
+        <li>Copy the command below with the <b>Copy</b> button:</li>
+      </ol>
+      <div class="cmd">
+        <code id="npmcmd">npm install -g @anthropic-ai/claude-code</code>
+        <button onclick="copyCmd('npmcmd', this)">⧉ Copy</button>
+      </div>
+      <ol start="3">
+        <li>Click into the <b>black box</b> (terminal) in the app window,
+          paste the command (<kbd>Ctrl</kbd>+<kbd>V</kbd> or right-click → Paste)
+          and press <kbd>Enter</kbd>.</li>
+        <li>Wait 1–2 minutes. Text will scroll across the screen — that's normal.</li>
+      </ol>
+      <div class="ok">✅ <b>Success looks like this:</b> at the end you'll see a line like
+        <b>“added 2 packages in 40s.”</b></div>
+      <div class="warn">⚠️ If you see <b>“'npm' is not recognized…”</b> — Node.js wasn't
+        installed (go back to step 2) or the app wasn't restarted (close it
+        and open it once more).</div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">4</span> Launch Claude Code and sign in</h2>
+      <ol>
+        <li>In the terminal (the black box), type <b>claude</b> and press <kbd>Enter</kbd>.
+          <b>Watch out for typos</b> — “claude,” not “cloude.” Best to copy it:
+          <span class="cmd" style="display:inline-flex;padding:4px 8px;margin:0">
+            <code id="claudecmd" style="font-size:.95rem">claude</code>
+            <button onclick="copyCmd('claudecmd', this)" style="padding:4px 10px">⧉</button>
+          </span>
+        </li>
+        <li>If you're asked whether you <b>trust the folder</b> (“Do you trust the files in this
+          folder?”) — press <kbd>Enter</kbd> (yes).</li>
+        <li>Claude Code will ask you to <b>sign in</b>. A browser should open —
+          sign in to your Claude account and click <b>Authorize</b>.</li>
+        <li>The browser will show a <b>code</b> — copy it, go back to the app, paste it where it says
+          <b>“Paste code here”</b> and press <kbd>Enter</kbd>.</li>
+      </ol>
+      <div class="warn">⚠️ <b>If the browser does NOT open on its own:</b> Claude Code will show
+        a long link and a hint that says <b>“c to copy.”</b> Press the letter <kbd>c</kbd> on your keyboard —
+        the link copies to your clipboard. Open your browser, click the address bar, paste
+        (<kbd>Ctrl</kbd>+<kbd>V</kbd>) and press <kbd>Enter</kbd>.
+        <b>Don't retype the link by hand</b> — it's over 300 characters and a single typo breaks it.</div>
+      <div class="ok">✅ After a successful sign-in you'll see Claude Code's welcome in the terminal.
+        From now on you can write to it like you would to a person.</div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">5</span> Done! What's next</h2>
+      <ul>
+        <li><b>Type commands</b> in the field at the bottom of the window or straight into the terminal, and press <kbd>Enter</kbd>.</li>
+        <li><b>Reading answers out loud</b> works right away — turn on “auto-read” on the tab.</li>
+        <li><b>Voice dictation</b> (the 🎤 microphone) needs a free Groq key.
+          Create a free account and generate a key at
+          <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a>
+          (the “Create API Key” button), then paste it into the app:
+          the <b>Settings → Groq API Key…</b> menu.</li>
+        <li>The app <b>updates itself</b> — when a new version comes out, it asks you with a single window.</li>
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h2>Common problems</h2>
+      <table class="faq">
+        <tr><td>“'claude' is not recognized…”</td>
+          <td>Claude Code isn't installed yet (step 3) or the app wasn't
+            restarted after installing Node.js. Close the app and open it once more.</td></tr>
+        <tr><td>A black window full of errors after installing Node.js</td>
+          <td>A harmless side effect of the “Tools for Native Modules” option. Close the window and carry on.</td></tr>
+        <tr><td>“Windows protected your PC”</td>
+          <td>Click “More info,” then “Run anyway.” The app doesn't have a digital
+            signature yet — hence the warning.</td></tr>
+        <tr><td>The update won't download (SSL error)</td>
+          <td>Download the latest installer through your browser from the download page
+            and run it — your settings will be kept.</td></tr>
+        <tr><td>The microphone does nothing</td>
+          <td>The Groq key is missing — get a free one at
+            <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a>
+            and paste it into Settings → Groq API Key… Or Windows is blocking the microphone
+            (System Settings → Privacy → Microphone).</td></tr>
+      </table>
+    </section>
+
+    <footer>
+      <p><a href="https://pobierz.srv1251441.hstgr.cloud/">← Back to the download page</a></p>
+      <p>Claude Voice Assistant • kontakt@fulfillment-polska.pl</p>
+    </footer>
+  </div>
+
+  <script>
+    function copyCmd(id, btn) {
+      var text = document.getElementById(id).textContent;
+      function done(){ var t = btn.textContent; btn.textContent = "✓"; setTimeout(function(){ btn.textContent = t; }, 1500); }
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(done);
+      } else {
+        var ta = document.createElement("textarea");
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        document.execCommand("copy"); document.body.removeChild(ta); done();
+      }
+    }
+  </script>
+</body>
+</html>

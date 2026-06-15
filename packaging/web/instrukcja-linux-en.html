@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="pl">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Instrukcja instalacji — Linux | Claude Voice Assistant</title>
-  <meta name="description" content="Instalacja Claude Voice Assistant na Linuksie krok po kroku.">
+  <title>Installation guide — Linux | Claude Voice Assistant</title>
+  <meta name="description" content="Installing Claude Voice Assistant on Linux, step by step.">
   <style>
     :root{
       --bg1:#2a1140; --bg2:#3d1a5b; --accent:#a855f7; --accent2:#7c3aed;
@@ -69,67 +69,67 @@
 </head>
 <body>
   <details class="lang-switch">
-    <summary>🌐 Polski ▾</summary>
+    <summary>🌐 English ▾</summary>
     <div class="lang-menu">
-      <a href="instrukcja-linux-en.html">English</a>
-      <a href="instrukcja-linux.html" class="active">Polski</a>
+      <a href="instrukcja-linux-en.html" class="active">English</a>
+      <a href="instrukcja-linux.html">Polski</a>
     </div>
   </details>
   <div class="wrap">
     <header>
       <div class="logo">🐧</div>
-      <h1>Instalacja na Linuksie</h1>
-      <p class="tagline">Wersja do pobrania jednym kliknięciem (AppImage) jest w przygotowaniu.
-        Poniżej znajdziesz to, co możesz przygotować już teraz.</p>
-      <a class="back" href="https://pobierz.srv1251441.hstgr.cloud/">← Wróć do strony pobierania</a>
+      <h1>Installing on Linux</h1>
+      <p class="tagline">The one-click download (AppImage) is still in the works.
+        Below is what you can set up right now.</p>
+      <a class="back" href="https://pobierz.srv1251441.hstgr.cloud/">← Back to the download page</a>
     </header>
 
     <section class="panel">
-      <h2>⏳ Paczka dla Linuksa — wkrótce</h2>
-      <p>Pracujemy nad gotowym plikiem <b>AppImage</b>, który uruchomi program na Linuksie bez
-        instalacji — tak samo prosto jak na Windows i Macu. Gdy będzie gotowy, pojawi się na
-        <a href="https://pobierz.srv1251441.hstgr.cloud/">stronie pobierania</a>, a ta instrukcja
-        zostanie uzupełniona o szczegółowe kroki.</p>
-      <div class="see">Masz Windows lub Maca? Zobacz gotowe instrukcje:
-        <a href="instrukcja-windows.html">Windows</a> •
-        <a href="instrukcja-macos.html">macOS</a></div>
+      <h2>⏳ Linux package — coming soon</h2>
+      <p>We're working on a ready-to-go <b>AppImage</b> file that runs the app on Linux without
+        any installation — just as simply as on Windows and Mac. Once it's ready, it'll show up on the
+        <a href="https://pobierz.srv1251441.hstgr.cloud/">download page</a>, and this guide
+        will be filled in with detailed steps.</p>
+      <div class="see">On Windows or Mac? See the ready-made guides:
+        <a href="instrukcja-windows-en.html">Windows</a> •
+        <a href="instrukcja-macos-en.html">macOS</a></div>
     </section>
 
     <section class="panel">
-      <h2><span class="num">1</span> Co możesz przygotować już teraz — Node.js i Claude Code</h2>
-      <p>Program (jak na każdym systemie) potrzebuje dwóch darmowych dodatków:
-        <b>Node.js</b> i <b>Claude Code</b>. Możesz zainstalować je już dziś — będą gotowe
-        na premierę paczki. Otwórz terminal (Ctrl+Alt+T na Ubuntu) i wykonaj kolejno:</p>
+      <h2><span class="num">1</span> What you can set up today — Node.js and Claude Code</h2>
+      <p>The app (just like on every system) needs two free add-ons:
+        <b>Node.js</b> and <b>Claude Code</b>. You can install them today — they'll be ready
+        for the package launch. Open a terminal (Ctrl+Alt+T on Ubuntu) and run these one after another:</p>
       <p><b>Node.js</b> (Ubuntu/Debian):</p>
       <div class="cmd">
         <code id="nodecmd">sudo apt update &amp;&amp; sudo apt install -y nodejs npm</code>
-        <button onclick="copyCmd('nodecmd', this)">⧉ Kopiuj</button>
+        <button onclick="copyCmd('nodecmd', this)">⧉ Copy</button>
       </div>
       <p><b>Claude Code</b>:</p>
       <div class="cmd">
         <code id="npmcmd">sudo npm install -g @anthropic-ai/claude-code</code>
-        <button onclick="copyCmd('npmcmd', this)">⧉ Kopiuj</button>
+        <button onclick="copyCmd('npmcmd', this)">⧉ Copy</button>
       </div>
-      <div class="ok">✅ Sprawdzenie: wpisz <b>claude --version</b> i naciśnij <kbd>Enter</kbd> —
-        jeśli pokaże się numer wersji, wszystko gotowe.</div>
+      <div class="ok">✅ Check: type <b>claude --version</b> and press <kbd>Enter</kbd> —
+        if a version number shows up, you're all set.</div>
     </section>
 
     <section class="panel">
-      <h2><span class="num">2</span> Logowanie do Claude Code</h2>
+      <h2><span class="num">2</span> Signing in to Claude Code</h2>
       <ol>
-        <li>W terminalu wpisz <b>claude</b> i naciśnij <kbd>Enter</kbd>.</li>
-        <li>Jeśli pojawi się pytanie o zaufanie do folderu — naciśnij <kbd>Enter</kbd> (tak).</li>
-        <li>Claude Code poprosi o zalogowanie. Powinna otworzyć się przeglądarka — zaloguj się
-          na konto Claude (claude.ai, plan np. Pro) i kliknij <b>Autoryzuj</b>.</li>
-        <li>Skopiuj pokazany kod i wklej go w terminalu w miejscu „Paste code here”.</li>
+        <li>In the terminal, type <b>claude</b> and press <kbd>Enter</kbd>.</li>
+        <li>If you're asked whether you trust the folder — press <kbd>Enter</kbd> (yes).</li>
+        <li>Claude Code will ask you to sign in. A browser should open — sign in
+          to your Claude account (claude.ai, e.g. a Pro plan) and click <b>Authorize</b>.</li>
+        <li>Copy the code that appears and paste it into the terminal where it says “Paste code here.”</li>
       </ol>
-      <div class="warn">⚠️ Jeśli przeglądarka nie otworzy się sama — Claude Code pokaże długi link
-        i podpowiedź „c to copy”. Naciśnij <kbd>c</kbd> (link skopiuje się do schowka), wklej go
-        w przeglądarce. <b>Nie przepisuj linku ręcznie.</b></div>
+      <div class="warn">⚠️ If the browser doesn't open on its own — Claude Code will show a long link
+        and a hint that says “c to copy.” Press <kbd>c</kbd> (the link copies to your clipboard), then paste it
+        into your browser. <b>Don't retype the link by hand.</b></div>
     </section>
 
     <footer>
-      <p><a href="https://pobierz.srv1251441.hstgr.cloud/">← Wróć do strony pobierania</a></p>
+      <p><a href="https://pobierz.srv1251441.hstgr.cloud/">← Back to the download page</a></p>
       <p>Claude Voice Assistant • kontakt@fulfillment-polska.pl</p>
     </footer>
   </div>

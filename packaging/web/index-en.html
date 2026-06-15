@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="pl">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Claude Voice Assistant — pobierz</title>
-  <meta name="description" content="Claude Voice Assistant — asystent głosowy do Claude Code. Mów do komputera, słuchaj odpowiedzi. Pobierz na Linux, macOS i Windows.">
+  <title>Claude Voice Assistant — download</title>
+  <meta name="description" content="Claude Voice Assistant — a voice assistant for Claude Code. Talk to your computer, listen to the answers. Download for Linux, macOS and Windows.">
   <style>
     :root{
       --bg1:#2a1140; --bg2:#3d1a5b; --accent:#a855f7; --accent2:#7c3aed;
@@ -86,7 +86,7 @@
     footer{text-align:center;color:#fff;opacity:.8;margin-top:46px;font-size:.9rem}
     footer a{color:#e9d5ff}
 
-    /* Przełącznik języka — rozwijane menu (skalowalne na kolejne języki) */
+    /* Language switcher — dropdown menu (scalable to more languages) */
     .lang-switch{position:fixed;top:12px;right:14px;z-index:100;font-size:.85rem;font-weight:700}
     .lang-switch summary{list-style:none;cursor:pointer;color:#fff;
       background:rgba(20,8,40,.55);backdrop-filter:blur(6px);border-radius:999px;
@@ -104,96 +104,96 @@
 </head>
 <body>
   <details class="lang-switch">
-    <summary>🌐 Polski ▾</summary>
+    <summary>🌐 English ▾</summary>
     <div class="lang-menu">
-      <a href="index-en.html">English</a>
-      <a href="index.html" class="active">Polski</a>
+      <a href="index-en.html" class="active">English</a>
+      <a href="index.html">Polski</a>
     </div>
   </details>
   <div class="wrap">
     <header>
       <div class="logo">🎙️</div>
       <h1>Claude Voice Assistant</h1>
-      <p class="tagline">Rozmawiaj z Claude Code głosem — dyktuj polecenia i słuchaj odpowiedzi.
-        Pobierz, zainstaluj jak każdy program i działaj. Bez kombinowania.</p>
+      <p class="tagline">Talk to Claude Code with your voice — dictate commands and listen to the answers.
+        Download it, install it like any other app, and go. No fuss.</p>
       <div class="detected" id="detected" hidden></div>
     </header>
 
     <section class="cards">
       <!-- macOS -->
       <article class="card" id="card-mac">
-        <div class="badge" hidden>Twój system</div>
+        <div class="badge" hidden>Your system</div>
         <div class="os-ico">🍎</div>
         <div class="os-name">macOS</div>
         <div class="os-sub">Apple Silicon (M1–M4)</div>
-        <a class="btn" id="dl-mac" href="downloads/ClaudeVoiceAssistant-macos.dmg" download>⬇ Pobierz na Maca</a>
-        <a class="guide" href="cva/instrukcja-macos.html">📖 Instrukcja krok po kroku (dla każdego)</a>
+        <a class="btn" id="dl-mac" href="downloads/ClaudeVoiceAssistant-macos.dmg" download>⬇ Download for Mac</a>
+        <a class="guide" href="cva/instrukcja-macos-en.html">📖 Step-by-step guide (for everyone)</a>
         <div class="hint">
-          <b>Jak zainstalować:</b> otwórz pobrany plik <b>.dmg</b> i przeciągnij ikonę
-          do folderu <b>Programy</b>. Przy pierwszym uruchomieniu: Ustawienia →
-          Prywatność i bezpieczeństwo → <b>„Otwórz mimo to"</b>.
+          <b>How to install:</b> open the downloaded <b>.dmg</b> file and drag the icon
+          into the <b>Applications</b> folder. On first launch: System Settings →
+          Privacy &amp; Security → <b>“Open Anyway”</b>.
         </div>
       </article>
 
       <!-- Linux -->
       <article class="card" id="card-linux">
-        <div class="badge" hidden>Twój system</div>
+        <div class="badge" hidden>Your system</div>
         <div class="os-ico">🐧</div>
         <div class="os-name">Linux</div>
-        <div class="os-sub">Plik AppImage — w przygotowaniu</div>
-        <a class="btn disabled" id="dl-linux">⏳ Wkrótce</a>
-        <a class="guide" href="cva/instrukcja-linux.html">📖 Co możesz przygotować już teraz</a>
+        <div class="os-sub">AppImage — coming soon</div>
+        <a class="btn disabled" id="dl-linux">⏳ Coming soon</a>
+        <a class="guide" href="cva/instrukcja-linux-en.html">📖 What you can set up right now</a>
         <div class="hint">
-          <b>Pracujemy nad paczką dla Linuksa.</b> W instrukcji powyżej znajdziesz,
-          co warto zainstalować już dziś (Node.js + Claude Code).
+          <b>We're working on the Linux package.</b> The guide above shows what's
+          worth installing today (Node.js + Claude Code).
         </div>
       </article>
 
       <!-- Windows -->
       <article class="card" id="card-windows">
-        <div class="badge" hidden>Twój system</div>
+        <div class="badge" hidden>Your system</div>
         <div class="os-ico">🪟</div>
         <div class="os-name">Windows</div>
-        <div class="os-sub">Windows 10/11 (64-bit) — instalator</div>
-        <a class="btn" id="dl-windows" href="downloads/ClaudeVoiceAssistant-Setup.exe" download>⬇ Pobierz na Windows</a>
-        <a class="guide" href="cva/instrukcja-windows.html">📖 Instrukcja krok po kroku (dla każdego)</a>
+        <div class="os-sub">Windows 10/11 (64-bit) — installer</div>
+        <a class="btn" id="dl-windows" href="downloads/ClaudeVoiceAssistant-Setup.exe" download>⬇ Download for Windows</a>
+        <a class="guide" href="cva/instrukcja-windows-en.html">📖 Step-by-step guide (for everyone)</a>
         <div class="hint">
-          <b>Jak zainstalować:</b> otwórz pobrany plik <b>.exe</b> i przejdź przez
-          instalator (kilka kliknięć „Dalej"). Jeśli pojawi się ekran
-          <b>„Windows chronił Twój komputer"</b>, kliknij <b>Więcej informacji →
-          Uruchom mimo to</b>. Program aktualizuje się potem sam.
+          <b>How to install:</b> open the downloaded <b>.exe</b> file and click through
+          the installer (a few “Next” clicks). If a
+          <b>“Windows protected your PC”</b> screen appears, click <b>More info →
+          Run anyway</b>. The app updates itself from then on.
         </div>
       </article>
     </section>
 
     <section class="help">
-      <h2>Jak to działa — w trzech krokach</h2>
+      <h2>How it works — in three steps</h2>
       <div class="steps">
         <div class="step">
           <span class="n">1</span>
-          <h3>Pobierz</h3>
-          <p>Kliknij przycisk dla swojego systemu powyżej. Plik zapisze się w „Pobrane".</p>
+          <h3>Download</h3>
+          <p>Click the button for your system above. The file saves to your “Downloads”.</p>
         </div>
         <div class="step">
           <span class="n">2</span>
-          <h3>Zainstaluj</h3>
-          <p>Otwórz pobrany plik i postępuj zgodnie z krótką podpowiedzią pod przyciskiem.</p>
+          <h3>Install</h3>
+          <p>Open the downloaded file and follow the short hint under the button.</p>
         </div>
         <div class="step">
           <span class="n">3</span>
-          <h3>Mów i słuchaj</h3>
-          <p>Uruchom program, zezwól na mikrofon i rozmawiaj z Claude Code głosem.</p>
+          <h3>Speak and listen</h3>
+          <p>Launch the app, allow microphone access, and talk to Claude Code with your voice.</p>
         </div>
       </div>
     </section>
 
     <footer>
-      <p>Claude Voice Assistant • wersja <span id="ver">…</span></p>
+      <p>Claude Voice Assistant • version <span id="ver">…</span></p>
     </footer>
   </div>
 
   <script>
-    // Wykryj system odwiedzającego i podpowiedz właściwy plik.
+    // Detect the visitor's system and highlight the right file.
     (function () {
       var ua = navigator.userAgent || "";
       var plat = navigator.platform || "";
@@ -204,10 +204,10 @@
 
       var det = document.getElementById("detected");
       if (label) {
-        det.innerHTML = "Wykryliśmy Twój system: <b>" + label + "</b>";
+        det.innerHTML = "We detected your system: <b>" + label + "</b>";
         det.hidden = false;
       }
-      // Wersja w stopce — zawsze aktualna, prosto z feedu aktualizacji.
+      // Version in the footer — always current, straight from the update feed.
       fetch("cva/appcast.json").then(function (r) { return r.json(); })
         .then(function (j) {
           var v = j && j.latest && j.latest.version;
@@ -221,7 +221,7 @@
         card.classList.add("recommended");
         var badge = card.querySelector(".badge");
         if (badge) badge.hidden = false;
-        // Przewiń lekko, żeby właściwy kafelek był widoczny na telefonie.
+        // Scroll a little so the right card is visible on phones.
         if (window.innerWidth < 820) {
           card.scrollIntoView({ behavior: "smooth", block: "center" });
         }
