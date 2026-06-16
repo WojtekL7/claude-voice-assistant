@@ -132,6 +132,13 @@ class WebTerminal(QWidget):
         # buforujemy i wysyłamy po frontend_ready (inaczej runJavaScript przepada).
         self._pending_theme = None
         self._pending_font = None
+        # Wejście (np. komenda `claude`) potrafi przyjść ZANIM powłoka wstanie —
+        # a powłoka startuje dopiero po frontend_ready (gdy xterm.js się załaduje,
+        # bywa ~2 s przy wolniejszym QtWebEngine, np. w AppImage). Bez bufora
+        # write-do-PTY przepadał po cichu (objaw: `claude` nie startował, a
+        # wiadomość pamięci trafiała wprost do bash-a → "command not found").
+        # Buforujemy i opróżniamy w _spawn(), w kolejności wysłania.
+        self._pending_input = []
         self._frontend_ready = False
         self._logged_first_output = False
         self._decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
@@ -218,8 +225,13 @@ class WebTerminal(QWidget):
             return
         family, size = self._pending_font
         fam = json.dumps(family)
+        # Wspólny interfejs przekazuje rozmiar w PUNKTACH (jak QTermWidget/QFont),
+        # a xterm.js liczy fontSize w PIKSELACH. Bez przeliczenia te same "13"
+        # dają na WebTerminalu litery ~30% mniejsze niż na QTermWidget (objaw:
+        # "czcionka nieczytelna w AppImage"). Przelicznik CSS: 1pt = 96/72 px.
+        px = round(int(size) * 4 / 3)
         self.view.page().runJavaScript(
-            f"window.__termFont && window.__termFont({fam}, {int(size)});")
+            f"window.__termFont && window.__termFont({fam}, {px});")
 
     def focus_terminal(self):
         self.view.setFocus()
@@ -324,6 +336,13 @@ class WebTerminal(QWidget):
         self._stop.clear()
         self._reader = threading.Thread(target=self._read_loop, daemon=True)
         self._reader.start()
+        # Opróżnij wejście zbuforowane przed startem powłoki (np. komenda
+        # `claude` wysłana zanim xterm.js się załadował) — w kolejności wysłania.
+        if self._pending_input:
+            pending, self._pending_input = self._pending_input, []
+            _log(f"spawn: opróżniam bufor wejścia ({len(pending)} fragm.)")
+            for chunk in pending:
+                self._write_pty(chunk)
 
     def _read_loop(self):
         while not self._stop.is_set():
@@ -357,12 +376,16 @@ class WebTerminal(QWidget):
             pass
 
     def _write_pty(self, data: str):
-        if self._proc is not None:
-            try:
-                # winpty pisze str, ptyprocess — bytes.
-                self._proc.write(data if _PTY_KIND == "winpty" else data.encode("utf-8"))
-            except Exception:
-                pass
+        if self._proc is None:
+            # Powłoka jeszcze nie wstała — zbuforuj i wyślij po _spawn()
+            # (inaczej write przepada po cichu; patrz _pending_input w __init__).
+            self._pending_input.append(data)
+            return
+        try:
+            # winpty pisze str, ptyprocess — bytes.
+            self._proc.write(data if _PTY_KIND == "winpty" else data.encode("utf-8"))
+        except Exception:
+            pass
 
     def _resize_pty(self, cols, rows):
         _log(f"resize: {cols}x{rows}")

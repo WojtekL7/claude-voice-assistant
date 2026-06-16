@@ -1,129 +1,154 @@
 #!/bin/bash
-# Build script for Claude Voice Assistant (Linux)
-
-set -e
+# Build Linux AppImage dla Claude Voice Assistant.
+#
+# URUCHAMIAĆ NA Linuksie x86_64. Produkuje jeden przenośny plik .AppImage
+# (użytkownik: chmod +x i klik — bez instalacji). Terminalem w paczce jest
+# WebTerminal (xterm.js + QtWebEngine); QTermWidget jest wykluczony ze .spec.
+#
+# Zmienne sterujące:
+#   CVA_SKIP_DEPS=1   — pomiń instalację zależności (gdy venv już gotowy; do testów lokalnych)
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
-BUILD_DIR="$PROJECT_DIR/dist"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SRC_DIR="$PROJECT_DIR/src"
+DIST_DIR="$PROJECT_DIR/dist"
+BUILD_DIR="$PROJECT_DIR/build"
+SPEC="$SCRIPT_DIR/ClaudeVoiceAssistant.spec"
 
 APP_NAME="Claude Voice Assistant"
-APP_VERSION="1.0.0"
+APP_BIN="claude-voice-assistant"
+APP_VERSION="$(grep -E '^APP_VERSION' "$SRC_DIR/config.py" | head -1 | sed -E 's/.*["'"'"']([^"'"'"']+)["'"'"'].*/\1/')"
+PLATFORM_ID="linux-x64"
+APPIMAGE="$DIST_DIR/ClaudeVoiceAssistant-$APP_VERSION-$PLATFORM_ID.AppImage"
 
 echo "=========================================="
-echo "Building $APP_NAME v$APP_VERSION for Linux"
+echo "Build: $APP_NAME v$APP_VERSION  ($PLATFORM_ID)"
 echo "=========================================="
 
-# Check Python
-if ! command -v python3 &> /dev/null; then
-    echo "Error: Python 3 is required"
-    exit 1
+if [[ "$(uname)" != "Linux" ]]; then
+  echo "BŁĄD: ten skrypt buduje TYLKO na Linuksie (uname=$(uname))."
+  exit 1
 fi
 
-# Create virtual environment if not exists
-if [ ! -d "$PROJECT_DIR/venv" ]; then
-    echo "Creating virtual environment..."
-    python3 -m venv "$PROJECT_DIR/venv"
+# 1) Środowisko + zależności
+PY=""
+for c in python3.12 python3.13 python3.11 python3; do
+  if command -v "$c" >/dev/null 2>&1; then PY="$c"; break; fi
+done
+if [[ -z "$PY" ]]; then
+  echo "BŁĄD: nie znaleziono Pythona 3.x."
+  exit 1
 fi
-
-# Activate virtual environment
+echo "== Python: $PY ($($PY --version 2>&1)) =="
+if [[ ! -d "$PROJECT_DIR/venv" ]]; then
+  echo "== Tworzę venv =="
+  "$PY" -m venv "$PROJECT_DIR/venv"
+fi
+# shellcheck disable=SC1091
 source "$PROJECT_DIR/venv/bin/activate"
-
-# Install dependencies
-echo "Installing dependencies..."
-pip install --upgrade pip
-pip install -r "$PROJECT_DIR/requirements.txt"
-
-# Install PyInstaller if not present
-pip install pyinstaller
-
-# Clean previous builds
-rm -rf "$BUILD_DIR"
-mkdir -p "$BUILD_DIR"
-
-# Build with PyInstaller
-echo "Building application with PyInstaller..."
-cd "$SRC_DIR"
-
-pyinstaller --onefile \
-    --windowed \
-    --name "claude-voice-assistant" \
-    --icon "$SRC_DIR/assets/icon.png" \
-    --add-data "config.py:." \
-    --add-data "assets:assets" \
-    --add-data "i18n:i18n" \
-    --hidden-import "PyQt5.QtCore" \
-    --hidden-import "PyQt5.QtWidgets" \
-    --hidden-import "PyQt5.QtGui" \
-    --hidden-import "edge_tts" \
-    --hidden-import "pygame" \
-    --hidden-import "sounddevice" \
-    --hidden-import "numpy" \
-    --hidden-import "scipy" \
-    --hidden-import "requests" \
-    --distpath "$BUILD_DIR" \
-    --workpath "$BUILD_DIR/build" \
-    --specpath "$BUILD_DIR" \
-    main.py
-
-# Create AppImage
-echo "Creating AppImage..."
-cd "$BUILD_DIR"
-
-# Create AppDir structure
-mkdir -p AppDir/usr/bin
-mkdir -p AppDir/usr/share/applications
-mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
-
-# Copy binary
-cp claude-voice-assistant AppDir/usr/bin/
-
-# Create desktop file
-cat > AppDir/usr/share/applications/claude-voice-assistant.desktop << EOF
-[Desktop Entry]
-Name=Claude Voice Assistant
-Comment=Voice assistant for Claude Code
-Exec=claude-voice-assistant
-Icon=claude-voice-assistant
-Terminal=false
-Type=Application
-Categories=Development;Utility;
-EOF
-
-# Copy icon (create placeholder if not exists)
-if [ -f "$SRC_DIR/assets/icon.png" ]; then
-    cp "$SRC_DIR/assets/icon.png" AppDir/usr/share/icons/hicolor/256x256/apps/claude-voice-assistant.png
+if [[ "${CVA_SKIP_DEPS:-0}" != "1" ]]; then
+  pip install --upgrade pip
+  pip install -r "$PROJECT_DIR/requirements.txt"
+  pip install pyinstaller
 else
-    # Create simple placeholder icon
-    echo "Warning: icon.png not found, skipping icon..."
+  echo "== Pomijam instalację zależności (CVA_SKIP_DEPS=1) =="
+  command -v pyinstaller >/dev/null 2>&1 || pip install pyinstaller
 fi
 
-# Create AppRun
-cat > AppDir/AppRun << 'EOF'
+# 2) Czysty build (onedir)
+echo "== PyInstaller =="
+rm -rf "$BUILD_DIR" "$DIST_DIR"
+pyinstaller --noconfirm --clean "$SPEC"
+
+ONEDIR="$DIST_DIR/$APP_BIN"
+if [[ ! -x "$ONEDIR/$APP_BIN" ]]; then
+  echo "BŁĄD: nie powstał $ONEDIR/$APP_BIN"
+  exit 1
+fi
+echo "== Zbudowano onedir: $ONEDIR =="
+
+# 3) Złóż AppDir
+echo "== Składanie AppDir =="
+APPDIR="$DIST_DIR/AppDir"
+rm -rf "$APPDIR"
+mkdir -p "$APPDIR/usr/bin"
+# Cała paczka PyInstallera (binarka + _internal) ląduje w usr/bin — binarka
+# znajduje _internal obok siebie.
+cp -a "$ONEDIR/." "$APPDIR/usr/bin/"
+
+# 3a) Ikona (na korzeniu AppDir + .DirIcon — wymóg AppImage)
+ICON_SRC="$SRC_DIR/assets/icon.png"
+if [[ -f "$ICON_SRC" ]]; then
+  cp "$ICON_SRC" "$APPDIR/$APP_BIN.png"
+  cp "$ICON_SRC" "$APPDIR/.DirIcon"
+  mkdir -p "$APPDIR/usr/share/icons/hicolor/256x256/apps"
+  cp "$ICON_SRC" "$APPDIR/usr/share/icons/hicolor/256x256/apps/$APP_BIN.png"
+else
+  echo "OSTRZEŻENIE: brak $ICON_SRC — AppImage bez ikony."
+fi
+
+# 3b) Plik .desktop (na korzeniu AppDir + w usr/share/applications)
+DESKTOP_CONTENT="[Desktop Entry]
+Type=Application
+Name=$APP_NAME
+Comment=Asystent głosowy dla Claude Code
+Exec=$APP_BIN
+Icon=$APP_BIN
+Categories=Development;Utility;
+Terminal=false
+"
+mkdir -p "$APPDIR/usr/share/applications"
+printf '%s' "$DESKTOP_CONTENT" > "$APPDIR/usr/share/applications/$APP_BIN.desktop"
+printf '%s' "$DESKTOP_CONTENT" > "$APPDIR/$APP_BIN.desktop"
+
+# 3c) AppRun — uruchamia binarkę z usr/bin
+# QTWEBENGINE_DISABLE_SANDBOX: sandbox Chromium nie współpracuje z układem
+# katalogów AppImage/PyInstallera (jak na Windows w 1.0.13). Wyświetlamy WYŁĄCZNIE
+# lokalny terminal.html (zero treści z sieci), więc wyłączenie sandboxa jest tu
+# bezpieczne i konieczne, by WebTerminal w ogóle wstał.
+cat > "$APPDIR/AppRun" << 'APPRUN_EOF'
 #!/bin/bash
-SELF=$(readlink -f "$0")
-HERE=${SELF%/*}
-export PATH="${HERE}/usr/bin/:${PATH}"
-exec "${HERE}/usr/bin/claude-voice-assistant" "$@"
-EOF
-chmod +x AppDir/AppRun
+SELF="$(readlink -f "$0")"
+HERE="${SELF%/*}"
+# CVA_WEBTERMINAL=1: w AppImage NIE pakujemy QTermWidgetu, więc terminalem jest
+# WebTerminal (xterm.js + QtWebEngine) — jak na macOS/Windows. Ta flaga sprawia,
+# że main.py ustawi Qt.AA_ShareOpenGLContexts i zaimportuje QtWebEngineWidgets
+# PRZED QApplication (twardy wymóg QtWebEngine). Bez niej WebTerminal nie wstaje.
+export CVA_WEBTERMINAL=1
+# Sandbox Chromium nie współpracuje z układem katalogów AppImage/PyInstallera
+# (jak na Windows w 1.0.13). Wyświetlamy tylko lokalny terminal.html (zero treści
+# z sieci), więc wyłączenie sandboxa jest tu bezpieczne i konieczne.
+export QTWEBENGINE_DISABLE_SANDBOX=1
+exec "$HERE/usr/bin/claude-voice-assistant" "$@"
+APPRUN_EOF
+chmod +x "$APPDIR/AppRun"
 
-# Download appimagetool if not present
-if [ ! -f appimagetool-x86_64.AppImage ]; then
-    echo "Downloading appimagetool..."
-    wget -q "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
-    chmod +x appimagetool-x86_64.AppImage
+# 4) appimagetool → AppImage
+echo "== appimagetool =="
+TOOL="$DIST_DIR/appimagetool-x86_64.AppImage"
+if [[ ! -f "$TOOL" ]]; then
+  echo "== Pobieram appimagetool =="
+  curl -fsSL -o "$TOOL" \
+    "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
+  chmod +x "$TOOL"
 fi
 
-# Build AppImage
-./appimagetool-x86_64.AppImage AppDir "Claude_Voice_Assistant-${APP_VERSION}-x86_64.AppImage"
+# --appimage-extract-and-run: działa też bez FUSE (kontener/CI).
+echo "== Tworzenie AppImage =="
+( cd "$DIST_DIR" && APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 \
+    "$TOOL" --appimage-extract-and-run "$APPDIR" "$APPIMAGE" )
 
 echo ""
 echo "=========================================="
-echo "Build complete!"
+echo "GOTOWE"
+echo "  AppImage: $APPIMAGE"
 echo "=========================================="
-echo "Output files:"
-echo "  - $BUILD_DIR/claude-voice-assistant (binary)"
-echo "  - $BUILD_DIR/Claude_Voice_Assistant-${APP_VERSION}-x86_64.AppImage"
 echo ""
+echo "Test lokalny:  chmod +x \"$APPIMAGE\" && \"$APPIMAGE\""
+echo ""
+echo "Wpis do appcast.json:"
+echo "  python3 \"$PROJECT_DIR/packaging/make-appcast-entry.py\" \\"
+echo "    \"$APPIMAGE\" --version $APP_VERSION --platform linux-x64 \\"
+echo "    --base-url https://pobierz.srv1251441.hstgr.cloud/cva/ \\"
+echo "    --appcast \"$PROJECT_DIR/packaging/appcast.json\" --merge"

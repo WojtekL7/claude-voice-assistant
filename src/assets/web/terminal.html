@@ -75,7 +75,10 @@
   <script>
     const term = new Terminal({
       fontFamily: '"Ubuntu Mono", Menlo, "DejaVu Sans Mono", Consolas, monospace',
-      fontSize: 14,
+      // 17 px = 13 pt przeliczone (96/72) — wartość startowa zgodna z tym, co
+      // Python dośle przez __termFont (patrz web_terminal._push_font). Dzięki
+      // temu litery nie "mrugają" mniejszym rozmiarem przez pierwszą klatkę.
+      fontSize: 17,
       cursorBlink: true,
       scrollback: 10000,
       allowProposedApi: true,
