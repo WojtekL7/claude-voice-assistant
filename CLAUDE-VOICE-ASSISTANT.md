@@ -883,6 +883,30 @@ bump→tag `v1.0.16`→Actions mac+win→`gh release download`→`.zip`+`.exe` d
 - Dwa skróty `.desktop` na maszynie usera: zwykła ikona „Claude Voice Assistant" → `run-safe.sh` (kod źródłowy = **QTermWidget** na Linuksie!), a „…(AppImage 1.0.16 — test)" → paczka = **WebTerminal**. Do testów WebTerminala używać ikony AppImage (albo z kodu `CVA_WEBTERMINAL=1`).
 - Nauki uniwersalne (odzysk po awarii z dziennika `.jsonl`; jednostki czcionki terminala pt-vs-px) → kandydaci do `CLAUDE-COMMON.md`.
 
+### ⏭️ ZAPLANOWANE NA NASTĘPNĄ SESJĘ — LINUX SELF-UPDATE (od zera do działania)
+
+> **Cel:** Linux ma się aktualizować sam, jak macOS (od 1.0.8) i Windows (od 1.0.14). Dziś NIE działa z DWÓCH niezależnych powodów: (a) feed na serwerze NIE ma wpisu `linux-x64` (apka raportuje `update_platform_id()=="linux-x64"`, a w `appcast.json` są tylko `macos-arm64`+`windows-x64` → `_parse_appcast` zwraca None → cicho `no_update`); (b) `update_manager.can_self_replace()` zwraca True tylko dla macOS(.zip)/Windows(.exe frozen) → Linux leci w `open_installer` (dla AppImage bez sensu). Paczka AppImage 1.0.16 istnieje TYLKO lokalnie w `dist/` (nie wgrana na VPS).
+
+**Stan startowy (już gotowe — nie trzeba dłubać):** `build.sh` produkuje `dist/ClaudeVoiceAssistant-1.0.16-linux-x64.AppImage`; `platform_utils.is_linux()` istnieje; `make-appcast-entry.py` JUŻ obsługuje `.AppImage` (`guess_platform` → `linux-x64`); `macos_app_bundle()` = wzorzec dla linuksowego helpera; sygnały `relaunch_ready`/`installer_opened`/`apply_failed` gotowe.
+
+**Część A — KOD samo-podmiany (`update_manager.py` + `platform_utils.py`):**
+1. `platform_utils`: dodać `appimage_path()` → `Path(os.environ["APPIMAGE"])` jeśli zmienna ustawiona, inaczej `None`. ⚠️ `$APPIMAGE` ustawia runtime AppImage i wskazuje **plik `.AppImage` na dysku** (NIE mount `/tmp/.mount_*`). Brak zmiennej = uruchomione „z kodu"/rozpakowane → wtedy NIE samo-podmiana.
+2. `can_self_replace`: dodać gałąź `if is_linux() and p.endswith(".appimage") and appimage_path() is not None: return True`.
+3. `_apply_worker`: dodać `elif is_linux(): self._linux_self_replace(path)`.
+4. Napisać `_linux_self_replace(new_appimage)` wzorowane na `_macos_self_replace`: helper-skrypt bash czeka aż PID apki zniknie → `cp new → $APPIMAGE` (nadpisanie starego pliku, bezpieczne PO wyjściu procesu) → `chmod +x $APPIMAGE` → `exec "$APPIMAGE"` (relaunch) → emit `relaunch_ready`; `xattr` NIE dotyczy Linuksa (pomiń).
+
+**Część B — FEED/DYSTRYBUCJA (runbook jak przy Mac/Win, kolejność krytyczna):**
+5. (opcjonalnie) bump wersji, by było co testować (np. 1.0.16→1.0.17), `git tag` jeśli chcemy też build w CI; ale Linux można złożyć lokalnie: `CVA_SKIP_DEPS=1 bash packaging/linux/build.sh`.
+6. **NAJPIERW** `scp` AppImage do `/opt/cva-web/html/cva/`, **POTEM** appcast.json (paczka przed feedem — inaczej 404).
+7. Wpis do feedu: `python3 packaging/make-appcast-entry.py dist/...linux-x64.AppImage --version X --base-url https://pobierz.srv1251441.hstgr.cloud/cva/ --appcast packaging/appcast.json --merge` → `scp appcast.json` na VPS.
+8. Weryfikacja PUBLICZNYM URL: `curl …/cva/appcast.json` (jest `linux-x64`?) + `curl -I …linux-x64.AppImage` (HTTP 200, `content-length`==`size`).
+
+**Część C — STRONA + pierwszy bootstrap:**
+9. `packaging/web/index.html` (+ `-en`): aktywować przycisk Linux (dziś „Wkrótce"/nieaktywny), dograć `instrukcja-linux.html` (chmod +x + klik) → `scp` na VPS.
+10. **Bootstrap jak Mac 1.0.7:** użytkownik na wersji BEZ linuksowego self-update musi PIERWSZĄ paczkę z mechanizmem zainstalować ręcznie raz; od niej w górę Linux aktualizuje się sam.
+
+**Pułapki do zapamiętania:** `$APPIMAGE` tylko gdy uruchomione jako AppImage (nie przy `--appimage-extract`/z kodu); `chmod +x` na nowym pliku obowiązkowy; feed MUSI mieć wpis `linux-x64` albo cisza `no_update`; paczka na serwer PRZED appcast.json. Test e2e wymaga realnego uruchomienia AppImage na ekranie usera (jak przy Mac/Win).
+
 ---
 
 *Ostatnia aktualizacja: 2026-06-16 (popołudnie) — **LINUX APPIMAGE 1.0.16: start Claude + czytelna czcionka, odzysk po awarii** (commit `d65857f`). Komputer zawiesił się w poprzedniej sesji (dziennik `be2b7aff`, urwany 13:16) — praca NIE przepadła: niezacommitowane zmiany przetrwały na dysku, przebieg odtworzony z `~/.claude/projects/<cwd>/*.jsonl`, kod nieuszkodzony. Dwie naprawy WebTerminala (xterm.js w AppImage): (1) **bufor wejścia do PTY** — `claude` przychodził ZANIM powłoka wstała (start po `frontend_ready`, ~2 s w AppImage) i `_write_pty` gubił go po cichu → Claude nie startował; fix = `_pending_input` w `__init__`, buforowanie gdy `_proc is None`, opróżnianie w `_spawn()`. (2) **czcionka pt-vs-px** — wspólny `set_font` przekazuje PUNKTY (QTermWidget=`QFont 13pt`~17px), a xterm.js liczył je jako PIKSELE (13px, ~30% mniej, nieczytelne); fix = `_push_font` przelicza `px=round(size*96/72)` → 13pt=17px + `fontSize:17` startowo w `terminal.html`. Oba potwierdzone na realnym ekranie. Plus przebudowa `packaging/linux/build.sh` (WebTerminal w paczce, CVA_SKIP_DEPS, logi etapów). Reguła: konwersja pt→px tylko na styku WebTerminala (jedyny backend w px). Nauki uniwersalne (odzysk z dziennika `.jsonl`; jednostki czcionki terminala) → kandydaci do CLAUDE-COMMON. Szczegóły w sekcji „🐧🛠️ SESJA 2026-06-16 (popołudnie)".*
