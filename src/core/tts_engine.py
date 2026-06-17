@@ -33,6 +33,14 @@ class TTSState(Enum):
 # opóźnień sieciowych edge-tts, dzięki czemu odtwarzanie jest ciągłe.
 PREFETCH_DEPTH = 2
 
+# Twardy limit czasu na pobranie audio JEDNEGO zdania z edge-tts (sekundy).
+# Bez tego zatkany serwer Microsoftu / przycięta sieć blokował wątek-generator
+# w NIESKOŃCZONOŚĆ na jednym zdaniu, a lektor milkł czekając na audio, które
+# nigdy nie przyszło ("czytanie się wiesza").
+TTS_GEN_TIMEOUT = 12
+# Ile razy łącznie próbować pobrać jedno zdanie, zanim je pominiemy.
+TTS_GEN_ATTEMPTS = 2
+
 
 class TTSEngine:
     """
@@ -353,33 +361,60 @@ class TTSEngine:
                     pass
 
     def _generate_audio(self, text: str) -> Optional[str]:
-        """Generate audio file for text using edge-tts."""
+        """Generate audio file for text using edge-tts.
+
+        Pobranie JEDNEGO zdania ma twardy limit czasu (TTS_GEN_TIMEOUT) i jest
+        ponawiane do TTS_GEN_ATTEMPTS razy. Gdy wszystkie próby zawiodą,
+        zwracamy None — wątek-generator pominie to zdanie i pójdzie dalej,
+        zamiast wisieć w nieskończoność na zatkanym serwerze/sieci.
+        """
         try:
             temp_file = tempfile.NamedTemporaryFile(
                 suffix='.mp3', delete=False, prefix='claude_tts_'
             )
             temp_path = temp_file.name
             temp_file.close()
-
-            with self._lock:
-                self._temp_files.add(temp_path)
-
-            asyncio.run(self._async_generate(text, temp_path))
-            return temp_path
         except Exception as e:
-            if self.on_error:
-                try:
-                    self.on_error(f"TTS generation failed: {str(e)}")
-                except Exception:
-                    pass
+            self._log_error(f"nie udało się utworzyć pliku tymczasowego: {e}")
             return None
 
+        with self._lock:
+            self._temp_files.add(temp_path)
+
+        for attempt in range(1, TTS_GEN_ATTEMPTS + 1):
+            if self._stop_event.is_set():
+                self._safe_remove(temp_path)
+                return None
+            try:
+                asyncio.run(self._async_generate(text, temp_path))
+                return temp_path
+            except Exception as e:
+                self._log_error(
+                    f"próba {attempt}/{TTS_GEN_ATTEMPTS} nie powiodła się "
+                    f"(limit={TTS_GEN_TIMEOUT}s): {type(e).__name__}: {e}"
+                )
+
+        # Wszystkie próby zawiodły — pomijamy to zdanie (lektor czyta dalej).
+        self._safe_remove(temp_path)
+        if self.on_error:
+            try:
+                self.on_error(f"TTS: pominięto zdanie po {TTS_GEN_ATTEMPTS} próbach")
+            except Exception:
+                pass
+        return None
+
     async def _async_generate(self, text: str, output_path: str):
-        """Async generation using edge-tts."""
+        """Async generation using edge-tts (twardy limit czasu na pobranie).
+
+        `asyncio.wait_for` po TTS_GEN_TIMEOUT anuluje zawieszone pobieranie i
+        rzuca TimeoutError, który łapie pętla ponowień w `_generate_audio`.
+        """
         communicate = edge_tts.Communicate(
             text, self.voice, rate=self.rate, volume=self.volume
         )
-        await communicate.save(output_path)
+        await asyncio.wait_for(
+            communicate.save(output_path), timeout=TTS_GEN_TIMEOUT
+        )
 
     def _play_audio_file(self, file_path: str):
         """Play audio file using pygame.
@@ -418,6 +453,23 @@ class TTSEngine:
                     os.remove(path)
             except Exception:
                 pass
+
+    def _log_error(self, msg: str):
+        """Dopisz błąd TTS do pliku log (diagnostyka).
+
+        Wcześniej błędy TTS szły TYLKO jako "toast" do okna i znikały — nie było
+        po nich śladu, co utrudniało diagnozę przerw w czytaniu. Zapis do pliku
+        jest celowo opakowany w try/except: log nigdy nie może wywalić lektora.
+        """
+        try:
+            import datetime
+            log_dir = os.path.join(os.path.expanduser("~"), ".claude-voice-assistant")
+            os.makedirs(log_dir, exist_ok=True)
+            ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            with open(os.path.join(log_dir, "tts.log"), "a", encoding="utf-8") as f:
+                f.write(f"[{ts}] {msg}\n")
+        except Exception:
+            pass
 
     def get_available_voices(self) -> list:
         """Get list of available voices."""
