@@ -32,6 +32,23 @@ LICENSE_FILE = CONFIG_DIR / "license.key"
 AGENTS_FILE = CONFIG_DIR / "agents.json"
 MEMORY_PROJECTS_FILE = CONFIG_DIR / "memory_projects.json"
 
+# ===== „Czarna skrzynka" terminala (diagnostyka crashu `claude`) =====
+# Pasywne nagrywanie OSTATNICH bajtów wyjścia terminala w pamięci (ring-bufor)
+# per zakładka. Gdy w strumieniu pojawi się PODPIS ekranu ratunkowego Claude
+# Code (`claude --resume <uuid>`) — zrzucamy bufor do pliku. Powód: w PTY
+# stdout+stderr są zlane, a `claude` to dziecko powłoki (jego crash NIE odpala
+# sygnału `finished` backendu), więc inaczej stack trace bezpowrotnie się
+# przewija. Logi TYLKO lokalnie, w katalogu konfiguracji.
+CRASH_LOG_DIR = CONFIG_DIR / "crash-logs"
+# Ile ostatnich bajtów wyjścia terminala trzymać w pamięci na zrzut (~64 KB
+# spokojnie obejmuje ekran ratunkowy + poprzedzający stack trace).
+TERMINAL_CAPTURE_BYTES = 65536
+# Ile plików zrzutu zachować (najstarsze kasowane przy nowym zrzucie).
+CRASH_LOG_KEEP = 20
+# Minimalny odstęp [s] między kolejnymi zrzutami tej samej zakładki — debounce,
+# by powtarzające się przerysowania ekranu ratunkowego nie tworzyły serii plików.
+CRASH_LOG_DEBOUNCE_SECS = 30
+
 # Ensure config directory exists
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 

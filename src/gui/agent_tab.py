@@ -3,6 +3,7 @@ Claude Voice Assistant - Agent Tab
 Single agent tab with terminal and input panel.
 """
 import json
+import re
 import time
 from pathlib import Path
 from typing import Optional, Dict, List, Callable
@@ -30,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import (
     MEMORY_PROJECTS_FILE, MEMORY_FILE_EXTENSIONS,
     DEFAULT_QUICK_ACTIONS, QUICK_ACTIONS_FILE, DEFAULT_SPLITTER_SIZES,
+    CRASH_LOG_DIR, TERMINAL_CAPTURE_BYTES, CRASH_LOG_KEEP, CRASH_LOG_DEBOUNCE_SECS,
     t as tr,
 )
 from core.platform_utils import default_shell
@@ -127,6 +129,14 @@ class AgentTab(QWidget):
         self.terminal = None
         self.conversation_area = None
         self._terminal_output_buffer = ""
+        # „Czarna skrzynka": ring-bufor SUROWEGO wyjścia terminala (z ANSI) —
+        # ostatnie ~64 KB. Niezależny od _terminal_output_buffer (ten liczy
+        # tokeny, bywa czyszczony i okrojony do 5000 zn.). Przy wykryciu podpisu
+        # ekranu ratunkowego Claude Code zrzucamy go do pliku — bo crash `claude`
+        # (dziecko powłoki) NIE odpala backend.finished, a stack trace inaczej
+        # bezpowrotnie przewija się z terminala. Patrz _maybe_dump_crash_log.
+        self._terminal_capture = ""
+        self._last_crash_dump_ts = 0.0
         # Czas OSTATNIEJ porcji danych z terminala (puls aktywności). Pracujący
         # Claude Code animuje pasek (spinner + licznik sekund ~1×/s) → dane
         # płyną ciągle; czekający na użytkownika — ekran stoi. Używane przez
@@ -483,6 +493,17 @@ class AgentTab(QWidget):
 
         text = data if isinstance(data, str) else str(data)
 
+        # „Czarna skrzynka": dopisz SUROWY fragment do ring-bufora i utnij do
+        # limitu (tylko gdy przekroczony — bez kosztu przy każdej porcji).
+        self._terminal_capture += text
+        if len(self._terminal_capture) > TERMINAL_CAPTURE_BYTES:
+            self._terminal_capture = self._terminal_capture[-TERMINAL_CAPTURE_BYTES:]
+        # Tani pre-check PRZED regexem (ta metoda to gorąca ścieżka: spinner
+        # Claude Code odpala ją ~1×/s). Podpis ekranu ratunkowego po crashu:
+        # „claude --resume <uuid>". Dopiero gdy „resume" w tej porcji — weryfikuj.
+        if "resume" in text:
+            self._maybe_dump_crash_log()
+
         # Clean ANSI codes
         import re
         clean_text = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', text)
@@ -503,6 +524,73 @@ class AgentTab(QWidget):
     def _on_terminal_finished(self):
         """Handle terminal process finished."""
         self.status_changed.emit("Terminal zakończony")
+
+    # ---- „Czarna skrzynka": zrzut wyjścia terminala po crashu `claude` ----
+
+    _CRASH_SIGNATURE_RE = re.compile(r"claude\s+--resume\s+[0-9a-fA-F-]{32,40}")
+
+    def _maybe_dump_crash_log(self):
+        """Jeśli w buforze jest podpis ekranu ratunkowego Claude Code, zrzuć log.
+
+        Wywoływane tylko gdy świeża porcja zawierała „resume" (tani pre-check
+        w _on_terminal_output). Tu pełna weryfikacja regexem + debounce, żeby
+        powtarzające się przerysowania ekranu ratunkowego nie tworzyły serii
+        plików. Całość defensywna — diagnostyka NIGDY nie może wywrócić apki.
+        """
+        try:
+            if not self._CRASH_SIGNATURE_RE.search(self._terminal_capture):
+                return
+            now = time.monotonic()
+            if now - self._last_crash_dump_ts < CRASH_LOG_DEBOUNCE_SECS:
+                return
+            self._last_crash_dump_ts = now
+            self._dump_crash_log()
+        except Exception:
+            # świadomie połykamy — log diagnostyczny nie może psuć działania
+            pass
+
+    def _dump_crash_log(self):
+        """Zapisz ANSI-oczyszczony ring-bufor do pliku z nagłówkiem i przytnij
+        liczbę plików do CRASH_LOG_KEEP. Nazwa: crash-<agent>-<RRRRMMDD-GGMMSS>.log."""
+        import re as _re
+        from datetime import datetime
+
+        raw = self._terminal_capture
+        # Oczyść sekwencje ANSI (CSI + OSC) — stack trace node jest czystym
+        # tekstem, więc po oczyszczeniu jest najczytelniejszy.
+        clean = _re.sub(r"\x1b\[[0-9;?]*[ -/]*[@-~]", "", raw)
+        clean = _re.sub(r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)", "", clean)
+        clean = clean.replace("\r", "")
+
+        # Sanityzacja nazwy agenta do nazwy pliku (bez separatorów ścieżki).
+        safe_name = _re.sub(r"[^\w.-]", "_", str(self.agent_name))[:40] or "agent"
+        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+
+        CRASH_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        path = CRASH_LOG_DIR / f"crash-{safe_name}-{ts}.log"
+
+        header = (
+            "=== CVA crash capture (czarna skrzynka terminala) ===\n"
+            f"czas:    {datetime.now().isoformat(timespec='seconds')}\n"
+            f"agent:   {self.agent_name} (id={self.agent_id})\n"
+            f"model:   {self.model}\n"
+            f"cwd:     {self.working_directory}\n"
+            f"powód:   wykryto ekran ratunkowy Claude Code (claude --resume ...)\n"
+            f"uwaga:   to OSTATNIE ~{TERMINAL_CAPTURE_BYTES // 1024} KB wyjścia terminala "
+            "(stdout+stderr zlane w PTY), ANSI usunięte.\n"
+            "=" * 60 + "\n\n"
+        )
+        path.write_text(header + clean, encoding="utf-8", errors="replace")
+
+        # Przytnij najstarsze zrzuty ponad limit.
+        logs = sorted(CRASH_LOG_DIR.glob("crash-*.log"), key=lambda p: p.stat().st_mtime)
+        for old in logs[:-CRASH_LOG_KEEP]:
+            try:
+                old.unlink()
+            except OSError:
+                pass
+
+        self.status_changed.emit(f"Zapisano log crashu: {path.name}")
 
     def _read_terminal_buffer(self):
         """Read accumulated terminal output via TTS."""
