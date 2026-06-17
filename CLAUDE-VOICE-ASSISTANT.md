@@ -41,7 +41,7 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
 | `src/core/platform_utils.py` | OS/arch, env Qt, `update_platform_id()`, `macos_app_bundle()` |
 
 ## Konfiguracja użytkownika — `~/.claude-voice-assistant/`
-`config.json` (język, głos, skin, `groq_api_key`, `auto_check_updates`) · `agents.json` (agenci + `splitter_sizes` per zakładka) · `memory_projects.json` · `quick_actions.json` · `tts.log` (błędy TTS).
+`config.json` (język, głos, skin, `groq_api_key`, `auto_check_updates`) · `agents.json` (agenci + `splitter_sizes` per zakładka) · `memory_projects.json` · `quick_actions.json` · `tts.log` (błędy TTS) · `crash-logs/` (zrzuty „czarnej skrzynki" po crashu `claude` — patrz pułapka niżej).
 
 ## Zależności (uwagi)
 - Klient HTTP = **`requests`**, NIE httpx (stt/license/update).
@@ -91,6 +91,19 @@ Tylko **aktywna** zakładka czyta; przełączenie ucisza poprzednią. Priming `s
 - **Windows spakowany (QtWebEngine).** `QTWEBENGINE_DISABLE_SANDBOX=1`; polyfill `replaceChildren` w `terminal.html` przed xterm.js (Chromium 83 z PyQtWebEngine-Qt5 5.15.2); `collect_all('winpty')` w `.spec`; `sys.stdout/err.reconfigure(errors="replace")` w `main.py`. → CLAUDE-COMMON „PAKOWANIE" pkt 10/12.
 
 ---
+
+## DIAGNOZA CRASHU `claude` W ZAKŁADCE + „czarna skrzynka"
+Objaw: zakładka „wypada" do gołego promptu basha z hintem `claude --resume <uuid>` — user widzi to jako „wylogowanie". To **crash procesu `claude`** (Claude Code), NIE crash CVA: powłoka (QTermWidget/WebTerminal) przeżywa, bo `claude` to jej dziecko → `backend.finished` NIE odpala. Ten sam ekran „Resume this session" to **ekran ratunkowy Claude Code po crashu**.
+
+**Kolejność wykluczania (potwierdzona na crashu 2026-06-17, sesja `2b03a6c5`):**
+1. **RAM/OOM?** → `journalctl --since today | grep -iE "earlyoom|oom-kill|killed process"`. Jest `earlyoom -m 8 -s 8 --prefer (claude|node|chrome|signal-desktop)` (ubija PREFEROWANE, m.in. `claude`, przy <8% mem+swap). Brak wpisu kill + log pokazuje sporo wolnego → NIE RAM. (Wtedy: 74% wolnej pamięci.)
+2. **Wylogowanie/token?** → mtime + `expiresAt` z `~/.claude/.credentials.json` (8h token). Ważny + brak realnego `401` w dzienniku → NIE auth. ⚠️ „401" w `.jsonl` to zwykle fałszywka (treść pamięci, cyfry w timestampach `…19.401Z`).
+3. **Błąd API/limit?** → w dzienniku sesji szukaj wpisu z `isApiErrorMessage:true`. Brak → claude nie zdążył odpowiedzieć (crash przed odpowiedzią).
+4. Zostaje **crash wewnętrzny `claude`** (np. przy przetwarzaniu konkretnego promptu/załącznika). Współbieżne sesje współdzielą `~/.claude.json` + `.credentials.json` (backup `~/.claude/backups/.claude.json.backup.<ms>` co do sekundy crashu = kolizja na wspólnym stanie to podejrzany trop).
+
+Dziennik sesji: `~/.claude/projects/<cwd-z-myślnikami>/<uuid>.jsonl`; padła sesja w pełni odzyskiwalna: `claude --resume <uuid>`.
+
+**„Czarna skrzynka" (od 2026-06-17):** dokładny stack trace szedł na stderr terminala i się przewijał (CVA czyta `.jsonl`, NIE stderr). Dlatego `AgentTab` trzyma ring-bufor surowego wyjścia (`_terminal_capture`, ~64 KB, `config.TERMINAL_CAPTURE_BYTES`) i przy wykryciu podpisu `claude --resume <uuid>` w strumieniu zrzuca go (ANSI usunięte) do `~/.claude-voice-assistant/crash-logs/crash-<agent>-<data>.log`. **Pierwsze miejsce do czytania przy NASTĘPNYM crashu.** Implementacja: `_on_terminal_output` (tani pre-check `"resume" in`), `_maybe_dump_crash_log` (regex `_CRASH_SIGNATURE_RE` + debounce 30 s), `_dump_crash_log`. Pasywne — nie zmienia uruchamiania `claude`.
 
 ## PRZEPIS: dodać nowy model Claude Code
 Aplikacja woła `claude --model <klucz>`. Dodanie modelu = **jeden plik `src/config.py`** = 3 słowniki jako jedyne źródło prawdy: `CLAUDE_MODELS`, `CLAUDE_MODELS_SHORT`, `CLAUDE_MODEL_CONTEXT_LIMITS` (dropdown/panel agentów/licznik tokenów zasilają się same).
