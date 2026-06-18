@@ -51,9 +51,10 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
 
 ---
 
-## AKTUALNY STAN (wersja 1.0.16)
+## AKTUALNY STAN (wersja 1.0.17)
 - **Wieloplatformowość:** Linux (z kodu + AppImage), macOS (.dmg/.zip), Windows (.exe Inno). Pełna wersja PL/EN (domyślnie EN; PL gdy system polski).
-- **Self-update:** macOS ✅ (od 1.0.8) · Windows ✅ (od 1.0.14, e2e na 1.0.16) · **Linux ✅ (kod od 1.0.16 — AppImage in-place; e2e restart do potwierdzenia na realnym AppImage)**.
+- **Self-update:** macOS ✅ (od 1.0.8) · Windows ✅ (od 1.0.14, e2e na 1.0.16) · **Linux ✅ (kod od 1.0.16, w feedzie od 1.0.17 — AppImage in-place; e2e podmiany zweryfikowany na żywych plikach, restart spakowanego AppImage do potwierdzenia: uruchom AppImage 1.0.16 → dostanie update do 1.0.17)**.
+- **Języki:** PL + jeden angielski (`en-US`); wariant brytyjski `en-GB` usunięty w 1.0.17 (scalony do en-US, migracja wsteczna w `set_ui_language`).
 - **Strona pobierania:** `https://pobierz.srv1251441.hstgr.cloud` (basicauth) + publiczny feed `…/cva/appcast.json` (bez auth). Kontener `cva-web` (nginx) na VPS w `/opt/cva-web/`.
 
 ## Architektura terminala
@@ -86,7 +87,7 @@ Tylko **aktywna** zakładka czyta; przełączenie ucisza poprzednią. Priming `s
 - **Splitter nowej zakładki.** `config.DEFAULT_SPLITTER_SIZES=[1500,190]` (jedyne źródło) + `_inherit_splitter_sizes()` (dziedziczenie z aktywnej); `dialogs.get_data` NIE wpycha defaultu nowemu agentowi.
 - **Zakładki macOS do lewej.** `_LeftAlignedTabStyle` = QProxyStyle na silniku Fusion + override `subElementRect(SE_TabWidgetTabBar)` (QMacStyle IGNORUJE `SH_TabBar_Alignment`); podpięty do `tab_widget.setStyle` ORAZ `tabBar().setStyle`. → CLAUDE-COMMON „PUŁAPKI QT" pkt 5.
 - **Pauza TTS.** Sygnał `request_pause` → `_toggle_pause` → `tts.toggle_pause()`; przycisk ⏸ tylko podczas `PLAYING`.
-- **i18n.** Centralny `config.t(key)` (import `from config import t as tr` — ABSOLUTNIE, nie `from ..config`); parytet 3 słowników `pl-PL`/`en-US`/`en-GB` w `UI_TRANSLATIONS`; przy zmianie języka USUWAJ stare QAction przed odbudową menu (inaczej „ambiguous shortcut"). → pamięć projektu `i18n-architektura.md`.
+- **i18n.** Centralny `config.t(key)` (import `from config import t as tr` — ABSOLUTNIE, nie `from ..config`); parytet 2 słowników `pl-PL`/`en-US` w `UI_TRANSLATIONS` (en-GB usunięty w 1.0.17 — `set(pl)==set(us)`); przy zmianie języka USUWAJ stare QAction przed odbudową menu (inaczej „ambiguous shortcut"). → pamięć projektu `i18n-architektura.md`.
 - **TTS limit czasu.** `tts_engine._async_generate` ma `asyncio.wait_for(save, TTS_GEN_TIMEOUT=12)`, `_generate_audio` ponawia `TTS_GEN_ATTEMPTS=2`, błędy → `tts.log`; po nieudanych próbach pomija zdanie (lektor nie wisi). Bez tego zatkany edge-tts wieszał czytanie.
 - **Windows spakowany (QtWebEngine).** `QTWEBENGINE_DISABLE_SANDBOX=1`; polyfill `replaceChildren` w `terminal.html` przed xterm.js (Chromium 83 z PyQtWebEngine-Qt5 5.15.2); `collect_all('winpty')` w `.spec`; `sys.stdout/err.reconfigure(errors="replace")` w `main.py`. → CLAUDE-COMMON „PAKOWANIE" pkt 10/12.
 
