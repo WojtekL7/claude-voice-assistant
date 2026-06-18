@@ -16,6 +16,12 @@
         "size": 102947958,
         "sha256": "dd7e409374a9e742ad72689fd61b0267c140c5c31e80b93ea6b4a7f2d26e5c11",
         "signature": ""
+      },
+      "linux-x64": {
+        "url": "https://pobierz.srv1251441.hstgr.cloud/cva/ClaudeVoiceAssistant-1.0.16-linux-x64.AppImage",
+        "size": 197760192,
+        "sha256": "339549909b4dfa7a710a8d4e28d158e3636bdac9272fd7bcb5959116d4a33fe9",
+        "signature": ""
       }
     }
   }
