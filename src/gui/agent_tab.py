@@ -562,6 +562,22 @@ class AgentTab(QWidget):
         clean = _re.sub(r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)", "", clean)
         clean = clean.replace("\r", "")
 
+        # Usuń ZAGNIEŻDŻONE nagłówki czarnej skrzynki, które wpadły do bufora,
+        # gdy poprzedni crash-log był wyświetlony w tej zakładce (np. `cat`/odczyt)
+        # lub ekran ratunkowy się przerysował. Bez tego nagłówki kumulują się
+        # z pokolenia na pokolenie (zaobserwowane: 60× w jednym pliku). Świeży
+        # nagłówek doklejamy niżej, więc tu czyścimy tylko stare kopie.
+        # Kotwiczymy na linii „=… CVA crash capture …" + kolejnych liniach
+        # metadanych (czas/agent/model/cwd/powód/uwaga); końcowy separator
+        # „====" bywa zgubiony przy przechwycie z terminala, więc opcjonalny.
+        clean = _re.sub(
+            r"={2,}\s*CVA crash capture[^\n]*\n"
+            r"(?:(?:czas|agent|model|cwd|powód|uwaga):[^\n]*\n)+"
+            r"(?:={5,}\n+)?",
+            "",
+            clean,
+        ).lstrip()
+
         # Sanityzacja nazwy agenta do nazwy pliku (bez separatorów ścieżki).
         safe_name = _re.sub(r"[^\w.-]", "_", str(self.agent_name))[:40] or "agent"
         ts = datetime.now().strftime("%Y%m%d-%H%M%S")
