@@ -41,6 +41,15 @@ TTS_GEN_TIMEOUT = 12
 # Ile razy łącznie próbować pobrać jedno zdanie, zanim je pominiemy.
 TTS_GEN_ATTEMPTS = 2
 
+# Maksymalna długość JEDNEGO kawałka wysyłanego do edge-tts (znaki).
+# Krótkie kawałki pobierają się szybko → twardy limit czasu (TTS_GEN_TIMEOUT)
+# praktycznie nigdy nie strzela → brak „dziur" i przeskoków w czytaniu. Tekst
+# zaznaczony w terminalu bywa jednym wielkim blokiem bez kropek; bez tego limitu
+# trafiał do edge-tts jako olbrzymi kawałek, który nie wyrabiał się w czasie i
+# był POMIJANY (objaw: czyta, cisza, przeskok kilka zdań dalej). 200 zn. mieści
+# większość zdań w całości, więc prozodia pozostaje naturalna.
+MAX_TTS_CHUNK_CHARS = 200
+
 
 class TTSEngine:
     """
@@ -279,13 +288,63 @@ class TTSEngine:
         self._play_thread.start()
 
     def _split_into_sentences(self, text: str) -> list:
-        """Podziel tekst na zdania (dla płynnej pauzy i szybkiego startu)."""
+        """Podziel tekst na kawałki dogodne dla TTS.
+
+        Najpierw po zdaniach (`.!?`), a potem zbyt długie zdania na mniejsze
+        fragmenty, tak by ŻADEN kawałek nie przekroczył MAX_TTS_CHUNK_CHARS.
+        Drobne kawałki = szybka synteza edge-tts = limit czasu nie strzela =
+        brak przeskoków/dziur (zwłaszcza dla tekstu zaznaczonego w terminalu,
+        który bywa jednym wielkim blokiem bez kropek).
+        """
         import re
-        sentences = re.split(r'(?<=[.!?])\s+', text)
-        sentences = [s.strip() for s in sentences if s.strip()]
-        if not sentences:
-            sentences = [text.strip()]
-        return sentences
+        chunks = []
+        for s in re.split(r'(?<=[.!?])\s+', text):
+            s = s.strip()
+            if not s:
+                continue
+            if len(s) <= MAX_TTS_CHUNK_CHARS:
+                chunks.append(s)
+            else:
+                chunks.extend(self._split_long_chunk(s))
+        if not chunks:
+            stripped = text.strip()
+            if stripped:
+                chunks = [stripped]
+        return chunks
+
+    @staticmethod
+    def _split_long_chunk(text: str) -> list:
+        """Potnij zbyt długie zdanie na ≤ MAX_TTS_CHUNK_CHARS.
+
+        Najpierw na granicach klauzul (po `,` `;` `:`), a klauzule wciąż za
+        długie — pakując słowo po słowie. Pojedyncze „słowo" dłuższe niż limit
+        (zlepek bez spacji) tniemy na twardo, by nic olbrzymiego nie trafiło
+        do edge-tts. Nic nie ginie — łączenie wyniku odtwarza treść.
+        """
+        import re
+        out = []
+        for clause in re.split(r'(?<=[,;:])\s+', text):
+            clause = clause.strip()
+            if not clause:
+                continue
+            if len(clause) <= MAX_TTS_CHUNK_CHARS:
+                out.append(clause)
+                continue
+            cur = ""
+            for w in clause.split():
+                if not cur:
+                    cur = w
+                elif len(cur) + 1 + len(w) <= MAX_TTS_CHUNK_CHARS:
+                    cur += " " + w
+                else:
+                    out.append(cur)
+                    cur = w
+                while len(cur) > MAX_TTS_CHUNK_CHARS:
+                    out.append(cur[:MAX_TTS_CHUNK_CHARS])
+                    cur = cur[MAX_TTS_CHUNK_CHARS:]
+            if cur:
+                out.append(cur)
+        return out
 
     def _gen_loop(self, stop_event, pending, ready):
         """Wątek-generator: pobiera audio dla kolejnych zdań z wyprzedzeniem."""
