@@ -188,6 +188,25 @@ def is_frozen() -> bool:
     return bool(getattr(sys, "frozen", False))
 
 
+def appimage_path() -> Path:
+    """Ścieżka do pliku .AppImage bieżącej (spakowanej) aplikacji na Linuksie,
+    albo None gdy nie uruchomiono jako AppImage.
+
+    Runtime AppImage ustawia `$APPIMAGE` na BEZWZGLĘDNĄ ścieżkę pliku .AppImage
+    na dysku (np. ~/Pulpit/Foo.AppImage) — to cel samo-podmiany. UWAGA: NIE
+    używać `sys.executable` ani `/proc/self`, bo te wskazują na tymczasowy mount
+    `/tmp/.mount_*`, który znika po zamknięciu aplikacji. Brak `$APPIMAGE`
+    (uruchomienie „z kodu" lub inny format) → None."""
+    env = os.environ.get("APPIMAGE")
+    if not env:
+        return None
+    try:
+        p = Path(env)
+        return p if p.exists() else None
+    except Exception:
+        return None
+
+
 def macos_app_bundle() -> Path:
     """Ścieżka do pakietu `.app` bieżącej (spakowanej) aplikacji na macOS,
     albo None gdy to nie macOS / nie spakowana / nie wygląda na `.app`.

@@ -37,7 +37,8 @@ from PyQt5.QtCore import QObject, pyqtSignal
 
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from core.platform_utils import is_macos, is_windows, is_frozen, macos_app_bundle
+from core.platform_utils import (is_macos, is_windows, is_linux, is_frozen,
+                                  macos_app_bundle, appimage_path)
 
 
 class UpdateInfo:
@@ -319,11 +320,15 @@ class UpdateManager(QObject):
           • macOS: paczka .zip + uruchomiona apka .app,
           • Windows: pobrany instalator .exe + aplikacja spakowana (frozen) —
             instalator (Inno, per-user) podmieni pliki po cichu i wznowi program.
+          • Linux: pobrany .AppImage + aplikacja uruchomiona jako AppImage
+            (`$APPIMAGE` wskazuje plik na dysku) — podmieniamy ten plik w miejscu.
         Inaczej (np. uruchomienie „z kodu") → otwórz instalator ręcznie."""
         p = str(path).lower()
         if is_macos() and p.endswith(".zip") and macos_app_bundle() is not None:
             return True
         if is_windows() and p.endswith(".exe") and is_frozen():
+            return True
+        if is_linux() and p.endswith(".appimage") and appimage_path() is not None:
             return True
         return False
 
@@ -334,6 +339,8 @@ class UpdateManager(QObject):
                     self._macos_self_replace(path, macos_app_bundle())
                 elif is_windows():
                     self._windows_self_replace(path)
+                elif is_linux():
+                    self._linux_self_replace(path, appimage_path())
             except Exception as e:
                 self.apply_failed.emit(f"Samo-aktualizacja nie powiodła się: {e}")
                 return
@@ -409,6 +416,46 @@ class UpdateManager(QObject):
             [str(installer_path), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"],
             creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
             close_fds=True)
+
+    def _linux_self_replace(self, appimage_path_new, target: Path):
+        """Podmień działający plik .AppImage nową, pobraną wersją i wznów apkę.
+
+        Prościej niż na macOS: AppImage to POJEDYNCZY plik (nie katalog ze
+        symlinkami) → wystarczy `cp` + `chmod +x` + uruchomienie. Bez kwarantanny
+        (to nie macOS), bez `ditto`. `cp` (nie `mv`) — pobrana paczka bywa na
+        innym systemie plików niż $APPIMAGE; zostawiamy ją w cache (idempotentne).
+
+        Pomocnik bash czeka aż TA aplikacja (pid) się zamknie — inaczej plik jest
+        zajęty. Zapis przez plik tymczasowy obok celu + `mv` = atomowa podmiana
+        (apka nigdy nie widzi w połowie skopiowanego pliku)."""
+        if target is None:
+            raise RuntimeError("nie ustalono ścieżki $APPIMAGE do podmiany")
+        staging = Path(tempfile.mkdtemp(prefix="cva-update-"))
+        script = staging / "cva-swap.sh"
+        pid = os.getpid()
+        # Plik tymczasowy obok celu (ten sam katalog = ten sam FS → mv atomowy).
+        script.write_text(
+            "#!/bin/bash\n"
+            "# Auto-podmiana Claude Voice Assistant (Linux/AppImage) — updater.\n"
+            f"PID={pid}\n"
+            f'NEW="{appimage_path_new}"\n'
+            f'TARGET="{target}"\n'
+            'for _ in $(seq 1 150); do\n'
+            '  kill -0 "$PID" 2>/dev/null || break\n'
+            '  sleep 0.2\n'
+            'done\n'
+            'sleep 0.5\n'
+            'TMP="$TARGET.new-$$"\n'
+            'cp -f "$NEW" "$TMP" || exit 1\n'
+            'chmod +x "$TMP"\n'
+            'mv -f "$TMP" "$TARGET" || { rm -f "$TMP"; exit 1; }\n'
+            'setsid "$TARGET" >/dev/null 2>&1 < /dev/null &\n'
+        )
+        script.chmod(0o755)
+        subprocess.Popen(
+            ["/bin/bash", str(script)],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True)
 
     # ==================== Weryfikacja / system ====================
 
