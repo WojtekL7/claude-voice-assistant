@@ -53,7 +53,7 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
 
 ## AKTUALNY STAN (wersja 1.0.16)
 - **Wieloplatformowość:** Linux (z kodu + AppImage), macOS (.dmg/.zip), Windows (.exe Inno). Pełna wersja PL/EN (domyślnie EN; PL gdy system polski).
-- **Self-update:** macOS ✅ (od 1.0.8) · Windows ✅ (od 1.0.14, potwierdzony e2e na 1.0.16) · **Linux ⏳ (do dorobienia — patrz „NASTĘPNE ZADANIE")**.
+- **Self-update:** macOS ✅ (od 1.0.8) · Windows ✅ (od 1.0.14, e2e na 1.0.16) · **Linux ✅ (kod od 1.0.16 — AppImage in-place; e2e restart do potwierdzenia na realnym AppImage)**.
 - **Strona pobierania:** `https://pobierz.srv1251441.hstgr.cloud` (basicauth) + publiczny feed `…/cva/appcast.json` (bez auth). Kontener `cva-web` (nginx) na VPS w `/opt/cva-web/`.
 
 ## Architektura terminala
@@ -132,20 +132,15 @@ Uwagi: appcast ma **jedną** globalną `version` dla wszystkich platform (musi m
 
 ---
 
-## NASTĘPNE ZADANIE: 🐧 LINUX SELF-UPDATE
-Dziś nie działa z 2 powodów: (a) feed nie ma wpisu `linux-x64` → `_parse_appcast`=None → cicho `no_update`; (b) `update_manager.can_self_replace()` nie obejmuje Linuksa → `open_installer` (bez sensu dla AppImage). AppImage 1.0.16 jest tylko lokalnie w `dist/`.
+## LINUX SELF-UPDATE (AppImage) — ZROBIONE (kod 1.0.16; commity `e91b76f` + `175b683`)
+Działa jak na Macu, prościej (AppImage = JEDEN plik, nie katalog ze symlinkami → bez `ditto`, bez kwarantanny):
+- `platform_utils.appimage_path()` → `$APPIMAGE` (plik .AppImage na dysku) lub `None`.
+- `update_manager`: `can_self_replace` (Linux + `.appimage` + `appimage_path()`), `_apply_worker` → `_linux_self_replace()` = skrypt bash czeka aż PID zniknie → atomowa podmiana (`cp` do pliku tymcz. obok celu + `mv`) → `chmod +x` → restart `setsid` → `relaunch_ready`.
+- Feed `linux-x64` w appcaście (publiczny `cva/`), strona PL+EN przycisk aktywny (`downloads/ClaudeVoiceAssistant-linux.AppImage`, stała nazwa), instrukcje `instrukcja-linux.html(-en)`.
 
-**A — kod (`platform_utils.py` + `update_manager.py`):**
-1. `platform_utils.appimage_path()` → `Path(os.environ["APPIMAGE"])` jeśli ustawione, inaczej `None` (`$APPIMAGE` = plik .AppImage na dysku, NIE mount `/tmp/.mount_*`).
-2. `can_self_replace`: gałąź `if is_linux() and p.endswith(".appimage") and appimage_path() is not None: return True`.
-3. `_apply_worker`: `elif is_linux(): self._linux_self_replace(path)`.
-4. `_linux_self_replace(new)` wzorem `_macos_self_replace`: skrypt bash czeka aż PID zniknie → `cp new → $APPIMAGE` → `chmod +x` → `exec "$APPIMAGE"` → `relaunch_ready` (xattr NIE dotyczy Linuksa).
+**Trwałe pułapki:** podmieniaj **`$APPIMAGE`**, NIE `sys.executable`/`/tmp/.mount_*` (mount znika po zamknięciu); `chmod +x` obowiązkowy; feed MUSI mieć wpis `linux-x64` (inaczej cicho „no_update"); paczka na serwer **PRZED** appcastem; `$APPIMAGE` istnieje tylko gdy uruchomione jako AppImage (z kodu → ścieżka „otwórz", to OK).
 
-**B — feed/dystrybucja:** `CVA_SKIP_DEPS=1 bash packaging/linux/build.sh` → AppImage; `scp` do `/opt/cva-web/html/cva/` **PRZED** appcastem; `make-appcast-entry.py …AppImage --version X --base-url …/cva/ --appcast … --merge` (`guess_platform`→`linux-x64`) → `scp appcast.json`; weryfikacja publicznym URL.
-
-**C — strona + bootstrap:** aktywować przycisk Linux w `packaging/web/index.html`(+`-en`) (dziś „Wkrótce"), dograć `instrukcja-linux.html`; pierwszą paczkę z mechanizmem user instaluje raz ręcznie, od niej w górę aktualizuje się sam.
-
-**Pułapki:** `$APPIMAGE` tylko gdy uruchomione jako AppImage; `chmod +x` obowiązkowy; feed MUSI mieć `linux-x64`; paczka na serwer PRZED appcastem. Test e2e wymaga realnego AppImage na ekranie usera.
+**Zostało:** test e2e prawdziwego restartu na realnym AppImage na ekranie usera (logika pewna; zdalnie nie sprawdzisz cyklu zamknij→podmień→uruchom). Pierwszą paczkę z mechanizmem user instaluje raz ręcznie, od niej w górę aktualizuje się sama.
 
 ## Inne otwarte TODO
 - [ ] Potwierdzić self-update **Mac** do 1.0.16 (wersja angielska).
