@@ -119,12 +119,12 @@ Aplikacja w Pythonie jest lekka (~80 MB). **Pamięć zżera Claude Code CLI: 3�
 
 ---
 
-## DYSTRYBUCJA / WYDANIA — runbook (sprawdzony 1.0.13→1.0.16)
+## DYSTRYBUCJA / WYDANIA — runbook (sprawdzony 1.0.13→1.0.17; 1.0.17 = pierwsze pełne 3-platformowe z Linuksem)
 1. Bump `APP_VERSION` w `src/config.py` → commit/push.
 2. `git tag vX.Y.Z && git push origin vX.Y.Z` → GitHub Actions buduje **mac+win naraz** (`build-macos.yml` runner `macos-14`, `build-windows.yml` `windows-latest`) i publikuje Release. (Iteracja bez wydania: `gh workflow run build-*.yml --ref main`.)
 3. `gh release download vX.Y.Z -p '*.zip' -p '*.dmg' -p '*Setup.exe'` (do `dist-release/`, jest w .gitignore).
-4. **Wgraj paczki PRZED appcastem** (inaczej okno błędu 404): `.zip`(mac)+`Setup.exe`(win) → `/opt/cva-web/html/cva/`; potem `appcast.json`.
-5. `.dmg`/`Setup.exe` → `/opt/cva-web/html/downloads/` pod **stałą nazwą** (`ClaudeVoiceAssistant-macos.dmg`, `ClaudeVoiceAssistant-Setup.exe`; starą jako `.bak`).
+4. **Wgraj paczki PRZED appcastem** (inaczej okno błędu 404): `.zip`(mac)+`Setup.exe`(win)+`.AppImage`(linux, build lokalny `CVA_SKIP_DEPS=1 bash packaging/linux/build.sh`) → `/opt/cva-web/html/cva/`; potem `appcast.json`. ⚠️ **Duże paczki (~200 MB AppImage) przez `scp` BYWAJĄ UCINANE (broken pipe) — wgrany plik krótszy, bez błędu widocznego od razu.** Używaj `rsync --partial --inplace -e ssh PLIK host:ścieżka` (wznawialny) i ZAWSZE sprawdź rozmiar/sha256 na serwerze PRZED uploadem appcastu (potwierdzone na 1.0.17: AppImage przyszedł 167/198 MB).
+5. `.dmg`/`Setup.exe`/`.AppImage` → `/opt/cva-web/html/downloads/` pod **stałą nazwą** (`ClaudeVoiceAssistant-macos.dmg`, `ClaudeVoiceAssistant-Setup.exe`, `ClaudeVoiceAssistant-linux.AppImage`+`chmod +x`; starą jako `.bak`). Oszczędność łącza: exe/AppImage z cva/ skopiuj server-side (`cp`) zamiast wgrywać drugi raz.
 6. Wpis do feedu: `python3 packaging/make-appcast-entry.py PACZKA --version X --platform <macos-arm64|windows-x64|linux-x64> --base-url https://pobierz.srv1251441.hstgr.cloud/cva/ --appcast packaging/appcast.json --merge` → `scp appcast.json`.
 7. **Weryfikacja publicznym URL:** `curl …/cva/appcast.json` (version + wpis dla platformy!) + `curl -I …PACZKA` (HTTP 200, `content-length`==`size`, sha256 serwer==feed).
 
