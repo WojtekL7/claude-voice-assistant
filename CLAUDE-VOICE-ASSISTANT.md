@@ -140,7 +140,9 @@ Działa jak na Macu, prościej (AppImage = JEDEN plik, nie katalog ze symlinkami
 
 **Trwałe pułapki:** podmieniaj **`$APPIMAGE`**, NIE `sys.executable`/`/tmp/.mount_*` (mount znika po zamknięciu); `chmod +x` obowiązkowy; feed MUSI mieć wpis `linux-x64` (inaczej cicho „no_update"); paczka na serwer **PRZED** appcastem; `$APPIMAGE` istnieje tylko gdy uruchomione jako AppImage (z kodu → ścieżka „otwórz", to OK).
 
-**Zostało:** test e2e prawdziwego restartu na realnym AppImage na ekranie usera (logika pewna; zdalnie nie sprawdzisz cyklu zamknij→podmień→uruchom). Pierwszą paczkę z mechanizmem user instaluje raz ręcznie, od niej w górę aktualizuje się sama.
+**Przetestowane:** gating `can_self_replace`/`appimage_path()` (oba tryby) + **mechanizm podmiany e2e na żywych plikach** (harness: proces-dziecko woła `_linux_self_replace` i ginie → pomocnik czeka na zgon PID → atomowy `mv` zmienia inode → `chmod +x` zachowany → `setsid` odpala nową wersję; zero śmieci `.new-*`). `UPDATE_APPCAST_URL` jest ZAPIEKANY w configu (brak env-override), więc pełny test GUI wymaga zbudowania paczki testowej.
+
+**Zostało (uznane za wystarczająco bezpieczne):** jedyna niepokryta luka = pełny cykl w SPAKOWANYM AppImage (uruchom→feed→dialog→pobierz→podmień→wstań). Część „pobierz/dialog/sha" wspólna z Mac/Win (sprawdzona e2e); zostaje tylko „czy zapakowany AppImage wstaje po podmianie" — do sprawdzenia dopiero na realnym kolejnym wydaniu (1.0.17+). Pierwszą paczkę user instaluje raz ręcznie, od niej w górę aktualizuje się sama.
 
 ## Inne otwarte TODO
 - [ ] Potwierdzić self-update **Mac** do 1.0.16 (wersja angielska).
