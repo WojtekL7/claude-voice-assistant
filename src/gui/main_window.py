@@ -320,7 +320,7 @@ from config import (
     AGENTS_FILE, MEMORY_PROJECTS_FILE, DEFAULT_AGENTS, DEFAULT_MEMORY_PROJECTS,
     ASSETS_DIR, CLAUDE_MODEL_CONTEXT_LIMITS, DEFAULT_AGENT_MODEL,
     UPDATE_APPCAST_URL, UPDATE_PUBLIC_KEY, UPDATE_DOWNLOAD_DIR,
-    MAX_ACTIVE_AGENTS,
+    MAX_ACTIVE_AGENTS, RAM_PER_AGENT_GB, RAM_SYSTEM_RESERVE_GB,
     t as tr, set_ui_language, detect_system_language,
 )
 from core.claude_bridge import ClaudeBridgeAsync
@@ -330,7 +330,7 @@ from core.license_manager import LicenseManager, LicenseStatus
 from core.text_cleaner import TextCleanerForTTS, extract_last_claude_response, fix_polish_encoding, prose_from_markdown
 from core.transcript_reader import TranscriptReader
 from core.update_manager import UpdateManager
-from core.platform_utils import update_platform_id
+from core.platform_utils import update_platform_id, total_ram_gb, recommended_max_agents
 from gui.agent_tab import AgentTab
 from gui import icon_set
 from gui.dialogs import (
@@ -796,6 +796,24 @@ class MainWindow(QMainWindow):
         _ctx_box_layout.addWidget(self._context_label)
         self.status_bar.addPermanentWidget(self._context_box)
 
+        # Lampka „nowa wersja" — pojawia się TYLKO gdy update_available; klik
+        # otwiera okno pobierania zapamiętanej aktualizacji. Siedzi tuż obok
+        # graficznego wskaźnika kontekstu (dodana jako drugi permanentny widget
+        # → ląduje na lewo od _context_box). Ukryta na starcie.
+        self._pending_update_info = None
+        self._update_indicator = QToolButton()
+        self._update_indicator.setText(tr('update_indicator_text'))
+        self._update_indicator.setToolTip(tr('update_indicator_tooltip'))
+        self._update_indicator.setCursor(Qt.PointingHandCursor)
+        self._update_indicator.setAutoRaise(True)
+        self._update_indicator.setStyleSheet(
+            "QToolButton { color: #4ade80; font-size: 11px; font-weight: bold;"
+            " padding: 0 8px; border: none; }"
+            "QToolButton:hover { color: #22c55e; }")
+        self._update_indicator.clicked.connect(self._open_pending_update)
+        self._update_indicator.setVisible(False)
+        self.status_bar.addPermanentWidget(self._update_indicator)
+
         # Status widget agenta (po lewej od licznika tokenów):
         # 🔌 MCP, 🧩 skille, 📁 pliki, 🤖 model + 🔄 refresh.
         self.mcp_status_widget = McpStatusWidget()
@@ -1171,13 +1189,35 @@ class MainWindow(QMainWindow):
             and not getattr(t, 'is_plain_terminal', False)
         )
 
+    def _max_active_agents(self) -> int:
+        """Bezpieczny limit jednoczesnych agentów dla RAM tej maszyny.
+
+        Liczony z wykrytego RAM (recommended_max_agents — każdy `claude` to
+        3–5 GB). Gdy RAM nieznany → dotychczasowa stała MAX_ACTIVE_AGENTS
+        (zachowanie sprzed RAM-aware, brak regresji)."""
+        return recommended_max_agents(
+            RAM_PER_AGENT_GB, RAM_SYSTEM_RESERVE_GB) or MAX_ACTIVE_AGENTS
+
     def _confirm_more_agents(self) -> bool:
-        """Ostrzeż przed uruchomieniem kolejnego agenta. True = kontynuuj."""
+        """Ostrzeż przed uruchomieniem kolejnego agenta. True = kontynuuj.
+
+        Komunikat dopasowany do maszyny: gdy znamy RAM, podajemy ile GB ma
+        komputer i ilu agentów bezpiecznie uniesie; gdy nie znamy — wariant
+        bez liczb (klucz _noram)."""
         active = self._active_agent_count()
+        total = total_ram_gb()
+        if total is not None:
+            msg = tr('dlg_many_agents_msg').format(
+                active=active,
+                recommended=self._max_active_agents(),
+                total=int(round(total)),
+            )
+        else:
+            msg = tr('dlg_many_agents_msg_noram').format(active=active)
         reply = QMessageBox.question(
             self,
             tr('dlg_many_agents_title'),
-            tr('dlg_many_agents_msg').format(active=active),
+            msg,
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )
@@ -1238,9 +1278,10 @@ class MainWindow(QMainWindow):
         if isinstance(current, AgentTab):
             if not current.is_activated():
                 # Ochrona pamięci: każdy aktywny agent to osobny proces `claude`
-                # (~1.5–2 GB RAM). Po przekroczeniu progu ostrzegamy, zanim
-                # uruchomimy kolejny — inaczej kilku agentów zawiesza komputer.
-                if self._active_agent_count() >= MAX_ACTIVE_AGENTS \
+                # (3–5 GB RAM). Limit dopasowany do RAM maszyny (_max_active_agents);
+                # po przekroczeniu ostrzegamy, zanim uruchomimy kolejny — inaczej
+                # kilku agentów zawiesza komputer.
+                if self._active_agent_count() >= self._max_active_agents() \
                         and not current.is_plain_terminal:
                     if not self._confirm_more_agents():
                         # Użytkownik zrezygnuje — wracamy do poprzedniej
@@ -1854,17 +1895,36 @@ class MainWindow(QMainWindow):
             self.update_manager.check_async()
 
     def _on_update_available(self, info):
-        """Jest nowsza wersja — pokaż okno pobierania (także przy cichym sprawdzaniu)."""
+        """Jest nowsza wersja. Zawsze zapalamy lampkę „nowa wersja" w pasku.
+        Okno pobierania otwieramy SAMO tylko gdy user sprawdzał ręcznie albo
+        przy zamykaniu; przy cichym sprawdzaniu przy starcie zostaje sama lampka
+        (nienachalnie — klik w nią otwiera okno)."""
+        was_manual = self._manual_update_check
         self._manual_update_check = False
         self._update_status("")
         was_closing = self._close_check_in_progress
         self._close_check_in_progress = False
+        # Lampka — niezależnie od trybu (zostaje jako przypomnienie).
+        self._pending_update_info = info
+        if hasattr(self, '_update_indicator'):
+            self._update_indicator.setVisible(True)
+        if was_manual or was_closing:
+            self._show_update_dialog(info, was_closing)
+
+    def _show_update_dialog(self, info, was_closing=False):
+        """Otwórz okno pobierania/instalacji dla danej aktualizacji."""
         dlg = UpdateAvailableDialog(self.update_manager, info, APP_VERSION, self)
         dlg.exec_()
         # Jeśli pytaliśmy przy zamykaniu, a użytkownik nie zaktualizował teraz
         # (kliknął „Później") — dokończ zamykanie aplikacji.
         if was_closing:
             self._finish_close()
+
+    def _open_pending_update(self):
+        """Klik w lampkę „nowa wersja" — otwórz okno dla zapamiętanej wersji."""
+        info = getattr(self, '_pending_update_info', None)
+        if info is not None:
+            self._show_update_dialog(info)
 
     def _on_no_update(self):
         """Brak nowszej — informuj tylko, gdy użytkownik sprawdzał ręcznie."""

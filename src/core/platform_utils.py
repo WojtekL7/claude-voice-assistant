@@ -50,6 +50,56 @@ def arch() -> str:
     return m or "unknown"
 
 
+# ==================== Pamięć (RAM) ====================
+
+def total_ram_gb():
+    """Całkowita pamięć RAM maszyny w GB (float), albo None gdy nie da się ustalić.
+
+    Bez dodatkowych zależności (psutil NIE jest w projekcie):
+      • Linux/macOS: `sysconf` SC_PAGE_SIZE × SC_PHYS_PAGES,
+      • Windows: GlobalMemoryStatusEx przez ctypes (ullTotalPhys).
+    Dowolny błąd / nieobsługiwana platforma → None (wołający traktuje jako
+    „nie wiem" i niczego nie blokuje)."""
+    try:
+        if is_windows():
+            import ctypes
+
+            class _MEMORYSTATUSEX(ctypes.Structure):
+                _fields_ = [
+                    ("dwLength", ctypes.c_ulong),
+                    ("dwMemoryLoad", ctypes.c_ulong),
+                    ("ullTotalPhys", ctypes.c_ulonglong),
+                    ("ullAvailPhys", ctypes.c_ulonglong),
+                    ("ullTotalPageFile", ctypes.c_ulonglong),
+                    ("ullAvailPageFile", ctypes.c_ulonglong),
+                    ("ullTotalVirtual", ctypes.c_ulonglong),
+                    ("ullAvailVirtual", ctypes.c_ulonglong),
+                    ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+                ]
+
+            stat = _MEMORYSTATUSEX()
+            stat.dwLength = ctypes.sizeof(_MEMORYSTATUSEX)
+            if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):
+                return None
+            return stat.ullTotalPhys / (1024 ** 3)
+        # Linux + macOS — oba mają sysconf z tymi kluczami.
+        return (os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")) / (1024 ** 3)
+    except Exception:
+        return None
+
+
+def recommended_max_agents(per_agent_gb=4.0, reserve_gb=3.0):
+    """Ilu agentów (zakładek z Claude Code) maszyna bezpiecznie uniesie naraz.
+
+    ≈ (RAM_total − rezerwa_systemu) / apetyt_na_agenta, minimum 1. Zwraca None
+    gdy RAM nieznany — wtedy wołający NIE blokuje niczego. Domyślne wartości to
+    tylko fallback; realne progi wstrzykuje config (RAM_PER_AGENT_GB itd.)."""
+    total = total_ram_gb()
+    if not total or per_agent_gb <= 0:
+        return None
+    return max(1, int((total - reserve_gb) // per_agent_gb))
+
+
 # ==================== Qt / środowisko ====================
 
 def configure_qt_environment():

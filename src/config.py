@@ -69,6 +69,15 @@ UPDATE_PUBLIC_KEY = ""
 # Katalog pobranych paczek aktualizacji.
 UPDATE_DOWNLOAD_DIR = CONFIG_DIR / "updates"
 
+# ===== Strażnik pamięci (RAM) =====
+# Każda zakładka uruchamia osobny proces Claude Code CLI (node), który zżera
+# 3–5 GB i rośnie z długością sesji — to on, nie nasz kod, dławi maszynę przy
+# wielu zakładkach. Te dwie stałe to JEDYNE źródło heurystyki „ile agentów
+# bezpiecznie naraz": recommended ≈ (total_RAM − rezerwa) / na_agenta.
+# Dobrane zachowawczo; łatwe do strojenia w jednym miejscu.
+RAM_PER_AGENT_GB = 4.0        # Zakładany apetyt jednej zakładki (środek 3–5 GB).
+RAM_SYSTEM_RESERVE_GB = 3.0   # RAM zostawiony systemowi + samej aplikacji.
+
 # Instrukcje instalacji „krok po kroku" (te same podstrony co na stronie
 # pobierania). Leżą pod /cva — PUBLICZNE (bez hasła), więc aplikacja może je
 # otwierać u użytkownika bez logowania. Plik per system: instrukcja-<os>.html
@@ -647,6 +656,9 @@ UI_TRANSLATIONS = {
         "dlg_update_downloaded_title": "Aktualizacja pobrana",
         "dlg_update_installer_opened_msg": "Instalator został otwarty. Dokończ instalację i uruchom aplikację ponownie.",
         "dlg_update_error_title": "Błąd aktualizacji",
+        # --- Lampka „nowa wersja" w pasku statusu ---
+        "update_indicator_text": "⬆ Nowa wersja",
+        "update_indicator_tooltip": "Dostępna jest nowa wersja. Kliknij, aby pobrać i zainstalować.",
         # --- ClaudeSetupDialog ---
         "dlg_setup_title": "Dokończ instalację — potrzebny Claude Code",
         "dlg_setup_header": "Jeszcze jeden krok — zainstaluj Claude Code",
@@ -674,7 +686,8 @@ UI_TRANSLATIONS = {
         "dlg_agent_waiting_tooltip": "Agent czeka na odpowiedź",
         "dlg_agent_saved_msg": "Agent \"{name}\" został zapisany.\nZakładka pojawi się po restarcie aplikacji lub użyj 'Zarządzaj agentami'.",
         "dlg_many_agents_title": "Dużo aktywnych agentów",
-        "dlg_many_agents_msg": "Masz już {active} aktywnych agentów. Każdy uruchamia osobny proces Claude zużywający ok. 1,5–2 GB pamięci RAM.\n\nUruchomienie kolejnego może spowolnić lub zawiesić komputer.\n\nCzy na pewno uruchomić tego agenta?",
+        "dlg_many_agents_msg": "Masz już {active} aktywnych agentów, a Twój komputer ({total} GB RAM) bezpiecznie uniesie około {recommended}. Każdy agent uruchamia osobny proces Claude zużywający 3–5 GB pamięci.\n\nUruchomienie kolejnego może spowolnić lub zawiesić komputer.\n\nCzy na pewno uruchomić tego agenta?",
+        "dlg_many_agents_msg_noram": "Masz już {active} aktywnych agentów. Każdy uruchamia osobny proces Claude zużywający 3–5 GB pamięci RAM.\n\nUruchomienie kolejnego może spowolnić lub zawiesić komputer.\n\nCzy na pewno uruchomić tego agenta?",
         "dlg_changes_after_restart": "Zmiany zostaną zastosowane po restarcie aplikacji.",
         "dlg_quick_add_title": "Dodaj szybką akcję",
         "dlg_quick_label_placeholder": "np. Sprawdź błędy",
@@ -1311,6 +1324,9 @@ UI_TRANSLATIONS = {
         "dlg_update_downloaded_title": "Update downloaded",
         "dlg_update_installer_opened_msg": "The installer has been opened. Finish the installation and start the app again.",
         "dlg_update_error_title": "Update error",
+        # --- "New version" indicator in the status bar ---
+        "update_indicator_text": "⬆ New version",
+        "update_indicator_tooltip": "A new version is available. Click to download and install.",
         # --- ClaudeSetupDialog ---
         "dlg_setup_title": "Finish setup — Claude Code is required",
         "dlg_setup_header": "One more step — install Claude Code",
@@ -1338,7 +1354,8 @@ UI_TRANSLATIONS = {
         "dlg_agent_waiting_tooltip": "Agent is waiting for a reply",
         "dlg_agent_saved_msg": "Agent \"{name}\" has been saved.\nThe tab will appear after restarting the app, or use 'Manage agents'.",
         "dlg_many_agents_title": "Many active agents",
-        "dlg_many_agents_msg": "You already have {active} active agents. Each one runs a separate Claude process using about 1.5–2 GB of RAM.\n\nLaunching another may slow down or freeze your computer.\n\nAre you sure you want to run this agent?",
+        "dlg_many_agents_msg": "You already have {active} active agents, and your computer ({total} GB RAM) can safely handle about {recommended}. Each agent runs a separate Claude process using 3–5 GB of memory.\n\nLaunching another may slow down or freeze your computer.\n\nAre you sure you want to run this agent?",
+        "dlg_many_agents_msg_noram": "You already have {active} active agents. Each one runs a separate Claude process using 3–5 GB of RAM.\n\nLaunching another may slow down or freeze your computer.\n\nAre you sure you want to run this agent?",
         "dlg_changes_after_restart": "Changes will be applied after restarting the app.",
         "dlg_quick_add_title": "Add quick action",
         "dlg_quick_label_placeholder": "e.g. Check errors",
@@ -1975,6 +1992,9 @@ UI_TRANSLATIONS = {
         "dlg_update_downloaded_title": "Update downloaded",
         "dlg_update_installer_opened_msg": "The installer has been opened. Finish the installation and start the app again.",
         "dlg_update_error_title": "Update error",
+        # --- "New version" indicator in the status bar ---
+        "update_indicator_text": "⬆ New version",
+        "update_indicator_tooltip": "A new version is available. Click to download and install.",
         # --- ClaudeSetupDialog ---
         "dlg_setup_title": "Finish setup — Claude Code is required",
         "dlg_setup_header": "One more step — install Claude Code",
@@ -2002,7 +2022,8 @@ UI_TRANSLATIONS = {
         "dlg_agent_waiting_tooltip": "Agent is waiting for a reply",
         "dlg_agent_saved_msg": "Agent \"{name}\" has been saved.\nThe tab will appear after restarting the app, or use 'Manage agents'.",
         "dlg_many_agents_title": "Many active agents",
-        "dlg_many_agents_msg": "You already have {active} active agents. Each one runs a separate Claude process using about 1.5–2 GB of RAM.\n\nLaunching another may slow down or freeze your computer.\n\nAre you sure you want to run this agent?",
+        "dlg_many_agents_msg": "You already have {active} active agents, and your computer ({total} GB RAM) can safely handle about {recommended}. Each agent runs a separate Claude process using 3–5 GB of memory.\n\nLaunching another may slow down or freeze your computer.\n\nAre you sure you want to run this agent?",
+        "dlg_many_agents_msg_noram": "You already have {active} active agents. Each one runs a separate Claude process using 3–5 GB of RAM.\n\nLaunching another may slow down or freeze your computer.\n\nAre you sure you want to run this agent?",
         "dlg_changes_after_restart": "Changes will be applied after restarting the app.",
         "dlg_quick_add_title": "Add quick action",
         "dlg_quick_label_placeholder": "e.g. Check errors",
