@@ -10,7 +10,7 @@ APP_NAME = "Claude Voice Assistant"
 # APP_VERSION — JEDYNE źródło prawdy o wersji. Używane przez auto-aktualizację
 # (M3) do porównania z wersją w pliku appcast na serwerze. Podbijaj przy każdym
 # wydaniu (semver: MAJOR.MINOR.PATCH).
-APP_VERSION = "1.0.18"
+APP_VERSION = "1.0.19"
 APP_AUTHOR = "Fulfillment Polska"
 
 # Tryb deweloperski — uruchomienie WPROST z kodu (`python3 src/main.py`).
