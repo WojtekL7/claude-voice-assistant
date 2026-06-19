@@ -3,13 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Instrukcja instalacji — Linux | Claude Voice Assistant</title>
-  <meta name="description" content="Instalacja Claude Voice Assistant na Linuksie krok po kroku — dla zupełnie początkujących.">
+  <title>Pełna instrukcja — Linux (od zera do rozmowy) | Claude Voice Assistant</title>
+  <meta name="description" content="Kompletna instrukcja Linux: pobranie, uruchomienie, instalacja Claude Code, założenie konta i połączenie z programem. Ścieżka z terminalem i bez terminala.">
   <style>
     :root{
       --bg1:#2a1140; --bg2:#3d1a5b; --accent:#a855f7; --accent2:#7c3aed;
       --ink:#1b1226; --muted:#6b6478; --card:#ffffff; --soft:#f5f2fb;
       --ok:#16a34a; --warn-bg:#fff7e6; --warn-line:#f0c36d; --line:#e9e3f3;
+      --pathA:#7c3aed; --pathB:#0ea5e9;
     }
     *{box-sizing:border-box;margin:0;padding:0}
     body{
@@ -18,7 +19,7 @@
       background:linear-gradient(160deg,var(--bg1),var(--bg2));
       min-height:100vh;line-height:1.6;
     }
-    .wrap{max-width:860px;margin:0 auto;padding:40px 20px 64px}
+    .wrap{max-width:880px;margin:0 auto;padding:40px 20px 64px}
     header{text-align:center;color:#fff;margin-bottom:30px}
     .logo{
       width:72px;height:72px;border-radius:20px;margin:0 auto 14px;
@@ -30,6 +31,13 @@
     .tagline{font-size:1.05rem;opacity:.9;margin-top:8px}
     .back{display:inline-block;margin-top:14px;color:#e9d5ff;font-size:.95rem}
 
+    .toc{background:rgba(255,255,255,.95);border-radius:16px;padding:18px 22px;margin-bottom:22px;box-shadow:0 18px 40px rgba(20,8,40,.22)}
+    .toc h2{font-size:1.05rem;margin-bottom:8px}
+    .toc ol{padding-left:22px}
+    .toc li{margin-bottom:4px}
+    .toc a{color:var(--accent2);text-decoration:none;font-weight:600}
+    .toc a:hover{text-decoration:underline}
+
     .panel{background:var(--card);border-radius:20px;padding:28px;box-shadow:0 18px 40px rgba(20,8,40,.28);margin-bottom:22px}
     .panel h2{font-size:1.3rem;margin-bottom:10px;display:flex;align-items:center;gap:12px}
     .num{display:inline-flex;flex:none;width:34px;height:34px;border-radius:50%;
@@ -39,6 +47,14 @@
     .panel ol, .panel ul{padding-left:24px;margin-bottom:8px}
     .panel li{margin-bottom:8px}
     .panel h3{font-size:1.05rem;margin:14px 0 6px}
+
+    /* Nagłówek ścieżki A / B */
+    .path{display:flex;align-items:center;gap:10px;margin:18px 0 8px;padding:10px 14px;border-radius:12px;font-weight:800;font-size:1.02rem}
+    .path .tag{display:inline-flex;width:30px;height:30px;border-radius:8px;align-items:center;justify-content:center;color:#fff;font-size:1.05rem}
+    .pathA{background:#f3ecff;color:#5b21b6;border:1px solid #ddd0fb}
+    .pathA .tag{background:var(--pathA)}
+    .pathB{background:#e8f6fd;color:#075985;border:1px solid #c5e8f7}
+    .pathB .tag{background:var(--pathB)}
 
     .see{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin:10px 0;font-size:.95rem}
     .see b{color:var(--accent2)}
@@ -52,12 +68,23 @@
       padding:8px 14px;cursor:pointer;font-size:.9rem;flex:none}
     .cmd button:hover{filter:brightness(1.1)}
 
+    .cta{display:inline-flex;align-items:center;gap:8px;margin:8px 0 4px;padding:12px 20px;
+      border-radius:12px;background:linear-gradient(145deg,var(--accent),var(--accent2));
+      color:#fff;text-decoration:none;font-weight:700;font-size:1rem}
+    .cta:hover{filter:brightness(1.07)}
+
+    .plans{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:12px 0 4px}
+    @media(max-width:640px){.plans{grid-template-columns:1fr}}
+    .plan{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+    .plan h4{font-size:1.05rem;margin-bottom:6px}
+    .plan p{font-size:.92rem;color:var(--muted);margin-bottom:0}
+
     kbd{background:#eee;border:1px solid #ccc;border-bottom-width:3px;border-radius:6px;
       padding:1px 7px;font-family:inherit;font-size:.92em;font-weight:600}
     footer{text-align:center;color:#fff;opacity:.8;margin-top:36px;font-size:.9rem}
     footer a{color:#e9d5ff}
 
-    /* Przełącznik języka — rozwijane menu (skalowalne na kolejne języki) */
+    /* Przełącznik języka */
     .lang-switch{position:fixed;top:12px;right:14px;z-index:100;font-size:.85rem;font-weight:700;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Ubuntu,sans-serif}
     .lang-switch summary{list-style:none;cursor:pointer;color:#fff;background:rgba(20,8,40,.6);backdrop-filter:blur(6px);border-radius:999px;padding:7px 15px;display:inline-flex;align-items:center;gap:7px;user-select:none}
     .lang-switch summary::-webkit-details-marker{display:none}
@@ -80,162 +107,205 @@
   <div class="wrap">
     <header>
       <div class="logo">🐧</div>
-      <h1>Instalacja na Linuksie — krok po kroku</h1>
-      <p class="tagline">Pisane dla osoby, która <b>nigdy</b> nie instalowała nic na Linuksie
-        i nie wie, co to terminal. Spokojnie — przejdziemy przez to razem.</p>
+      <h1>Pełna instrukcja — Linux</h1>
+      <p class="tagline">Od zera do pierwszej rozmowy, <b>po kolei</b>. Pisane dla osoby, która nigdy nie
+        instalowała nic na Linuksie. Wszędzie masz dwie drogi: <b>🅰️ z terminalem</b> i <b>🅱️ bez terminala</b>.</p>
       <a class="back" href="https://pobierz.srv1251441.hstgr.cloud/">← Wróć do strony pobierania</a>
     </header>
 
-    <section class="panel">
-      <h2>📦 Co dostajesz i co trzeba zrobić</h2>
-      <p>Na Linuksie program to <b>jeden plik</b> (typu <b>AppImage</b>) — nie ma „instalatora”
-        jak na Windowsie. Plik nosisz ze sobą i uruchamiasz dwuklikiem, jak ikonę gry.</p>
-      <p>Żeby wszystko ruszyło, zrobimy po kolei <b>5 rzeczy</b>:</p>
+    <nav class="toc">
+      <h2>📍 Co zrobimy — po kolei</h2>
       <ol>
-        <li><b>Pobrać</b> plik programu ze strony.</li>
-        <li><b>Pozwolić</b> plikowi się uruchamiać (Linux z ostrożności tego nie robi sam).</li>
-        <li><b>Uruchomić</b> program (dwuklik).</li>
-        <li>Jednorazowo dodać <b>„mózg” programu</b> — darmowe <b>Claude Code</b>.</li>
-        <li><b>Zalogować się</b> na swoje konto Claude.</li>
+        <li><a href="#cz1">Pobierz i uruchom program</a></li>
+        <li><a href="#cz2">Dodaj „mózg” — Claude Code</a></li>
+        <li><a href="#cz3">Załóż konto Claude i wybierz plan</a></li>
+        <li><a href="#cz4">Połącz konto z programem (logowanie)</a></li>
+        <li><a href="#cz5">Sprawdź, czy działa — i co, gdy nie</a></li>
       </ol>
-      <div class="tip">💜 <b>Najważniejsze:</b> nigdzie nic nie przepisujesz ręcznie. Gdzie pojawi się
-        czarna ramka z komendą — masz przy niej przycisk <b>Kopiuj</b>. Kopiujesz, wklejasz, Enter.</div>
+    </nav>
+
+    <section class="panel">
+      <h2>🧭 Zanim zaczniemy — dwie drogi</h2>
+      <p>Ten program (Claude Voice Assistant) to <b>pilot</b>: daje głos, zakładki i wygodne okno.
+        „Myśli” za niego <b>Claude Code</b>, a żeby działał, potrzebuje <b>Twojego konta Claude</b>.
+        Przejdziemy przez wszystko po kolei — a na każdym etapie wybierzesz jedną z dwóch dróg:</p>
+      <div class="path pathA"><span class="tag">A</span> Z terminalem — sam wklejasz gotowe komendy. Pewne, działa zawsze.</div>
+      <div class="path pathB"><span class="tag">B</span> Bez terminala — prowadzi Cię myszka i okienka programu. Dla osoby nietechnicznej.</div>
+      <div class="warn">⚠️ Mała szczerość: <b>jedną rzecz</b> (instalację Claude Code) trzeba na Linuksie odpalić
+        w terminalu — nie ma na to „klikanego” instalatora. W drodze B program <b>poda Ci gotową komendę
+        z przyciskiem Kopiuj</b>, więc dotkniesz terminala tylko raz: wklej i <kbd>Enter</kbd>. Tyle.</div>
+      <div class="tip">💜 Nigdzie nic nie przepisujesz ręcznie. Gdzie zobaczysz ciemną ramkę z komendą —
+        obok jest przycisk <b>Kopiuj</b>.</div>
     </section>
 
     <section class="panel">
-      <h2>🧰 Najpierw spokojnie: co to jest „terminal”</h2>
-      <p><b>Terminal</b> to małe okienko, w którym zamiast klikać — wpisuje się polecenia tekstem.
-        Wygląda groźnie, ale Ty będziesz tylko <b>wklejać</b> gotowe komendy z tej strony. To wszystko.</p>
+      <h2>🧰 Co to „terminal” (potrzebne tylko w drodze A i przy jednej komendzie)</h2>
+      <p><b>Terminal</b> to małe okienko, w którym zamiast klikać — wkleja się polecenia tekstem.
+        Wygląda groźnie, ale Ty będziesz tylko <b>wklejać</b> gotowce z tej strony.</p>
       <ul>
-        <li><b>Jak otworzyć terminal:</b> naciśnij naraz <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>T</kbd>.
-          Otworzy się czarne (lub fioletowe) okienko. To jest terminal.</li>
-        <li><b>Jak wkleić do terminala:</b> skopiuj komendę przyciskiem, wróć do terminala i naciśnij
-          <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>V</kbd> (albo kliknij prawym przyciskiem → „Wklej”).</li>
-        <li><b>Jak zatwierdzić:</b> po wklejeniu naciśnij <kbd>Enter</kbd>.</li>
+        <li><b>Otworzyć terminal:</b> naciśnij naraz <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>T</kbd>.</li>
+        <li><b>Wkleić do terminala:</b> <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>V</kbd> (albo prawy przycisk → „Wklej”).</li>
+        <li><b>Zatwierdzić:</b> <kbd>Enter</kbd>.</li>
       </ul>
-      <div class="warn">⚠️ Jeśli komenda zaczyna się od <b>sudo</b>, terminal poprosi o <b>hasło</b>
-        (to samo, którym logujesz się do komputera). Podczas wpisywania <b>nie widać kropek ani gwiazdek</b>
-        — to normalne. Wpisz hasło „w ciemno” i naciśnij <kbd>Enter</kbd>.</div>
+      <div class="warn">⚠️ Gdy komenda zaczyna się od <b>sudo</b>, terminal poprosi o <b>hasło</b> (to do logowania w komputerze).
+        Podczas wpisywania <b>nie widać kropek ani gwiazdek</b> — to normalne. Wpisz „w ciemno” i <kbd>Enter</kbd>.</div>
     </section>
 
-    <section class="panel">
-      <h2><span class="num">1</span> Pobierz program</h2>
+    <!-- ============ CZĘŚĆ 1 ============ -->
+    <section class="panel" id="cz1">
+      <h2><span class="num">1</span> Pobierz i uruchom program</h2>
+      <p>Na Linuksie program to <b>jeden plik</b> typu <b>AppImage</b> — bez instalatora. Pobierasz go i
+        uruchamiasz dwuklikiem, jak ikonę gry.</p>
+
+      <h3>1.1 Pobierz plik</h3>
       <ol>
         <li>Na <a href="https://pobierz.srv1251441.hstgr.cloud/">stronie pobierania</a> kliknij
-          duży przycisk <b>„⬇ Pobierz na Linux”</b>.</li>
-        <li>Przeglądarka pobierze plik o nazwie <b>ClaudeVoiceAssistant-linux.AppImage</b>
-          (ok. 190 MB — może chwilę zejść).</li>
-        <li>Plik wyląduje w folderze <b>Pobrane</b> (po angielsku: <b>Downloads</b>) — tam, gdzie
-          trafiają wszystkie Twoje pobrane pliki.</li>
+          <b>„⬇ Pobierz na Linux”</b>.</li>
+        <li>Pobierze się plik <b>ClaudeVoiceAssistant-linux.AppImage</b> (ok. 190 MB) do folderu <b>Pobrane</b>.</li>
       </ol>
-      <div class="ok">✅ Masz w folderze Pobrane plik z fioletową ikoną mikrofonu i nazwą kończącą się
-        na <b>.AppImage</b> — świetnie, idziemy dalej.</div>
-    </section>
+      <div class="ok">✅ W folderze Pobrane masz plik z fioletową ikoną mikrofonu kończący się na <b>.AppImage</b>.</div>
 
-    <section class="panel">
-      <h2><span class="num">2</span> Pozwól plikowi się uruchamiać</h2>
-      <p>Linux z ostrożności traktuje świeżo pobrany plik jak „zwykły dokument” i nie pozwoli go
-        uruchomić, dopóki sam nie potwierdzisz, że to program. Robi się to raz. Wybierz <b>jeden</b>
-        z dwóch sposobów — sposób A działa zawsze.</p>
+      <h3>1.2 Pozwól plikowi się uruchamiać</h3>
+      <p>Linux z ostrożności nie pozwoli uruchomić świeżo pobranego pliku, dopóki nie potwierdzisz, że to program. Robi się to raz.</p>
 
-      <h3>Sposób A — przez terminal (pewny, polecany)</h3>
+      <div class="path pathA"><span class="tag">A</span> Przez terminal (pewne)</div>
       <ol>
-        <li>Otwórz terminal: <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>T</kbd>.</li>
-        <li>Wpisz <b>chmod +x</b> i <b>jedną spację</b> na końcu (nie naciskaj jeszcze Enter):</li>
+        <li>Otwórz terminal (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>T</kbd>).</li>
+        <li>Skopiuj poniższe (jest tu spacja na końcu) — jeszcze <b>nie</b> naciskaj Enter:</li>
       </ol>
       <div class="cmd">
         <code id="chmodcmd">chmod +x </code>
         <button onclick="copyCmd('chmodcmd', this)">⧉ Kopiuj</button>
       </div>
       <ol start="3">
-        <li>Teraz <b>przeciągnij myszką</b> pobrany plik <b>.AppImage</b> prosto do okna terminala
-          i upuść. Ścieżka do pliku <b>dopisze się sama</b> — nie musisz nic przepisywać.</li>
-        <li>Naciśnij <kbd>Enter</kbd>. Brak komunikatu = sukces (tak działa terminal — cisza to dobra wiadomość).</li>
+        <li>Wklej do terminala, potem <b>przeciągnij myszką</b> pobrany plik <b>.AppImage</b> do okna terminala
+          i upuść — ścieżka dopisze się sama.</li>
+        <li>Naciśnij <kbd>Enter</kbd>. Brak komunikatu = sukces (cisza to dobra wiadomość).</li>
       </ol>
-      <div class="tip">💡 Cała linijka będzie wyglądać mniej więcej tak:
-        <b>chmod +x /home/twojanazwa/Pobrane/ClaudeVoiceAssistant-linux.AppImage</b></div>
 
-      <h3>Sposób B — przez menedżer plików (jeśli Twój go obsługuje)</h3>
+      <div class="path pathB"><span class="tag">B</span> Przez menedżer plików (myszką)</div>
       <ol>
-        <li>Otwórz folder <b>Pobrane</b>, kliknij plik <b>prawym</b> przyciskiem myszy → <b>Właściwości</b>.</li>
-        <li>Przejdź na zakładkę <b>Uprawnienia</b>.</li>
-        <li>Zaznacz <b>„Zezwól na wykonywanie pliku jako programu”</b> i zamknij okno.</li>
+        <li>Otwórz folder <b>Pobrane</b>, kliknij plik <b>prawym</b> przyciskiem → <b>Właściwości</b>.</li>
+        <li>Zakładka <b>Uprawnienia</b> → zaznacz <b>„Zezwól na wykonywanie pliku jako programu”</b>.</li>
       </ol>
-      <div class="warn">⚠️ Niektóre nowsze systemy (np. najnowsze Ubuntu) <b>ukryły</b> tę opcję
-        w menedżerze plików. Jeśli nie widzisz takiego pola — po prostu użyj <b>Sposobu A</b> (terminal).</div>
-    </section>
+      <div class="warn">⚠️ Nowsze Ubuntu czasem <b>ukrywa</b> tę opcję. Nie widzisz jej? Użyj drogi <b>A</b>.</div>
 
-    <section class="panel">
-      <h2><span class="num">3</span> Uruchom program</h2>
-      <p>Wróć do folderu <b>Pobrane</b> i <b>kliknij dwa razy</b> plik <b>.AppImage</b>.
-        Po chwili powinno otworzyć się okno programu.</p>
-
-      <div class="warn">⚠️ <b>Dwuklik nic nie robi</b> albo pojawia się błąd o <b>„libfuse.so.2”</b>?
-        To bardzo częste na nowszym Ubuntu — brakuje jednej małej biblioteki. Wklej w terminalu
-        (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>T</kbd>) tę komendę i naciśnij <kbd>Enter</kbd>:</div>
+      <h3>1.3 Uruchom</h3>
+      <p>Wróć do folderu <b>Pobrane</b> i <b>kliknij dwa razy</b> plik <b>.AppImage</b>. Po chwili otworzy się okno programu.</p>
+      <div class="warn">⚠️ Dwuklik nic nie robi lub błąd o <b>„libfuse.so.2”</b>? Brakuje małej biblioteki —
+        wklej w terminalu i <kbd>Enter</kbd>:</div>
       <div class="cmd">
         <code id="fusecmd">sudo apt update &amp;&amp; sudo apt install -y libfuse2</code>
         <button onclick="copyCmd('fusecmd', this)">⧉ Kopiuj</button>
       </div>
-      <p>Potem spróbuj ponownie kliknąć plik dwa razy.</p>
-      <div class="tip">💡 Jeśli pojawi się okienko „Czy chcesz uruchomić…?” — potwierdź
-        <b>Uruchom / Run</b>.</div>
     </section>
 
-    <section class="panel">
-      <h2><span class="num">4</span> Dodaj „mózg” programu — Claude Code</h2>
-      <p>Ten program sam nie myśli — jest <b>pilotem</b> do narzędzia <b>Claude Code</b> (to ono
-        rozmawia i pisze kod). Claude Code jest darmowe i instaluje się raz. Jeśli program po
-        uruchomieniu pokaże <b>kreatora konfiguracji</b> — po prostu wykonuj jego wskazówki.
-        Wolisz zrobić to ręcznie? Otwórz terminal i wklej po kolei:</p>
+    <!-- ============ CZĘŚĆ 2 ============ -->
+    <section class="panel" id="cz2">
+      <h2><span class="num">2</span> Dodaj „mózg” — Claude Code</h2>
+      <p>Program sam nie myśli — potrzebuje <b>Claude Code</b> (darmowy dodatek, instaluje się raz,
+        razem z pomocniczym <b>Node.js</b>).</p>
 
-      <h3>a) Node.js (darmowy program pomocniczy)</h3>
+      <div class="path pathB"><span class="tag">B</span> Bez terminala — niech poprowadzi program (polecane)</div>
+      <ol>
+        <li>Po uruchomieniu programu, jeśli nie znajdzie Claude Code, sam pokaże okno <b>„Dokończ instalację”</b>.</li>
+        <li>Kliknij przycisk <b>„Pobierz Node.js”</b> — otworzy stronę nodejs.org. Pobierz i zainstaluj
+          (klikasz „Dalej”, jak każdy program).</li>
+        <li>W tym samym oknie jest gotowa komenda i przycisk <b>Kopiuj</b>. To ta jedna chwila z terminalem:
+          otwórz terminal (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>T</kbd>), wklej, <kbd>Enter</kbd>.</li>
+        <li>Wróć do okna programu i kliknij <b>„Sprawdź ponownie”</b>. Program znajdzie mózg i ruszy dalej.</li>
+      </ol>
+      <div class="tip">💡 To okno możesz wywołać też sam: menu <b>Pomoc → Konfiguracja Claude Code</b>.</div>
+
+      <div class="path pathA"><span class="tag">A</span> Z terminalem — wszystko ręcznie</div>
+      <p>Otwórz terminal i wklej po kolei:</p>
+      <h3>a) Node.js</h3>
       <div class="cmd">
         <code id="nodecmd">sudo apt update &amp;&amp; sudo apt install -y nodejs npm</code>
         <button onclick="copyCmd('nodecmd', this)">⧉ Kopiuj</button>
       </div>
-
       <h3>b) Claude Code</h3>
       <div class="cmd">
         <code id="npmcmd">sudo npm install -g @anthropic-ai/claude-code</code>
         <button onclick="copyCmd('npmcmd', this)">⧉ Kopiuj</button>
       </div>
-      <div class="ok">✅ Sprawdzenie: wpisz <b>claude --version</b> i naciśnij <kbd>Enter</kbd>.
-        Pokazał się numer wersji? Mózg na miejscu.</div>
+      <div class="ok">✅ Sprawdzenie: wpisz <b>claude --version</b> i <kbd>Enter</kbd>. Pokazał się numer? Mózg na miejscu.</div>
     </section>
 
-    <section class="panel">
-      <h2><span class="num">5</span> Zaloguj się do Claude</h2>
+    <!-- ============ CZĘŚĆ 3 ============ -->
+    <section class="panel" id="cz3">
+      <h2><span class="num">3</span> Załóż konto Claude i wybierz plan</h2>
+      <p>Żeby Claude Code działał, potrzebujesz <b>konta Claude</b> z <b>płatnym dostępem</b>. Konto i plan
+        możesz założyć też wcześniej — ważne, żeby było gotowe przed logowaniem w części 4.</p>
+
+      <h3>3.1 Załóż konto</h3>
       <ol>
-        <li>W terminalu wpisz <b>claude</b> i naciśnij <kbd>Enter</kbd>
-          (albo zrób to w terminalu wewnątrz programu).</li>
-        <li>Jeśli pojawi się pytanie o zaufanie do folderu — naciśnij <kbd>Enter</kbd> (tak).</li>
-        <li>Claude Code poprosi o zalogowanie. Powinna otworzyć się przeglądarka — zaloguj się
-          na konto Claude (claude.ai, np. plan Pro) i kliknij <b>Autoryzuj</b>.</li>
-        <li>Skopiuj pokazany kod i wklej go w terminalu w miejscu „Paste code here”.</li>
+        <li>Wejdź na <b>claude.ai</b> (przycisk niżej) i kliknij <b>„Sign up”</b>.</li>
+        <li>Wybierz rejestrację <b>e-mailem</b> albo <b>kontem Google</b> (szybsze, jeśli masz Gmaila).</li>
+        <li>Przy e-mailu — potwierdź kodem/linkiem z poczty (sprawdź też folder Spam).</li>
       </ol>
-      <div class="warn">⚠️ Jeśli przeglądarka nie otworzy się sama — Claude Code pokaże długi link
-        i podpowiedź „c to copy”. Naciśnij <kbd>c</kbd> (link skopiuje się do schowka), wklej go
-        w przeglądarce. <b>Nie przepisuj linku ręcznie.</b></div>
-      <div class="ok">🎉 Gotowe! Od teraz uruchamiasz program zwykłym dwuklikiem pliku
-        <b>.AppImage</b>. Program <b>sam się aktualizuje</b> — gdy pojawi się nowa wersja, zaproponuje ją.</div>
+      <a class="cta" href="https://claude.ai/" target="_blank" rel="noopener">🔗 Otwórz claude.ai i załóż konto</a>
+
+      <h3>3.2 Wybierz plan</h3>
+      <p>Darmowe konto wystarcza do rozmów na stronie, ale <b>Claude Code wymaga płatnego dostępu</b>. Dwie drogi:</p>
+      <div class="plans">
+        <div class="plan">
+          <h4>💜 Plan Pro / Max <span style="color:var(--ok)">— polecane</span></h4>
+          <p>Stała opłata miesięczna na koncie claude.ai. Najprościej: płacisz raz w miesiącu i logujesz się tym kontem.
+            <b>Pro</b> wystarcza na start, <b>Max</b> daje więcej do intensywnej pracy.</p>
+        </div>
+        <div class="plan">
+          <h4>🔧 Rozliczenie przez API (zaawansowane)</h4>
+          <p>Płatność „za zużycie” w panelu <b>console.anthropic.com</b>. Bardziej kłopotliwe — zostaw,
+            jeśli nie wiesz, czy go potrzebujesz.</p>
+        </div>
+      </div>
+      <a class="cta" href="https://claude.ai/upgrade" target="_blank" rel="noopener">🔗 Wybierz plan na claude.ai</a>
+      <div class="tip">💡 Niepewny? Zacznij od <b>Claude Pro</b> — plan zmienisz lub anulujesz w każdej chwili.</div>
     </section>
 
-    <section class="panel">
-      <h2>🛟 Coś nie działa? Szybka ściąga</h2>
+    <!-- ============ CZĘŚĆ 4 ============ -->
+    <section class="panel" id="cz4">
+      <h2><span class="num">4</span> Połącz konto z programem (logowanie)</h2>
+      <p>Teraz łączymy konto z programem — robi się to <b>w samym programie</b>, raz.</p>
+      <ol>
+        <li>W programie powstaje <b>terminal</b> (ciemne pole). Przy pierwszym uruchomieniu agenta
+          Claude Code <b>poprosi o zalogowanie</b>.</li>
+        <li>Powinna otworzyć się <b>przeglądarka</b> — zaloguj się na konto Claude (to z części 3)
+          i kliknij <b>„Autoryzuj”</b>.</li>
+        <li>Przeglądarka pokaże <b>kod</b>. Skopiuj go i wklej w programie w miejscu <b>„Paste code here”</b>,
+          potem <kbd>Enter</kbd>.</li>
+      </ol>
+      <div class="warn">⚠️ Przeglądarka nie otworzyła się sama? Claude Code pokaże długi <b>link</b> i podpowiedź
+        „press <b>c</b> to copy”. Naciśnij <kbd>c</kbd> (link trafi do schowka), wklej go w przeglądarce.
+        <b>Nie przepisuj linku ręcznie.</b></div>
+    </section>
+
+    <!-- ============ CZĘŚĆ 5 ============ -->
+    <section class="panel" id="cz5">
+      <h2><span class="num">5</span> Sprawdź, czy działa — i co, gdy nie</h2>
+      <h3>✅ Szybki test</h3>
       <ul>
-        <li><b>Dwuklik nic nie robi.</b> Najpewniej pominięty <b>krok 2</b> (pozwolenie na uruchamianie)
-          lub brak <b>libfuse2</b> z <b>kroku 3</b>. Zrób oba i spróbuj ponownie.</li>
-        <li><b>„command not found: claude”.</b> Brakuje mózgu — wróć do <b>kroku 4</b>.</li>
-        <li><b>Nie wiem, gdzie jest plik.</b> Otwórz „Pliki” (menedżer plików) → folder <b>Pobrane</b>.</li>
-        <li><b>Terminal prosi o hasło i „nic się nie wpisuje”.</b> To normalne — hasła nie widać.
-          Wpisz je w ciemno i <kbd>Enter</kbd>.</li>
-        <li><b>Inny system niż Ubuntu</b> (Fedora, Arch…)? Komendy <b>apt</b> mogą się różnić —
-          napisz do nas, podpowiemy: <a href="mailto:kontakt@fulfillment-polska.pl">kontakt@fulfillment-polska.pl</a>.</li>
+        <li>Powstała <b>zakładka agenta</b> z działającym terminalem.</li>
+        <li>Napisz lub <b>powiedz</b>: „Cześć, działasz?” — Claude odpowie, a program <b>przeczyta odpowiedź głosem</b>.</li>
+        <li>Od teraz uruchamiasz program zwykłym dwuklikiem pliku <b>.AppImage</b> — i <b>sam się aktualizuje</b>.</li>
+      </ul>
+      <div class="ok">🎉 Claude odpowiada? Wszystko gotowe. Miłej rozmowy!</div>
+
+      <h3>🛟 Coś nie działa? Ściąga</h3>
+      <ul>
+        <li><b>Dwuklik nic nie robi.</b> Pominięty krok <b>1.2</b> (pozwolenie) lub brak <b>libfuse2</b> (krok 1.3).</li>
+        <li><b>„command not found: claude”.</b> Brakuje mózgu — wróć do <b>części 2</b>.</li>
+        <li><b>Program prosi o logowanie w kółko.</b> Loguj się na konto z <b>opłaconym planem</b> (część 3) —
+          darmowe nie wystarcza.</li>
+        <li><b>Przeglądarka nie otwiera się przy logowaniu.</b> Użyj sposobu z klawiszem <kbd>c</kbd> (część 4).</li>
+        <li><b>Terminal prosi o hasło i „nic się nie wpisuje”.</b> Normalne — hasła nie widać. Wpisz w ciemno i <kbd>Enter</kbd>.</li>
+        <li><b>Inny system niż Ubuntu</b> (Fedora, Arch…)? Komendy <b>apt</b> mogą się różnić — napisz:
+          <a href="mailto:kontakt@fulfillment-polska.pl">kontakt@fulfillment-polska.pl</a>.</li>
       </ul>
       <div class="see">Masz też Windows lub Maca? Zobacz:
-        <a href="instrukcja-windows.html">Instrukcja Windows</a> •
-        <a href="instrukcja-macos.html">Instrukcja macOS</a></div>
+        <a href="instrukcja-windows.html">Pełna instrukcja Windows</a> •
+        <a href="instrukcja-macos.html">Pełna instrukcja macOS</a></div>
     </section>
 
     <footer>

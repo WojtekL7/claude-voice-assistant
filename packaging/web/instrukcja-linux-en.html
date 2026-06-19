@@ -3,13 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Installation guide — Linux | Claude Voice Assistant</title>
-  <meta name="description" content="Install Claude Voice Assistant on Linux step by step — for absolute beginners.">
+  <title>Complete guide — Linux (from zero to talking) | Claude Voice Assistant</title>
+  <meta name="description" content="Complete Linux guide: download, run, install Claude Code, create an account and connect it to the app. With-terminal and no-terminal paths.">
   <style>
     :root{
       --bg1:#2a1140; --bg2:#3d1a5b; --accent:#a855f7; --accent2:#7c3aed;
       --ink:#1b1226; --muted:#6b6478; --card:#ffffff; --soft:#f5f2fb;
       --ok:#16a34a; --warn-bg:#fff7e6; --warn-line:#f0c36d; --line:#e9e3f3;
+      --pathA:#7c3aed; --pathB:#0ea5e9;
     }
     *{box-sizing:border-box;margin:0;padding:0}
     body{
@@ -18,7 +19,7 @@
       background:linear-gradient(160deg,var(--bg1),var(--bg2));
       min-height:100vh;line-height:1.6;
     }
-    .wrap{max-width:860px;margin:0 auto;padding:40px 20px 64px}
+    .wrap{max-width:880px;margin:0 auto;padding:40px 20px 64px}
     header{text-align:center;color:#fff;margin-bottom:30px}
     .logo{
       width:72px;height:72px;border-radius:20px;margin:0 auto 14px;
@@ -30,6 +31,13 @@
     .tagline{font-size:1.05rem;opacity:.9;margin-top:8px}
     .back{display:inline-block;margin-top:14px;color:#e9d5ff;font-size:.95rem}
 
+    .toc{background:rgba(255,255,255,.95);border-radius:16px;padding:18px 22px;margin-bottom:22px;box-shadow:0 18px 40px rgba(20,8,40,.22)}
+    .toc h2{font-size:1.05rem;margin-bottom:8px}
+    .toc ol{padding-left:22px}
+    .toc li{margin-bottom:4px}
+    .toc a{color:var(--accent2);text-decoration:none;font-weight:600}
+    .toc a:hover{text-decoration:underline}
+
     .panel{background:var(--card);border-radius:20px;padding:28px;box-shadow:0 18px 40px rgba(20,8,40,.28);margin-bottom:22px}
     .panel h2{font-size:1.3rem;margin-bottom:10px;display:flex;align-items:center;gap:12px}
     .num{display:inline-flex;flex:none;width:34px;height:34px;border-radius:50%;
@@ -39,6 +47,13 @@
     .panel ol, .panel ul{padding-left:24px;margin-bottom:8px}
     .panel li{margin-bottom:8px}
     .panel h3{font-size:1.05rem;margin:14px 0 6px}
+
+    .path{display:flex;align-items:center;gap:10px;margin:18px 0 8px;padding:10px 14px;border-radius:12px;font-weight:800;font-size:1.02rem}
+    .path .tag{display:inline-flex;width:30px;height:30px;border-radius:8px;align-items:center;justify-content:center;color:#fff;font-size:1.05rem}
+    .pathA{background:#f3ecff;color:#5b21b6;border:1px solid #ddd0fb}
+    .pathA .tag{background:var(--pathA)}
+    .pathB{background:#e8f6fd;color:#075985;border:1px solid #c5e8f7}
+    .pathB .tag{background:var(--pathB)}
 
     .see{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin:10px 0;font-size:.95rem}
     .see b{color:var(--accent2)}
@@ -52,12 +67,22 @@
       padding:8px 14px;cursor:pointer;font-size:.9rem;flex:none}
     .cmd button:hover{filter:brightness(1.1)}
 
+    .cta{display:inline-flex;align-items:center;gap:8px;margin:8px 0 4px;padding:12px 20px;
+      border-radius:12px;background:linear-gradient(145deg,var(--accent),var(--accent2));
+      color:#fff;text-decoration:none;font-weight:700;font-size:1rem}
+    .cta:hover{filter:brightness(1.07)}
+
+    .plans{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:12px 0 4px}
+    @media(max-width:640px){.plans{grid-template-columns:1fr}}
+    .plan{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+    .plan h4{font-size:1.05rem;margin-bottom:6px}
+    .plan p{font-size:.92rem;color:var(--muted);margin-bottom:0}
+
     kbd{background:#eee;border:1px solid #ccc;border-bottom-width:3px;border-radius:6px;
       padding:1px 7px;font-family:inherit;font-size:.92em;font-weight:600}
     footer{text-align:center;color:#fff;opacity:.8;margin-top:36px;font-size:.9rem}
     footer a{color:#e9d5ff}
 
-    /* Language switch — dropdown menu (scales to more languages) */
     .lang-switch{position:fixed;top:12px;right:14px;z-index:100;font-size:.85rem;font-weight:700;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Ubuntu,sans-serif}
     .lang-switch summary{list-style:none;cursor:pointer;color:#fff;background:rgba(20,8,40,.6);backdrop-filter:blur(6px);border-radius:999px;padding:7px 15px;display:inline-flex;align-items:center;gap:7px;user-select:none}
     .lang-switch summary::-webkit-details-marker{display:none}
@@ -80,160 +105,202 @@
   <div class="wrap">
     <header>
       <div class="logo">🐧</div>
-      <h1>Installing on Linux — step by step</h1>
-      <p class="tagline">Written for someone who has <b>never</b> installed anything on Linux
-        and doesn't know what a terminal is. Relax — we'll do it together.</p>
+      <h1>Complete guide — Linux</h1>
+      <p class="tagline">From zero to your first conversation, <b>in order</b>. Written for someone who has never
+        installed anything on Linux. Everywhere you get two paths: <b>🅰️ with a terminal</b> and <b>🅱️ without a terminal</b>.</p>
       <a class="back" href="https://pobierz.srv1251441.hstgr.cloud/">← Back to the download page</a>
     </header>
 
-    <section class="panel">
-      <h2>📦 What you get and what to do</h2>
-      <p>On Linux the program is <b>a single file</b> (an <b>AppImage</b>) — there's no “installer”
-        like on Windows. You keep the file and launch it with a double-click, like a game icon.</p>
-      <p>To get everything running, we'll do <b>5 things</b> in order:</p>
+    <nav class="toc">
+      <h2>📍 What we'll do — in order</h2>
       <ol>
-        <li><b>Download</b> the program file from the page.</li>
-        <li><b>Allow</b> the file to run (Linux won't do this on its own, to be safe).</li>
-        <li><b>Launch</b> the program (double-click).</li>
-        <li>One time only, add the program's <b>“brain”</b> — the free <b>Claude Code</b>.</li>
-        <li><b>Log in</b> to your Claude account.</li>
+        <li><a href="#cz1">Download and run the app</a></li>
+        <li><a href="#cz2">Add the “brain” — Claude Code</a></li>
+        <li><a href="#cz3">Create a Claude account and pick a plan</a></li>
+        <li><a href="#cz4">Connect the account to the app (login)</a></li>
+        <li><a href="#cz5">Check it works — and what to do if it doesn't</a></li>
       </ol>
-      <div class="tip">💜 <b>Most important:</b> you never retype anything by hand. Wherever a black box
-        with a command appears, there's a <b>Copy</b> button next to it. Copy, paste, Enter.</div>
+    </nav>
+
+    <section class="panel">
+      <h2>🧭 Before we start — two paths</h2>
+      <p>This app (Claude Voice Assistant) is a <b>remote control</b>: it gives you voice, tabs and a comfortable window.
+        The thinking is done by <b>Claude Code</b>, and for it to work it needs <b>your Claude account</b>.
+        We'll go through everything in order — and at each stage you pick one of two paths:</p>
+      <div class="path pathA"><span class="tag">A</span> With a terminal — you paste ready-made commands. Reliable, always works.</div>
+      <div class="path pathB"><span class="tag">B</span> Without a terminal — the mouse and the app's windows guide you. For non-technical users.</div>
+      <div class="warn">⚠️ A bit of honesty: <b>one thing</b> (installing Claude Code) has to be run once in a terminal on Linux —
+        there's no “click-through” installer for it. On path B the app <b>gives you a ready command with a Copy button</b>,
+        so you touch the terminal just once: paste and <kbd>Enter</kbd>. That's it.</div>
+      <div class="tip">💜 You never retype anything by hand. Wherever you see a dark box with a command, there's a <b>Copy</b> button next to it.</div>
     </section>
 
     <section class="panel">
-      <h2>🧰 First, relax: what is a “terminal”</h2>
+      <h2>🧰 What a “terminal” is (only needed for path A and one command)</h2>
       <p>A <b>terminal</b> is a small window where, instead of clicking, you type commands as text.
-        It looks scary, but all you'll do is <b>paste</b> ready-made commands from this page. That's it.</p>
+        It looks scary, but you'll only be <b>pasting</b> ready-made commands from this page.</p>
       <ul>
-        <li><b>How to open the terminal:</b> press <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>T</kbd> together.
-          A black (or purple) window opens. That's the terminal.</li>
-        <li><b>How to paste into it:</b> copy the command with the button, go back to the terminal and press
-          <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>V</kbd> (or right-click → “Paste”).</li>
-        <li><b>How to confirm:</b> after pasting, press <kbd>Enter</kbd>.</li>
+        <li><b>Open a terminal:</b> press <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>T</kbd> together.</li>
+        <li><b>Paste into the terminal:</b> <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>V</kbd> (or right-click → “Paste”).</li>
+        <li><b>Confirm:</b> <kbd>Enter</kbd>.</li>
       </ul>
-      <div class="warn">⚠️ If a command starts with <b>sudo</b>, the terminal will ask for your <b>password</b>
-        (the same one you use to log into the computer). While you type it, <b>no dots or stars appear</b>
-        — that's normal. Type it “blind” and press <kbd>Enter</kbd>.</div>
+      <div class="warn">⚠️ When a command starts with <b>sudo</b>, the terminal asks for your <b>password</b> (the one you log into the computer with).
+        While typing it <b>no dots or stars appear</b> — that's normal. Type it “blind” and press <kbd>Enter</kbd>.</div>
     </section>
 
-    <section class="panel">
-      <h2><span class="num">1</span> Download the program</h2>
+    <!-- ============ PART 1 ============ -->
+    <section class="panel" id="cz1">
+      <h2><span class="num">1</span> Download and run the app</h2>
+      <p>On Linux the app is <b>a single file</b> of the <b>AppImage</b> type — no installer. You download it and
+        run it with a double-click, like a game icon.</p>
+
+      <h3>1.1 Download the file</h3>
       <ol>
-        <li>On the <a href="https://pobierz.srv1251441.hstgr.cloud/">download page</a> click the big
-          <b>“⬇ Download for Linux”</b> button.</li>
-        <li>Your browser downloads a file named <b>ClaudeVoiceAssistant-linux.AppImage</b>
-          (about 190 MB — it may take a moment).</li>
-        <li>The file lands in your <b>Downloads</b> folder — where all your downloads go.</li>
+        <li>On the <a href="https://pobierz.srv1251441.hstgr.cloud/">download page</a> click
+          <b>“⬇ Download for Linux”</b>.</li>
+        <li>It downloads <b>ClaudeVoiceAssistant-linux.AppImage</b> (about 190 MB) into your <b>Downloads</b> folder.</li>
       </ol>
-      <div class="ok">✅ You now have a file in Downloads with a purple microphone icon and a name ending in
-        <b>.AppImage</b> — great, let's continue.</div>
-    </section>
+      <div class="ok">✅ You have a file in Downloads with a purple microphone icon ending in <b>.AppImage</b>.</div>
 
-    <section class="panel">
-      <h2><span class="num">2</span> Allow the file to run</h2>
-      <p>To be safe, Linux treats a freshly downloaded file as an “ordinary document” and won't run it
-        until you confirm it's a program. You do this once. Pick <b>one</b> of the two methods —
-        method A always works.</p>
+      <h3>1.2 Allow the file to run</h3>
+      <p>Out of caution, Linux won't run a freshly downloaded file until you confirm it's a program. You do this once.</p>
 
-      <h3>Method A — via the terminal (reliable, recommended)</h3>
+      <div class="path pathA"><span class="tag">A</span> Via the terminal (reliable)</div>
       <ol>
-        <li>Open the terminal: <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>T</kbd>.</li>
-        <li>Type <b>chmod +x</b> followed by <b>one space</b> (don't press Enter yet):</li>
+        <li>Open a terminal (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>T</kbd>).</li>
+        <li>Copy the line below (there's a space at the end) — <b>don't</b> press Enter yet:</li>
       </ol>
       <div class="cmd">
         <code id="chmodcmd">chmod +x </code>
         <button onclick="copyCmd('chmodcmd', this)">⧉ Copy</button>
       </div>
       <ol start="3">
-        <li>Now <b>drag</b> the downloaded <b>.AppImage</b> file straight into the terminal window and drop it.
-          The file's path <b>fills in by itself</b> — no typing needed.</li>
-        <li>Press <kbd>Enter</kbd>. No message = success (that's how the terminal works — silence is good news).</li>
+        <li>Paste it into the terminal, then <b>drag</b> the downloaded <b>.AppImage</b> file into the terminal window
+          and drop it — the path is added by itself.</li>
+        <li>Press <kbd>Enter</kbd>. No message = success (silence is good news).</li>
       </ol>
-      <div class="tip">💡 The whole line will look roughly like this:
-        <b>chmod +x /home/yourname/Downloads/ClaudeVoiceAssistant-linux.AppImage</b></div>
 
-      <h3>Method B — via the file manager (if yours supports it)</h3>
+      <div class="path pathB"><span class="tag">B</span> Via the file manager (with the mouse)</div>
       <ol>
         <li>Open the <b>Downloads</b> folder, <b>right-click</b> the file → <b>Properties</b>.</li>
-        <li>Go to the <b>Permissions</b> tab.</li>
-        <li>Tick <b>“Allow executing file as program”</b> and close the window.</li>
+        <li><b>Permissions</b> tab → tick <b>“Allow executing file as program”</b>.</li>
       </ol>
-      <div class="warn">⚠️ Some newer systems (e.g. the latest Ubuntu) have <b>hidden</b> this option
-        in the file manager. If you don't see such a checkbox — just use <b>Method A</b> (terminal).</div>
-    </section>
+      <div class="warn">⚠️ Newer Ubuntu sometimes <b>hides</b> this option. Don't see it? Use path <b>A</b>.</div>
 
-    <section class="panel">
-      <h2><span class="num">3</span> Launch the program</h2>
-      <p>Go back to the <b>Downloads</b> folder and <b>double-click</b> the <b>.AppImage</b> file.
-        After a moment the program window should open.</p>
-
-      <div class="warn">⚠️ <b>Double-click does nothing</b>, or you get an error about <b>“libfuse.so.2”</b>?
-        This is very common on newer Ubuntu — one small library is missing. Paste this in the terminal
-        (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>T</kbd>) and press <kbd>Enter</kbd>:</div>
+      <h3>1.3 Run it</h3>
+      <p>Go back to <b>Downloads</b> and <b>double-click</b> the <b>.AppImage</b> file. The app window opens after a moment.</p>
+      <div class="warn">⚠️ Double-click does nothing, or an error about <b>“libfuse.so.2”</b>? A small library is missing —
+        paste this in a terminal and press <kbd>Enter</kbd>:</div>
       <div class="cmd">
         <code id="fusecmd">sudo apt update &amp;&amp; sudo apt install -y libfuse2</code>
         <button onclick="copyCmd('fusecmd', this)">⧉ Copy</button>
       </div>
-      <p>Then try double-clicking the file again.</p>
-      <div class="tip">💡 If a dialog asks “Do you want to run…?” — confirm <b>Run</b>.</div>
     </section>
 
-    <section class="panel">
-      <h2><span class="num">4</span> Add the program's “brain” — Claude Code</h2>
-      <p>This program doesn't think on its own — it's a <b>remote control</b> for <b>Claude Code</b>
-        (that's what talks and writes code). Claude Code is free and installs once. If the program shows
-        a <b>setup wizard</b> after launch — just follow its steps. Prefer to do it manually? Open the
-        terminal and paste one after another:</p>
+    <!-- ============ PART 2 ============ -->
+    <section class="panel" id="cz2">
+      <h2><span class="num">2</span> Add the “brain” — Claude Code</h2>
+      <p>The app doesn't think on its own — it needs <b>Claude Code</b> (a free add-on, installed once,
+        together with the helper <b>Node.js</b>).</p>
 
-      <h3>a) Node.js (a free helper program)</h3>
+      <div class="path pathB"><span class="tag">B</span> Without a terminal — let the app guide you (recommended)</div>
+      <ol>
+        <li>After you launch the app, if it can't find Claude Code it shows a <b>“Finish setup”</b> window.</li>
+        <li>Click <b>“Get Node.js”</b> — it opens nodejs.org. Download and install it (click “Next”, like any program).</li>
+        <li>The “Finish setup” window has a ready command and a <b>Copy</b> button. This is the one moment with a terminal:
+          open a terminal (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>T</kbd>), paste, <kbd>Enter</kbd>.</li>
+        <li>Go back to the app window and click <b>“Check again”</b>. The app finds the brain and moves on.</li>
+      </ol>
+      <div class="tip">💡 You can open that window yourself any time: menu <b>Help → Claude Code setup</b>.</div>
+
+      <div class="path pathA"><span class="tag">A</span> With a terminal — everything manually</div>
+      <p>Open a terminal and paste, one after another:</p>
+      <h3>a) Node.js</h3>
       <div class="cmd">
         <code id="nodecmd">sudo apt update &amp;&amp; sudo apt install -y nodejs npm</code>
         <button onclick="copyCmd('nodecmd', this)">⧉ Copy</button>
       </div>
-
       <h3>b) Claude Code</h3>
       <div class="cmd">
         <code id="npmcmd">sudo npm install -g @anthropic-ai/claude-code</code>
         <button onclick="copyCmd('npmcmd', this)">⧉ Copy</button>
       </div>
-      <div class="ok">✅ Check: type <b>claude --version</b> and press <kbd>Enter</kbd>.
-        A version number showed up? The brain is in place.</div>
+      <div class="ok">✅ Check: type <b>claude --version</b> and <kbd>Enter</kbd>. See a number? The brain is in place.</div>
     </section>
 
-    <section class="panel">
-      <h2><span class="num">5</span> Log in to Claude</h2>
+    <!-- ============ PART 3 ============ -->
+    <section class="panel" id="cz3">
+      <h2><span class="num">3</span> Create a Claude account and pick a plan</h2>
+      <p>For Claude Code to work you need a <b>Claude account</b> with <b>paid access</b>. You can do this earlier too —
+        what matters is that it's ready before the login in part 4.</p>
+
+      <h3>3.1 Create the account</h3>
       <ol>
-        <li>In the terminal type <b>claude</b> and press <kbd>Enter</kbd>
-          (or do it in the terminal inside the program).</li>
-        <li>If asked whether to trust the folder — press <kbd>Enter</kbd> (yes).</li>
-        <li>Claude Code asks you to log in. A browser should open — sign in to your Claude account
-          (claude.ai, e.g. the Pro plan) and click <b>Authorize</b>.</li>
-        <li>Copy the code shown and paste it in the terminal where it says “Paste code here”.</li>
+        <li>Go to <b>claude.ai</b> (button below) and click <b>“Sign up”</b>.</li>
+        <li>Choose to sign up with an <b>email</b> or a <b>Google account</b> (quicker if you have Gmail).</li>
+        <li>With email — confirm using the code/link from your inbox (check Spam too).</li>
       </ol>
-      <div class="warn">⚠️ If the browser doesn't open by itself — Claude Code shows a long link and a
-        “c to copy” hint. Press <kbd>c</kbd> (the link is copied to the clipboard), then paste it into the
-        browser. <b>Don't retype the link by hand.</b></div>
-      <div class="ok">🎉 Done! From now on you launch the program with a normal double-click of the
-        <b>.AppImage</b> file. The program <b>updates itself</b> — when a new version appears, it offers it.</div>
+      <a class="cta" href="https://claude.ai/" target="_blank" rel="noopener">🔗 Open claude.ai and sign up</a>
+
+      <h3>3.2 Pick a plan</h3>
+      <p>A free account is enough for chatting on the website, but <b>Claude Code needs paid access</b>. Two routes:</p>
+      <div class="plans">
+        <div class="plan">
+          <h4>💜 Pro / Max plan <span style="color:var(--ok)">— recommended</span></h4>
+          <p>A fixed monthly fee on your claude.ai account. Simplest: pay once a month and log in with that account.
+            <b>Pro</b> is enough to start, <b>Max</b> gives you more for heavy use.</p>
+        </div>
+        <div class="plan">
+          <h4>🔧 Pay via the API (advanced)</h4>
+          <p>“Pay as you go” billing in the <b>console.anthropic.com</b> dashboard. More fiddly — skip it unless you
+            know you need it.</p>
+        </div>
+      </div>
+      <a class="cta" href="https://claude.ai/upgrade" target="_blank" rel="noopener">🔗 Choose a plan on claude.ai</a>
+      <div class="tip">💡 Not sure? Start with <b>Claude Pro</b> — you can change or cancel any time.</div>
     </section>
 
-    <section class="panel">
-      <h2>🛟 Something's not working? Quick cheat sheet</h2>
+    <!-- ============ PART 4 ============ -->
+    <section class="panel" id="cz4">
+      <h2><span class="num">4</span> Connect the account to the app (login)</h2>
+      <p>Now we connect the account to the app — done <b>inside the app</b>, once.</p>
+      <ol>
+        <li>A <b>terminal</b> (a dark panel) appears in the app. The first time you start an agent,
+          Claude Code <b>asks you to log in</b>.</li>
+        <li>A <b>browser</b> should open — sign in to your Claude account (from part 3) and click <b>“Authorize”</b>.</li>
+        <li>The browser shows a <b>code</b>. Copy it and paste it into the app where it says <b>“Paste code here”</b>,
+          then <kbd>Enter</kbd>.</li>
+      </ol>
+      <div class="warn">⚠️ Browser didn't open by itself? Claude Code shows a long <b>link</b> and a hint
+        “press <b>c</b> to copy”. Press <kbd>c</kbd> (the link goes to the clipboard), paste it in your browser.
+        <b>Don't retype the link by hand.</b></div>
+    </section>
+
+    <!-- ============ PART 5 ============ -->
+    <section class="panel" id="cz5">
+      <h2><span class="num">5</span> Check it works — and what to do if it doesn't</h2>
+      <h3>✅ Quick test</h3>
       <ul>
-        <li><b>Double-click does nothing.</b> Most likely you skipped <b>step 2</b> (allow running)
-          or <b>libfuse2</b> from <b>step 3</b> is missing. Do both and try again.</li>
-        <li><b>“command not found: claude”.</b> The brain is missing — go back to <b>step 4</b>.</li>
-        <li><b>I don't know where the file is.</b> Open “Files” (the file manager) → the <b>Downloads</b> folder.</li>
-        <li><b>The terminal asks for a password and “nothing types”.</b> That's normal — the password is hidden.
-          Type it blind and press <kbd>Enter</kbd>.</li>
-        <li><b>A different system than Ubuntu</b> (Fedora, Arch…)? The <b>apt</b> commands may differ —
-          write to us and we'll help: <a href="mailto:kontakt@fulfillment-polska.pl">kontakt@fulfillment-polska.pl</a>.</li>
+        <li>An <b>agent tab</b> with a working terminal has appeared.</li>
+        <li>Type or <b>say</b>: “Hi, are you working?” — Claude replies, and the app <b>reads the answer out loud</b>.</li>
+        <li>From now on you launch the app with a normal double-click of the <b>.AppImage</b> file — and it <b>updates itself</b>.</li>
       </ul>
-      <div class="see">Also on Windows or Mac? See:
-        <a href="instrukcja-windows-en.html">Windows guide</a> •
-        <a href="instrukcja-macos-en.html">macOS guide</a></div>
+      <div class="ok">🎉 Claude replies? You're all set. Enjoy!</div>
+
+      <h3>🛟 Something not working? Cheat sheet</h3>
+      <ul>
+        <li><b>Double-click does nothing.</b> You likely skipped step <b>1.2</b> (permission) or <b>libfuse2</b> is missing (step 1.3).</li>
+        <li><b>“command not found: claude”.</b> The brain is missing — go back to <b>part 2</b>.</li>
+        <li><b>The app keeps asking you to log in.</b> Sign in with the account that has a <b>paid plan</b> (part 3) —
+          a free one isn't enough.</li>
+        <li><b>The browser won't open during login.</b> Use the <kbd>c</kbd> method (part 4).</li>
+        <li><b>Terminal asks for a password and “nothing types”.</b> That's normal — the password is hidden. Type it blind and <kbd>Enter</kbd>.</li>
+        <li><b>A distro other than Ubuntu</b> (Fedora, Arch…)? The <b>apt</b> commands may differ — write to us:
+          <a href="mailto:kontakt@fulfillment-polska.pl">kontakt@fulfillment-polska.pl</a>.</li>
+      </ul>
+      <div class="see">Got Windows or a Mac too? See:
+        <a href="instrukcja-windows-en.html">Complete Windows guide</a> •
+        <a href="instrukcja-macos-en.html">Complete macOS guide</a></div>
     </section>
 
     <footer>

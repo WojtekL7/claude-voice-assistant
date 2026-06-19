@@ -3,13 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Instrukcja instalacji — Windows | Claude Voice Assistant</title>
-  <meta name="description" content="Instalacja Claude Voice Assistant na Windows krok po kroku — dla każdego, bez wiedzy technicznej.">
+  <title>Pełna instrukcja — Windows (od zera do rozmowy) | Claude Voice Assistant</title>
+  <meta name="description" content="Kompletna instrukcja Windows: pobranie, instalacja, dodanie Claude Code, założenie konta i połączenie z programem. Ścieżka z terminalem i bez terminala.">
   <style>
     :root{
       --bg1:#2a1140; --bg2:#3d1a5b; --accent:#a855f7; --accent2:#7c3aed;
       --ink:#1b1226; --muted:#6b6478; --card:#ffffff; --soft:#f5f2fb;
       --ok:#16a34a; --warn-bg:#fff7e6; --warn-line:#f0c36d; --line:#e9e3f3;
+      --pathA:#7c3aed; --pathB:#0ea5e9;
     }
     *{box-sizing:border-box;margin:0;padding:0}
     body{
@@ -18,7 +19,7 @@
       background:linear-gradient(160deg,var(--bg1),var(--bg2));
       min-height:100vh;line-height:1.6;
     }
-    .wrap{max-width:860px;margin:0 auto;padding:40px 20px 64px}
+    .wrap{max-width:880px;margin:0 auto;padding:40px 20px 64px}
     header{text-align:center;color:#fff;margin-bottom:30px}
     .logo{
       width:72px;height:72px;border-radius:20px;margin:0 auto 14px;
@@ -30,6 +31,13 @@
     .tagline{font-size:1.05rem;opacity:.9;margin-top:8px}
     .back{display:inline-block;margin-top:14px;color:#e9d5ff;font-size:.95rem}
 
+    .toc{background:rgba(255,255,255,.95);border-radius:16px;padding:18px 22px;margin-bottom:22px;box-shadow:0 18px 40px rgba(20,8,40,.22)}
+    .toc h2{font-size:1.05rem;margin-bottom:8px}
+    .toc ol{padding-left:22px}
+    .toc li{margin-bottom:4px}
+    .toc a{color:var(--accent2);text-decoration:none;font-weight:600}
+    .toc a:hover{text-decoration:underline}
+
     .panel{background:var(--card);border-radius:20px;padding:28px;box-shadow:0 18px 40px rgba(20,8,40,.28);margin-bottom:22px}
     .panel h2{font-size:1.3rem;margin-bottom:10px;display:flex;align-items:center;gap:12px}
     .num{display:inline-flex;flex:none;width:34px;height:34px;border-radius:50%;
@@ -38,11 +46,20 @@
     .panel p, .panel li{font-size:1rem;color:#332b40;margin-bottom:10px}
     .panel ol, .panel ul{padding-left:24px;margin-bottom:8px}
     .panel li{margin-bottom:8px}
+    .panel h3{font-size:1.05rem;margin:14px 0 6px}
+
+    .path{display:flex;align-items:center;gap:10px;margin:18px 0 8px;padding:10px 14px;border-radius:12px;font-weight:800;font-size:1.02rem}
+    .path .tag{display:inline-flex;width:30px;height:30px;border-radius:8px;align-items:center;justify-content:center;color:#fff;font-size:1.05rem}
+    .pathA{background:#f3ecff;color:#5b21b6;border:1px solid #ddd0fb}
+    .pathA .tag{background:var(--pathA)}
+    .pathB{background:#e8f6fd;color:#075985;border:1px solid #c5e8f7}
+    .pathB .tag{background:var(--pathB)}
 
     .see{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin:10px 0;font-size:.95rem}
     .see b{color:var(--accent2)}
     .warn{background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:12px;padding:12px 16px;margin:10px 0;font-size:.95rem}
     .ok{background:#ecfdf3;border:1px solid #b7e4c7;border-radius:12px;padding:12px 16px;margin:10px 0;font-size:.95rem}
+    .tip{background:#eef6ff;border:1px solid #bcdcff;border-radius:12px;padding:12px 16px;margin:10px 0;font-size:.95rem}
 
     .cmd{display:flex;gap:10px;align-items:center;background:#1e1530;border-radius:12px;padding:12px 14px;margin:10px 0}
     .cmd code{color:#d8c7ff;font-family:"Ubuntu Mono",Consolas,monospace;font-size:1rem;flex:1;overflow-x:auto;white-space:nowrap}
@@ -50,21 +67,22 @@
       padding:8px 14px;cursor:pointer;font-size:.9rem;flex:none}
     .cmd button:hover{filter:brightness(1.1)}
 
+    .cta{display:inline-flex;align-items:center;gap:8px;margin:8px 0 4px;padding:12px 20px;
+      border-radius:12px;background:linear-gradient(145deg,var(--accent),var(--accent2));
+      color:#fff;text-decoration:none;font-weight:700;font-size:1rem}
+    .cta:hover{filter:brightness(1.07)}
+
+    .plans{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:12px 0 4px}
+    @media(max-width:640px){.plans{grid-template-columns:1fr}}
+    .plan{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+    .plan h4{font-size:1.05rem;margin-bottom:6px}
+    .plan p{font-size:.92rem;color:var(--muted);margin-bottom:0}
+
     kbd{background:#eee;border:1px solid #ccc;border-bottom-width:3px;border-radius:6px;
       padding:1px 7px;font-family:inherit;font-size:.92em;font-weight:600}
-
-    .faq td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:.95rem;vertical-align:top}
-    .faq td:first-child{font-weight:700;width:45%}
-    .faq{width:100%;border-collapse:collapse;margin-top:6px}
-
-    .btn{display:inline-flex;align-items:center;gap:8px;padding:12px 20px;border-radius:12px;
-      background:linear-gradient(145deg,var(--accent),var(--accent2));color:#fff;font-weight:700;
-      text-decoration:none;margin:6px 0}
-    .btn:hover{filter:brightness(1.07)}
     footer{text-align:center;color:#fff;opacity:.8;margin-top:36px;font-size:.9rem}
     footer a{color:#e9d5ff}
 
-    /* Przełącznik języka — rozwijane menu (skalowalne na kolejne języki) */
     .lang-switch{position:fixed;top:12px;right:14px;z-index:100;font-size:.85rem;font-weight:700;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Ubuntu,sans-serif}
     .lang-switch summary{list-style:none;cursor:pointer;color:#fff;background:rgba(20,8,40,.6);backdrop-filter:blur(6px);border-radius:999px;padding:7px 15px;display:inline-flex;align-items:center;gap:7px;user-select:none}
     .lang-switch summary::-webkit-details-marker{display:none}
@@ -87,147 +105,159 @@
   <div class="wrap">
     <header>
       <div class="logo">🪟</div>
-      <h1>Instalacja na Windows — krok po kroku</h1>
-      <p class="tagline">Przeprowadzimy Cię od pobrania pliku do pierwszej rozmowy z Claude Code.
-        Nie musisz znać się na komputerach — wystarczy robić dokładnie to, co poniżej.</p>
+      <h1>Pełna instrukcja — Windows</h1>
+      <p class="tagline">Od zera do pierwszej rozmowy, <b>po kolei</b>. Pisane dla osoby, która robi to pierwszy raz.
+        Sam program instaluje się klikaniem — terminal pojawia się tylko raz, przy dodaniu „mózgu”.</p>
       <a class="back" href="https://pobierz.srv1251441.hstgr.cloud/">← Wróć do strony pobierania</a>
     </header>
 
-    <section class="panel">
-      <h2>Zanim zaczniesz — co będzie potrzebne</h2>
-      <ul>
-        <li>Komputer z <b>Windows 10 lub 11</b> i dostęp do internetu.</li>
-        <li>Około <b>15 minut</b>.</li>
-        <li><b>Konto Claude</b> (claude.ai) z aktywnym planem (np. Pro) — to do niego
-          zaloguje się Claude Code w ostatnim kroku. Jeśli nie masz konta, załóż je na
-          <a href="https://claude.ai" target="_blank" rel="noopener">claude.ai</a>.</li>
-      </ul>
-      <div class="see">Oprócz naszego programu zainstalujemy <b>dwa darmowe dodatki</b>:
-        <b>Node.js</b> (program pomocniczy) i <b>Claude Code</b> (właściwy „mózg”, którym
-        nasz program steruje). Bez nich program się uruchomi, ale nie będzie z kim rozmawiać.</div>
-    </section>
+    <nav class="toc">
+      <h2>📍 Co zrobimy — po kolei</h2>
+      <ol>
+        <li><a href="#cz1">Pobierz i zainstaluj program</a></li>
+        <li><a href="#cz2">Dodaj „mózg” — Claude Code</a></li>
+        <li><a href="#cz3">Załóż konto Claude i wybierz plan</a></li>
+        <li><a href="#cz4">Połącz konto z programem (logowanie)</a></li>
+        <li><a href="#cz5">Sprawdź, czy działa — i co, gdy nie</a></li>
+      </ol>
+    </nav>
 
     <section class="panel">
+      <h2>🧭 Zanim zaczniemy — dwie drogi</h2>
+      <p>Ten program (Claude Voice Assistant) to <b>pilot</b>: daje głos, zakładki i wygodne okno.
+        „Myśli” za niego <b>Claude Code</b>, a żeby działał, potrzebuje <b>Twojego konta Claude</b>.</p>
+      <p>Na Windowsie <b>instalacja programu jest w całości klikana</b> (zwykły instalator). Wybór drogi
+        dotyczy tylko jednego momentu — dodania „mózgu” w części 2:</p>
+      <div class="path pathA"><span class="tag">A</span> Z terminalem (PowerShell) — sam wklejasz gotową komendę. Pewne, działa zawsze.</div>
+      <div class="path pathB"><span class="tag">B</span> Bez terminala — prowadzi Cię kreator w programie. Dla osoby nietechnicznej.</div>
+      <div class="warn">⚠️ Mała szczerość: instalacja Claude Code <b>nie ma czysto-klikanego instalatora</b> —
+        trzeba ją odpalić raz w okienku PowerShell. W drodze B program <b>poda Ci gotową komendę z przyciskiem
+        Kopiuj</b>, więc tylko wklejasz i <kbd>Enter</kbd>.</div>
+      <div class="tip">💜 Nigdzie nic nie przepisujesz ręcznie — przy każdej komendzie jest przycisk <b>Kopiuj</b>.</div>
+    </section>
+
+    <!-- ============ CZĘŚĆ 1 ============ -->
+    <section class="panel" id="cz1">
       <h2><span class="num">1</span> Pobierz i zainstaluj program</h2>
       <ol>
-        <li>Wejdź na <a href="https://pobierz.srv1251441.hstgr.cloud/" target="_blank" rel="noopener">stronę pobierania</a>
-          (jeśli poprosi o login i hasło — wpisz dane, które otrzymałeś od nas) i kliknij
+        <li>Na <a href="https://pobierz.srv1251441.hstgr.cloud/">stronie pobierania</a> kliknij
           <b>„⬇ Pobierz na Windows”</b>.</li>
-        <li>Po pobraniu otwórz plik — kliknij go w pasku przeglądarki albo znajdź w folderze
-          <b>Pobrane</b> i kliknij dwukrotnie. Nazwa pliku to <b>ClaudeVoiceAssistant-Setup.exe</b>.</li>
-        <li>Może pojawić się niebieski ekran <b>„System Windows ochronił ten komputer”</b>.
-          To standardowe ostrzeżenie dla nowych programów — kliknij <b>„Więcej informacji”</b>,
-          a potem przycisk <b>„Uruchom mimo to”</b>.</li>
-        <li>W instalatorze klikaj <b>Dalej → Zainstaluj → Zakończ</b>. Program uruchomi się sam.</li>
+        <li>Pobierze się plik <b>ClaudeVoiceAssistant-Setup.exe</b> do folderu <b>Pobrane</b>.</li>
+        <li>Kliknij go dwa razy i przejdź przez instalator (kilka razy <b>„Dalej / Zainstaluj”</b>).</li>
       </ol>
-      <div class="see"><b>Co zobaczysz:</b> okno programu z <b>czarnym polem</b> w środku.
-        To pole to <b>terminal</b> — miejsce, w którym wpisuje się polecenia dla komputera.
-        Piszesz, naciskasz <kbd>Enter</kbd>, komputer odpowiada. Będziemy z niego korzystać za chwilę.</div>
-      <div class="see">Przy pierwszym uruchomieniu program może też pokazać okno
-        <b>„Dokończ instalację — potrzebny Claude Code”</b>. To nasz pomocnik — prowadzi przez
-        te same kroki, które opisujemy poniżej. Możesz iść za nim albo za tą stroną, to to samo.</div>
+      <div class="warn">⚠️ Pojawił się niebieski ekran <b>„System Windows ochronił Twój komputer”</b>?
+        To normalne dla nowych programów. Kliknij <b>„Więcej informacji”</b>, a potem
+        <b>„Uruchom mimo to”</b>.</div>
+      <div class="ok">✅ Po instalacji program jest w menu Start. Uruchom go — przyda się w części 2.</div>
     </section>
 
-    <section class="panel">
-      <h2><span class="num">2</span> Zainstaluj Node.js (darmowy dodatek)</h2>
-      <ol>
-        <li>Wejdź na <a href="https://nodejs.org/" target="_blank" rel="noopener">nodejs.org</a>
-          i kliknij <b>zielony przycisk z napisem „LTS”</b> (to wersja stabilna). Plik się pobierze.</li>
-        <li>Otwórz pobrany plik (np. <b>node-v22…-x64.msi</b>) i klikaj <b>Next</b>,
-          zaznacz zgodę na licencję, znowu <b>Next</b> — niczego nie zmieniaj.</li>
-        <li>Na ekranie <b>„Tools for Native Modules”</b> <u>NIE zaznaczaj</u> kratki —
-          po prostu kliknij <b>Next</b>, potem <b>Install</b> i <b>Finish</b>.</li>
-      </ol>
-      <div class="warn">⚠️ <b>Jeśli mimo wszystko zaznaczysz tę kratkę</b> (albo już zaznaczyłeś):
-        po instalacji otworzy się czarne okno, które wypisze groźnie wyglądające błędy
-        (np. „Didn't find any channel feed”). <b>To nieszkodliwe</b> — Node.js jest już
-        zainstalowany. Po prostu zamknij to okno krzyżykiem i idź dalej.</div>
-    </section>
+    <!-- ============ CZĘŚĆ 2 ============ -->
+    <section class="panel" id="cz2">
+      <h2><span class="num">2</span> Dodaj „mózg” — Claude Code</h2>
+      <p>Program sam nie myśli — potrzebuje <b>Claude Code</b> (darmowy dodatek, instaluje się raz,
+        razem z pomocniczym <b>Node.js</b>).</p>
 
-    <section class="panel">
-      <h2><span class="num">3</span> Zainstaluj Claude Code</h2>
+      <div class="path pathB"><span class="tag">B</span> Bez terminala — niech poprowadzi program (polecane)</div>
       <ol>
-        <li><b>Zamknij nasz program całkowicie i uruchom go ponownie</b> (ikona na pulpicie).
-          To ważne — program musi „zobaczyć” świeżo zainstalowany Node.js.</li>
-        <li>Skopiuj poniższą komendę przyciskiem <b>Kopiuj</b>:</li>
+        <li>Uruchom Claude Voice Assistant. Jeśli nie znajdzie Claude Code, sam pokaże okno <b>„Dokończ instalację”</b>.</li>
+        <li>Kliknij <b>„Pobierz Node.js”</b> — otworzy stronę nodejs.org. Pobierz wersję <b>LTS</b> i zainstaluj
+          (klikasz „Next”, jak każdy program). <b>Po instalacji Node uruchom program ponownie</b>, żeby go zauważył.</li>
+        <li>W oknie „Dokończ instalację” jest gotowa komenda i przycisk <b>Kopiuj</b>. To ta jedna chwila z terminalem:
+          otwórz <b>PowerShell</b> (patrz niżej), wklej komendę (prawy przycisk myszy albo <kbd>Ctrl</kbd>+<kbd>V</kbd>)
+          i naciśnij <kbd>Enter</kbd>.</li>
+        <li>Wróć do okna programu i kliknij <b>„Sprawdź ponownie”</b>. Program znajdzie mózg i ruszy dalej.</li>
+      </ol>
+      <div class="tip">💡 <b>Jak otworzyć PowerShell:</b> kliknij menu <b>Start</b>, wpisz <b>PowerShell</b>
+        i naciśnij <kbd>Enter</kbd>. Otworzy się granatowe okienko — to nasz „terminal”.</div>
+      <div class="tip">💡 Okno „Dokończ instalację” wywołasz też sam: menu <b>Pomoc → Konfiguracja Claude Code</b>.</div>
+
+      <div class="path pathA"><span class="tag">A</span> Z terminalem — samodzielnie</div>
+      <ol>
+        <li>Zainstaluj <b>Node.js (LTS)</b> ze strony <a href="https://nodejs.org/" target="_blank" rel="noopener">nodejs.org</a>
+          (zwykły instalator, klikasz „Next”).</li>
+        <li>Otwórz <b>PowerShell</b> (Start → wpisz „PowerShell” → Enter) i wklej:</li>
       </ol>
       <div class="cmd">
         <code id="npmcmd">npm install -g @anthropic-ai/claude-code</code>
         <button onclick="copyCmd('npmcmd', this)">⧉ Kopiuj</button>
       </div>
-      <ol start="3">
-        <li>Kliknij myszką w <b>czarne pole</b> (terminal) w oknie programu,
-          wklej komendę (<kbd>Ctrl</kbd>+<kbd>V</kbd> albo prawy przycisk myszy → Wklej)
-          i naciśnij <kbd>Enter</kbd>.</li>
-        <li>Poczekaj 1–2 minuty. Na ekranie będą przewijać się napisy — to normalne.</li>
-      </ol>
-      <div class="ok">✅ <b>Sukces wygląda tak:</b> na końcu pojawi się napis w stylu
-        <b>„added 2 packages in 40s”</b>.</div>
-      <div class="warn">⚠️ Jeśli zobaczysz <b>„'npm' is not recognized…”</b> — Node.js nie został
-        zainstalowany (wróć do kroku 2) albo program nie został uruchomiony ponownie (zamknij go
-        i otwórz jeszcze raz).</div>
+      <div class="ok">✅ Sprawdzenie: wpisz <b>claude --version</b> i <kbd>Enter</kbd>. Pokazał się numer? Mózg na miejscu.</div>
     </section>
 
-    <section class="panel">
-      <h2><span class="num">4</span> Uruchom Claude Code i zaloguj się</h2>
+    <!-- ============ CZĘŚĆ 3 ============ -->
+    <section class="panel" id="cz3">
+      <h2><span class="num">3</span> Załóż konto Claude i wybierz plan</h2>
+      <p>Żeby Claude Code działał, potrzebujesz <b>konta Claude</b> z <b>płatnym dostępem</b>. Możesz to zrobić
+        też wcześniej — ważne, żeby było gotowe przed logowaniem w części 4.</p>
+
+      <h3>3.1 Załóż konto</h3>
       <ol>
-        <li>W terminalu (czarne pole) wpisz <b>claude</b> i naciśnij <kbd>Enter</kbd>.
-          <b>Uwaga na literówki</b> — „claude”, nie „cloude”. Najlepiej skopiuj:
-          <span class="cmd" style="display:inline-flex;padding:4px 8px;margin:0">
-            <code id="claudecmd" style="font-size:.95rem">claude</code>
-            <button onclick="copyCmd('claudecmd', this)" style="padding:4px 10px">⧉</button>
-          </span>
-        </li>
-        <li>Jeśli pojawi się pytanie o <b>zaufanie do folderu</b> („Do you trust the files in this
-          folder?”) — naciśnij <kbd>Enter</kbd> (tak).</li>
-        <li>Claude Code poprosi o <b>zalogowanie</b>. Powinna otworzyć się przeglądarka —
-          zaloguj się na swoje konto Claude i kliknij <b>Autoryzuj</b>.</li>
-        <li>Przeglądarka pokaże <b>kod</b> — skopiuj go, wróć do programu, wklej w miejscu
-          <b>„Paste code here”</b> i naciśnij <kbd>Enter</kbd>.</li>
+        <li>Wejdź na <b>claude.ai</b> (przycisk niżej) i kliknij <b>„Sign up”</b>.</li>
+        <li>Wybierz rejestrację <b>e-mailem</b> albo <b>kontem Google</b>.</li>
+        <li>Przy e-mailu — potwierdź kodem/linkiem z poczty (sprawdź też folder Spam).</li>
       </ol>
-      <div class="warn">⚠️ <b>Jeśli przeglądarka NIE otworzy się sama:</b> Claude Code wyświetli
-        długi link i podpowiedź <b>„c to copy”</b>. Naciśnij na klawiaturze literę <kbd>c</kbd> —
-        link skopiuje się do schowka. Otwórz przeglądarkę, kliknij w pasek adresu, wklej
-        (<kbd>Ctrl</kbd>+<kbd>V</kbd>) i naciśnij <kbd>Enter</kbd>.
-        <b>Nie przepisuj linku ręcznie</b> — ma ponad 300 znaków i jedna literówka go psuje.</div>
-      <div class="ok">✅ Po udanym logowaniu zobaczysz powitanie Claude Code w terminalu.
-        Od teraz możesz pisać do niego jak do człowieka.</div>
+      <a class="cta" href="https://claude.ai/" target="_blank" rel="noopener">🔗 Otwórz claude.ai i załóż konto</a>
+
+      <h3>3.2 Wybierz plan</h3>
+      <p>Darmowe konto wystarcza do rozmów na stronie, ale <b>Claude Code wymaga płatnego dostępu</b>. Dwie drogi:</p>
+      <div class="plans">
+        <div class="plan">
+          <h4>💜 Plan Pro / Max <span style="color:var(--ok)">— polecane</span></h4>
+          <p>Stała opłata miesięczna na koncie claude.ai. Najprościej: płacisz raz w miesiącu i logujesz się tym kontem.
+            <b>Pro</b> wystarcza na start, <b>Max</b> daje więcej do intensywnej pracy.</p>
+        </div>
+        <div class="plan">
+          <h4>🔧 Rozliczenie przez API (zaawansowane)</h4>
+          <p>Płatność „za zużycie” w panelu <b>console.anthropic.com</b>. Bardziej kłopotliwe — zostaw,
+            jeśli nie wiesz, czy go potrzebujesz.</p>
+        </div>
+      </div>
+      <a class="cta" href="https://claude.ai/upgrade" target="_blank" rel="noopener">🔗 Wybierz plan na claude.ai</a>
+      <div class="tip">💡 Niepewny? Zacznij od <b>Claude Pro</b> — plan zmienisz lub anulujesz w każdej chwili.</div>
     </section>
 
-    <section class="panel">
-      <h2><span class="num">5</span> Gotowe! Co dalej</h2>
+    <!-- ============ CZĘŚĆ 4 ============ -->
+    <section class="panel" id="cz4">
+      <h2><span class="num">4</span> Połącz konto z programem (logowanie)</h2>
+      <p>Teraz łączymy konto z programem — robi się to <b>w samym programie</b>, raz.</p>
+      <ol>
+        <li>W programie powstaje <b>terminal</b> (ciemne pole). Przy pierwszym uruchomieniu agenta
+          Claude Code <b>poprosi o zalogowanie</b>.</li>
+        <li>Powinna otworzyć się <b>przeglądarka</b> — zaloguj się na konto Claude (to z części 3)
+          i kliknij <b>„Autoryzuj”</b>.</li>
+        <li>Przeglądarka pokaże <b>kod</b>. Skopiuj go i wklej w programie w miejscu <b>„Paste code here”</b>,
+          potem <kbd>Enter</kbd>.</li>
+      </ol>
+      <div class="warn">⚠️ Przeglądarka nie otworzyła się sama? Claude Code pokaże długi <b>link</b> i podpowiedź
+        „press <b>c</b> to copy”. Naciśnij <kbd>c</kbd> (link trafi do schowka), wklej go w przeglądarce.
+        <b>Nie przepisuj linku ręcznie.</b></div>
+    </section>
+
+    <!-- ============ CZĘŚĆ 5 ============ -->
+    <section class="panel" id="cz5">
+      <h2><span class="num">5</span> Sprawdź, czy działa — i co, gdy nie</h2>
+      <h3>✅ Szybki test</h3>
       <ul>
-        <li><b>Pisz polecenia</b> w polu na dole okna albo wprost w terminalu i naciskaj <kbd>Enter</kbd>.</li>
-        <li><b>Czytanie odpowiedzi na głos</b> działa od razu — włącz „auto-czytanie” przy zakładce.</li>
-        <li><b>Dyktowanie głosem</b> (mikrofon 🎤) wymaga darmowego klucza Groq.
-          Załóż darmowe konto i wygeneruj klucz na
-          <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a>
-          (przycisk „Create API Key”), a potem wklej go w programie:
-          menu <b>Ustawienia → Klucz API Groq…</b></li>
-        <li>Program <b>aktualizuje się sam</b> — gdy wyjdzie nowa wersja, zapyta jednym oknem.</li>
+        <li>Powstała <b>zakładka agenta</b> z działającym terminalem.</li>
+        <li>Napisz lub <b>powiedz</b>: „Cześć, działasz?” — Claude odpowie, a program <b>przeczyta odpowiedź głosem</b>.</li>
+        <li>Od teraz uruchamiasz program z menu Start — i <b>sam się aktualizuje</b>.</li>
       </ul>
-    </section>
+      <div class="ok">🎉 Claude odpowiada? Wszystko gotowe. Miłej rozmowy!</div>
 
-    <section class="panel">
-      <h2>Najczęstsze problemy</h2>
-      <table class="faq">
-        <tr><td>„'claude' is not recognized…”</td>
-          <td>Claude Code nie jest jeszcze zainstalowany (krok 3) albo program nie był
-            uruchomiony ponownie po instalacji Node.js. Zamknij program i otwórz go jeszcze raz.</td></tr>
-        <tr><td>Czarne okno z błędami po instalacji Node.js</td>
-          <td>Nieszkodliwy efekt opcji „Tools for Native Modules”. Zamknij okno i działaj dalej.</td></tr>
-        <tr><td>„System Windows ochronił ten komputer”</td>
-          <td>Kliknij „Więcej informacji”, potem „Uruchom mimo to”. Program nie ma jeszcze
-            podpisu cyfrowego — stąd ostrzeżenie.</td></tr>
-        <tr><td>Aktualizacja nie chce się pobrać (błąd SSL)</td>
-          <td>Pobierz instalator najnowszej wersji przez przeglądarkę ze strony pobierania
-            i uruchom go — ustawienia zostaną zachowane.</td></tr>
-        <tr><td>Mikrofon nic nie robi</td>
-          <td>Brakuje klucza Groq — załóż darmowy na
-            <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a>
-            i wklej w Ustawienia → Klucz API Groq… Albo Windows blokuje mikrofon
-            (Ustawienia systemu → Prywatność → Mikrofon).</td></tr>
-      </table>
+      <h3>🛟 Coś nie działa? Ściąga</h3>
+      <ul>
+        <li><b>„'claude' is not recognized”</b> (nie rozpoznano polecenia). Mózg jest, ale program go nie widzi —
+          <b>zamknij i otwórz program ponownie</b> (czasem trzeba zrestartować komputer, żeby system zauważył nowy dodatek).
+          Jeśli dalej nic — wróć do <b>części 2</b>.</li>
+        <li><b>„System Windows ochronił Twój komputer”.</b> Kliknij <b>Więcej informacji → Uruchom mimo to</b> (część 1).</li>
+        <li><b>Program prosi o logowanie w kółko.</b> Loguj się na konto z <b>opłaconym planem</b> (część 3) —
+          darmowe nie wystarcza.</li>
+        <li><b>Przeglądarka nie otwiera się przy logowaniu.</b> Użyj sposobu z klawiszem <kbd>c</kbd> (część 4).</li>
+        <li><b>Dalej nie działa?</b> Napisz: <a href="mailto:kontakt@fulfillment-polska.pl">kontakt@fulfillment-polska.pl</a>.</li>
+      </ul>
+      <div class="see">Masz też Linuksa lub Maca? Zobacz:
+        <a href="instrukcja-linux.html">Pełna instrukcja Linux</a> •
+        <a href="instrukcja-macos.html">Pełna instrukcja macOS</a></div>
     </section>
 
     <footer>
