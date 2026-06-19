@@ -13,6 +13,15 @@ APP_NAME = "Claude Voice Assistant"
 APP_VERSION = "1.0.17"
 APP_AUTHOR = "Fulfillment Polska"
 
+# Tryb deweloperski — uruchomienie WPROST z kodu (`python3 src/main.py`).
+# Wersje spakowane (AppImage/.dmg/.exe via PyInstaller) mają `sys.frozen=True`;
+# tryb z kodu go nie ma. Służy do ODRÓŻNIENIA okna dev od wersji wydanej:
+# osobny WM_CLASS (pasek zadań Linuksa nie skleja obu w jedną ikonę) + dopisek
+# „— DEV" w tytule. Wersji wydanej NIE dotyczy (oba poniżej puste/bazowe).
+IS_DEV = not getattr(sys, "frozen", False)
+APP_WM_CLASS = "claude-voice-assistant" + ("-beta" if IS_DEV else "")
+APP_TITLE_SUFFIX = "  —  beta" if IS_DEV else ""
+
 # Paths
 # Wersja spakowana (PyInstaller, .app/.exe): zasoby leżą w katalogu wypakowania
 # (sys._MEIPASS); datas w packaging/macos/*.spec dokładają je pod 'src/...'.

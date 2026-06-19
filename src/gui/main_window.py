@@ -319,6 +319,7 @@ from config import (
     CONFIG_FILE, QUICK_ACTIONS_FILE, CLAUDE_COMMAND, GROQ_API_KEY,
     AGENTS_FILE, MEMORY_PROJECTS_FILE, DEFAULT_AGENTS, DEFAULT_MEMORY_PROJECTS,
     ASSETS_DIR, CLAUDE_MODEL_CONTEXT_LIMITS, DEFAULT_AGENT_MODEL,
+    APP_TITLE_SUFFIX,
     UPDATE_APPCAST_URL, UPDATE_PUBLIC_KEY, UPDATE_DOWNLOAD_DIR,
     MAX_ACTIVE_AGENTS, RAM_PER_AGENT_GB, RAM_SYSTEM_RESERVE_GB,
     t as tr, set_ui_language, detect_system_language,
@@ -586,7 +587,7 @@ class MainWindow(QMainWindow):
 
     def _setup_ui(self):
         """Setup user interface."""
-        self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}")
+        self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}{APP_TITLE_SUFFIX}")
         self.setMinimumSize(900, 650)
         self.resize(1100, 750)  # Domyślny rozmiar startowy
 
@@ -2226,7 +2227,7 @@ class MainWindow(QMainWindow):
         # Etykieta „Dodaj własną…" w menu szybkich akcji wszystkich zakładek.
         self._update_quick_actions_menu()
         # Tytuł okna
-        self.setWindowTitle(f"{tr('app_title')} v{APP_VERSION}")
+        self.setWindowTitle(f"{tr('app_title')} v{APP_VERSION}{APP_TITLE_SUFFIX}")
 
     def _apply_tab_language(self, tab):
         """Ustaw napisy dolnego panelu zakładki wg bieżącego języka."""

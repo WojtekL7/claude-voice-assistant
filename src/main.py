@@ -39,7 +39,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 
 from gui.main_window import MainWindow
-from config import APP_NAME, ASSETS_DIR
+from config import APP_NAME, ASSETS_DIR, IS_DEV, APP_WM_CLASS
 
 
 def _excepthook(exc_type, exc_value, exc_tb):
@@ -76,7 +76,10 @@ def main():
 
     # Create application
     app = QApplication(sys.argv)
-    app.setApplicationName(APP_NAME)
+    # W trybie deweloperskim doklej „ (beta)" do nazwy i użyj osobnego WM_CLASS,
+    # by pasek zadań Linuksa NIE sklejał okna z kodu z wersją wydaną (AppImage).
+    app.setApplicationName(APP_NAME + (" (beta)" if IS_DEV else ""))
+    app.setDesktopFileName(APP_WM_CLASS)
     app.setOrganizationName("Fulfillment Polska")
 
     # Czcionki dołączone do aplikacji (Ubuntu / Ubuntu Mono) — żeby wygląd na
