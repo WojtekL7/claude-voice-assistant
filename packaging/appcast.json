@@ -1,26 +1,26 @@
 {
   "_comment": "Feed auto-aktualizacji Claude Voice Assistant. PUBLICZNY na VPS: /opt/cva-web/html/cva/appcast.json -> https://pobierz.srv1251441.hstgr.cloud/cva/appcast.json . Aplikacja porownuje config.APP_VERSION z 'version' wpisu dla swojej platformy (core.platform_utils.update_platform_id). macOS uzywa paczki .zip (samo-podmiana). Wpisy aktualizuj generatorem: packaging/make-appcast-entry.py PACZKA.zip --version X.Y.Z --base-url https://pobierz.srv1251441.hstgr.cloud/cva/ --appcast packaging/appcast.json --merge",
   "latest": {
-    "version": "1.0.18",
+    "version": "1.0.19",
     "notes_url": "",
     "mandatory": false,
     "platforms": {
       "macos-arm64": {
-        "url": "https://pobierz.srv1251441.hstgr.cloud/cva/ClaudeVoiceAssistant-1.0.18-macos-arm64.zip",
-        "size": 123068646,
-        "sha256": "49f4fcbaa80ceaf3d17eea181ba705c31c7bb1d35dfaae1671d88d8999e4817b",
+        "url": "https://pobierz.srv1251441.hstgr.cloud/cva/ClaudeVoiceAssistant-1.0.19-macos-arm64.zip",
+        "size": 123074229,
+        "sha256": "f330fb58cad2928b1b7a42910985068bff85864b74d69665e21e108fb1010445",
         "signature": ""
       },
       "windows-x64": {
-        "url": "https://pobierz.srv1251441.hstgr.cloud/cva/ClaudeVoiceAssistant-Setup-1.0.18.exe",
-        "size": 102941162,
-        "sha256": "4f6a906e0df57f06c6b1299a0109cc5bace6ae692ce07e697d1b1605f02e5fec",
+        "url": "https://pobierz.srv1251441.hstgr.cloud/cva/ClaudeVoiceAssistant-Setup-1.0.19.exe",
+        "size": 102951719,
+        "sha256": "2385fc6071b556e97bbc444575ce53ec359c70850562ab55b135c76c64c8b385",
         "signature": ""
       },
       "linux-x64": {
-        "url": "https://pobierz.srv1251441.hstgr.cloud/cva/ClaudeVoiceAssistant-1.0.18-linux-x64.AppImage",
+        "url": "https://pobierz.srv1251441.hstgr.cloud/cva/ClaudeVoiceAssistant-1.0.19-linux-x64.AppImage",
         "size": 175297728,
-        "sha256": "a1a0587428a077320a605e864a66c4483e0dd28a7811be5dbdcac10ae3b39fdd",
+        "sha256": "76deb99dc4c21ae14f9de83e1c4bf71118928ee1cc941e02e5063ed21d595e33",
         "signature": ""
       }
     }
