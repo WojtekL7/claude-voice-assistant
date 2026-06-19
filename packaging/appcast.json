@@ -1,26 +1,26 @@
 {
   "_comment": "Feed auto-aktualizacji Claude Voice Assistant. PUBLICZNY na VPS: /opt/cva-web/html/cva/appcast.json -> https://pobierz.srv1251441.hstgr.cloud/cva/appcast.json . Aplikacja porownuje config.APP_VERSION z 'version' wpisu dla swojej platformy (core.platform_utils.update_platform_id). macOS uzywa paczki .zip (samo-podmiana). Wpisy aktualizuj generatorem: packaging/make-appcast-entry.py PACZKA.zip --version X.Y.Z --base-url https://pobierz.srv1251441.hstgr.cloud/cva/ --appcast packaging/appcast.json --merge",
   "latest": {
-    "version": "1.0.17",
+    "version": "1.0.18",
     "notes_url": "",
     "mandatory": false,
     "platforms": {
       "macos-arm64": {
-        "url": "https://pobierz.srv1251441.hstgr.cloud/cva/ClaudeVoiceAssistant-1.0.17-macos-arm64.zip",
-        "size": 123064886,
-        "sha256": "e9e5946bc34f828a07db5638bcd48dea27a502862aa920c969d0389602832e85",
+        "url": "https://pobierz.srv1251441.hstgr.cloud/cva/ClaudeVoiceAssistant-1.0.18-macos-arm64.zip",
+        "size": 123068646,
+        "sha256": "49f4fcbaa80ceaf3d17eea181ba705c31c7bb1d35dfaae1671d88d8999e4817b",
         "signature": ""
       },
       "windows-x64": {
-        "url": "https://pobierz.srv1251441.hstgr.cloud/cva/ClaudeVoiceAssistant-Setup-1.0.17.exe",
-        "size": 102946831,
-        "sha256": "7ceab2f9323d1a1ae43498ff0ef816c2b78d1126e85368ce480b33ea0f06e525",
+        "url": "https://pobierz.srv1251441.hstgr.cloud/cva/ClaudeVoiceAssistant-Setup-1.0.18.exe",
+        "size": 102941162,
+        "sha256": "4f6a906e0df57f06c6b1299a0109cc5bace6ae692ce07e697d1b1605f02e5fec",
         "signature": ""
       },
       "linux-x64": {
-        "url": "https://pobierz.srv1251441.hstgr.cloud/cva/ClaudeVoiceAssistant-1.0.17-linux-x64.AppImage",
-        "size": 197756096,
-        "sha256": "be34b66ed63cfe79dd2a9c03cd8a10c17f57e9287f28a723d60dfb0eb75a9b60",
+        "url": "https://pobierz.srv1251441.hstgr.cloud/cva/ClaudeVoiceAssistant-1.0.18-linux-x64.AppImage",
+        "size": 175297728,
+        "sha256": "a1a0587428a077320a605e864a66c4483e0dd28a7811be5dbdcac10ae3b39fdd",
         "signature": ""
       }
     }
