@@ -902,6 +902,17 @@ class AgentTab(QWidget):
             }}
         """)
 
+        # Anti-flash: ten sam ciemny kolor także w PALECIE pola (rola Base), nie
+        # tylko w stylesheet. Bez tego po wyczyszczeniu pola (Enter) Qt na ~1 klatkę
+        # maluje domyślne białe tło palety, zanim nałoży styl → migający biały
+        # prostokąt (intermittentnie, zależnie od trafienia między klatkami).
+        # Ustawiamy na samym polu I na jego viewport (właściwy obszar tekstu).
+        ipal = self.input_field.palette()
+        ipal.setColor(QPalette.Base, QColor(input_bg))
+        ipal.setColor(QPalette.Text, QColor(text_color))
+        self.input_field.setPalette(ipal)
+        self.input_field.viewport().setPalette(ipal)
+
         # Note: Terminal colors are applied by MainWindow._apply_terminal_colors()
         # which creates a custom color scheme and applies it to all terminals
 
