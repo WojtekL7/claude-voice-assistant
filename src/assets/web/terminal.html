@@ -117,6 +117,7 @@
 
     new QWebChannel(qt.webChannelTransport, function (channel) {
       const bridge = channel.objects.bridge;
+      window.__bridge = bridge;  // udostępnij obsłudze upuszczania plików (drop) — patrz niżej
       // Python → terminal (wyjście PTY).
       bridge.output.connect(function (data) { term.write(data); });
       if (bridge.closed) bridge.closed.connect(function () {
@@ -133,6 +134,53 @@
     });
 
     window.addEventListener('resize', function () { fitAddon.fit(); });
+
+    // ---- Upuszczanie plików (drag & drop) ----
+    // WebTerminal działa na Chromium (QtWebEngine). BEZ tego Chromium reaguje na
+    // upuszczony plik domyślnie: OTWIERA go na całe okno, przykrywając terminal —
+    // i nie ma jak wyjść (brak paska adresu/przycisku wstecz). To zacinało wersję
+    // pobraną (AppImage/macOS/Windows). Dlatego globalnie blokujemy domyślną akcję,
+    // a zamiast tego wklejamy ŚCIEŻKĘ pliku do terminala — jak natywny terminal.
+    function __dropPaths(e) {
+      var dt = e.dataTransfer;
+      if (!dt) return [];
+      var out = [], uri = '';
+      try { uri = dt.getData('text/uri-list'); } catch (_) {}
+      if (uri) {
+        uri.split(/[\r\n]+/).forEach(function (line) {
+          line = line.trim();
+          if (!line || line.charAt(0) === '#') return;        // komentarze w uri-list
+          if (line.indexOf('file://') === 0) {
+            var p = line.replace(/^file:\/\/[^\/]*/, '');      // usuń 'file://' + ewent. host
+            try { p = decodeURIComponent(p); } catch (_) {}
+            p = p.replace(/^\/([A-Za-z]:)/, '$1');             // Windows: /C:/.. -> C:/..
+            out.push(p);
+          }
+        });
+      }
+      if (!out.length) {                                       // np. zaznaczony tekst z innego okna
+        var txt = '';
+        try { txt = dt.getData('text/plain'); } catch (_) {}
+        if (txt && txt.trim()) out.push(txt.trim());
+      }
+      return out;
+    }
+    function __quote(p) { return /\s/.test(p) ? '"' + p + '"' : p; }
+    ['dragenter', 'dragover'].forEach(function (ev) {
+      window.addEventListener(ev, function (e) {
+        e.preventDefault();                                    // pozwól na 'drop' i zablokuj nawigację
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+      }, true);
+    });
+    window.addEventListener('drop', function (e) {
+      e.preventDefault();                                      // <- to likwiduje "wpadnięcie w obrazek"
+      e.stopPropagation();
+      var paths = __dropPaths(e);
+      if (paths.length && window.__bridge) {
+        window.__bridge.send_input(paths.map(__quote).join(' '));
+      }
+      try { term.focus(); } catch (_) {}
+    }, true);
   </script>
 </body>
 </html>

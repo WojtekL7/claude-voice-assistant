@@ -18,7 +18,7 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
-from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QUrl, Qt, QTimer
+from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QUrl, Qt, QTimer, QEvent
 from PyQt5.QtWidgets import QWidget, QVBoxLayout
 from PyQt5.QtWebEngineWidgets import (
     QWebEngineView, QWebEngineSettings, QWebEnginePage,
@@ -144,6 +144,12 @@ class WebTerminal(QWidget):
         self._decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
 
         self._failure_shown = False
+        # Drag&drop pliku NA terminal — patrz _install_drop_filter/eventFilter.
+        # QtWebEngine renderuje treść w wewnętrznym widgecie (focusProxy); to ON
+        # dostaje QDropEvent z OS. JS w terminal.html NIE dostaje prawdziwej ścieżki
+        # (Chromium ją ukrywa), więc upuszczenie pliku obsługujemy po stronie Qt.
+        self._drop_filter_target = None
+        self.setAcceptDrops(True)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -240,6 +246,66 @@ class WebTerminal(QWidget):
     def is_available(self) -> bool:
         return _PTY_AVAILABLE
 
+    # ==================== Drag & drop pliku na terminal ====================
+
+    def _drop_paths_to_text(self, mime) -> str:
+        """Zamień upuszczone lokalne pliki na tekst ścieżek (spacje → cudzysłów).
+
+        Zwraca pusty string, jeśli nie ma lokalnych plików (np. upuszczono sam
+        tekst albo zdalny URL) — wtedy nie ingerujemy i zdarzenie idzie dalej."""
+        if not mime.hasUrls():
+            return ""
+        paths = []
+        for url in mime.urls():
+            local = url.toLocalFile()
+            if local:
+                paths.append('"%s"' % local if " " in local else local)
+        return " ".join(paths)
+
+    def _install_drop_filter(self):
+        """Wepnij filtr zdarzeń w widget renderujący QtWebEngine (focusProxy).
+
+        Robione po załadowaniu strony i przy każdym pokazaniu zakładki — bo Qt
+        potrafi PODMIENIĆ render widget (przy ukryciu/przeniesieniu między
+        zakładkami/splitterami) i stary filtr przepada. Idempotentne: instaluje
+        tylko gdy proxy się zmieniło."""
+        proxy = self.view.focusProxy()
+        if proxy is None or proxy is self._drop_filter_target:
+            return
+        proxy.installEventFilter(self)
+        try:
+            proxy.setAcceptDrops(True)
+        except Exception:
+            pass
+        self._drop_filter_target = proxy
+        _log("drop: filtr zdarzeń zainstalowany na render widget")
+
+    def eventFilter(self, obj, event):
+        """Przechwytuje upuszczenie PLIKU na terminal, zanim zrobi to Chromium.
+
+        Tylko dla URL-i z lokalnymi plikami: akceptujemy DragEnter/Move i na Drop
+        wpisujemy ścieżkę do PTY (jak natywny terminal). Inne zrzuty (np. tekst)
+        puszczamy dalej do strony — tam obsłuży je JS w terminal.html."""
+        et = event.type()
+        if et in (QEvent.DragEnter, QEvent.DragMove):
+            if event.mimeData().hasUrls() and self._drop_paths_to_text(event.mimeData()):
+                event.acceptProposedAction()
+                return True
+        elif et == QEvent.Drop:
+            text = self._drop_paths_to_text(event.mimeData())
+            if text:
+                self._write_pty(text)
+                event.acceptProposedAction()
+                self.focus_terminal()
+                return True
+        return super().eventFilter(obj, event)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        # Render widget bywa tworzony/podmieniany po pokazaniu — (re)instaluj filtr.
+        self._install_drop_filter()
+        QTimer.singleShot(200, self._install_drop_filter)
+
     # ==================== Wewnętrzne ====================
 
     def _on_load_finished(self, ok: bool):
@@ -288,6 +354,9 @@ class WebTerminal(QWidget):
         _log(f"frontend_ready cols={cols} rows={rows}")
         self._frontend_ready = True
         self._pending_size = (cols, rows)
+        # Render widget istnieje po załadowaniu strony — wepnij filtr drag&drop.
+        self._install_drop_filter()
+        QTimer.singleShot(300, self._install_drop_filter)
         # Wyślij zbuforowany motyw/czcionkę, gdy xterm.js jest już gotowy.
         self._push_theme()
         self._push_font()

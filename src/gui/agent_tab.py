@@ -75,8 +75,19 @@ class AutoResizeTextEdit(QTextEdit):
     def insertFromMimeData(self, source):
         """Paste as plain text — drop colors, fonts, underlines from the source.
 
-        Covers Ctrl+V, Shift+Insert, context-menu Paste, and text drag&drop.
+        Covers Ctrl+V, Shift+Insert, context-menu Paste, and text/file drag&drop.
+        Dropping a file (e.g. an image) inserts its PATH as text — never a raw
+        embedded image — matching how a real terminal handles a dropped file.
         """
+        if source.hasUrls():
+            paths = []
+            for url in source.urls():
+                local = url.toLocalFile()
+                if local:
+                    paths.append('"%s"' % local if " " in local else local)
+            if paths:
+                self.textCursor().insertText(" ".join(paths))
+                return
         if source.hasText():
             self.textCursor().insertText(source.text())
         else:
