@@ -53,7 +53,7 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
 
 ## AKTUALNY STAN (wersja 1.0.19)
 - **Wieloplatformowość:** Linux (z kodu + AppImage), macOS (.dmg/.zip), Windows (.exe Inno). Pełna wersja PL/EN (domyślnie EN; PL gdy system polski).
-- **Self-update:** macOS ✅ (od 1.0.8) · Windows ✅ (od 1.0.14) · **Linux ✅** (kod od 1.0.16, w feedzie od 1.0.17). **Pipeline WYDANIA potwierdzony e2e 2× (1.0.18, 1.0.19)** — tag→Actions(mac/win)+lokalny AppImage→rsync paczek (sha256!)→appcast→downloads. **Kliencki cykl spakowanego AppImage** (uruchom→feed→pobierz→podmień→wstań) wciąż DO POTWIERDZENIA przy najbliższym uruchomieniu zainstalowanej apki (testy poprawek dotąd robione z kodu, nie przez auto-update).
+- **Self-update:** macOS ✅ (od 1.0.8) · Windows ✅ (od 1.0.14) · **Linux ✅** (kod od 1.0.16, w feedzie od 1.0.17). **Pipeline WYDANIA potwierdzony e2e 2× (1.0.18, 1.0.19)** — tag→Actions(mac/win)+lokalny AppImage→rsync paczek (sha256!)→appcast→downloads. **URUCHOMIENIE spakowanego AppImage POTWIERDZONE 2026-06-20** (okno + terminal działają — PO naprawie braku wtyczek Qt/xcb; paczka 1.0.19 przebudowana, sha `325378b4…`, wydana). Wciąż DO POTWIERDZENIA: pełny **kliencki cykl self-update** (feed→pobierz→podmień→wstań) — uruchomienie i samo-podmiana niepotwierdzone razem. ⚠️ Mac/Win: uruchomienie spakowanej paczki NADAL niepotwierdzone (patrz TODO — podejrzenie tego samego braku wtyczek).
 - **Języki:** PL + jeden angielski (`en-US`); wariant brytyjski `en-GB` usunięty w 1.0.17 (scalony do en-US, migracja wsteczna w `set_ui_language`).
 - **Strona pobierania:** `https://pobierz.srv1251441.hstgr.cloud` (basicauth) + publiczny feed `…/cva/appcast.json` (bez auth). Kontener `cva-web` (nginx) na VPS w `/opt/cva-web/`.
 
