@@ -8,6 +8,27 @@
 <meta name="description" content="Vibe Coding Assistant — desktopowy asystent głosowy dla Claude Code. Mów do terminala, słuchaj odpowiedzi, prowadź wielu agentów w zakładkach. macOS, Windows, Linux.">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="icon" type="image/x-icon" href="favicon.ico">
+<script>
+/* Anty-migotanie: motyw + język ustawiane PRZED renderem. */
+(function(){
+  try{
+    /* 1) Motyw: zapamiętany wybór > preferencja systemu (prefers-color-scheme) > ciemny */
+    var t=localStorage.getItem('vca-theme');
+    if(!t){ t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark'; }
+    document.documentElement.dataset.theme=t;
+    /* 2) Język: ?lang=… > ręczny wybór > geolokalizacja IP (PL→polski, inne→angielski) */
+    var qs=new URLSearchParams(location.search), forced=qs.get('lang');
+    if(forced==='pl'||forced==='en'){ localStorage.setItem('vca-lang',forced); }
+    var pref=localStorage.getItem('vca-lang'), CUR='pl';
+    if(pref){ if(pref!==CUR){ location.replace((pref==='en'?'index-en.html':'index.html')+location.hash); } return; }
+    /* brak wyboru → wykryj kraj (GeoJS, darmowe, bez klucza); nie-PL → wersja angielska */
+    fetch('https://get.geojs.io/v1/ip/country.txt').then(function(r){return r.text();}).then(function(c){
+      c=(c||'').trim().toUpperCase();
+      if(c && c!=='PL'){ location.replace('index-en.html'+location.hash); }
+    }).catch(function(){});
+  }catch(e){}
+})();
+</script>
 <style>
   :root{
     --accent:#a855f7; --accent2:#7c3aed; --accent3:#6d28d9;
@@ -184,6 +205,29 @@
     .price-grid,.ft-grid{grid-template-columns:1fr 1fr}
     .hero h1{font-size:2.2rem}
   }
+
+  /* ---------- Przełącznik motywu ---------- */
+  .theme-toggle{background:none;border:1px solid var(--line);border-radius:999px;width:40px;height:34px;
+    color:var(--ink);cursor:pointer;font-size:.95rem;display:inline-flex;align-items:center;justify-content:center}
+  .theme-toggle:hover{border-color:var(--accent)}
+
+  /* ---------- Motyw JASNY (nadpisania) ---------- */
+  html[data-theme="light"]{
+    --bg:#f6f3fc; --bg2:#ece5f7; --surface:#ffffff; --surface2:#f3eefb;
+    --line:#e5ddf2; --ink:#1b1226; --muted:#6b6478;
+  }
+  html[data-theme="light"] header.nav{background:rgba(246,243,252,.85)}
+  html[data-theme="light"] .burger{color:var(--ink)}
+  html[data-theme="light"] .nav-links a:hover{color:var(--ink);background:rgba(0,0,0,.05)}
+  html[data-theme="light"] .hero{background:radial-gradient(900px 420px at 50% -10%,rgba(168,85,247,.16),transparent 70%),var(--bg)}
+  html[data-theme="light"] .badge{color:#7c3aed;background:rgba(168,85,247,.12)}
+  html[data-theme="light"] .feat-hero p{color:#3a3147}
+  html[data-theme="light"] .plan li{color:#3a3147}
+  html[data-theme="light"] .btn-ghost:hover{color:var(--ink)}
+  html[data-theme="light"] footer.ft{background:#ece5f7}
+  html[data-theme="light"] .ft a{color:#5b4f74}
+  html[data-theme="light"] .ft a:hover{color:var(--ink)}
+  /* makieta terminala celowo zostaje ciemna (terminale są ciemne) */
 </style>
 </head>
 <body>
@@ -210,7 +254,8 @@
       <a href="#pricing">Cennik</a>
       <a href="#faq">FAQ</a>
       <a href="#contact">Kontakt</a>
-      <a class="lang-pill" href="index-en.html">EN</a>
+      <button class="theme-toggle" id="themeBtn" aria-label="Przełącz motyw jasny/ciemny" onclick="toggleTheme()">🌙</button>
+      <a class="lang-pill" href="index-en.html" onclick="localStorage.setItem('vca-lang','en')">EN</a>
       <a class="nav-cta" href="#download">Pobierz</a>
     </nav>
   </div>
@@ -423,6 +468,10 @@
   document.querySelectorAll('#nav-links a').forEach(function(a){
     a.addEventListener('click', function(){ document.getElementById('nav-links').classList.remove('open'); });
   });
+  // Przełącznik motywu jasny/ciemny (zapamiętany w localStorage)
+  function applyThemeBtn(){ var l=document.documentElement.dataset.theme==='light'; var b=document.getElementById('themeBtn'); if(b) b.textContent=l?'☀️':'🌙'; }
+  function toggleTheme(){ var n=document.documentElement.dataset.theme==='light'?'dark':'light'; document.documentElement.dataset.theme=n; try{localStorage.setItem('vca-theme',n);}catch(e){} applyThemeBtn(); }
+  applyThemeBtn();
   // Makiety (płatności/pobieranie/formularz) — na razie tylko komunikat
   function mock(msg){ alert(msg); }
 </script>

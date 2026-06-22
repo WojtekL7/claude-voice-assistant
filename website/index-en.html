@@ -8,6 +8,27 @@
 <meta name="description" content="Vibe Coding Assistant — a desktop voice assistant for Claude Code. Talk to your terminal, listen to answers, run multiple agents in tabs. macOS, Windows, Linux.">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="icon" type="image/x-icon" href="favicon.ico">
+<script>
+/* Anti-FOUC: theme + language set BEFORE render. */
+(function(){
+  try{
+    /* 1) Theme: saved choice > system preference (prefers-color-scheme) > dark */
+    var t=localStorage.getItem('vca-theme');
+    if(!t){ t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark'; }
+    document.documentElement.dataset.theme=t;
+    /* 2) Language: ?lang=… > manual choice > IP geolocation (PL→Polish, other→English) */
+    var qs=new URLSearchParams(location.search), forced=qs.get('lang');
+    if(forced==='pl'||forced==='en'){ localStorage.setItem('vca-lang',forced); }
+    var pref=localStorage.getItem('vca-lang'), CUR='en';
+    if(pref){ if(pref!==CUR){ location.replace((pref==='pl'?'index.html':'index-en.html')+location.hash); } return; }
+    /* no choice → detect country (GeoJS, free, no key); PL → Polish version */
+    fetch('https://get.geojs.io/v1/ip/country.txt').then(function(r){return r.text();}).then(function(c){
+      c=(c||'').trim().toUpperCase();
+      if(c==='PL'){ location.replace('index.html'+location.hash); }
+    }).catch(function(){});
+  }catch(e){}
+})();
+</script>
 <style>
   :root{
     --accent:#a855f7; --accent2:#7c3aed; --accent3:#6d28d9;
@@ -184,6 +205,29 @@
     .price-grid,.ft-grid{grid-template-columns:1fr 1fr}
     .hero h1{font-size:2.2rem}
   }
+
+  /* ---------- Theme toggle ---------- */
+  .theme-toggle{background:none;border:1px solid var(--line);border-radius:999px;width:40px;height:34px;
+    color:var(--ink);cursor:pointer;font-size:.95rem;display:inline-flex;align-items:center;justify-content:center}
+  .theme-toggle:hover{border-color:var(--accent)}
+
+  /* ---------- LIGHT theme (overrides) ---------- */
+  html[data-theme="light"]{
+    --bg:#f6f3fc; --bg2:#ece5f7; --surface:#ffffff; --surface2:#f3eefb;
+    --line:#e5ddf2; --ink:#1b1226; --muted:#6b6478;
+  }
+  html[data-theme="light"] header.nav{background:rgba(246,243,252,.85)}
+  html[data-theme="light"] .burger{color:var(--ink)}
+  html[data-theme="light"] .nav-links a:hover{color:var(--ink);background:rgba(0,0,0,.05)}
+  html[data-theme="light"] .hero{background:radial-gradient(900px 420px at 50% -10%,rgba(168,85,247,.16),transparent 70%),var(--bg)}
+  html[data-theme="light"] .badge{color:#7c3aed;background:rgba(168,85,247,.12)}
+  html[data-theme="light"] .feat-hero p{color:#3a3147}
+  html[data-theme="light"] .plan li{color:#3a3147}
+  html[data-theme="light"] .btn-ghost:hover{color:var(--ink)}
+  html[data-theme="light"] footer.ft{background:#ece5f7}
+  html[data-theme="light"] .ft a{color:#5b4f74}
+  html[data-theme="light"] .ft a:hover{color:var(--ink)}
+  /* terminal mockup stays dark on purpose (terminals are dark) */
 </style>
 </head>
 <body>
@@ -210,7 +254,8 @@
       <a href="#pricing">Pricing</a>
       <a href="#faq">FAQ</a>
       <a href="#contact">Contact</a>
-      <a class="lang-pill" href="index.html">PL</a>
+      <button class="theme-toggle" id="themeBtn" aria-label="Toggle light/dark theme" onclick="toggleTheme()">🌙</button>
+      <a class="lang-pill" href="index.html" onclick="localStorage.setItem('vca-lang','pl')">PL</a>
       <a class="nav-cta" href="#download">Download</a>
     </nav>
   </div>
@@ -424,6 +469,9 @@
     a.addEventListener('click', function(){ document.getElementById('nav-links').classList.remove('open'); });
   });
   // Makiety (płatności/pobieranie/formularz) — na razie tylko komunikat
+  function applyThemeBtn(){ var l=document.documentElement.dataset.theme==='light'; var b=document.getElementById('themeBtn'); if(b) b.textContent=l?'☀️':'🌙'; }
+  function toggleTheme(){ var n=document.documentElement.dataset.theme==='light'?'dark':'light'; document.documentElement.dataset.theme=n; try{localStorage.setItem('vca-theme',n);}catch(e){} applyThemeBtn(); }
+  applyThemeBtn();
   function mock(msg){ alert(msg); }
 </script>
 </body>
