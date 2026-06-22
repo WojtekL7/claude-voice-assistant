@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dyktowanie głosem — darmowy klucz Groq | Claude Voice Assistant</title>
+  <meta name="description" content="Jak włączyć dyktowanie głosem w Claude Voice Assistant — załóż darmowe konto Groq, zdobądź klucz API i wklej go w programie. Krok po kroku, dla każdego.">
+  <style>
+    :root{
+      --bg1:#2a1140; --bg2:#3d1a5b; --accent:#a855f7; --accent2:#7c3aed;
+      --ink:#1b1226; --muted:#6b6478; --card:#ffffff; --soft:#f5f2fb;
+      --ok:#16a34a; --warn-bg:#fff7e6; --warn-line:#f0c36d; --line:#e9e3f3;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Ubuntu,Helvetica,Arial,sans-serif;
+      color:var(--ink);
+      background:linear-gradient(160deg,var(--bg1),var(--bg2));
+      min-height:100vh;line-height:1.6;
+    }
+    .wrap{max-width:860px;margin:0 auto;padding:40px 20px 64px}
+    header{text-align:center;color:#fff;margin-bottom:30px}
+    .logo{
+      width:72px;height:72px;border-radius:20px;margin:0 auto 14px;
+      background:linear-gradient(145deg,#c084fc,#7c3aed);
+      display:flex;align-items:center;justify-content:center;font-size:36px;
+      box-shadow:0 12px 30px rgba(124,58,237,.45);
+    }
+    h1{font-size:1.9rem;font-weight:800;letter-spacing:-.5px}
+    .tagline{font-size:1.05rem;opacity:.9;margin-top:8px}
+    .back{display:inline-block;margin-top:14px;color:#e9d5ff;font-size:.95rem}
+
+    .panel{background:var(--card);border-radius:20px;padding:28px;box-shadow:0 18px 40px rgba(20,8,40,.28);margin-bottom:22px}
+    .panel h2{font-size:1.3rem;margin-bottom:10px;display:flex;align-items:center;gap:12px}
+    .panel h3{font-size:1.05rem;margin:16px 0 8px}
+    .num{display:inline-flex;flex:none;width:34px;height:34px;border-radius:50%;
+      background:var(--accent);color:#fff;font-weight:800;font-size:1.05rem;
+      align-items:center;justify-content:center}
+    .panel p, .panel li{font-size:1rem;color:#332b40;margin-bottom:10px}
+    .panel ol, .panel ul{padding-left:24px;margin-bottom:8px}
+    .panel li{margin-bottom:8px}
+
+    .see{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin:10px 0;font-size:.95rem}
+    .see b{color:var(--accent2)}
+    .warn{background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:12px;padding:12px 16px;margin:10px 0;font-size:.95rem}
+    .ok{background:#ecfdf3;border:1px solid #b7e4c7;border-radius:12px;padding:12px 16px;margin:10px 0;font-size:.95rem}
+
+    .btn{display:inline-block;background:var(--accent);color:#fff;text-decoration:none;
+      border-radius:12px;padding:12px 22px;font-weight:700;font-size:1rem;margin:6px 0;
+      box-shadow:0 8px 20px rgba(124,58,237,.35)}
+    .btn:hover{background:var(--accent2)}
+
+    .opts{width:100%;border-collapse:collapse;margin-top:6px}
+    .opts td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:.95rem;vertical-align:top}
+    .opts td:first-child{font-weight:700;width:34%;white-space:nowrap}
+
+    .faq{width:100%;border-collapse:collapse;margin-top:6px}
+    .faq td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:.95rem;vertical-align:top}
+    .faq td:first-child{font-weight:700;width:45%}
+
+    kbd{background:#eee;border:1px solid #ccc;border-bottom-width:3px;border-radius:6px;
+      padding:1px 7px;font-family:inherit;font-size:.92em;font-weight:600}
+    .chip{display:inline-block;background:#2d0a1e;color:#fff;border-radius:8px;padding:2px 10px;font-size:.9em;font-family:ui-monospace,Menlo,Consolas,monospace}
+
+    footer{text-align:center;color:#fff;opacity:.8;margin-top:36px;font-size:.9rem}
+    footer a{color:#e9d5ff}
+
+    /* Przełącznik języka — rozwijane menu (skalowalne na kolejne języki) */
+    .lang-switch{position:fixed;top:12px;right:14px;z-index:100;font-size:.85rem;font-weight:700;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Ubuntu,sans-serif}
+    .lang-switch summary{list-style:none;cursor:pointer;color:#fff;background:rgba(20,8,40,.6);backdrop-filter:blur(6px);border-radius:999px;padding:7px 15px;display:inline-flex;align-items:center;gap:7px;user-select:none}
+    .lang-switch summary::-webkit-details-marker{display:none}
+    .lang-switch summary::marker{content:""}
+    .lang-switch[open] summary{background:rgba(20,8,40,.9)}
+    .lang-menu{position:absolute;top:calc(100% + 6px);right:0;min-width:150px;background:#2a1140;border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:6px;box-shadow:0 14px 34px rgba(20,8,40,.55);display:flex;flex-direction:column;gap:2px}
+    .lang-menu a{color:#e9d5ff;text-decoration:none;padding:9px 13px;border-radius:8px;white-space:nowrap;line-height:1}
+    .lang-menu a:hover{background:rgba(255,255,255,.08);color:#fff}
+    .lang-menu a.active{background:#a855f7;color:#fff}
+  </style>
+</head>
+<body>
+  <details class="lang-switch">
+    <summary>🌐 Polski ▾</summary>
+    <div class="lang-menu">
+      <a href="instrukcja-dyktowanie-en.html">English</a>
+      <a href="instrukcja-dyktowanie.html" class="active">Polski</a>
+    </div>
+  </details>
+  <div class="wrap">
+    <header>
+      <div class="logo">🎙️</div>
+      <h1>Dyktowanie głosem — krok po kroku</h1>
+      <p class="tagline">Jak włączyć mówienie do programu zamiast pisania na klawiaturze.
+        Potrzebny jest jeden darmowy klucz — pokażemy, jak go zdobyć w kilka minut,
+        bez żadnej wiedzy technicznej.</p>
+      <a class="back" href="https://pobierz.srv1251441.hstgr.cloud/">← Wróć do strony pobierania</a>
+    </header>
+
+    <section class="panel">
+      <h2>Po co w ogóle ten klucz?</h2>
+      <p>Dyktowanie zamienia <b>Twój głos na tekst</b> — mówisz, a słowa same wpisują się
+        w terminalu. Zamianą głosu na tekst zajmuje się darmowa usługa internetowa o nazwie
+        <b>Groq</b> (to taka „maszynka do spisywania", działa szybko i za darmo).</p>
+      <p>Żeby program mógł z niej korzystać w Twoim imieniu, potrzebuje <b>klucza API</b> —
+        to taki <b>osobisty hasłokod</b>, jak własny pilot do bramy. Zakładasz go raz,
+        wklejasz do programu i masz spokój.</p>
+      <div class="see"><b>Czy to kosztuje?</b> Nie. Konto Groq i klucz są darmowe, a limit
+        darmowy jest na tyle duży, że do dyktowania w zupełności wystarcza. Karty płatniczej
+        nie trzeba podawać.</div>
+      <div class="warn">⚠️ <b>Dyktowanie jest dodatkiem.</b> Program świetnie działa bez niego —
+        czytanie odpowiedzi głosem (TTS) i cała reszta nie wymagają żadnego klucza.
+        Klucz Groq jest potrzebny <b>tylko</b>, gdy chcesz mówić do programu.</div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">1</span> Załóż darmowe konto Groq</h2>
+      <p>Otwórz w przeglądarce stronę logowania Groq:</p>
+      <a class="btn" href="https://console.groq.com/login" target="_blank" rel="noopener">🌐 Otwórz console.groq.com/login</a>
+      <p>Zaloguj się najwygodniejszym sposobem — <b>kontem Google</b>, <b>GitHub</b> albo
+        zwykłym <b>e-mailem</b>. Jeśli to pierwszy raz, konto utworzy się automatycznie
+        przy pierwszym logowaniu.</p>
+      <div class="see">To zwykłe logowanie, jak do każdej innej strony. Nie podajesz numeru
+        karty ani żadnych danych do płatności.</div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">2</span> Utwórz klucz API</h2>
+      <p>Po zalogowaniu przejdź do sekcji z kluczami:</p>
+      <a class="btn" href="https://console.groq.com/keys" target="_blank" rel="noopener">🔑 Otwórz console.groq.com/keys</a>
+      <ol>
+        <li>Kliknij przycisk <b>„Create API Key"</b> (Utwórz klucz API).</li>
+        <li>Wpisz dowolną nazwę, żeby później wiedzieć, do czego służy —
+          np. <i>Claude Voice Assistant</i> — i zatwierdź.</li>
+        <li>Pokaże się <b>długi ciąg znaków zaczynający się od</b> <span class="chip">gsk_…</span>.
+          To jest Twój klucz.</li>
+        <li>Kliknij <b>„Copy"</b> (Kopiuj) — albo zaznacz cały i skopiuj
+          (<kbd>Ctrl</kbd>+<kbd>C</kbd>, na Macu <kbd>⌘</kbd>+<kbd>C</kbd>).</li>
+      </ol>
+      <div class="warn">⚠️ <b>Ważne:</b> ten klucz widać <b>tylko raz</b>, zaraz po utworzeniu.
+        Skopiuj go od razu. Jeśli go zgubisz — nic się nie stanie, po prostu utworzysz nowy
+        w tym samym miejscu, a stary skasujesz.</div>
+      <div class="see"><b>Traktuj klucz jak hasło.</b> Nie wklejaj go na czacie, nie wysyłaj
+        nikomu mailem. Wkleisz go tylko w jednym miejscu — w programie, w następnym kroku.</div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">3</span> Wklej klucz do programu</h2>
+      <p>Wróć do <b>Claude Voice Assistant</b> i otwórz okno ustawień klucza:</p>
+      <ul>
+        <li>menu <b>Ustawienia → Klucz API (dyktowanie)…</b>, albo</li>
+        <li>kliknij ikonę 🎙️ <b>Dyktuj</b> w zakładce — jeśli klucza jeszcze nie ma,
+          program sam zaproponuje jego wpisanie.</li>
+      </ul>
+      <ol>
+        <li>Wklej skopiowany klucz w pole (<kbd>Ctrl</kbd>+<kbd>V</kbd>,
+          na Macu <kbd>⌘</kbd>+<kbd>V</kbd>).</li>
+        <li>Kliknij <b>Zapisz</b>.</li>
+      </ol>
+      <div class="ok">✅ Gotowe! Klucz zapisuje się na Twoim komputerze i program zapamiętuje
+        go na stałe — wpisujesz go <b>tylko raz</b>.</div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">4</span> Przetestuj dyktowanie</h2>
+      <ol>
+        <li>Wejdź w zakładkę agenta i kliknij <b>🎙️ Dyktuj</b> (albo użyj skrótu klawiszowego).</li>
+        <li>Powiedz krótkie zdanie, np. <i>„pokaż mi listę plików w tym folderze"</i>.</li>
+        <li>Po chwili Twoje słowa pojawią się jako tekst w polu. Kliknij ponownie 🎙️,
+          żeby zakończyć nagrywanie.</li>
+      </ol>
+      <div class="see">Pierwsza zamiana głosu na tekst może chwilę potrwać — to normalne.
+        Mów wyraźnie, w miarę cicho w tle. Polski i angielski rozpoznawane są automatycznie.</div>
+    </section>
+
+    <section class="panel">
+      <h2>Najczęstsze pytania</h2>
+      <table class="faq">
+        <tr><td>Czy muszę podawać kartę płatniczą?</td>
+          <td>Nie. Konto i klucz Groq są darmowe, a limit darmowy w zupełności wystarcza
+            do dyktowania.</td></tr>
+        <tr><td>Zgubiłem klucz / nie skopiowałem go</td>
+          <td>Nic straconego. Wejdź ponownie na <b>console.groq.com/keys</b>, skasuj stary
+            klucz (ikoną kosza) i kliknij <b>Create API Key</b>, żeby utworzyć nowy.</td></tr>
+        <tr><td>Dyktowanie nie działa, choć wkleiłem klucz</td>
+          <td>Sprawdź, czy klucz zaczyna się od <span class="chip">gsk_</span> i czy wkleił
+            się w całości (bez spacji na końcu). Upewnij się też, że mikrofon jest podłączony
+            i że program ma do niego dostęp w ustawieniach systemu.</td></tr>
+        <tr><td>Czy mój głos jest gdzieś zapisywany?</td>
+          <td>Nagranie jest wysyłane do usługi Groq tylko po to, żeby zamienić je na tekst,
+            i nie jest przechowywane przez program. Klucz trzymany jest wyłącznie na Twoim
+            komputerze.</td></tr>
+        <tr><td>Czy mogę używać tego samego klucza na kilku komputerach?</td>
+          <td>Tak — ten sam klucz możesz wkleić na każdym swoim urządzeniu. Możesz też
+            utworzyć osobny klucz dla każdego komputera, jak wolisz.</td></tr>
+        <tr><td>Nie chcę dyktować — czy muszę to ustawiać?</td>
+          <td>Nie. Pomiń tę instrukcję — program działa w pełni bez klucza. W oknie ustawień
+            możesz zaznaczyć <b>„nie przypominaj o dyktowaniu"</b>, żeby program już o to
+            nie pytał.</td></tr>
+      </table>
+    </section>
+
+    <footer>
+      <p><a href="https://pobierz.srv1251441.hstgr.cloud/">← Wróć do strony pobierania</a></p>
+      <p>Claude Voice Assistant • kontakt@fulfillment-polska.pl</p>
+    </footer>
+  </div>
+</body>
+</html>

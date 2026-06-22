@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Voice dictation — free Groq key | Claude Voice Assistant</title>
+  <meta name="description" content="How to turn on voice dictation in Claude Voice Assistant — create a free Groq account, get an API key and paste it into the app. Step by step, for everyone.">
+  <style>
+    :root{
+      --bg1:#2a1140; --bg2:#3d1a5b; --accent:#a855f7; --accent2:#7c3aed;
+      --ink:#1b1226; --muted:#6b6478; --card:#ffffff; --soft:#f5f2fb;
+      --ok:#16a34a; --warn-bg:#fff7e6; --warn-line:#f0c36d; --line:#e9e3f3;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Ubuntu,Helvetica,Arial,sans-serif;
+      color:var(--ink);
+      background:linear-gradient(160deg,var(--bg1),var(--bg2));
+      min-height:100vh;line-height:1.6;
+    }
+    .wrap{max-width:860px;margin:0 auto;padding:40px 20px 64px}
+    header{text-align:center;color:#fff;margin-bottom:30px}
+    .logo{
+      width:72px;height:72px;border-radius:20px;margin:0 auto 14px;
+      background:linear-gradient(145deg,#c084fc,#7c3aed);
+      display:flex;align-items:center;justify-content:center;font-size:36px;
+      box-shadow:0 12px 30px rgba(124,58,237,.45);
+    }
+    h1{font-size:1.9rem;font-weight:800;letter-spacing:-.5px}
+    .tagline{font-size:1.05rem;opacity:.9;margin-top:8px}
+    .back{display:inline-block;margin-top:14px;color:#e9d5ff;font-size:.95rem}
+
+    .panel{background:var(--card);border-radius:20px;padding:28px;box-shadow:0 18px 40px rgba(20,8,40,.28);margin-bottom:22px}
+    .panel h2{font-size:1.3rem;margin-bottom:10px;display:flex;align-items:center;gap:12px}
+    .panel h3{font-size:1.05rem;margin:16px 0 8px}
+    .num{display:inline-flex;flex:none;width:34px;height:34px;border-radius:50%;
+      background:var(--accent);color:#fff;font-weight:800;font-size:1.05rem;
+      align-items:center;justify-content:center}
+    .panel p, .panel li{font-size:1rem;color:#332b40;margin-bottom:10px}
+    .panel ol, .panel ul{padding-left:24px;margin-bottom:8px}
+    .panel li{margin-bottom:8px}
+
+    .see{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin:10px 0;font-size:.95rem}
+    .see b{color:var(--accent2)}
+    .warn{background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:12px;padding:12px 16px;margin:10px 0;font-size:.95rem}
+    .ok{background:#ecfdf3;border:1px solid #b7e4c7;border-radius:12px;padding:12px 16px;margin:10px 0;font-size:.95rem}
+
+    .btn{display:inline-block;background:var(--accent);color:#fff;text-decoration:none;
+      border-radius:12px;padding:12px 22px;font-weight:700;font-size:1rem;margin:6px 0;
+      box-shadow:0 8px 20px rgba(124,58,237,.35)}
+    .btn:hover{background:var(--accent2)}
+
+    .opts{width:100%;border-collapse:collapse;margin-top:6px}
+    .opts td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:.95rem;vertical-align:top}
+    .opts td:first-child{font-weight:700;width:34%;white-space:nowrap}
+
+    .faq{width:100%;border-collapse:collapse;margin-top:6px}
+    .faq td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:.95rem;vertical-align:top}
+    .faq td:first-child{font-weight:700;width:45%}
+
+    kbd{background:#eee;border:1px solid #ccc;border-bottom-width:3px;border-radius:6px;
+      padding:1px 7px;font-family:inherit;font-size:.92em;font-weight:600}
+    .chip{display:inline-block;background:#2d0a1e;color:#fff;border-radius:8px;padding:2px 10px;font-size:.9em;font-family:ui-monospace,Menlo,Consolas,monospace}
+
+    footer{text-align:center;color:#fff;opacity:.8;margin-top:36px;font-size:.9rem}
+    footer a{color:#e9d5ff}
+
+    /* Language switcher — dropdown menu (scales to more languages) */
+    .lang-switch{position:fixed;top:12px;right:14px;z-index:100;font-size:.85rem;font-weight:700;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Ubuntu,sans-serif}
+    .lang-switch summary{list-style:none;cursor:pointer;color:#fff;background:rgba(20,8,40,.6);backdrop-filter:blur(6px);border-radius:999px;padding:7px 15px;display:inline-flex;align-items:center;gap:7px;user-select:none}
+    .lang-switch summary::-webkit-details-marker{display:none}
+    .lang-switch summary::marker{content:""}
+    .lang-switch[open] summary{background:rgba(20,8,40,.9)}
+    .lang-menu{position:absolute;top:calc(100% + 6px);right:0;min-width:150px;background:#2a1140;border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:6px;box-shadow:0 14px 34px rgba(20,8,40,.55);display:flex;flex-direction:column;gap:2px}
+    .lang-menu a{color:#e9d5ff;text-decoration:none;padding:9px 13px;border-radius:8px;white-space:nowrap;line-height:1}
+    .lang-menu a:hover{background:rgba(255,255,255,.08);color:#fff}
+    .lang-menu a.active{background:#a855f7;color:#fff}
+  </style>
+</head>
+<body>
+  <details class="lang-switch">
+    <summary>🌐 English ▾</summary>
+    <div class="lang-menu">
+      <a href="instrukcja-dyktowanie-en.html" class="active">English</a>
+      <a href="instrukcja-dyktowanie.html">Polski</a>
+    </div>
+  </details>
+  <div class="wrap">
+    <header>
+      <div class="logo">🎙️</div>
+      <h1>Voice dictation — step by step</h1>
+      <p class="tagline">How to talk to the program instead of typing. You need one free
+        key — we'll show you how to get it in a few minutes, with no technical knowledge
+        at all.</p>
+      <a class="back" href="https://pobierz.srv1251441.hstgr.cloud/">← Back to the download page</a>
+    </header>
+
+    <section class="panel">
+      <h2>Why do I need this key?</h2>
+      <p>Dictation turns <b>your voice into text</b> — you speak, and the words type
+        themselves into the terminal. The voice-to-text work is done by a free online
+        service called <b>Groq</b> (think of it as a fast, free "transcription machine").</p>
+      <p>So the program can use it on your behalf, it needs an <b>API key</b> — a kind of
+        <b>personal passcode</b>, like your own remote for a gate. You set it up once,
+        paste it into the program, and you're done.</p>
+      <div class="see"><b>Does it cost anything?</b> No. The Groq account and the key are
+        free, and the free allowance is more than enough for dictation. No payment card
+        is required.</div>
+      <div class="warn">⚠️ <b>Dictation is optional.</b> The program works great without it —
+        reading answers aloud (TTS) and everything else need no key at all. The Groq key is
+        only needed if you want to <b>talk</b> to the program.</div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">1</span> Create a free Groq account</h2>
+      <p>Open the Groq sign-in page in your browser:</p>
+      <a class="btn" href="https://console.groq.com/login" target="_blank" rel="noopener">🌐 Open console.groq.com/login</a>
+      <p>Sign in the easiest way — with a <b>Google account</b>, <b>GitHub</b>, or a plain
+        <b>email</b>. If it's your first time, the account is created automatically on your
+        first sign-in.</p>
+      <div class="see">It's an ordinary sign-in, like any other website. You don't enter a
+        card number or any payment details.</div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">2</span> Create an API key</h2>
+      <p>Once signed in, go to the keys section:</p>
+      <a class="btn" href="https://console.groq.com/keys" target="_blank" rel="noopener">🔑 Open console.groq.com/keys</a>
+      <ol>
+        <li>Click the <b>"Create API Key"</b> button.</li>
+        <li>Type any name so you'll remember what it's for —
+          e.g. <i>Claude Voice Assistant</i> — and confirm.</li>
+        <li>A <b>long string of characters starting with</b> <span class="chip">gsk_…</span>
+          will appear. That's your key.</li>
+        <li>Click <b>"Copy"</b> — or select it all and copy
+          (<kbd>Ctrl</kbd>+<kbd>C</kbd>, on Mac <kbd>⌘</kbd>+<kbd>C</kbd>).</li>
+      </ol>
+      <div class="warn">⚠️ <b>Important:</b> this key is shown <b>only once</b>, right after
+        you create it. Copy it straight away. If you lose it — no problem, just create a new
+        one in the same place and delete the old one.</div>
+      <div class="see"><b>Treat the key like a password.</b> Don't paste it into a chat or
+        email it to anyone. You'll paste it in just one place — the program, in the next
+        step.</div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">3</span> Paste the key into the program</h2>
+      <p>Go back to <b>Claude Voice Assistant</b> and open the key settings window:</p>
+      <ul>
+        <li>menu <b>Settings → API key (dictation)…</b>, or</li>
+        <li>click the 🎙️ <b>Dictate</b> icon in a tab — if there's no key yet, the program
+          will offer to enter it.</li>
+      </ul>
+      <ol>
+        <li>Paste the copied key into the field (<kbd>Ctrl</kbd>+<kbd>V</kbd>,
+          on Mac <kbd>⌘</kbd>+<kbd>V</kbd>).</li>
+        <li>Click <b>Save</b>.</li>
+      </ol>
+      <div class="ok">✅ Done! The key is saved on your computer and the program remembers
+        it for good — you enter it <b>only once</b>.</div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">4</span> Test dictation</h2>
+      <ol>
+        <li>Open an agent tab and click <b>🎙️ Dictate</b> (or use the keyboard shortcut).</li>
+        <li>Say a short sentence, e.g. <i>"show me the list of files in this folder"</i>.</li>
+        <li>After a moment your words appear as text in the field. Click 🎙️ again to stop
+          recording.</li>
+      </ol>
+      <div class="see">The first voice-to-text may take a moment — that's normal. Speak
+        clearly, with little background noise. English and Polish are detected
+        automatically.</div>
+    </section>
+
+    <section class="panel">
+      <h2>Frequently asked questions</h2>
+      <table class="faq">
+        <tr><td>Do I have to enter a payment card?</td>
+          <td>No. The Groq account and key are free, and the free allowance is plenty for
+            dictation.</td></tr>
+        <tr><td>I lost the key / didn't copy it</td>
+          <td>Nothing lost. Go back to <b>console.groq.com/keys</b>, delete the old key
+            (trash icon) and click <b>Create API Key</b> to make a new one.</td></tr>
+        <tr><td>Dictation doesn't work even though I pasted the key</td>
+          <td>Check that the key starts with <span class="chip">gsk_</span> and was pasted
+            in full (no trailing space). Also make sure a microphone is connected and the
+            program is allowed to use it in your system settings.</td></tr>
+        <tr><td>Is my voice stored anywhere?</td>
+          <td>The recording is sent to Groq only to turn it into text, and is not kept by
+            the program. The key stays only on your computer.</td></tr>
+        <tr><td>Can I use the same key on several computers?</td>
+          <td>Yes — you can paste the same key on each of your devices. You can also create
+            a separate key per computer if you prefer.</td></tr>
+        <tr><td>I don't want to dictate — do I have to set this up?</td>
+          <td>No. Skip this guide — the program works fully without the key. In the settings
+            window you can tick <b>"don't remind me about dictation"</b> so the program stops
+            asking.</td></tr>
+      </table>
+    </section>
+
+    <footer>
+      <p><a href="https://pobierz.srv1251441.hstgr.cloud/">← Back to the download page</a></p>
+      <p>Claude Voice Assistant • kontakt@fulfillment-polska.pl</p>
+    </footer>
+  </div>
+</body>
+</html>

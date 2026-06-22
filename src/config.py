@@ -10,7 +10,7 @@ APP_NAME = "Claude Voice Assistant"
 # APP_VERSION — JEDYNE źródło prawdy o wersji. Używane przez auto-aktualizację
 # (M3) do porównania z wersją w pliku appcast na serwerze. Podbijaj przy każdym
 # wydaniu (semver: MAJOR.MINOR.PATCH).
-APP_VERSION = "1.0.19"
+APP_VERSION = "1.0.20"
 APP_AUTHOR = "Fulfillment Polska"
 
 # Tryb deweloperski — uruchomienie WPROST z kodu (`python3 src/main.py`).
@@ -687,6 +687,18 @@ UI_TRANSLATIONS = {
         "dlg_setup_found_msg": "Claude Code jest zainstalowany. 🎉\n\nMożesz teraz uruchomić agenta (zakładka → Uruchom) albo wpisać „claude” w terminalu.",
         "dlg_setup_not_found_title": "Jeszcze nie widać Claude Code",
         "dlg_setup_not_found_msg": "Nie znalazłem jeszcze Claude Code w systemie.\n\nUpewnij się, że Krok 1 (Node.js) i Krok 2 (komenda npm) zostały wykonane, a jeśli właśnie zainstalowano Node.js — uruchom ten program od nowa i spróbuj jeszcze raz.",
+        "dlg_setup_check_title": "Konfiguracja programu — co jeszcze zostało",
+        "dlg_setup_check_intro": "Sprawdziłem, co jest już gotowe. Uzupełnij punkty oznaczone <b>❗</b> — przy każdym napisałem, co zrobić, krok po kroku.",
+        "dlg_setup_ready": "✅ gotowe",
+        "dlg_setup_missing": "❗ do zrobienia",
+        "dlg_setup_item_claude": "Claude Code — zainstalowany",
+        "dlg_setup_item_login": "Claude Code — zalogowany",
+        "dlg_setup_item_dictation": "Dyktowanie głosem — klucz Groq",
+        "dlg_setup_dictation_intro": "Dyktowanie (mówienie zamiast pisania) to dodatek — program działa bez niego. Aby je włączyć, zdobądź <b>darmowy</b> klucz Groq i wklej go w Ustawieniach. Krok po kroku pokazuje strona poniżej.",
+        "dlg_setup_groq_btn": "🔑 Jak zdobyć darmowy klucz Groq",
+        "dlg_setup_settings_btn": "⚙️ Otwórz Ustawienia (wklej klucz)",
+        "dlg_setup_dictation_dismiss": "Nie przypominaj mi o dyktowaniu",
+        "dlg_setup_all_ready": "✅ Wszystko gotowe — możesz zaczynać pracę.",
         # --- i18n runda 2: dialogi main_window ---
         "dlg_cannot_close_title": "Nie można zamknąć",
         "dlg_must_keep_one_tab": "Musi pozostać co najmniej jedna zakładka.",
@@ -1355,6 +1367,18 @@ UI_TRANSLATIONS = {
         "dlg_setup_found_msg": "Claude Code is installed. 🎉\n\nYou can now run an agent (tab → Run) or type \"claude\" in the terminal.",
         "dlg_setup_not_found_title": "Claude Code not visible yet",
         "dlg_setup_not_found_msg": "I haven't found Claude Code on the system yet.\n\nMake sure Step 1 (Node.js) and Step 2 (the npm command) were completed, and if you just installed Node.js — restart this program and try again.",
+        "dlg_setup_check_title": "Program setup — what's still left",
+        "dlg_setup_check_intro": "I've checked what's already done. Complete the items marked <b>❗</b> — for each one I've written what to do, step by step.",
+        "dlg_setup_ready": "✅ done",
+        "dlg_setup_missing": "❗ to do",
+        "dlg_setup_item_claude": "Claude Code — installed",
+        "dlg_setup_item_login": "Claude Code — signed in",
+        "dlg_setup_item_dictation": "Voice dictation — Groq key",
+        "dlg_setup_dictation_intro": "Dictation (speaking instead of typing) is optional — the program works without it. To enable it, get a <b>free</b> Groq key and paste it in Settings. The page below shows it step by step.",
+        "dlg_setup_groq_btn": "🔑 How to get a free Groq key",
+        "dlg_setup_settings_btn": "⚙️ Open Settings (paste the key)",
+        "dlg_setup_dictation_dismiss": "Don't remind me about dictation",
+        "dlg_setup_all_ready": "✅ All set — you're ready to go.",
         # --- i18n round 2: main_window dialogs ---
         "dlg_cannot_close_title": "Cannot close",
         "dlg_must_keep_one_tab": "At least one tab must remain.",

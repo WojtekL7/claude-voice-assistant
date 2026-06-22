@@ -487,6 +487,10 @@ class MainWindow(QMainWindow):
     # trzykrotny margines, a flaga i tak ma sens dopiero po paru sekundach.
     QUESTION_TERMINAL_QUIET_SECS = 3.0
 
+    # Wynik sprawdzania gotowości (3 punkty kreatora) policzonego w wątku tła —
+    # emitowany z wątku, odbierany w wątku GUI (bezpieczne przez kolejkę Qt).
+    _readiness_ready = pyqtSignal(object)
+
     def __init__(self):
         super().__init__()
 
@@ -526,6 +530,10 @@ class MainWindow(QMainWindow):
         self.current_language = "pl-PL"
         self.auto_read_responses = False
         self.auto_check_updates = True  # nadpisywane przez _load_settings
+        # Kreator dyktowania: user zaznaczył „nie przypominaj" → nie wymuszaj okna
+        # z powodu braku klucza Groq (nadpisywane przez _load_settings).
+        self.dictation_reminder_dismissed = False
+        self._readiness_ready.connect(self._on_readiness_checked)
         self.quick_actions = self._load_quick_actions()
         self.attached_files = []  # List of attached file paths
         self.skin_colors = DEFAULT_SKIN_COLORS.copy()  # Custom skin colors (interfejs + terminal)
@@ -1853,20 +1861,69 @@ class MainWindow(QMainWindow):
         except Exception:
             return False
 
+    def _compute_readiness(self) -> dict:
+        """Policz gotowość programu w 3 punktach. Może chwilę potrwać (powłoka
+        logowania przy wykrywaniu `claude`), dlatego przy starcie wołane w wątku
+        tła; przez „Sprawdź ponownie" w kreatorze — synchronicznie."""
+        from core.platform_utils import (
+            claude_runnable, claude_logged_in, find_claude_command)
+        installed = claude_runnable(self.claude_command)
+        return {
+            'claude_installed': installed,
+            'claude_logged_in': claude_logged_in() if installed else False,
+            'dictation': bool(self.stt.api_key),
+            'claude_command_path': find_claude_command() if installed else None,
+        }
+
     def _maybe_show_claude_setup(self):
-        """Przy starcie: brak CLI → pokaż kreator (raz na uruchomienie)."""
+        """Przy starcie policz gotowość w TLE (nie zamrażaj okna), a po wyniku
+        ewentualnie pokaż kreator. Raz na uruchomienie."""
         if getattr(self, '_claude_setup_shown', False):
             return
-        if self._claude_cli_available():
+        import threading
+        threading.Thread(
+            target=lambda: self._readiness_ready.emit(self._compute_readiness()),
+            daemon=True).start()
+
+    def _on_readiness_checked(self, readiness):
+        """Wynik z wątku tła (wątek GUI). Pokaż kreator TYLKO gdy czegoś brakuje:
+        Claude Code, logowanie albo dyktowanie (chyba że user zaznaczył
+        „nie przypominaj o dyktowaniu")."""
+        if getattr(self, '_claude_setup_shown', False):
+            return
+        r = readiness or {}
+        # Komenda mogła rozwiązać się do konkretnej ścieżki — przejmij ją cicho.
+        path = r.get('claude_command_path')
+        if r.get('claude_installed') and path and path != self.claude_command:
+            self.claude_command = path
+            self._save_settings()
+        need = (not r.get('claude_installed')
+                or not r.get('claude_logged_in')
+                or (not r.get('dictation') and not self.dictation_reminder_dismissed))
+        if not need:
             return
         self._claude_setup_shown = True
-        self._show_claude_setup_dialog()
+        self._show_claude_setup_dialog(readiness=r)
 
-    def _show_claude_setup_dialog(self):
-        """Kreator „dokończ instalację" (też ręcznie z menu Pomoc)."""
-        dlg = ClaudeSetupDialog(self)
+    def _show_claude_setup_dialog(self, readiness=None):
+        """Kreator konfiguracji = lista kontrolna (też ręcznie z menu Pomoc).
+        Bez podanego stanu (otwarcie z menu) — policz teraz, synchronicznie."""
+        # Sygnał `triggered` z menu przekazuje bool `checked` — odfiltruj go.
+        if not isinstance(readiness, dict):
+            readiness = self._compute_readiness()
+        dlg = ClaudeSetupDialog(
+            self, readiness=readiness,
+            dictation_dismissed=self.dictation_reminder_dismissed,
+            readiness_provider=self._compute_readiness)
         dlg.claude_found.connect(self._on_claude_cli_found)
+        dlg.open_groq_settings.connect(self._show_groq_api_dialog)
+        dlg.dictation_reminder_changed.connect(self._on_dictation_reminder_changed)
         dlg.exec_()
+
+    def _on_dictation_reminder_changed(self, dismissed: bool):
+        """Zapamiętaj wybór „nie przypominaj o dyktowaniu" (trwale w configu)."""
+        self.dictation_reminder_dismissed = bool(dismissed)
+        self._save_settings()
 
     def _open_agents_guide(self):
         """Instrukcja online „Zarządzaj agentami" (publiczna podstrona /cva)."""
@@ -2026,6 +2083,8 @@ class MainWindow(QMainWindow):
                     self.auto_run_claude = settings.get('auto_run_claude', True)
                     self.last_active_agent_id = settings.get('last_active_agent_id', None)
                     self.auto_check_updates = settings.get('auto_check_updates', True)
+                    self.dictation_reminder_dismissed = settings.get(
+                        'dictation_reminder_dismissed', False)
 
             except Exception as e:
                 print(f"Error loading settings: {e}")
@@ -2047,6 +2106,7 @@ class MainWindow(QMainWindow):
             'auto_run_claude': self.auto_run_claude,
             'last_active_agent_id': self.last_active_agent_id,
             'auto_check_updates': getattr(self, 'auto_check_updates', True),
+            'dictation_reminder_dismissed': getattr(self, 'dictation_reminder_dismissed', False),
         }
         try:
             with open(CONFIG_FILE, 'w') as f:

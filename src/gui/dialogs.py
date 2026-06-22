@@ -13,7 +13,8 @@ from PyQt5.QtWidgets import (
     QTreeWidget, QTreeWidgetItem, QGroupBox, QFileDialog,
     QMessageBox, QListWidget, QListWidgetItem, QRadioButton,
     QButtonGroup, QWidget, QSplitter, QFrame, QInputDialog,
-    QListView, QPlainTextEdit, QStackedWidget, QTabWidget, QProgressBar
+    QListView, QPlainTextEdit, QStackedWidget, QTabWidget, QProgressBar,
+    QScrollArea
 )
 from PyQt5.QtCore import Qt, QSize, QUrl, QTimer, pyqtSignal
 import threading
@@ -3543,76 +3544,54 @@ class ClaudeSetupDialog(QDialog):
     # Ścieżka znalezionego CLI po kliknięciu „Sprawdź ponownie" — MainWindow
     # podmienia claude_command bez restartu aplikacji.
     claude_found = pyqtSignal(str)
+    # Użytkownik chce wpisać klucz Groq → MainWindow otwiera okno klucza.
+    open_groq_settings = pyqtSignal()
+    # Zmiana pola „nie przypominaj o dyktowaniu" → MainWindow zapisuje w configu.
+    dictation_reminder_changed = pyqtSignal(bool)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, readiness=None, dictation_dismissed=False,
+                 readiness_provider=None):
         super().__init__(parent)
         from core.platform_utils import os_key
         from config import install_guide_url
         self._os = os_key()
         # Język interfejsu decyduje o wersji instrukcji (-en dla angielskiego).
         self._guide_url = install_guide_url(self._os)
+        self._dictation_guide_url = install_guide_url('dyktowanie')
+        # Funkcja zwracająca świeży stan gotowości (3 punkty) — do „Sprawdź ponownie".
+        self._provider = readiness_provider
+        self._readiness = dict(readiness) if readiness else {}
+        self._dictation_dismissed = bool(dictation_dismissed)
 
-        self.setWindowTitle(tr('dlg_setup_title'))
-        self.setMinimumWidth(560)
+        self.setWindowTitle(tr('dlg_setup_check_title'))
+        self.setMinimumWidth(600)
+        self.setMinimumHeight(420)
 
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
 
-        title = QLabel(tr('dlg_setup_header'))
+        title = QLabel(tr('dlg_setup_check_title'))
         tf = QFont()
         tf.setPointSize(13)
         tf.setBold(True)
         title.setFont(tf)
         layout.addWidget(title)
 
-        intro = QLabel(tr('dlg_setup_intro'))
+        intro = QLabel(tr('dlg_setup_check_intro'))
         intro.setWordWrap(True)
         intro.setTextFormat(Qt.RichText)
         layout.addWidget(intro)
 
-        # ---- Krok 1: Node.js ----
-        step1_box = QGroupBox(tr('dlg_setup_step1_title'))
-        s1 = QVBoxLayout(step1_box)
-        s1_label = QLabel(tr('dlg_setup_step1_label'))
-        s1_label.setWordWrap(True)
-        s1_label.setTextFormat(Qt.RichText)
-        s1.addWidget(s1_label)
-        if self._os == "windows":
-            s1_warn = QLabel(tr('dlg_setup_step1_warn'))
-            s1_warn.setWordWrap(True)
-            s1_warn.setTextFormat(Qt.RichText)
-            s1.addWidget(s1_warn)
-        node_btn = QPushButton(tr('dlg_setup_node_btn'))
-        node_btn.clicked.connect(
-            lambda: QDesktopServices.openUrl(QUrl("https://nodejs.org/")))
-        s1.addWidget(node_btn)
-        layout.addWidget(step1_box)
-
-        # ---- Krok 2: npm install ----
-        step2_box = QGroupBox(tr('dlg_setup_step2_title'))
-        s2 = QVBoxLayout(step2_box)
-        s2_label = QLabel(tr('dlg_setup_step2_label'))
-        s2_label.setWordWrap(True)
-        s2_label.setTextFormat(Qt.RichText)
-        s2.addWidget(s2_label)
-        cmd_row = QHBoxLayout()
-        self.cmd_field = QLineEdit(self.NPM_COMMAND)
-        self.cmd_field.setReadOnly(True)
-        cmd_row.addWidget(self.cmd_field)
-        self.copy_btn = QPushButton(tr('dlg_setup_copy'))
-        self.copy_btn.clicked.connect(self._copy_command)
-        cmd_row.addWidget(self.copy_btn)
-        s2.addLayout(cmd_row)
-        layout.addWidget(step2_box)
-
-        # ---- Krok 3: logowanie ----
-        step3_box = QGroupBox(tr('dlg_setup_step3_title'))
-        s3 = QVBoxLayout(step3_box)
-        s3_label = QLabel(tr('dlg_setup_step3_label'))
-        s3_label.setWordWrap(True)
-        s3_label.setTextFormat(Qt.RichText)
-        s3.addWidget(s3_label)
-        layout.addWidget(step3_box)
+        # Obszar treści (przewijalny — przy wielu brakujących punktach bywa wysoki).
+        self._content = QVBoxLayout()
+        self._content.setSpacing(12)
+        content_host = QWidget()
+        content_host.setLayout(self._content)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setWidget(content_host)
+        layout.addWidget(scroll, 1)
 
         # ---- Przyciski ----
         btn_row = QHBoxLayout()
@@ -3622,7 +3601,7 @@ class ClaudeSetupDialog(QDialog):
         btn_row.addWidget(guide_btn)
         btn_row.addStretch()
         check_btn = QPushButton(tr('dlg_setup_check_again'))
-        check_btn.clicked.connect(self._check_again)
+        check_btn.clicked.connect(lambda: self._recheck())
         btn_row.addWidget(check_btn)
         close_btn = QPushButton(tr('dlg_close'))
         close_btn.setDefault(True)
@@ -3630,32 +3609,174 @@ class ClaudeSetupDialog(QDialog):
         btn_row.addWidget(close_btn)
         layout.addLayout(btn_row)
 
+        self._render()
+
+    # ---------- Budowa listy kontrolnej ----------
+
+    def _clear_content(self):
+        """Usuń wszystkie widgety/układy z obszaru treści (przed przerysowaniem)."""
+        while self._content.count():
+            item = self._content.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.deleteLater()
+                continue
+            sub = item.layout()
+            if sub is not None:
+                while sub.count():
+                    sw = sub.takeAt(0).widget()
+                    if sw is not None:
+                        sw.deleteLater()
+
+    def _render(self):
+        """Przerysuj listę kontrolną z aktualnego stanu gotowości."""
+        self._clear_content()
+        r = self._readiness
+        claude_ok = bool(r.get('claude_installed'))
+        login_ok = bool(r.get('claude_logged_in'))
+        dict_ok = bool(r.get('dictation'))
+
+        self._content.addWidget(self._status_row(tr('dlg_setup_item_claude'), claude_ok))
+        self._content.addWidget(self._status_row(tr('dlg_setup_item_login'), login_ok))
+        self._content.addWidget(self._status_row(tr('dlg_setup_item_dictation'), dict_ok))
+
+        if claude_ok and login_ok and dict_ok:
+            done = QLabel(tr('dlg_setup_all_ready'))
+            done.setWordWrap(True)
+            self._content.addWidget(done)
+
+        # Szczegóły „co zrobić" pokazujemy TYLKO przy brakujących punktach.
+        if not claude_ok:
+            self._content.addWidget(self._claude_install_box())
+        elif not login_ok:
+            # Zainstalowany, ale niezalogowany — wystarczy sam krok logowania.
+            self._content.addWidget(self._login_box())
+        if not dict_ok:
+            self._content.addWidget(self._dictation_box())
+
+        self._content.addStretch()
+
+    def _status_row(self, label_text, ok):
+        """Wiersz: nazwa punktu + chip „gotowe / do zrobienia"."""
+        row = QWidget()
+        h = QHBoxLayout(row)
+        h.setContentsMargins(0, 0, 0, 0)
+        name = QLabel(label_text)
+        nf = QFont()
+        nf.setBold(True)
+        name.setFont(nf)
+        h.addWidget(name)
+        h.addStretch()
+        status = QLabel(tr('dlg_setup_ready') if ok else tr('dlg_setup_missing'))
+        status.setStyleSheet("color:#16a34a;font-weight:700;" if ok
+                             else "color:#dc2626;font-weight:700;")
+        h.addWidget(status)
+        return row
+
+    def _rich_label(self, text):
+        lbl = QLabel(text)
+        lbl.setWordWrap(True)
+        lbl.setTextFormat(Qt.RichText)
+        return lbl
+
+    def _claude_install_box(self):
+        """Pełna instrukcja instalacji (Node + npm + logowanie) — gdy brak CLI."""
+        box = QGroupBox(tr('dlg_setup_item_claude'))
+        v = QVBoxLayout(box)
+        v.addWidget(self._rich_label(tr('dlg_setup_intro')))
+        # Krok 1 — Node.js
+        v.addWidget(self._rich_label("<b>%s</b>" % tr('dlg_setup_step1_title')))
+        v.addWidget(self._rich_label(tr('dlg_setup_step1_label')))
+        if self._os == "windows":
+            v.addWidget(self._rich_label(tr('dlg_setup_step1_warn')))
+        node_btn = QPushButton(tr('dlg_setup_node_btn'))
+        node_btn.clicked.connect(
+            lambda: QDesktopServices.openUrl(QUrl("https://nodejs.org/")))
+        v.addWidget(node_btn)
+        # Krok 2 — npm install
+        v.addWidget(self._rich_label("<b>%s</b>" % tr('dlg_setup_step2_title')))
+        v.addWidget(self._rich_label(tr('dlg_setup_step2_label')))
+        cmd_row = QHBoxLayout()
+        self.cmd_field = QLineEdit(self.NPM_COMMAND)
+        self.cmd_field.setReadOnly(True)
+        cmd_row.addWidget(self.cmd_field)
+        self.copy_btn = QPushButton(tr('dlg_setup_copy'))
+        self.copy_btn.clicked.connect(self._copy_command)
+        cmd_row.addWidget(self.copy_btn)
+        v.addLayout(cmd_row)
+        # Krok 3 — logowanie (część instalacji)
+        v.addWidget(self._rich_label("<b>%s</b>" % tr('dlg_setup_step3_title')))
+        v.addWidget(self._rich_label(tr('dlg_setup_step3_label')))
+        return box
+
+    def _login_box(self):
+        """Sam krok logowania — gdy CLI jest, ale użytkownik się nie zalogował."""
+        box = QGroupBox(tr('dlg_setup_item_login'))
+        v = QVBoxLayout(box)
+        v.addWidget(self._rich_label("<b>%s</b>" % tr('dlg_setup_step3_title')))
+        v.addWidget(self._rich_label(tr('dlg_setup_step3_label')))
+        return box
+
+    def _dictation_box(self):
+        """Sekcja dyktowania: link do instrukcji Groq + otwórz Ustawienia + „nie przypominaj"."""
+        box = QGroupBox(tr('dlg_setup_item_dictation'))
+        v = QVBoxLayout(box)
+        v.addWidget(self._rich_label(tr('dlg_setup_dictation_intro')))
+        row = QHBoxLayout()
+        groq_btn = QPushButton(tr('dlg_setup_groq_btn'))
+        groq_btn.clicked.connect(
+            lambda: QDesktopServices.openUrl(QUrl(self._dictation_guide_url)))
+        row.addWidget(groq_btn)
+        settings_btn = QPushButton(tr('dlg_setup_settings_btn'))
+        settings_btn.clicked.connect(self._open_settings)
+        row.addWidget(settings_btn)
+        v.addLayout(row)
+        dismiss = QCheckBox(tr('dlg_setup_dictation_dismiss'))
+        dismiss.setChecked(self._dictation_dismissed)
+        dismiss.toggled.connect(self._on_dismiss_toggled)
+        v.addWidget(dismiss)
+        return box
+
+    def _open_settings(self):
+        """Otwórz okno klucza Groq w MainWindow, potem odśwież stan."""
+        self.open_groq_settings.emit()
+        self._recheck(silent=True)
+
+    def _on_dismiss_toggled(self, checked):
+        self._dictation_dismissed = bool(checked)
+        self.dictation_reminder_changed.emit(self._dictation_dismissed)
+
     def _copy_command(self):
         from PyQt5.QtWidgets import QApplication
         QApplication.clipboard().setText(self.NPM_COMMAND)
         self.copy_btn.setText(tr('dlg_setup_copied'))
         QTimer.singleShot(2000, lambda: self.copy_btn.setText(tr('dlg_setup_copy')))
 
-    def _check_again(self):
-        """Poszukaj CLI jeszcze raz (PATH + typowe lokalizacje). Znalezione →
-        sygnał do MainWindow (podmiana komendy bez restartu) i zamknięcie."""
-        import shutil
-        from core.platform_utils import find_claude_command
-        found = find_claude_command()
-        resolved = shutil.which(found)
-        if not resolved:
+    def _recheck(self, silent=False):
+        """Sprawdź gotowość ponownie (3 punkty) i przerysuj listę kontrolną.
+
+        Świeży stan bierze z funkcji `readiness_provider` przekazanej przez
+        MainWindow (to samo źródło, co przy starcie). Gdy CLI właśnie się
+        pojawiło — przekazuje jego ścieżkę do MainWindow (podmiana komendy bez
+        restartu). `silent=True` po wpisaniu klucza Groq (bez okienek)."""
+        if self._provider is not None:
             try:
-                if Path(found).is_absolute() and Path(found).exists():
-                    resolved = found
+                fresh = self._provider()
+                if fresh:
+                    self._readiness = dict(fresh)
             except Exception:
-                resolved = None
-        if resolved:
-            QMessageBox.information(
-                self, tr('dlg_setup_found_title'),
-                tr('dlg_setup_found_msg'))
-            self.claude_found.emit(str(resolved))
-            self.accept()
-        else:
-            QMessageBox.information(
-                self, tr('dlg_setup_not_found_title'),
-                tr('dlg_setup_not_found_msg'))
+                pass
+        r = self._readiness
+        path = r.get('claude_command_path')
+        if r.get('claude_installed') and path:
+            self.claude_found.emit(str(path))
+        self._render()
+        if not silent:
+            all_ok = (r.get('claude_installed') and r.get('claude_logged_in')
+                      and r.get('dictation'))
+            if all_ok:
+                QMessageBox.information(self, tr('dlg_setup_found_title'),
+                                        tr('dlg_setup_all_ready'))
+            elif not r.get('claude_installed'):
+                QMessageBox.information(self, tr('dlg_setup_not_found_title'),
+                                        tr('dlg_setup_not_found_msg'))

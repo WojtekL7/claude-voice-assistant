@@ -19,6 +19,7 @@ from datetime import datetime
 from pathlib import Path
 
 from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QUrl, Qt, QTimer, QEvent
+from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import QWidget, QVBoxLayout
 from PyQt5.QtWebEngineWidgets import (
     QWebEngineView, QWebEngineSettings, QWebEnginePage,
@@ -158,6 +159,11 @@ class WebTerminal(QWidget):
         # PRZED settings/webchannel — one działają na bieżącej stronie widoku.
         self._page = _LoggingWebEnginePage(self.view)
         self.view.setPage(self._page)
+        # QtWebEngine maluje stronę na BIAŁO, dopóki terminal.html się nie wczyta
+        # (~1 s: xterm.js + czcionka Ubuntu Mono) → widoczny biały błysk przy starcie.
+        # Ustawiamy z góry tło strony na ten sam ciemny kolor co terminal.html
+        # (#1b1b1d), żeby od pierwszej klatki było ciemno, bez białej "pustej kartki".
+        self._page.setBackgroundColor(QColor(0x1b, 0x1b, 0x1d))
         st = self.view.settings()
         st.setAttribute(QWebEngineSettings.LocalContentCanAccessFileUrls, True)
         st.setAttribute(QWebEngineSettings.LocalContentCanAccessRemoteUrls, True)

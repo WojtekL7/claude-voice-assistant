@@ -14,6 +14,7 @@ import os
 import sys
 import shutil
 import platform
+import subprocess
 from pathlib import Path
 
 
@@ -212,6 +213,98 @@ def find_claude_command() -> str:
             continue
     # Fallback: gołe 'claude' (powłoka znajdzie je na PATH przy uruchomieniu).
     return "claude"
+
+
+def _enriched_path_env() -> dict:
+    """Środowisko z PATH wzbogaconym o typowe lokalizacje narzędzi użytkownika.
+
+    GUI uruchomione z Findera/Docka (macOS) dostaje OKROJONY PATH — bez Homebrew,
+    nvm i npm-global — więc `claude` „znika", choć jest zainstalowany. Dokładamy
+    te same ścieżki, co terminal w web_terminal._spawn, żeby wykrywanie zgadzało
+    się z tym, co realnie zobaczy powłoka."""
+    env = dict(os.environ)
+    if not is_windows():
+        home = Path.home()
+        extras = ["/opt/homebrew/bin", "/usr/local/bin",
+                  str(home / ".local" / "bin"),
+                  str(home / ".npm-global" / "bin")]
+        parts = [p for p in env.get("PATH", "").split(os.pathsep) if p]
+        for extra in extras:
+            if extra not in parts:
+                parts.append(extra)
+        env["PATH"] = os.pathsep.join(parts)
+    return env
+
+
+def claude_runnable(command: str = None, timeout: float = 5.0) -> bool:
+    """Czy CLI `claude` realnie da się uruchomić w tym systemie.
+
+    Pyta system TAK SAMO, jak zrobi to wbudowany terminal: na macOS/Linux przez
+    POWŁOKĘ LOGOWANIA (`-lc`), która wczytuje profil użytkownika i pełny PATH
+    (Homebrew, nvm, npm). Dzięki temu nie ma fałszywego „nie znaleziono", gdy
+    aplikacja startuje z Findera/Docka z okrojonym PATH (przyczyna ciągłego
+    kreatora na Macu). Krótki limit czasu, by nie blokować startu."""
+    cmd = (command or "").strip()
+    name = (cmd.split()[0] if cmd else "claude") or "claude"
+    # 1) Pełna ścieżka do istniejącego pliku — pewne i natychmiastowe.
+    try:
+        if Path(name).is_absolute() and Path(name).exists():
+            return True
+    except Exception:
+        pass
+    env = _enriched_path_env()
+    # 2) Zapytaj system tak jak terminal.
+    try:
+        if is_windows():
+            r = subprocess.run(["where", name], env=env, timeout=timeout,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if r.returncode == 0:
+                return True
+        else:
+            shell = default_shell()
+            r = subprocess.run([shell, "-lc", "command -v %s" % name],
+                               env=env, timeout=timeout,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if r.returncode == 0:
+                return True
+    except Exception:
+        pass
+    # 3) Zapasowo: wyszukiwanie po wzbogaconym PATH + typowe lokalizacje.
+    if shutil.which(name, path=env.get("PATH")):
+        return True
+    found = find_claude_command()
+    try:
+        return Path(found).is_absolute() and Path(found).exists()
+    except Exception:
+        return False
+
+
+def claude_logged_in() -> bool:
+    """Czy użytkownik kiedykolwiek zalogował się do Claude Code.
+
+    Logowanie zostawia ślad poświadczeń: na Linux/Windows plik
+    `~/.claude/.credentials.json`, na macOS wpis w Pęku kluczy (Keychain).
+    Sprawdzamy OBECNOŚĆ, nie ważność (token odświeża samo Claude Code). Na macOS
+    czytamy tylko metadane wpisu (bez `-w`) → nieinteraktywne, bez pytania o hasło.
+    Przy niepewności zwracamy True, żeby nie nagabywać fałszywie."""
+    try:
+        if (Path.home() / ".claude" / ".credentials.json").exists():
+            return True
+    except Exception:
+        pass
+    if is_macos():
+        try:
+            r = subprocess.run(
+                ["security", "find-generic-password", "-s", "Claude Code-credentials"],
+                timeout=4, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if r.returncode == 0:
+                return True
+            if r.returncode == 44:   # errSecItemNotFound — na pewno brak wpisu
+                return False
+            return True              # inny błąd → niepewność → nie nagabuj
+        except Exception:
+            return True
+    return False
 
 
 # ==================== Ścieżki danych ====================
