@@ -1039,11 +1039,15 @@ class MainWindow(QMainWindow):
 
         # Insert before "+" tab (if exists), otherwise add at end
         insert_index = max(0, self.tab_widget.count() - 1) if self.tab_widget.count() > 0 else 0
+        # Etykieta + ikona zakładki wg pola 'icon' agenta (emoji w tekście / plik jako QIcon).
+        tab_label, tab_icon = self._agent_label_icon(agent_config)
         # Check if last tab is "+" tab
         if self.tab_widget.count() > 0 and self.tab_widget.tabText(self.tab_widget.count() - 1) == "+":
-            index = self.tab_widget.insertTab(insert_index, agent_tab, f"🤖 {agent_name}")
+            index = self.tab_widget.insertTab(insert_index, agent_tab, tab_label)
         else:
-            index = self.tab_widget.addTab(agent_tab, f"🤖 {agent_name}")
+            index = self.tab_widget.addTab(agent_tab, tab_label)
+        if not tab_icon.isNull():
+            self.tab_widget.setTabIcon(index, tab_icon)
         # NIE wołamy setCurrentIndex tutaj — _create_agent_tabs zrobi to
         # świadomie raz, dla primary agent. Inaczej każda nowa zakładka
         # natychmiast się aktywuje i znowu mamy 4× claude przy starcie.
@@ -1613,11 +1617,34 @@ class MainWindow(QMainWindow):
         # Globalne zmiany mogą wpłynąć na status bieżącego agenta — odśwież.
         self.mcp_status_widget.force_refresh()
 
+    def _refresh_open_agent_tabs(self):
+        """Po edycji w menedżerze: zaktualizuj NA ŻYWO otwarte zakładki istniejących
+        agentów (nazwa, ikona, config) — bez restartu. Dopasowanie po agent_id.
+
+        Ikonę pomijamy, gdy świeci flaga „?" (zostanie przywrócona z nowego
+        configu po jej zniknięciu — patrz _refresh_question_flag)."""
+        by_id = {a.get('id'): a for a in self.agents if isinstance(a, dict)}
+        for agent_id, tab in list(self.agent_tabs.items()):
+            if not isinstance(tab, AgentTab):
+                continue
+            cfg = by_id.get(agent_id)
+            if not cfg:
+                continue
+            tab.update_config(cfg)
+            index = self.tab_widget.indexOf(tab)
+            if index < 0:
+                continue
+            label, icon = self._agent_label_icon(cfg)
+            self.tab_widget.setTabText(index, label)
+            if not getattr(tab, '_question_flag_shown', False):
+                self.tab_widget.setTabIcon(index, icon)
+
     def _show_agents_manager_dialog(self):
         """Show agents manager dialog."""
         dialog = AgentsManagerDialog(self, self.agents, self.memory_projects)
         if dialog.exec_() == QDialog.Accepted:
             self.agents = dialog.get_agents()
+            self._refresh_open_agent_tabs()  # edycje istniejących agentów na żywo
             agents_to_run = dialog.get_agents_to_run()
 
             # Create tabs for agents marked for immediate run
@@ -3715,6 +3742,25 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
     # Wykrywanie "agent czeka" idzie z dziennika sesji (reader.waiting_for_user()
     # w _poll_transcripts), NIE ze strumienia terminala — patrz tamten komentarz.
 
+    def _agent_label_icon(self, agent_config):
+        """Zwróć (tekst_zakładki, QIcon) dla agenta wg jego pola 'icon'.
+
+        Emoji → prefiks w TEKŚCIE (renderuje się jak dotychczasowe '🤖 ');
+        własny plik → QIcon (setTabIcon) + sam tekst nazwy; brak → '🤖 Nazwa'."""
+        name = agent_config.get('name', 'Agent')
+        spec = agent_config.get('icon')
+        if isinstance(spec, dict):
+            kind, val = spec.get('kind'), spec.get('value')
+            if kind == 'emoji' and val:
+                return f"{val} {name}", QIcon()
+            if kind == 'file' and val:
+                try:
+                    if Path(val).exists():
+                        return name, QIcon(str(val))
+                except Exception:
+                    pass
+        return f"🤖 {name}", QIcon()
+
     def _question_icon(self) -> QIcon:
         icon = getattr(self, "_question_icon_cached", None)
         if icon is None:
@@ -3752,7 +3798,11 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
             self.tab_widget.setTabIcon(index, self._question_icon())
             self.tab_widget.tabBar().setTabToolTip(index, tr('dlg_agent_waiting_tooltip'))
         else:
-            self.tab_widget.setTabIcon(index, QIcon())
+            # Przywróć bazową ikonę zakładki (własny plik agenta) zamiast pustej.
+            base = QIcon()
+            if isinstance(tab, AgentTab):
+                _, base = self._agent_label_icon(tab.agent_config)
+            self.tab_widget.setTabIcon(index, base)
             self.tab_widget.tabBar().setTabToolTip(index, "")
 
     def _refresh_all_question_flags(self):

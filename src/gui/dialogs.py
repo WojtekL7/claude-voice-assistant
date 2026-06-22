@@ -14,11 +14,11 @@ from PyQt5.QtWidgets import (
     QMessageBox, QListWidget, QListWidgetItem, QRadioButton,
     QButtonGroup, QWidget, QSplitter, QFrame, QInputDialog,
     QListView, QPlainTextEdit, QStackedWidget, QTabWidget, QProgressBar,
-    QScrollArea
+    QScrollArea, QGridLayout
 )
 from PyQt5.QtCore import Qt, QSize, QUrl, QTimer, pyqtSignal
 import threading
-from PyQt5.QtGui import QFont, QDesktopServices
+from PyQt5.QtGui import QFont, QDesktopServices, QPixmap
 
 import sys
 from pathlib import Path
@@ -643,6 +643,32 @@ class _StyledComboBox(QComboBox):
             container.setStyleSheet(self._POPUP_CONTAINER_STYLE)
 
 
+# Gotowa pula ikon (emoji) do szybkiego wyboru w konfiguracji agenta.
+# Pogrupowana wg typowych obszarów pracy. Klucz = i18n nazwy kategorii.
+AGENT_ICON_PALETTE = [
+    ("dlg_agent_icon_cat_dev",
+     ["💻", "🖥️", "⌨️", "👨‍💻", "🐍", "🐛", "🚀", "⚙️", "🔧", "🛠️", "📦", "🗄️", "🔌", "🧩", "☁️"]),
+    ("dlg_agent_icon_cat_sales",
+     ["🛒", "🛍️", "💰", "💳", "🏷️", "🤝", "🧾", "💼", "🏪"]),
+    ("dlg_agent_icon_cat_seo",
+     ["🔍", "🔑", "📈", "📊", "🎯", "🌐", "🏆", "📑"]),
+    ("dlg_agent_icon_cat_social",
+     ["📱", "📣", "💬", "📸", "🎬", "🔔", "✉️", "🎨", "💡"]),
+    ("dlg_agent_icon_cat_project",
+     ["📁", "🗂️", "📋", "✅", "🧠", "⭐", "🔥", "🤖"]),
+]
+
+
+class _ClickableLabel(QLabel):
+    """QLabel z sygnałem clicked — renderuje kolorowe emoji (inaczej niż przycisk
+    przy ściśniętym layoucie). Używane na podgląd ikony i komórki palety."""
+    clicked = pyqtSignal()
+
+    def mouseReleaseEvent(self, event):
+        self.clicked.emit()
+        super().mouseReleaseEvent(event)
+
+
 class AgentConfigDialog(QDialog):
     """Dialog for configuring a single agent."""
 
@@ -841,6 +867,39 @@ class AgentConfigDialog(QDialog):
         browse_btn.clicked.connect(self._browse_directory)
         dir_layout.addWidget(browse_btn)
         form.addRow(tr('dlg_agent_working_dir_label'), dir_layout)
+
+        # Tab icon (emoji ALBO własny plik graficzny)
+        self.icon_spec = self.agent.get('icon') if isinstance(self.agent.get('icon'), dict) else None
+        icon_layout = QHBoxLayout()
+        self.icon_preview = _ClickableLabel()
+        self.icon_preview.setFixedSize(34, 34)
+        self.icon_preview.setAlignment(Qt.AlignCenter)
+        self.icon_preview.setCursor(Qt.PointingHandCursor)
+        self.icon_preview.setToolTip(tr('dlg_agent_icon_pick_tooltip'))
+        self.icon_preview.setStyleSheet(
+            "background:#2d0a1e;border:1px solid #4a1a3a;border-radius:4px;font-size:20px;")
+        self.icon_preview.clicked.connect(self._open_icon_palette)
+        icon_layout.addWidget(self.icon_preview)
+        self.icon_emoji_input = QLineEdit()
+        self.icon_emoji_input.setPlaceholderText(tr('dlg_agent_icon_emoji_ph'))
+        self.icon_emoji_input.setMaxLength(8)
+        self.icon_emoji_input.setStyleSheet(self._input_style())
+        if self.icon_spec and self.icon_spec.get('kind') == 'emoji':
+            self.icon_emoji_input.setText(self.icon_spec.get('value', ''))
+        self.icon_emoji_input.textChanged.connect(self._on_icon_emoji_changed)
+        icon_layout.addWidget(self.icon_emoji_input)
+        icon_file_btn = QPushButton(tr('dlg_agent_icon_file_btn'))
+        icon_file_btn.clicked.connect(self._pick_icon_file)
+        icon_layout.addWidget(icon_file_btn)
+        icon_clear_btn = QPushButton(tr('dlg_agent_icon_clear'))
+        icon_clear_btn.clicked.connect(self._clear_icon)
+        icon_layout.addWidget(icon_clear_btn)
+        form.addRow(tr('dlg_agent_icon_label'), icon_layout)
+        icon_hint = QLabel(tr('dlg_agent_icon_hint'))
+        icon_hint.setStyleSheet("color: #888888; font-size: 11px;")
+        icon_hint.setWordWrap(True)
+        form.addRow("", icon_hint)
+        self._update_icon_preview()
 
         # Model Claude Code
         chevron_path = str(ASSETS_DIR / "chevron-down.svg").replace("\\", "/")
@@ -1072,6 +1131,110 @@ class AgentConfigDialog(QDialog):
         if directory:
             self.dir_input.setText(directory)
 
+    # ---------- Ikona zakładki (emoji albo plik) ----------
+
+    def _open_icon_palette(self):
+        """Popup z gotową pulą emoji (klik podglądu/robota). Własne okno → nic się
+        nie ściska, emoji widoczne. Wybór ustawia ikonę i zamyka popup."""
+        dlg = QDialog(self)
+        dlg.setWindowTitle(tr('dlg_agent_icon_label'))
+        dlg.setStyleSheet("QDialog{background:#1a0b14;}")
+        outer = QVBoxLayout(dlg)
+        outer.setContentsMargins(16, 16, 16, 12)
+        outer.setSpacing(8)
+
+        content = QWidget()
+        content.setStyleSheet("background:#1a0b14;")
+        v = QVBoxLayout(content)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(6)
+        cols = 12
+        for cat_key, emojis in AGENT_ICON_PALETTE:
+            lab = QLabel(tr(cat_key))
+            lab.setStyleSheet("color:#c084fc;font-size:11px;font-weight:bold;margin-top:4px;")
+            v.addWidget(lab)
+            grid = QGridLayout()
+            grid.setSpacing(5)
+            grid.setContentsMargins(0, 0, 0, 0)
+            for i, emoji in enumerate(emojis):
+                cell = _ClickableLabel(emoji)
+                cell.setAlignment(Qt.AlignCenter)
+                cell.setFixedSize(42, 42)
+                cell.setCursor(Qt.PointingHandCursor)
+                cell.setToolTip(emoji)
+                cell.setStyleSheet(
+                    "QLabel{background:#2d0a1e;border:1px solid #4a1a3a;"
+                    "border-radius:8px;font-size:24px;}"
+                    "QLabel:hover{border:2px solid #22c55e;background:#3a0f28;}")
+                cell.clicked.connect(
+                    lambda em=emoji: (self._set_emoji_icon(em), dlg.accept()))
+                grid.addWidget(cell, i // cols, i % cols)
+            holder = QWidget()
+            holder.setLayout(grid)
+            v.addWidget(holder)
+        v.addStretch()
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setWidget(content)
+        scroll.setMinimumWidth(560)
+        scroll.setMinimumHeight(420)
+        scroll.setStyleSheet("QScrollArea{background:#1a0b14;border:none;}")
+        scroll.viewport().setStyleSheet("background:#1a0b14;")
+        outer.addWidget(scroll)
+
+        close_btn = QPushButton(tr('dlg_close'))
+        close_btn.setStyleSheet(
+            "QPushButton{background:#2d0a1e;color:#ece7f5;border:1px solid #4a1a3a;"
+            "border-radius:6px;padding:7px 18px;}QPushButton:hover{border-color:#22c55e;}")
+        close_btn.clicked.connect(dlg.reject)
+        outer.addWidget(close_btn, alignment=Qt.AlignRight)
+        dlg.exec_()
+
+    def _set_emoji_icon(self, emoji: str):
+        """Wybór z palety → wpisuje emoji (textChanged ustawi spec + podgląd)."""
+        self.icon_emoji_input.setText(emoji)
+
+    def _on_icon_emoji_changed(self, text):
+        text = (text or '').strip()
+        self.icon_spec = {'kind': 'emoji', 'value': text} if text else None
+        self._update_icon_preview()
+
+    def _pick_icon_file(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, tr('dlg_agent_icon_file_title'), str(Path.home()),
+            "Obrazy (*.png *.svg *.jpg *.jpeg *.ico *.gif)")
+        if path:
+            self.icon_spec = {'kind': 'file', 'value': path}
+            self.icon_emoji_input.blockSignals(True)
+            self.icon_emoji_input.clear()
+            self.icon_emoji_input.blockSignals(False)
+            self._update_icon_preview()
+
+    def _clear_icon(self):
+        self.icon_spec = None
+        self.icon_emoji_input.blockSignals(True)
+        self.icon_emoji_input.clear()
+        self.icon_emoji_input.blockSignals(False)
+        self._update_icon_preview()
+
+    def _update_icon_preview(self):
+        """Pokaż w podglądzie: emoji (tekst), obrazek (pixmap) albo domyślne 🤖."""
+        spec = self.icon_spec
+        if spec and spec.get('kind') == 'emoji' and spec.get('value'):
+            self.icon_preview.setPixmap(QPixmap())
+            self.icon_preview.setText(spec['value'])
+        elif spec and spec.get('kind') == 'file' and Path(spec.get('value', '')).exists():
+            self.icon_preview.setText("")
+            pm = QPixmap(spec['value'])
+            if not pm.isNull():
+                self.icon_preview.setPixmap(
+                    pm.scaled(28, 28, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        else:
+            self.icon_preview.setPixmap(QPixmap())
+            self.icon_preview.setText("🤖")
+
     def _save(self):
         """Validate and save."""
         name = self.name_input.text().strip()
@@ -1115,6 +1278,7 @@ class AgentConfigDialog(QDialog):
             'auto_start': self.auto_start_checkbox.isChecked(),
             'send_memory_on_start': self.send_memory_checkbox.isChecked(),
             'model': self.model_combo.currentData() or DEFAULT_AGENT_MODEL,
+            'icon': self.icon_spec,
         }
         # splitter_sizes tylko dla agenta, który już je ma (edycja istniejącego).
         # Nowy agent zostaje bez klucza — MainWindow dziedziczy proporcje
