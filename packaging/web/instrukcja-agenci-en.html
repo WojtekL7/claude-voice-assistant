@@ -73,6 +73,13 @@
     .lang-menu a{color:#e9d5ff;text-decoration:none;padding:9px 13px;border-radius:8px;white-space:nowrap;line-height:1}
     .lang-menu a:hover{background:rgba(255,255,255,.08);color:#fff}
     .lang-menu a.active{background:#a855f7;color:#fff}
+
+    /* Górne menu nawigacyjne — wspólne dla wszystkich instrukcji */
+    .topnav{position:sticky;top:0;z-index:90;background:rgba(20,8,40,.92);backdrop-filter:blur(8px);border-bottom:1px solid rgba(255,255,255,.12)}
+    .topnav-inner{max-width:860px;margin:0 auto;display:flex;flex-wrap:wrap;gap:4px;padding:9px 132px 9px 14px}
+    .topnav a{color:#e9d5ff;text-decoration:none;font-weight:700;font-size:.92rem;padding:8px 14px;border-radius:999px;white-space:nowrap;cursor:pointer}
+    .topnav a:hover{background:rgba(255,255,255,.10);color:#fff}
+    .topnav a.active{background:#a855f7;color:#fff}
   </style>
 </head>
 <body>
@@ -83,6 +90,15 @@
       <a href="instrukcja-agenci.html">Polski</a>
     </div>
   </details>
+  <nav class="topnav">
+    <div class="topnav-inner">
+      <a href="instrukcja-instalacja-en.html#macos">🍎 macOS</a>
+      <a href="instrukcja-instalacja-en.html#linux">🐧 Linux</a>
+      <a href="instrukcja-instalacja-en.html#windows">🪟 Windows</a>
+      <a href="instrukcja-dyktowanie-en.html">🎙️ Dictation</a>
+      <a href="instrukcja-agenci-en.html" class="active">🤖 Agents</a>
+    </div>
+  </nav>
   <div class="wrap">
     <header>
       <div class="logo">🤖</div>

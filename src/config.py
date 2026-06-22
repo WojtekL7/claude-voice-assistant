@@ -1641,11 +1641,15 @@ def model_default_prefix() -> str:
 
 
 def install_guide_url(name: str) -> str:
-    """URL instrukcji „krok po kroku" dla danej strony (windows/macos/linux/agenci).
+    """URL instrukcji „krok po kroku" dla danej strony.
 
-    Gdy interfejs jest po angielsku → wersja '-en' (np. instrukcja-windows-en.html),
-    inaczej polska. Obie wersje leżą obok siebie na publicznym /cva (bez hasła)."""
+    Instrukcje instalacji 3 systemów są SCALONE w jedną stronę z górnym menu
+    (`instrukcja-instalacja.html`) — dla macos/linux/windows zwracamy ją z kotwicą
+    systemu (#macos itd.). Pozostałe strony (agenci, dyktowanie) mają własne pliki.
+    Gdy interfejs po angielsku → wersja '-en'. Wszystkie leżą na publicznym /cva."""
     suffix = "-en" if current_ui_language().startswith("en") else ""
+    if name in ("macos", "linux", "windows"):
+        return f"{INSTALL_GUIDE_BASE_URL}instrukcja-instalacja{suffix}.html#{name}"
     return f"{INSTALL_GUIDE_BASE_URL}instrukcja-{name}{suffix}.html"
 
 
