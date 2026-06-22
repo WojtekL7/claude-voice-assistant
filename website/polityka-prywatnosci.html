@@ -1,14 +1,133 @@
-<!DOCTYPE html><html lang="pl"><head><meta charset="utf-8">
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex"><title>Polityka prywatności — Vibe Coding Assistant</title>
+<meta name="robots" content="noindex">
+<title>Polityka prywatności — Vibe Coding Assistant</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Ubuntu,Arial,sans-serif;
-background:#0f0a1a;color:#ece7f5;line-height:1.6;margin:0}
-.wrap{max-width:820px;margin:0 auto;padding:80px 22px}
-h1{font-size:2rem;font-weight:800}.a{color:#a855f7}
-.box{background:#1b1230;border:1px solid #332247;border-radius:16px;padding:28px;margin-top:24px;color:#a99fc0}
-a{color:#a855f7;text-decoration:none}</style></head><body><div class="wrap">
-<a href="index.html">← Wróć na stronę główną</a>
-<h1 style="margin-top:18px">Polityka prywatności</h1>
-<div class="box"><b>📝 Treść w przygotowaniu.</b><br><br>Pełna polityka prywatności (RODO/GDPR) zostanie tu opublikowana. Opisze jakie dane przetwarzamy, gdzie przechowywane są klucze API, oraz Twoje prawa.</div>
-</div></body></html>
+<style>
+  :root{--accent:#a855f7;--bg:#0f0a1a;--bg2:#150d22;--surface:#1b1230;--line:#332247;--ink:#ece7f5;--muted:#a99fc0}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Ubuntu,Arial,sans-serif;background:var(--bg);color:var(--ink);line-height:1.7}
+  a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+  .topbar{position:sticky;top:0;background:rgba(15,10,26,.85);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  .topbar .in{max-width:820px;margin:0 auto;padding:14px 22px;display:flex;align-items:center;gap:10px;font-weight:800}
+  .topbar svg{width:28px;height:28px}
+  .wrap{max-width:820px;margin:0 auto;padding:46px 22px 80px}
+  h1{font-size:2.1rem;font-weight:800;letter-spacing:-.5px}
+  .meta{color:var(--muted);font-size:.9rem;margin:8px 0 4px}
+  .draft{background:#3a1d12;border:1px solid #92531f;color:#fcd34d;border-radius:12px;padding:12px 16px;margin:20px 0;font-size:.9rem}
+  h2{font-size:1.25rem;margin:34px 0 10px;padding-top:8px}
+  h3{font-size:1.05rem;margin:18px 0 6px}
+  p,li{color:#d9d0ec;margin-bottom:10px}
+  ul,ol{padding-left:22px;margin-bottom:10px}
+  .box{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:14px 0}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:.94rem}
+  td,th{border:1px solid var(--line);padding:9px 12px;text-align:left;vertical-align:top}
+  th{background:var(--bg2);color:var(--ink)}
+  .ph{background:rgba(251,191,36,.16);border-radius:5px;padding:0 5px;color:#fcd34d}
+  footer{border-top:1px solid var(--line);margin-top:46px;padding-top:22px;color:var(--muted);font-size:.86rem}
+</style>
+</head>
+<body>
+<div class="topbar"><div class="in">
+  <svg viewBox="0 0 256 256"><rect width="256" height="256" rx="58" fill="#a855f7"/><path d="M70 84 L104 128 L70 172" fill="none" stroke="#fff" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/><g fill="#fff"><rect x="128" y="103" width="15" height="50" rx="7.5"/><rect x="152" y="83" width="15" height="90" rx="7.5"/><rect x="176" y="96" width="15" height="64" rx="7.5"/></g></svg>
+  Vibe Coding Assistant
+</div></div>
+
+<div class="wrap">
+  <a href="index.html">← Wróć na stronę główną</a>
+  <h1 style="margin-top:14px">Polityka prywatności</h1>
+  <p class="meta">Ostatnia aktualizacja: 22 czerwca 2026 · wersja robocza</p>
+
+  <div class="draft">⚠️ <b>Wersja robocza.</b> Dokument przed publikacją wymaga weryfikacji prawnej. Pola w nawiasach <span class="ph">[…]</span> wymagają uzupełnienia danymi firmy.</div>
+
+  <h2>1. Administrator danych</h2>
+  <p>Administratorem Twoich danych osobowych oraz dostawcą aplikacji <b>Vibe Coding Assistant</b> jest
+    <b>Fulfillment Polska</b> <span class="ph">[pełna forma prawna]</span>, z siedzibą pod adresem
+    <span class="ph">[adres]</span>, NIP <span class="ph">[NIP]</span>
+    (dalej: „my", „Administrator", „Usługodawca").</p>
+  <p>Kontakt w sprawach prywatności: <a href="mailto:kontakt@fulfillment-polska.pl">kontakt@fulfillment-polska.pl</a>.</p>
+
+  <h2>2. Najważniejsze w skrócie</h2>
+  <div class="box">
+    <ul>
+      <li><b>Aplikacja działa lokalnie</b> na Twoim komputerze. Twoje ustawienia i klucze są przechowywane <b>u Ciebie</b>, nie na naszych serwerach.</li>
+      <li><b>Nie hostujemy modelu AI ani Twojego konta Claude Code</b> — to narzędzie Anthropic, z którego korzystasz na własnym koncie.</li>
+      <li>Niektóre funkcje (czytanie na głos, dyktowanie) wysyłają treść/nagranie do <b>zewnętrznych usług</b>, aby je przetworzyć — opisujemy to niżej.</li>
+      <li>Nie prowadzimy ukrytej telemetrii i nie sprzedajemy Twoich danych.</li>
+    </ul>
+  </div>
+
+  <h2>3. Jakie dane przetwarzamy i w jakim celu</h2>
+
+  <h3>3.1 Dane przechowywane lokalnie (na Twoim urządzeniu)</h3>
+  <p>Aplikacja zapisuje w katalogu konfiguracyjnym na Twoim komputerze m.in.: ustawienia (język, głos, motyw),
+    konfigurację agentów, oraz — jeśli je podasz — <b>klucze API</b> (np. klucz Groq do dyktowania).
+    Te dane <b>nie są nam przesyłane</b> i pozostają pod Twoją kontrolą. Klucze przechowywane są lokalnie
+    (docelowo w systemowym magazynie kluczy systemu operacyjnego).</p>
+
+  <h3>3.2 Dane przesyłane do usług zewnętrznych (podmioty przetwarzające)</h3>
+  <p>Aby zapewnić część funkcji, treść lub nagranie są przesyłane do dostawców zewnętrznych:</p>
+  <table>
+    <tr><th>Funkcja</th><th>Co jest wysyłane</th><th>Do kogo</th></tr>
+    <tr><td>Czytanie odpowiedzi na głos (TTS)</td><td>Tekst do syntezy mowy</td><td>Microsoft (usługa edge-tts)</td></tr>
+    <tr><td>Dyktowanie (STT)</td><td>Nagranie audio Twojej wypowiedzi</td><td>Groq (rozpoznawanie mowy Whisper)</td></tr>
+    <tr><td>Praca z Claude Code</td><td>Twoje polecenia i kontekst projektu</td><td>Anthropic — przez zainstalowane u Ciebie Claude Code (na Twoim koncie)</td></tr>
+    <tr><td>Automatyczne aktualizacje</td><td>Zapytanie o nową wersję i pobranie pliku</td><td>Nasz serwer (hosting Hostinger) — w logach może pojawić się adres IP</td></tr>
+  </table>
+  <p>Korzystanie z tych funkcji jest <b>dobrowolne</b> (np. dyktowanie wymaga podania własnego klucza Groq).
+    Każdy dostawca przetwarza dane zgodnie z własną polityką prywatności.</p>
+
+  <h3>3.3 Kontakt</h3>
+  <p>Jeśli napiszesz do nas (formularz na stronie lub e-mail), przetwarzamy podane dane (imię, adres e-mail, treść)
+    wyłącznie w celu udzielenia odpowiedzi.</p>
+
+  <h3>3.4 Płatności i licencja (plan Pro)</h3>
+  <p>Po uruchomieniu sprzedaży planu Pro płatności będą obsługiwane przez zewnętrznego operatora płatności
+    <span class="ph">[np. Stripe]</span>, a do aktywacji licencji będzie przesyłany klucz licencyjny.
+    Funkcja ta jest obecnie w przygotowaniu.</p>
+
+  <h2>4. Podstawy prawne (RODO)</h2>
+  <ul>
+    <li><b>Wykonanie usługi</b> (art. 6 ust. 1 lit. b RODO) — udostępnienie i działanie aplikacji oraz jej funkcji.</li>
+    <li><b>Zgoda</b> (art. 6 ust. 1 lit. a RODO) — funkcje opcjonalne, które uruchamiasz świadomie (dyktowanie, TTS).</li>
+    <li><b>Prawnie uzasadniony interes</b> (art. 6 ust. 1 lit. f RODO) — bezpieczeństwo, aktualizacje, obsługa zapytań.</li>
+  </ul>
+
+  <h2>5. Odbiorcy danych</h2>
+  <p>Odbiorcami danych mogą być wyłącznie podmioty wymienione w pkt 3.2–3.4 (dostawcy funkcji, operator płatności,
+    dostawca hostingu). Nie przekazujemy danych poza te cele i nie sprzedajemy ich.</p>
+
+  <h2>6. Przekazywanie poza EOG</h2>
+  <p>Część dostawców (np. Microsoft, Groq, Anthropic) może przetwarzać dane poza Europejskim Obszarem Gospodarczym.
+    W takim przypadku odbywa się to na podstawie odpowiednich zabezpieczeń (m.in. standardowe klauzule umowne).</p>
+
+  <h2>7. Okres przechowywania</h2>
+  <ul>
+    <li>Dane lokalne — do czasu ich usunięcia przez Ciebie (odinstalowanie aplikacji / wyczyszczenie konfiguracji).</li>
+    <li>Korespondencja — przez czas potrzebny do obsługi sprawy i ewentualnie dochodzenia roszczeń.</li>
+    <li>Logi serwera aktualizacji — przez ograniczony czas w celach bezpieczeństwa.</li>
+  </ul>
+
+  <h2>8. Twoje prawa</h2>
+  <p>Masz prawo do: dostępu do danych, ich sprostowania, usunięcia, ograniczenia przetwarzania, przenoszenia,
+    sprzeciwu oraz cofnięcia zgody w dowolnym momencie. Przysługuje Ci też prawo wniesienia skargi do
+    <b>Prezesa Urzędu Ochrony Danych Osobowych</b> (UODO). Aby skorzystać z praw, napisz na
+    <a href="mailto:kontakt@fulfillment-polska.pl">kontakt@fulfillment-polska.pl</a>.</p>
+
+  <h2>9. Pliki cookies (strona internetowa)</h2>
+  <p>Strona w obecnej wersji nie używa plików cookies do śledzenia ani narzędzi analitycznych. W razie ich
+    dodania zaktualizujemy tę politykę i — gdy będzie to wymagane — poprosimy o zgodę.</p>
+
+  <h2>10. Zmiany polityki</h2>
+  <p>Możemy aktualizować tę politykę. Aktualna wersja zawsze będzie dostępna na tej stronie, z datą ostatniej zmiany.</p>
+
+  <footer>
+    Vibe Coding Assistant · <a href="licencja.html">Licencja</a> · <a href="index.html">Strona główna</a><br>
+    © 2026 Fulfillment Polska. Kontakt: kontakt@fulfillment-polska.pl
+  </footer>
+</div>
+</body>
+</html>
