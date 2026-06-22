@@ -95,6 +95,23 @@
   .feat h3{font-size:1.1rem;margin-bottom:8px}
   .feat p{color:var(--muted);font-size:.95rem}
 
+  /* ---------- Featured feature (słuchanie) ---------- */
+  .feat-hero{display:flex;gap:26px;align-items:center;
+    background:linear-gradient(120deg,rgba(124,58,237,.22),rgba(168,85,247,.08));
+    border:1px solid rgba(168,85,247,.5);border-radius:20px;padding:30px 32px;margin-bottom:22px;
+    box-shadow:0 14px 40px rgba(124,58,237,.18)}
+  .feat-hero .big{font-size:3rem;flex:none;filter:drop-shadow(0 6px 14px rgba(124,58,237,.5))}
+  .feat-hero h3{font-size:1.4rem;margin-bottom:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .feat-hero .pill{font-size:.66rem;font-weight:800;letter-spacing:.5px;background:var(--accent);color:#fff;padding:3px 9px;border-radius:999px}
+  .feat-hero p{color:#d9d0ec}
+  .eq{display:inline-flex;gap:4px;align-items:flex-end;height:26px}
+  .eq span{width:4px;height:8px;background:var(--accent);border-radius:2px;animation:eq 1s ease-in-out infinite}
+  .eq span:nth-child(2){animation-delay:.15s}
+  .eq span:nth-child(3){animation-delay:.30s}
+  .eq span:nth-child(4){animation-delay:.45s}
+  @keyframes eq{0%,100%{height:8px}50%{height:24px}}
+  @media(max-width:840px){.feat-hero{flex-direction:column;text-align:center}.feat-hero h3{justify-content:center}}
+
   /* ---------- How ---------- */
   .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
   .step{text-align:center;padding:20px}
@@ -223,6 +240,7 @@
         <div class="o">Witaj! W czym mogę pomóc?</div>
         <div class="mic">🎙️ „dodaj testy do modułu płatności”…</div>
         <div><span class="pr">➜</span> piszę testy <span class="cursor"></span></div>
+        <div class="mic" style="color:#a78bfa">🔊 czytam odpowiedź na głos…</div>
       </div>
     </div>
   </div>
@@ -233,8 +251,21 @@
   <div class="wrap">
     <h2 class="section-title">Wszystko, czego potrzebujesz</h2>
     <p class="section-sub">Pełna kontrola nad Claude Code — bez dotykania klawiatury, jeśli nie chcesz.</p>
+
+    <div class="feat-hero">
+      <div class="big">🔊</div>
+      <div>
+        <h3>Słuchaj, co wygenerował Claude Code
+          <span class="pill">KLUCZOWA FUNKCJA</span>
+          <span class="eq"><span></span><span></span><span></span><span></span></span></h3>
+        <p>Aplikacja <b>czyta na głos odpowiedzi i kod tworzony przez Claude Code</b> — automatycznie, prosto
+          z dziennika sesji. Odsuń się od ekranu, rób swoje i <b>po prostu słuchaj</b>, co agent właśnie zrobił.
+          Czysty, naturalny głos (bez wymawiania znaczników i kodu „znak po znaku"), po polsku i angielsku.</p>
+      </div>
+    </div>
+
     <div class="feat-grid">
-      <div class="feat"><div class="ic">🎙️</div><h3>Dyktowanie i głos</h3><p>Mów do terminala (rozpoznawanie mowy), a odpowiedzi słuchaj na głos. Polski i angielski automatycznie.</p></div>
+      <div class="feat"><div class="ic">🎙️</div><h3>Dyktowanie głosem</h3><p>Mów do terminala zamiast pisać — rozpoznawanie mowy zamienia Twój głos na polecenia. Polski i angielski automatycznie.</p></div>
       <div class="feat"><div class="ic">🗂️</div><h3>Wielu agentów</h3><p>Każdy projekt w osobnej zakładce — własny katalog, model i pamięć. Przełączasz się jednym kliknięciem.</p></div>
       <div class="feat"><div class="ic">🧩</div><h3>MCP i Skills</h3><p>Wbudowany menedżer wtyczek MCP i umiejętności (Skills) — rozszerz agenta o dowolne narzędzia.</p></div>
       <div class="feat"><div class="ic">💻</div><h3>Prawdziwy terminal</h3><p>Pełny terminal z Claude Code pod spodem. To Twoje konto i Twój CLI — my dokładamy wygodę i głos.</p></div>
