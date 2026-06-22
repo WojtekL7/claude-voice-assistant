@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vibe Coding Assistant — koncepty logo</title>
+<style>
+  :root{--accent:#a855f7;--accent2:#7c3aed;--accent3:#6d28d9;--ink:#1b1226;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Ubuntu,Arial,sans-serif;background:#150d22;color:#ece7f5;line-height:1.5;padding:32px 18px 64px}
+  .wrap{max-width:1080px;margin:0 auto}
+  h1{font-size:1.8rem;font-weight:800;letter-spacing:-.5px}
+  .sub{opacity:.8;margin:6px 0 26px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:20px}
+  .card{background:#1f1430;border:1px solid #34264d;border-radius:18px;overflow:hidden}
+  .card h2{font-size:1.05rem;padding:16px 18px 4px}
+  .card .idea{font-size:.9rem;opacity:.75;padding:0 18px 14px}
+  .row{display:flex;gap:0}
+  .cell{flex:1;display:flex;align-items:center;justify-content:center;padding:22px;min-height:150px}
+  .dark{background:linear-gradient(150deg,#241636,#160d24)}
+  .light{background:#f5f2fb}
+  .lock{display:flex;align-items:center;gap:14px;padding:18px 20px;border-top:1px solid #34264d;background:#190f29}
+  .lock .wm{display:flex;flex-direction:column;line-height:1.05}
+  .wm .b{font-weight:800;font-size:1.15rem;letter-spacing:-.3px}
+  .wm .b span{color:var(--accent)}
+  .wm .t{font-size:.72rem;letter-spacing:3px;text-transform:uppercase;opacity:.6;margin-top:3px}
+  .icon{width:104px;height:104px}
+  .icon-sm{width:40px;height:40px}
+  .note{margin-top:30px;font-size:.9rem;opacity:.8;background:#1f1430;border:1px solid #34264d;border-radius:14px;padding:16px 18px}
+  code{background:#2a1c40;padding:1px 7px;border-radius:6px;font-size:.85em}
+
+  /* współdzielony gradient ikon definiujemy raz w pierwszym SVG (defs id) */
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Vibe Coding Assistant — koncepty logo</h1>
+  <p class="sub">5 kierunków. Każdy pokazany jako ikona aplikacji (na ciemnym i jasnym tle) oraz lockup z nazwą. Wszystko wektorowo (SVG) → gotowe do eksportu na ikony aplikacji. Wybierz numer, dopracuję jeden.</p>
+
+  <!-- wspólne definicje gradientów (jeden raz) -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#c084fc"/><stop offset="1" stop-color="#7c3aed"/>
+    </linearGradient>
+    <linearGradient id="gv" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#7c3aed"/><stop offset="1" stop-color="#c084fc"/>
+    </linearGradient>
+  </defs></svg>
+
+  <div class="grid">
+
+    <!-- ============ 1. PROMPT WAVE ============ -->
+    <div class="card">
+      <h2>1 · Prompt Wave</h2>
+      <div class="idea">Znak terminala <code>&gt;</code> + fala głosu jako „kursor". Kodowanie + głos w jednym.</div>
+      <div class="row">
+        <div class="cell dark">
+          <svg class="icon" viewBox="0 0 256 256">
+            <rect width="256" height="256" rx="58" fill="url(#g)"/>
+            <path d="M70 84 L104 128 L70 172" fill="none" stroke="#fff" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/>
+            <g fill="#fff">
+              <rect x="128" y="103" width="15" height="50" rx="7.5"/>
+              <rect x="152" y="83"  width="15" height="90" rx="7.5"/>
+              <rect x="176" y="96"  width="15" height="64" rx="7.5"/>
+            </g>
+          </svg>
+        </div>
+        <div class="cell light">
+          <svg class="icon" viewBox="0 0 256 256">
+            <path d="M70 84 L104 128 L70 172" fill="none" stroke="url(#g)" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/>
+            <g fill="url(#g)">
+              <rect x="128" y="103" width="15" height="50" rx="7.5"/>
+              <rect x="152" y="83"  width="15" height="90" rx="7.5"/>
+              <rect x="176" y="96"  width="15" height="64" rx="7.5"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+      <div class="lock">
+        <svg class="icon-sm" viewBox="0 0 256 256"><rect width="256" height="256" rx="58" fill="url(#g)"/><path d="M70 84 L104 128 L70 172" fill="none" stroke="#fff" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/><g fill="#fff"><rect x="128" y="103" width="15" height="50" rx="7.5"/><rect x="152" y="83" width="15" height="90" rx="7.5"/><rect x="176" y="96" width="15" height="64" rx="7.5"/></g></svg>
+        <div class="wm"><div class="b"><span>Vibe</span> Coding Assistant</div><div class="t">vibe coding assistant</div></div>
+      </div>
+    </div>
+
+    <!-- ============ 2. VOICE BUBBLE ============ -->
+    <div class="card">
+      <h2>2 · Voice Bubble</h2>
+      <div class="idea">Dymek rozmowy (głos/asystent) z promptem <code>&gt;_</code> w środku. Przyjazny, „rozmawiasz z kodem".</div>
+      <div class="row">
+        <div class="cell dark">
+          <svg class="icon" viewBox="0 0 256 256">
+            <rect width="256" height="256" rx="58" fill="url(#g)"/>
+            <path d="M64 70 h128 a16 16 0 0 1 16 16 v66 a16 16 0 0 1 -16 16 h-58 l-30 28 v-28 h-40 a16 16 0 0 1 -16 -16 v-66 a16 16 0 0 1 16 -16 z" fill="#fff"/>
+            <path d="M96 104 L120 119 L96 134" fill="none" stroke="url(#g)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+            <rect x="132" y="126" width="34" height="11" rx="5.5" fill="url(#g)"/>
+          </svg>
+        </div>
+        <div class="cell light">
+          <svg class="icon" viewBox="0 0 256 256">
+            <path d="M64 70 h128 a16 16 0 0 1 16 16 v66 a16 16 0 0 1 -16 16 h-58 l-30 28 v-28 h-40 a16 16 0 0 1 -16 -16 v-66 a16 16 0 0 1 16 -16 z" fill="url(#g)"/>
+            <path d="M96 104 L120 119 L96 134" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+            <rect x="132" y="126" width="34" height="11" rx="5.5" fill="#fff"/>
+          </svg>
+        </div>
+      </div>
+      <div class="lock">
+        <svg class="icon-sm" viewBox="0 0 256 256"><rect width="256" height="256" rx="58" fill="url(#g)"/><path d="M64 70 h128 a16 16 0 0 1 16 16 v66 a16 16 0 0 1 -16 16 h-58 l-30 28 v-28 h-40 a16 16 0 0 1 -16 -16 v-66 a16 16 0 0 1 16 -16 z" fill="#fff"/><path d="M96 104 L120 119 L96 134" fill="none" stroke="url(#g)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/><rect x="132" y="126" width="34" height="11" rx="5.5" fill="url(#g)"/></svg>
+        <div class="wm"><div class="b"><span>Vibe</span> Coding Assistant</div><div class="t">vibe coding assistant</div></div>
+      </div>
+    </div>
+
+    <!-- ============ 3. WAVEFORM V ============ -->
+    <div class="card">
+      <h2>3 · Waveform „V”</h2>
+      <div class="idea">Słupki fali dźwiękowej układające się w literę <b>V</b> (Vibe). Dynamiczne, „audio-first”.</div>
+      <div class="row">
+        <div class="cell dark">
+          <svg class="icon" viewBox="0 0 256 256">
+            <rect width="256" height="256" rx="58" fill="#190f29"/>
+            <rect x="20" y="20" width="216" height="216" rx="46" fill="none" stroke="url(#g)" stroke-width="6" opacity=".35"/>
+            <g fill="url(#gv)">
+              <rect x="66"  y="74"  width="16" height="108" rx="8"/>
+              <rect x="94"  y="100" width="16" height="78"  rx="8"/>
+              <rect x="122" y="120" width="16" height="44"  rx="8"/>
+              <rect x="150" y="100" width="16" height="78"  rx="8"/>
+              <rect x="178" y="74"  width="16" height="108" rx="8"/>
+            </g>
+          </svg>
+        </div>
+        <div class="cell light">
+          <svg class="icon" viewBox="0 0 256 256">
+            <g fill="url(#gv)">
+              <rect x="66"  y="74"  width="16" height="108" rx="8"/>
+              <rect x="94"  y="100" width="16" height="78"  rx="8"/>
+              <rect x="122" y="120" width="16" height="44"  rx="8"/>
+              <rect x="150" y="100" width="16" height="78"  rx="8"/>
+              <rect x="178" y="74"  width="16" height="108" rx="8"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+      <div class="lock">
+        <svg class="icon-sm" viewBox="0 0 256 256"><rect width="256" height="256" rx="58" fill="#190f29"/><g fill="url(#gv)"><rect x="66" y="74" width="16" height="108" rx="8"/><rect x="94" y="100" width="16" height="78" rx="8"/><rect x="122" y="120" width="16" height="44" rx="8"/><rect x="150" y="100" width="16" height="78" rx="8"/><rect x="178" y="74" width="16" height="108" rx="8"/></g></svg>
+        <div class="wm"><div class="b"><span>Vibe</span> Coding Assistant</div><div class="t">vibe coding assistant</div></div>
+      </div>
+    </div>
+
+    <!-- ============ 4. BRACKET MIC ============ -->
+    <div class="card">
+      <h2>4 · Bracket Mic</h2>
+      <div class="idea">Mikrofon (głos) wpisany między nawiasy kodu <code>{ }</code>. Czytelne: „kod + mowa”.</div>
+      <div class="row">
+        <div class="cell dark">
+          <svg class="icon" viewBox="0 0 256 256">
+            <rect width="256" height="256" rx="58" fill="url(#g)"/>
+            <g fill="none" stroke="#fff" stroke-width="13" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M86 76 q-20 4 -20 24 v0 q0 14 -14 18 q14 4 14 18 v0 q0 20 20 24"/>
+              <path d="M170 76 q20 4 20 24 v0 q0 14 14 18 q-14 4 -14 18 v0 q0 20 -20 24"/>
+            </g>
+            <g fill="#fff">
+              <rect x="112" y="74" width="32" height="64" rx="16"/>
+            </g>
+            <path d="M100 126 a28 28 0 0 0 56 0" fill="none" stroke="#fff" stroke-width="11" stroke-linecap="round"/>
+            <rect x="123" y="154" width="10" height="22" rx="5" fill="#fff"/>
+            <rect x="108" y="178" width="40" height="10" rx="5" fill="#fff"/>
+          </svg>
+        </div>
+        <div class="cell light">
+          <svg class="icon" viewBox="0 0 256 256">
+            <g fill="none" stroke="url(#g)" stroke-width="13" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M86 76 q-20 4 -20 24 v0 q0 14 -14 18 q14 4 14 18 v0 q0 20 20 24"/>
+              <path d="M170 76 q20 4 20 24 v0 q0 14 14 18 q-14 4 -14 18 v0 q0 20 -20 24"/>
+            </g>
+            <rect x="112" y="74" width="32" height="64" rx="16" fill="url(#g)"/>
+            <path d="M100 126 a28 28 0 0 0 56 0" fill="none" stroke="url(#g)" stroke-width="11" stroke-linecap="round"/>
+            <rect x="123" y="154" width="10" height="22" rx="5" fill="url(#g)"/>
+            <rect x="108" y="178" width="40" height="10" rx="5" fill="url(#g)"/>
+          </svg>
+        </div>
+      </div>
+      <div class="lock">
+        <svg class="icon-sm" viewBox="0 0 256 256"><rect width="256" height="256" rx="58" fill="url(#g)"/><g fill="none" stroke="#fff" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"><path d="M86 76 q-20 4 -20 24 v0 q0 14 -14 18 q14 4 14 18 v0 q0 20 20 24"/><path d="M170 76 q20 4 20 24 v0 q0 14 14 18 q-14 4 -14 18 v0 q0 20 -20 24"/></g><rect x="112" y="74" width="32" height="64" rx="16" fill="#fff"/><path d="M100 126 a28 28 0 0 0 56 0" fill="none" stroke="#fff" stroke-width="11" stroke-linecap="round"/><rect x="123" y="154" width="10" height="22" rx="5" fill="#fff"/><rect x="108" y="178" width="40" height="10" rx="5" fill="#fff"/></svg>
+        <div class="wm"><div class="b"><span>Vibe</span> Coding Assistant</div><div class="t">vibe coding assistant</div></div>
+      </div>
+    </div>
+
+    <!-- ============ 5. VCA MONOGRAM ============ -->
+    <div class="card">
+      <h2>5 · Monogram „VCA”</h2>
+      <div class="idea">Inicjały VCA — „V” jako fala/szewron promptu, kursor terminala miga obok. Minimalistyczne, app-icon.</div>
+      <div class="row">
+        <div class="cell dark">
+          <svg class="icon" viewBox="0 0 256 256">
+            <rect width="256" height="256" rx="58" fill="url(#g)"/>
+            <path d="M74 80 L112 168 L150 80" fill="none" stroke="#fff" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+            <rect x="166" y="120" width="20" height="48" rx="6" fill="#fff"/>
+          </svg>
+        </div>
+        <div class="cell light">
+          <svg class="icon" viewBox="0 0 256 256">
+            <path d="M74 80 L112 168 L150 80" fill="none" stroke="url(#g)" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+            <rect x="166" y="120" width="20" height="48" rx="6" fill="url(#g)"/>
+          </svg>
+        </div>
+      </div>
+      <div class="lock">
+        <svg class="icon-sm" viewBox="0 0 256 256"><rect width="256" height="256" rx="58" fill="url(#g)"/><path d="M74 80 L112 168 L150 80" fill="none" stroke="#fff" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/><rect x="166" y="120" width="20" height="48" rx="6" fill="#fff"/></svg>
+        <div class="wm"><div class="b"><span>Vibe</span> Coding Assistant</div><div class="t">vibe coding assistant</div></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="note">
+    <b>Jak to obejrzeć:</b> otwórz ten plik w przeglądarce —
+    <code>xdg-open branding/logo-concepts.html</code>.<br>
+    <b>Paleta:</b> fiolet <code>#a855f7 → #7c3aed</code> (spójna ze skórką aplikacji). <br>
+    <b>Następny krok:</b> powiedz, który numer (1–5) idzie dalej — dopracuję go, dorobię warianty (mono/na ciemnym/jasnym) i wyeksportuję komplet ikon aplikacji (16–1024 px + <code>.ico</code> + <code>.icns</code>). Możesz też mieszać („ikona z 3, ale wordmark jak w 1”).
+  </div>
+</div>
+</body>
+</html>
