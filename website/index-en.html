@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="pl">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex"><!-- STAGING: nie indeksuj wersji roboczej -->
-<title>Vibe Coding Assistant — głosowy asystent do Claude Code</title>
-<meta name="description" content="Vibe Coding Assistant — desktopowy asystent głosowy dla Claude Code. Mów do terminala, słuchaj odpowiedzi, prowadź wielu agentów w zakładkach. macOS, Windows, Linux.">
+<title>Vibe Coding Assistant — voice assistant for Claude Code</title>
+<meta name="description" content="Vibe Coding Assistant — a desktop voice assistant for Claude Code. Talk to your terminal, listen to answers, run multiple agents in tabs. macOS, Windows, Linux.">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="icon" type="image/x-icon" href="favicon.ico">
 <style>
@@ -194,7 +194,7 @@
   <div class="lname">Vibe Coding Assistant</div>
 </div>
 
-<div class="staging">⚙️ WERSJA ROBOCZA (STAGING)</div>
+<div class="staging">⚙️ DRAFT (STAGING)</div>
 
 <!-- ===== Nav ===== -->
 <header class="nav">
@@ -205,13 +205,13 @@
     </a>
     <button class="burger" aria-label="Menu" onclick="document.getElementById('nav-links').classList.toggle('open')">☰</button>
     <nav class="nav-links" id="nav-links">
-      <a href="#features">Funkcje</a>
-      <a href="#how">Jak działa</a>
-      <a href="#pricing">Cennik</a>
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="#pricing">Pricing</a>
       <a href="#faq">FAQ</a>
-      <a href="#contact">Kontakt</a>
-      <a class="lang-pill" href="index-en.html">EN</a>
-      <a class="nav-cta" href="#download">Pobierz</a>
+      <a href="#contact">Contact</a>
+      <a class="lang-pill" href="index.html">PL</a>
+      <a class="nav-cta" href="#download">Download</a>
     </nav>
   </div>
 </header>
@@ -220,17 +220,17 @@
 <section class="hero">
   <div class="wrap hero-grid">
     <div>
-      <span class="badge">🎙️ Głosowy asystent dla Claude Code</span>
-      <h1>Rozmawiaj ze swoim kodem.<br><span class="accent">Dyktuj i słuchaj.</span></h1>
-      <p class="lead">Vibe Coding Assistant to desktopowy asystent głosowy dla <b>Claude Code</b>:
-        <b>dyktuj</b> polecenia głosem, <b>słuchaj</b> na głos tego, co wygenerował,
-        prowadź <b>wielu agentów</b> w zakładkach i rozszerzaj ich o <b>MCP i Skills</b> —
-        wszystko w prawdziwym terminalu, na macOS, Windows i Linux.</p>
+      <span class="badge">🎙️ Voice assistant for Claude Code</span>
+      <h1>Talk to your code.<br><span class="accent">Dictate and listen.</span></h1>
+      <p class="lead">Vibe Coding Assistant is a desktop voice assistant for <b>Claude Code</b>:
+        <b>dictate</b> commands by voice, <b>listen</b> to what it generated read aloud,
+        run <b>multiple agents</b> in tabs and extend them with <b>MCP &amp; Skills</b> —
+        all in a real terminal, on macOS, Windows and Linux.</p>
       <div class="cta-row">
-        <a class="btn btn-primary" href="#download">⬇️ Pobierz za darmo</a>
-        <a class="btn btn-ghost" href="#how">Zobacz, jak działa</a>
+        <a class="btn btn-primary" href="#download">⬇️ Download free</a>
+        <a class="btn btn-ghost" href="#how">See how it works</a>
       </div>
-      <p class="hero-note">macOS · Windows · Linux · darmowy plan na start</p>
+      <p class="hero-note">macOS · Windows · Linux · free plan to start</p>
     </div>
     <div class="term">
       <div class="term-bar">
@@ -240,10 +240,10 @@
       </div>
       <div class="term-body">
         <div><span class="pr">➜</span> <span class="o">claude</span></div>
-        <div class="o">Witaj! W czym mogę pomóc?</div>
-        <div class="mic">🎙️ „dodaj testy do modułu płatności”…</div>
-        <div><span class="pr">➜</span> piszę testy <span class="cursor"></span></div>
-        <div class="mic" style="color:#a78bfa">🔊 czytam odpowiedź na głos…</div>
+        <div class="o">Hi! How can I help?</div>
+        <div class="mic">🎙️ "add tests to the payments module"…</div>
+        <div><span class="pr">➜</span> writing tests <span class="cursor"></span></div>
+        <div class="mic" style="color:#a78bfa">🔊 reading the answer aloud…</div>
       </div>
     </div>
   </div>
@@ -252,28 +252,28 @@
 <!-- ===== Features ===== -->
 <section class="features" id="features">
   <div class="wrap">
-    <h2 class="section-title">Wszystko, czego potrzebujesz</h2>
-    <p class="section-sub">Pełna kontrola nad Claude Code — bez dotykania klawiatury, jeśli nie chcesz.</p>
+    <h2 class="section-title">Everything you need</h2>
+    <p class="section-sub">Full control over Claude Code — without touching the keyboard, unless you want to.</p>
 
     <div class="feat-hero">
       <div class="big">🔊</div>
       <div>
-        <h3>Słuchaj, co wygenerował Claude Code
-          <span class="pill">KLUCZOWA FUNKCJA</span>
+        <h3>Listen to what Claude Code generated
+          <span class="pill">KEY FEATURE</span>
           <span class="eq"><span></span><span></span><span></span><span></span></span></h3>
-        <p>Aplikacja <b>czyta na głos odpowiedzi i kod tworzony przez Claude Code</b> — automatycznie, prosto
-          z dziennika sesji. Odsuń się od ekranu, rób swoje i <b>po prostu słuchaj</b>, co agent właśnie zrobił.
-          Czysty, naturalny głos (bez wymawiania znaczników i kodu „znak po znaku"), po polsku i angielsku.</p>
+        <p>The app <b>reads aloud the answers and code created by Claude Code</b> — automatically, straight
+          from the session log. Step away from the screen, do your thing and <b>just listen</b> to what the agent did.
+          Clean, natural voice (no reading out markup or code "character by character"), in English and Polish.</p>
       </div>
     </div>
 
     <div class="feat-grid">
-      <div class="feat"><div class="ic">🎙️</div><h3>Dyktowanie głosem</h3><p>Mów do terminala zamiast pisać — rozpoznawanie mowy zamienia Twój głos na polecenia. Polski i angielski automatycznie.</p></div>
-      <div class="feat"><div class="ic">🗂️</div><h3>Wielu agentów</h3><p>Każdy projekt w osobnej zakładce — własny katalog, model i pamięć. Przełączasz się jednym kliknięciem.</p></div>
-      <div class="feat"><div class="ic">🧩</div><h3>MCP i Skills</h3><p>Wbudowany menedżer wtyczek MCP i umiejętności (Skills) — rozszerz agenta o dowolne narzędzia.</p></div>
-      <div class="feat"><div class="ic">💻</div><h3>Prawdziwy terminal</h3><p>Pełny terminal z Claude Code pod spodem. To Twoje konto i Twój CLI — my dokładamy wygodę i głos.</p></div>
-      <div class="feat"><div class="ic">🔄</div><h3>Auto-aktualizacja</h3><p>Aplikacja sama pobiera i instaluje nowe wersje. Zawsze najnowszy zestaw funkcji.</p></div>
-      <div class="feat"><div class="ic">🖥️</div><h3>Trzy platformy</h3><p>Natywne paczki na macOS, Windows i Linux. Spójny wygląd i działanie wszędzie.</p></div>
+      <div class="feat"><div class="ic">🎙️</div><h3>Voice dictation</h3><p>Talk to the terminal instead of typing — speech recognition turns your voice into commands. English and Polish automatically.</p></div>
+      <div class="feat"><div class="ic">🗂️</div><h3>Multiple agents</h3><p>Each project in its own tab — its own directory, model and memory. Switch with a single click.</p></div>
+      <div class="feat"><div class="ic">🧩</div><h3>MCP &amp; Skills</h3><p>Built-in manager for MCP plugins and Skills — extend your agent with any tools.</p></div>
+      <div class="feat"><div class="ic">💻</div><h3>Real terminal</h3><p>A full terminal with Claude Code underneath. Your account and your CLI — we add the comfort and the voice.</p></div>
+      <div class="feat"><div class="ic">🔄</div><h3>Auto-update</h3><p>The app downloads and installs new versions by itself. Always the latest feature set.</p></div>
+      <div class="feat"><div class="ic">🖥️</div><h3>Three platforms</h3><p>Native packages for macOS, Windows and Linux. Consistent look and feel everywhere.</p></div>
     </div>
   </div>
 </section>
@@ -281,12 +281,12 @@
 <!-- ===== How ===== -->
 <section id="how">
   <div class="wrap">
-    <h2 class="section-title">Jak to działa</h2>
-    <p class="section-sub">Trzy kroki do pierwszej rozmowy z kodem.</p>
+    <h2 class="section-title">How it works</h2>
+    <p class="section-sub">Three steps to your first conversation with code.</p>
     <div class="steps">
-      <div class="step"><div class="n">1</div><h3>Zainstaluj</h3><p>Pobierz paczkę dla swojego systemu i zainstaluj. Kreator pomoże dograć Claude Code.</p></div>
-      <div class="step"><div class="n">2</div><h3>Zaloguj się</h3><p>Użyj swojego konta Claude Code. (Opcjonalnie dodaj darmowy klucz Groq do dyktowania.)</p></div>
-      <div class="step"><div class="n">3</div><h3>Mów i koduj</h3><p>Otwórz agenta, kliknij mikrofon i powiedz, co zrobić. Słuchaj odpowiedzi na głos.</p></div>
+      <div class="step"><div class="n">1</div><h3>Install</h3><p>Download the package for your system and install it. A wizard helps you add Claude Code.</p></div>
+      <div class="step"><div class="n">2</div><h3>Sign in</h3><p>Use your Claude Code account. (Optionally add a free Groq key for dictation.)</p></div>
+      <div class="step"><div class="n">3</div><h3>Speak and code</h3><p>Open an agent, click the microphone and say what to do. Listen to the answer aloud.</p></div>
     </div>
   </div>
 </section>
@@ -294,75 +294,75 @@
 <!-- ===== Pricing ===== -->
 <section class="pricing" id="pricing">
   <div class="wrap">
-    <h2 class="section-title">Prosty cennik</h2>
-    <p class="section-sub">Zacznij za darmo. Przejdź na Pro, gdy potrzebujesz więcej mocy.</p>
+    <h2 class="section-title">Simple pricing</h2>
+    <p class="section-sub">Start free. Go Pro when you need more power.</p>
     <div class="price-grid">
       <div class="plan">
         <h3>Free</h3>
-        <div class="amt">0 zł</div>
-        <div class="per">na zawsze</div>
+        <div class="amt">€0</div>
+        <div class="per">forever</div>
         <ul>
           <li>1 agent</li>
-          <li>3 wtyczki MCP</li>
-          <li>5 umiejętności (Skills)</li>
-          <li>Głosy podstawowe (TTS/STT)</li>
-          <li class="no">Reklamy w aplikacji</li>
-          <li class="no">Głosy premium</li>
+          <li>3 MCP plugins</li>
+          <li>5 Skills</li>
+          <li>Basic voices (TTS/STT)</li>
+          <li class="no">In-app ads</li>
+          <li class="no">Premium voices</li>
         </ul>
-        <a class="btn btn-ghost" href="#download" style="width:100%;justify-content:center">Pobierz za darmo</a>
+        <a class="btn btn-ghost" href="#download" style="width:100%;justify-content:center">Download free</a>
       </div>
       <div class="plan pro">
-        <span class="tag">NAJPOPULARNIEJSZY</span>
+        <span class="tag">MOST POPULAR</span>
         <h3>Pro</h3>
-        <div class="amt">€9 <small>/ miesiąc</small></div>
-        <div class="per">lub €79 / rok (2 miesiące gratis)</div>
+        <div class="amt">€9 <small>/ month</small></div>
+        <div class="per">or €79 / year (2 months free)</div>
         <ul>
-          <li>Nieograniczona liczba agentów</li>
-          <li>Nieograniczone MCP i Skills</li>
-          <li>Głosy premium (naturalne)</li>
-          <li>Szablony MCP premium</li>
-          <li>Bez reklam</li>
-          <li>Priorytetowe wsparcie</li>
+          <li>Unlimited agents</li>
+          <li>Unlimited MCP &amp; Skills</li>
+          <li>Premium voices (natural)</li>
+          <li>Premium MCP templates</li>
+          <li>No ads</li>
+          <li>Priority support</li>
         </ul>
-        <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="mock('Płatności Pro — wkrótce (wersja robocza)')">Wybierz Pro</button>
+        <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="mock('Pro payments — coming soon (draft)')">Choose Pro</button>
       </div>
     </div>
-    <p class="mock-note">⚙️ Wersja robocza — płatności jeszcze nieaktywne. Ceny orientacyjne.</p>
+    <p class="mock-note">⚙️ Draft — payments not active yet. Prices are indicative.</p>
   </div>
 </section>
 
 <!-- ===== Download ===== -->
 <section id="download">
   <div class="wrap">
-    <h2 class="section-title">Pobierz Vibe Coding Assistant</h2>
-    <p class="section-sub">Wybierz swój system. Instalacja krok po kroku w instrukcjach.</p>
+    <h2 class="section-title">Download Vibe Coding Assistant</h2>
+    <p class="section-sub">Pick your system. Step-by-step setup in the guides.</p>
     <div class="dl-grid">
       <div class="dl"><div class="os">🍎</div><h3>macOS</h3><p>.dmg · Apple Silicon</p>
-        <button class="btn btn-primary" onclick="mock('Pobieranie macOS — wkrótce (wersja robocza)')">Pobierz .dmg</button>
-        <div class="badge-soon">wkrótce</div></div>
-      <div class="dl"><div class="os">🪟</div><h3>Windows</h3><p>.exe · instalator</p>
-        <button class="btn btn-primary" onclick="mock('Pobieranie Windows — wkrótce (wersja robocza)')">Pobierz .exe</button>
-        <div class="badge-soon">wkrótce</div></div>
+        <button class="btn btn-primary" onclick="mock('macOS download — coming soon (draft)')">Download .dmg</button>
+        <div class="badge-soon">soon</div></div>
+      <div class="dl"><div class="os">🪟</div><h3>Windows</h3><p>.exe · installer</p>
+        <button class="btn btn-primary" onclick="mock('Windows download — coming soon (draft)')">Download .exe</button>
+        <div class="badge-soon">soon</div></div>
       <div class="dl"><div class="os">🐧</div><h3>Linux</h3><p>.AppImage · x64</p>
-        <button class="btn btn-primary" onclick="mock('Pobieranie Linux — wkrótce (wersja robocza)')">Pobierz .AppImage</button>
-        <div class="badge-soon">wkrótce</div></div>
+        <button class="btn btn-primary" onclick="mock('Linux download — coming soon (draft)')">Download .AppImage</button>
+        <div class="badge-soon">soon</div></div>
     </div>
-    <p class="mock-note">Masz już aplikację? Zobacz <a href="#" class="accent">instrukcje instalacji krok po kroku</a>.</p>
+    <p class="mock-note">Already have the app? See the <a href="#" class="accent">step-by-step install guides</a>.</p>
   </div>
 </section>
 
 <!-- ===== FAQ ===== -->
 <section class="faq" id="faq">
   <div class="wrap">
-    <h2 class="section-title">Najczęstsze pytania</h2>
-    <p class="section-sub">Nie znalazłeś odpowiedzi? Napisz do nas — sekcja kontakt niżej.</p>
+    <h2 class="section-title">Frequently asked questions</h2>
+    <p class="section-sub">Didn't find an answer? Write to us — contact section below.</p>
     <div class="faq-list">
-      <details class="qa"><summary>Czy potrzebuję konta Claude Code?</summary><div class="a">Tak. Vibe Coding Assistant jest „pilotem" nad narzędziem Claude Code — uruchamia je i dokłada głos, zakładki i wygodę. Konto i logowanie pozostają po Twojej stronie. Kreator w aplikacji pomoże dograć Claude Code, jeśli go jeszcze nie masz.</div></details>
-      <details class="qa"><summary>Czy aplikacja jest darmowa?</summary><div class="a">Tak — plan Free jest darmowy na zawsze (1 agent, podstawowe głosy, MCP i Skills w limicie). Plan Pro odblokowuje nieograniczoną liczbę agentów, głosy premium i usuwa reklamy.</div></details>
-      <details class="qa"><summary>Na jakich systemach działa?</summary><div class="a">macOS (Apple Silicon), Windows 10/11 oraz Linux (AppImage). Ten sam zestaw funkcji na każdej platformie.</div></details>
-      <details class="qa"><summary>Czy moje dane są bezpieczne? Gdzie są klucze?</summary><div class="a">Klucze i konta trzymane są lokalnie na Twoim komputerze (m.in. w systemowym magazynie kluczy). Aplikacja nie hostuje modelu ani Twojego CLI. Szczegóły w <a href="polityka-prywatnosci.html" class="accent">Polityce prywatności</a>.</div></details>
-      <details class="qa"><summary>Do czego potrzebny jest klucz Groq?</summary><div class="a">Tylko do dyktowania głosem (zamiana mowy na tekst). Jest darmowy i opcjonalny — czytanie odpowiedzi na głos działa bez niego. Instrukcja zdobycia klucza jest w aplikacji.</div></details>
-      <details class="qa"><summary>Czy mogę używać wielu projektów naraz?</summary><div class="a">Tak — w planie Pro prowadzisz nieograniczoną liczbę agentów, każdy w osobnej zakładce z własnym katalogiem, modelem i pamięcią. Plan Free pozwala na jednego agenta.</div></details>
+      <details class="qa"><summary>Do I need a Claude Code account?</summary><div class="a">Yes. Vibe Coding Assistant is a "remote control" over the Claude Code tool — it launches it and adds voice, tabs and comfort. Your account and sign-in stay on your side. A wizard in the app helps you add Claude Code if you don't have it yet.</div></details>
+      <details class="qa"><summary>Is the app free?</summary><div class="a">Yes — the Free plan is free forever (1 agent, basic voices, limited MCP &amp; Skills). The Pro plan unlocks unlimited agents, premium voices and removes ads.</div></details>
+      <details class="qa"><summary>Which systems does it run on?</summary><div class="a">macOS (Apple Silicon), Windows 10/11 and Linux (AppImage). The same feature set on every platform.</div></details>
+      <details class="qa"><summary>Is my data safe? Where are the keys?</summary><div class="a">Keys and accounts are kept locally on your computer (including the system keychain). The app does not host the model or your CLI. Details in the <a href="privacy-policy.html" class="accent">Privacy policy</a>.</div></details>
+      <details class="qa"><summary>What is the Groq key for?</summary><div class="a">Only for voice dictation (speech to text). It is free and optional — reading answers aloud works without it. A guide to get the key is in the app.</div></details>
+      <details class="qa"><summary>Can I use multiple projects at once?</summary><div class="a">Yes — on the Pro plan you run unlimited agents, each in its own tab with its own directory, model and memory. The Free plan allows one agent.</div></details>
     </div>
   </div>
 </section>
@@ -370,23 +370,23 @@
 <!-- ===== Contact ===== -->
 <section id="contact">
   <div class="wrap">
-    <h2 class="section-title">Kontakt</h2>
-    <p class="section-sub">Masz pytanie, pomysł albo problem? Chętnie pomożemy.</p>
+    <h2 class="section-title">Contact</h2>
+    <p class="section-sub">Got a question, idea or problem? We're happy to help.</p>
     <div class="contact-grid">
       <div class="contact-card">
-        <h3 style="margin-bottom:14px">Napisz do nas</h3>
-        <form onsubmit="mock('Formularz kontaktowy — wkrótce (wersja robocza)');return false">
-          <div class="field"><label>Imię</label><input type="text" placeholder="Jak się do Ciebie zwracać?"></div>
-          <div class="field"><label>E-mail</label><input type="email" placeholder="twoj@email.pl"></div>
-          <div class="field"><label>Wiadomość</label><textarea placeholder="W czym możemy pomóc?"></textarea></div>
-          <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center">Wyślij wiadomość</button>
+        <h3 style="margin-bottom:14px">Write to us</h3>
+        <form onsubmit="mock('Contact form — coming soon (draft)');return false">
+          <div class="field"><label>Name</label><input type="text" placeholder="How should we call you?"></div>
+          <div class="field"><label>Email</label><input type="email" placeholder="you@email.com"></div>
+          <div class="field"><label>Message</label><textarea placeholder="How can we help?"></textarea></div>
+          <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center">Send message</button>
         </form>
       </div>
       <div class="contact-card">
-        <h3 style="margin-bottom:14px">Bezpośrednio</h3>
-        <p style="color:var(--muted);margin-bottom:14px">Najszybciej złapiesz nas mailem:</p>
+        <h3 style="margin-bottom:14px">Directly</h3>
+        <p style="color:var(--muted);margin-bottom:14px">The fastest way to reach us is email:</p>
         <p style="margin-bottom:18px"><a class="accent" style="font-weight:700;font-size:1.05rem" href="mailto:kontakt@fulfillment-polska.pl">kontakt@fulfillment-polska.pl</a></p>
-        <p style="color:var(--muted);font-size:.9rem">Odpowiadamy zwykle w ciągu 1–2 dni roboczych.</p>
+        <p style="color:var(--muted);font-size:.9rem">We usually reply within 1–2 business days.</p>
       </div>
     </div>
   </div>
@@ -401,15 +401,15 @@
           <svg viewBox="0 0 256 256" style="width:30px;height:30px"><rect width="256" height="256" rx="58" fill="#a855f7"/><path d="M70 84 L104 128 L70 172" fill="none" stroke="#fff" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/><g fill="#fff"><rect x="128" y="103" width="15" height="50" rx="7.5"/><rect x="152" y="83" width="15" height="90" rx="7.5"/><rect x="176" y="96" width="15" height="64" rx="7.5"/></g></svg>
           Vibe Coding Assistant
         </div>
-        <p style="color:var(--muted);font-size:.9rem;max-width:280px">Głosowy asystent desktopowy dla Claude Code. Mów do kodu — na macOS, Windows i Linux.</p>
+        <p style="color:var(--muted);font-size:.9rem;max-width:280px">Desktop voice assistant for Claude Code. Talk to your code — on macOS, Windows and Linux.</p>
       </div>
-      <div><h4>Produkt</h4><a href="#features">Funkcje</a><a href="#pricing">Cennik</a><a href="#download">Pobierz</a><a href="#faq">FAQ</a></div>
-      <div><h4>Pomoc</h4><a href="#">Instrukcje</a><a href="#contact">Kontakt</a><a href="mailto:kontakt@fulfillment-polska.pl">E-mail</a></div>
-      <div><h4>Informacje</h4><a href="polityka-prywatnosci.html">Polityka prywatności</a><a href="licencja.html">Licencja</a></div>
+      <div><h4>Product</h4><a href="#features">Features</a><a href="#pricing">Pricing</a><a href="#download">Download</a><a href="#faq">FAQ</a></div>
+      <div><h4>Help</h4><a href="#">Guides</a><a href="#contact">Contact</a><a href="mailto:kontakt@fulfillment-polska.pl">Email</a></div>
+      <div><h4>Legal</h4><a href="privacy-policy.html">Privacy policy</a><a href="license.html">License</a></div>
     </div>
     <div class="ft-bottom">
-      <span>© 2026 Vibe Coding Assistant. Wszelkie prawa zastrzeżone.</span>
-      <span>⚙️ Wersja robocza (staging) — nie do publikacji.</span>
+      <span>© 2026 Vibe Coding Assistant. All rights reserved.</span>
+      <span>⚙️ Draft (staging) — not for publication.</span>
     </div>
   </div>
 </footer>
