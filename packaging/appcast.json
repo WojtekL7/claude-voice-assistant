@@ -1,28 +1,28 @@
 {
- "_comment": "Feed auto-aktualizacji Claude Voice Assistant. PUBLICZNY na VPS: /opt/cva-web/html/cva/appcast.json -> https://pobierz.srv1251441.hstgr.cloud/cva/appcast.json . Aplikacja porownuje config.APP_VERSION z 'version' wpisu dla swojej platformy (core.platform_utils.update_platform_id). macOS uzywa paczki .zip (samo-podmiana). Wpisy aktualizuj generatorem: packaging/make-appcast-entry.py PACZKA.zip --version X.Y.Z --base-url https://pobierz.srv1251441.hstgr.cloud/cva/ --appcast packaging/appcast.json --merge",
- "latest": {
-  "version": "1.0.19",
-  "notes_url": "",
-  "mandatory": false,
-  "platforms": {
-   "macos-arm64": {
-    "url": "https://pobierz.srv1251441.hstgr.cloud/cva/ClaudeVoiceAssistant-1.0.19-macos-arm64.zip",
-    "size": 123074229,
-    "sha256": "f330fb58cad2928b1b7a42910985068bff85864b74d69665e21e108fb1010445",
-    "signature": ""
-   },
-   "windows-x64": {
-    "url": "https://pobierz.srv1251441.hstgr.cloud/cva/ClaudeVoiceAssistant-Setup-1.0.19.exe",
-    "size": 102951719,
-    "sha256": "2385fc6071b556e97bbc444575ce53ec359c70850562ab55b135c76c64c8b385",
-    "signature": ""
-   },
-   "linux-x64": {
-    "url": "https://pobierz.srv1251441.hstgr.cloud/cva/ClaudeVoiceAssistant-1.0.19-linux-x64.AppImage",
-    "size": 197772480,
-    "sha256": "325378b46ff7c4b004398ec1ac0b9d1c1dd310198bc35871f910fa3d28934813",
-    "signature": ""
-   }
+  "_comment": "Feed auto-aktualizacji Claude Voice Assistant. PUBLICZNY na VPS: /opt/cva-web/html/cva/appcast.json -> https://pobierz.srv1251441.hstgr.cloud/cva/appcast.json . Aplikacja porownuje config.APP_VERSION z 'version' wpisu dla swojej platformy (core.platform_utils.update_platform_id). macOS uzywa paczki .zip (samo-podmiana). Wpisy aktualizuj generatorem: packaging/make-appcast-entry.py PACZKA.zip --version X.Y.Z --base-url https://pobierz.srv1251441.hstgr.cloud/cva/ --appcast packaging/appcast.json --merge",
+  "latest": {
+    "version": "1.0.20",
+    "notes_url": "",
+    "mandatory": false,
+    "platforms": {
+      "macos-arm64": {
+        "url": "https://pobierz.srv1251441.hstgr.cloud/cva/ClaudeVoiceAssistant-1.0.20-macos-arm64.zip",
+        "size": 123143460,
+        "sha256": "0211147493bba25372f7bf7a84cb9fc792cd93dff67943f65691bfa890369388",
+        "signature": ""
+      },
+      "windows-x64": {
+        "url": "https://pobierz.srv1251441.hstgr.cloud/cva/ClaudeVoiceAssistant-Setup-1.0.20.exe",
+        "size": 103009549,
+        "sha256": "03288b26eb81c6395e7e4d0b9a48c41a94eb31a53c6e12ef94c53600a003e83f",
+        "signature": ""
+      },
+      "linux-x64": {
+        "url": "https://pobierz.srv1251441.hstgr.cloud/cva/ClaudeVoiceAssistant-1.0.20-linux-x64.AppImage",
+        "size": 179426496,
+        "sha256": "9c1a7dddce4b4fde4fcebefcfea190264cec1738cb201bac82b02788615eb44d",
+        "signature": ""
+      }
+    }
   }
- }
 }
