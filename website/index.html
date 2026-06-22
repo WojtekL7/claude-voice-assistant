@@ -22,10 +22,9 @@
     var pref=localStorage.getItem('vca-lang'), CUR='pl';
     if(pref){ if(pref!==CUR){ location.replace((pref==='en'?'index-en.html':'index.html')+location.hash); } return; }
     /* brak wyboru → wykryj kraj (GeoJS, darmowe, bez klucza); nie-PL → wersja angielska */
-    fetch('https://get.geojs.io/v1/ip/country.txt').then(function(r){return r.text();}).then(function(c){
-      c=(c||'').trim().toUpperCase();
-      if(c && c!=='PL'){ location.replace('index-en.html'+location.hash); }
-    }).catch(function(){});
+    var go=function(c){ c=(c||'').toUpperCase(); if(c && c!=='PL'){ location.replace('index-en.html'+location.hash); } };
+    fetch('https://get.geojs.io/v1/ip/country.json').then(function(r){return r.json();}).then(function(d){go(d&&d.country);})
+      .catch(function(){ fetch('https://api.country.is/').then(function(r){return r.json();}).then(function(d){go(d&&d.country);}).catch(function(){}); });
   }catch(e){}
 })();
 </script>
