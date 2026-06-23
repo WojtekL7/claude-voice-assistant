@@ -3810,11 +3810,18 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         tab = self._get_current_agent_tab()
         color = self._agent_tab_color(getattr(tab, 'agent_config', None)) \
             if isinstance(tab, AgentTab) else None
+        # ZAWSZE maluj tłem motywu. Sama ramka w QSS robi z widżetu „styled
+        # background" — bez podanego tła Qt maluje go DOMYŚLNYM SZARYM kolorem
+        # systemu (widać jako białe/szare pole tam, gdzie terminal nie zakrywa
+        # całości — np. na pionowym ekranie). Jawne tło motywu temu zapobiega.
+        bg = self.skin_colors.get('main_window_bg', '#300A24')
         if color:
             central.setStyleSheet(
-                f"QWidget#centralAccent {{ border: 3px solid {color}; border-radius: 6px; }}")
+                f"QWidget#centralAccent {{ background-color: {bg}; "
+                f"border: 3px solid {color}; border-radius: 6px; }}")
         else:
-            central.setStyleSheet("")
+            central.setStyleSheet(
+                f"QWidget#centralAccent {{ background-color: {bg}; }}")
 
     def _question_icon(self) -> QIcon:
         icon = getattr(self, "_question_icon_cached", None)

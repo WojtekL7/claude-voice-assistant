@@ -221,6 +221,13 @@ class AgentTab(QWidget):
         self.main_splitter.addWidget(self.bottom_panel)
         self.main_splitter.setSizes(self.splitter_sizes)
 
+        # Dodatkowa wysokość okna (np. ekran pionowy) ma trafiać do TERMINALA
+        # (indeks 0), a nie do panelu wejścia (indeks 1). Bez tego splitter
+        # rozdaje nadmiar również panelowi wejścia → rośnie pusta przestrzeń,
+        # w której prześwitywało tło (szare pole na pionowym ekranie).
+        self.main_splitter.setStretchFactor(0, 1)
+        self.main_splitter.setStretchFactor(1, 0)
+
         # Connect splitter moved signal to save position
         self.main_splitter.splitterMoved.connect(self._on_splitter_moved)
 
@@ -309,6 +316,9 @@ class AgentTab(QWidget):
                 old.deleteLater()
             self._terminal_placeholder = None
         self.main_splitter.setSizes(self.splitter_sizes)
+        # Po podmianie potwierdź: nadmiar wysokości → terminal, nie panel wejścia.
+        self.main_splitter.setStretchFactor(0, 1)
+        self.main_splitter.setStretchFactor(1, 0)
 
     def _setup_bottom_panel(self):
         """Setup bottom panel with input and controls."""
