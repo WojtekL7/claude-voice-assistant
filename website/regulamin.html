@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Regulamin — Vibe Coding Assistant</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<style>
+  :root{--accent:#a855f7;--bg:#0f0a1a;--bg2:#150d22;--surface:#1b1230;--line:#332247;--ink:#ece7f5;--muted:#a99fc0}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Ubuntu,Arial,sans-serif;background:var(--bg);color:var(--ink);line-height:1.7}
+  a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+  .topbar{position:sticky;top:0;background:rgba(15,10,26,.85);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  .topbar .in{max-width:820px;margin:0 auto;padding:14px 22px;display:flex;align-items:center;gap:10px;font-weight:800}
+  .topbar svg{width:28px;height:28px}
+  .wrap{max-width:820px;margin:0 auto;padding:46px 22px 80px}
+  h1{font-size:2.1rem;font-weight:800;letter-spacing:-.5px}
+  .meta{color:var(--muted);font-size:.9rem;margin:8px 0 4px}
+  .draft{background:#3a1d12;border:1px solid #92531f;color:#fcd34d;border-radius:12px;padding:12px 16px;margin:20px 0;font-size:.9rem}
+  h2{font-size:1.2rem;margin:30px 0 8px}
+  p,li{color:#d9d0ec;margin-bottom:10px}
+  ul,ol{padding-left:22px;margin-bottom:10px}
+  .box{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:14px 0}
+  .ph{background:rgba(251,191,36,.16);border-radius:5px;padding:0 5px;color:#fcd34d}
+  footer{border-top:1px solid var(--line);margin-top:46px;padding-top:22px;color:var(--muted);font-size:.86rem}
+</style>
+</head>
+<body>
+<div class="topbar"><div class="in">
+  <svg viewBox="0 0 256 256"><rect width="256" height="256" rx="58" fill="#a855f7"/><path d="M70 84 L104 128 L70 172" fill="none" stroke="#fff" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/><g fill="#fff"><rect x="128" y="103" width="15" height="50" rx="7.5"/><rect x="152" y="83" width="15" height="90" rx="7.5"/><rect x="176" y="96" width="15" height="64" rx="7.5"/></g></svg>
+  Vibe Coding Assistant
+</div></div>
+
+<div class="wrap">
+  <a href="index.html">← Wróć na stronę główną</a>
+  <h1 style="margin-top:14px">Regulamin świadczenia usług</h1>
+  <p class="meta">Ostatnia aktualizacja: 23 czerwca 2026 · wersja robocza</p>
+
+  <div class="draft">⚠️ <b>Wersja robocza.</b> Dokument przed publikacją wymaga weryfikacji prawnej. Pola <span class="ph">[…]</span> do uzupełnienia danymi firmy.</div>
+
+  <h2>§1. Postanowienia ogólne</h2>
+  <p>Niniejszy Regulamin określa zasady korzystania z aplikacji <b>Vibe Coding Assistant</b> oraz zakupu planu
+    płatnego (Pro). Usługodawcą i sprzedawcą jest <b>Fulfillment Polska</b> <span class="ph">[pełna forma prawna]</span>,
+    z siedzibą <span class="ph">[adres]</span>, NIP <span class="ph">[NIP]</span>, <span class="ph">[REGON/KRS]</span>
+    (dalej: „Usługodawca", „my"). Kontakt: <a href="mailto:kontakt@fulfillment-polska.pl">kontakt@fulfillment-polska.pl</a>.</p>
+
+  <h2>§2. Definicje</h2>
+  <ul>
+    <li><b>Aplikacja</b> — oprogramowanie Vibe Coding Assistant (nakładka „pilot" na Claude Code firmy Anthropic).</li>
+    <li><b>Użytkownik</b> — osoba korzystająca z Aplikacji; <b>Konsument</b> — Użytkownik będący konsumentem w rozumieniu Kodeksu cywilnego (oraz przedsiębiorca na prawach konsumenta).</li>
+    <li><b>Plan Free / Plan Pro</b> — bezpłatny i płatny wariant Aplikacji.</li>
+    <li><b>Licencja</b> — odrębne <a href="licencja.html">warunki korzystania z oprogramowania (EULA)</a>.</li>
+  </ul>
+
+  <h2>§3. Rodzaj i zakres usług</h2>
+  <p>Usługodawca udostępnia Aplikację w planie Free oraz odpłatnie w planie Pro (subskrypcja). Aplikacja
+    dodaje do Claude Code obsługę głosem, zakładki agentów oraz menedżer MCP i Skills. <b>Aplikacja nie zawiera
+    ani nie hostuje modelu AI ani konta Claude Code</b> — wymaga, by Użytkownik posiadał je we własnym zakresie.</p>
+
+  <h2>§4. Wymagania techniczne</h2>
+  <ul>
+    <li>komputer z systemem Windows, macOS lub Linux,</li>
+    <li>zainstalowane Claude Code i konto Anthropic (we własnym zakresie),</li>
+    <li>połączenie z internetem (m.in. do aktualizacji, dyktowania i czytania na głos),</li>
+    <li>do dyktowania — własny klucz API usługi rozpoznawania mowy (np. Groq).</li>
+  </ul>
+
+  <h2>§5. Ceny i płatności</h2>
+  <p>Ceny planu Pro podane są na stronie zakupu i są cenami brutto. Płatności obsługuje zewnętrzny operator
+    płatności <span class="ph">[operator — Paddle / Stripe]</span>. Subskrypcja jest <b>odnawiana automatycznie</b>
+    na kolejny okres rozliczeniowy <span class="ph">[miesięczny / roczny]</span>, chyba że zostanie anulowana przed
+    końcem bieżącego okresu. Dokument księgowy (faktura/rachunek) wystawia <span class="ph">[Usługodawca / operator
+    płatności jako Merchant of Record]</span>.</p>
+
+  <h2>§6. Zawarcie i czas trwania umowy</h2>
+  <p>Umowa o świadczenie usługi Pro zostaje zawarta z chwilą skutecznej płatności i aktywacji licencji.
+    Umowa trwa przez opłacony okres i odnawia się zgodnie z §5. Użytkownik może anulować odnowienie w dowolnym
+    momencie — usługa działa wówczas do końca opłaconego okresu.</p>
+
+  <h2>§7. Prawo odstąpienia od umowy (Konsument)</h2>
+  <p>Konsumentowi przysługuje prawo odstąpienia od umowy w terminie <b>14 dni</b> bez podania przyczyny.</p>
+  <div class="box">
+    <p><b>Treści cyfrowe / dostęp natychmiastowy.</b> Jeżeli Konsument zażąda rozpoczęcia świadczenia (aktywacji
+      planu Pro) <b>przed upływem terminu odstąpienia</b> i wyrazi na to wyraźną zgodę oraz przyjmie do wiadomości
+      utratę prawa odstąpienia — <b>prawo odstąpienia wygasa</b> z chwilą rozpoczęcia świadczenia (zgodnie z ustawą
+      o prawach konsumenta). Stosowną zgodę zbieramy w procesie zakupu.</p>
+  </div>
+  <p>Aby odstąpić (gdy prawo przysługuje), wystarczy jednoznaczne oświadczenie wysłane na
+    <a href="mailto:kontakt@fulfillment-polska.pl">kontakt@fulfillment-polska.pl</a> (można użyć wzoru w załączniku).
+    Zwrot płatności następuje niezwłocznie, nie później niż w 14 dni.</p>
+
+  <h2>§8. Reklamacje</h2>
+  <p>Reklamacje dotyczące Aplikacji lub płatności można składać na
+    <a href="mailto:kontakt@fulfillment-polska.pl">kontakt@fulfillment-polska.pl</a>. Reklamację rozpatrujemy
+    w terminie <b>14 dni</b>. Usługodawca odpowiada za zgodność treści/usługi cyfrowej z umową na zasadach
+    określonych w ustawie o prawach konsumenta.</p>
+
+  <h2>§9. Rozwiązanie umowy</h2>
+  <p>Użytkownik może w każdej chwili zrezygnować z subskrypcji i odinstalować Aplikację. Usługodawca może
+    rozwiązać umowę lub cofnąć licencję w razie istotnego naruszenia Regulaminu lub <a href="licencja.html">Licencji</a>.</p>
+
+  <h2>§10. Odpowiedzialność</h2>
+  <p>Aplikacja udostępniana jest „tak jak jest". Usługodawca nie odpowiada za działanie usług zewnętrznych
+    (Anthropic, Microsoft, Groq, operator płatności i in.). Ograniczenia odpowiedzialności nie wyłączają praw
+    Konsumenta wynikających z bezwzględnie obowiązujących przepisów. Szczegóły w <a href="licencja.html">Licencji</a>.</p>
+
+  <h2>§11. Dane osobowe</h2>
+  <p>Zasady przetwarzania danych opisuje <a href="polityka-prywatnosci.html">Polityka prywatności</a>,
+    a wykorzystanie pamięci lokalnej i geolokalizacji — <a href="polityka-cookies.html">Polityka cookies i pamięci lokalnej</a>.</p>
+
+  <h2>§12. Pozasądowe rozwiązywanie sporów</h2>
+  <p>Konsument może skorzystać z pozasądowych sposobów rozpatrywania reklamacji i dochodzenia roszczeń, w tym
+    z unijnej platformy ODR: <a href="https://ec.europa.eu/consumers/odr" target="_blank" rel="noopener">ec.europa.eu/consumers/odr</a>.</p>
+
+  <h2>§13. Zmiany Regulaminu</h2>
+  <p>Możemy aktualizować Regulamin z ważnych przyczyn. O zmianach dotyczących aktywnych subskrypcji poinformujemy
+    z wyprzedzeniem. Aktualna wersja jest zawsze dostępna na tej stronie wraz z datą.</p>
+
+  <h2>§14. Postanowienia końcowe</h2>
+  <p>W sprawach nieuregulowanych stosuje się prawo polskie, z poszanowaniem praw Konsumenta. Regulamin obowiązuje
+    od dnia publikacji.</p>
+
+  <h2>Załącznik — wzór formularza odstąpienia</h2>
+  <div class="box">
+    <p>(Formularz wypełnij i odeślij tylko, jeśli chcesz odstąpić od umowy)</p>
+    <p>Adresat: Fulfillment Polska, <span class="ph">[adres]</span>, kontakt@fulfillment-polska.pl<br>
+      — Ja/My niniejszym informuję/informujemy o odstąpieniu od umowy o świadczenie usługi Vibe Coding Assistant (Pro)<br>
+      — Data zawarcia umowy: <span class="ph">[…]</span><br>
+      — Imię i nazwisko konsumenta: <span class="ph">[…]</span><br>
+      — Adres / e-mail konsumenta: <span class="ph">[…]</span><br>
+      — Data: <span class="ph">[…]</span></p>
+  </div>
+
+  <footer>
+    Vibe Coding Assistant ·
+    <a href="polityka-prywatnosci.html">Polityka prywatności</a> ·
+    <a href="licencja.html">Licencja</a> ·
+    <a href="polityka-cookies.html">Cookies</a> ·
+    <a href="index.html">Strona główna</a><br>
+    © 2026 Fulfillment Polska. Kontakt: kontakt@fulfillment-polska.pl
+  </footer>
+</div>
+</body>
+</html>

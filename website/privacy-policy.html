@@ -84,10 +84,22 @@
   <p>If you write to us (website form or email), we process the data you provide (name, email, message)
     solely to respond to you.</p>
 
-  <h3>3.4 Payments and license (Pro plan)</h3>
-  <p>Once the Pro plan goes on sale, payments will be handled by an external payment provider
-    <span class="ph">[e.g. Stripe]</span>, and a license key will be sent for activation.
-    This feature is currently in preparation.</p>
+  <h3>3.4 Account and license (license server)</h3>
+  <p>To provide the trial and the Pro plan, our license server (Hostinger hosting) processes: your <b>email</b>,
+    a <b>device identifier</b> (a hash of machine characteristics), the <b>platform</b> (OS), the <b>license key</b>,
+    and license status and dates. This is used for activation, validity checks and enforcing the device limit.
+    We do not collect the content of your work this way.</p>
+
+  <h3>3.5 Payments (Pro plan)</h3>
+  <p>Pro plan sales are currently in preparation. Once launched, payments will be handled by an external provider
+    <span class="ph">[Paddle / Stripe]</span>, who processes payment data under its own policy; we only receive the
+    data needed to issue/renew a license (e.g. email, payment identifier).</p>
+
+  <h3>3.6 Website (geolocation, downloads)</h3>
+  <p>The site selects the language by country by asking the <b>GeoJS</b> service for your country based on your IP
+    address (your IP is sent to GeoJS). When you download the app we record an event (version, platform); the IP
+    address is <b>hashed</b> and not stored in clear. Details:
+    <a href="cookie-policy.html">Cookies &amp; Local Storage Policy</a>.</p>
 
   <h2>4. Legal bases (GDPR)</h2>
   <ul>
@@ -97,8 +109,8 @@
   </ul>
 
   <h2>5. Data recipients</h2>
-  <p>Recipients may only be the entities listed in sections 3.2–3.4 (feature providers, payment provider,
-    hosting provider). We do not transfer data beyond these purposes and we do not sell it.</p>
+  <p>Recipients may only be the entities listed in sections 3.2–3.6 (feature providers, license server, payment
+    provider, GeoJS, hosting provider). We do not transfer data beyond these purposes and we do not sell it.</p>
 
   <h2>6. Transfers outside the EEA</h2>
   <p>Some providers (e.g. Microsoft, Groq, Anthropic) may process data outside the European Economic Area.
@@ -117,15 +129,16 @@
     <b>Polish Data Protection Authority</b> (UODO). To exercise your rights, write to
     <a href="mailto:kontakt@fulfillment-polska.pl">kontakt@fulfillment-polska.pl</a>.</p>
 
-  <h2>9. Cookies (website)</h2>
-  <p>In its current version, the website uses no tracking cookies or analytics tools. If we add them, we will
-    update this policy and — where required — ask for your consent.</p>
+  <h2>9. Cookies and local storage (website)</h2>
+  <p>The site uses no tracking cookies or analytics tools. It uses local storage (language/theme), IP geolocation
+    (language selection, GeoJS) and download counting (hashed IP). Details:
+    <a href="cookie-policy.html">Cookies &amp; Local Storage Policy</a>.</p>
 
   <h2>10. Changes to this policy</h2>
   <p>We may update this policy. The current version will always be available on this page, with the date of the last change.</p>
 
   <footer>
-    Vibe Coding Assistant · <a href="license.html">License</a> · <a href="index-en.html">Home</a><br>
+    Vibe Coding Assistant · <a href="license.html">License</a> · <a href="terms.html">Terms</a> · <a href="cookie-policy.html">Cookies</a> · <a href="index-en.html">Home</a><br>
     © 2026 Fulfillment Polska. Contact: kontakt@fulfillment-polska.pl
   </footer>
 </div>

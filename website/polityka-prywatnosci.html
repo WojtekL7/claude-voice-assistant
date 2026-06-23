@@ -84,10 +84,22 @@
   <p>Jeśli napiszesz do nas (formularz na stronie lub e-mail), przetwarzamy podane dane (imię, adres e-mail, treść)
     wyłącznie w celu udzielenia odpowiedzi.</p>
 
-  <h3>3.4 Płatności i licencja (plan Pro)</h3>
-  <p>Po uruchomieniu sprzedaży planu Pro płatności będą obsługiwane przez zewnętrznego operatora płatności
-    <span class="ph">[np. Stripe]</span>, a do aktywacji licencji będzie przesyłany klucz licencyjny.
-    Funkcja ta jest obecnie w przygotowaniu.</p>
+  <h3>3.4 Konto i licencja (serwer licencji)</h3>
+  <p>Aby udostępnić okres próbny i plan Pro, na naszym serwerze licencji (hosting Hostinger) przetwarzamy:
+    <b>adres e-mail</b>, <b>identyfikator urządzenia</b> (skrót/hash cech komputera), <b>platformę</b> (system),
+    <b>klucz licencyjny</b> oraz status i daty licencji. Służy to do aktywacji, weryfikacji ważności i egzekwowania
+    limitu urządzeń. Nie zbieramy w ten sposób treści Twojej pracy.</p>
+
+  <h3>3.5 Płatności (plan Pro)</h3>
+  <p>Sprzedaż planu Pro jest obecnie w przygotowaniu. Po uruchomieniu płatności obsłuży zewnętrzny operator
+    <span class="ph">[Paddle / Stripe]</span>, który przetwarza dane płatności zgodnie z własną polityką; do nas
+    trafiają jedynie dane potrzebne do wystawienia/odnowienia licencji (np. e-mail, identyfikator płatności).</p>
+
+  <h3>3.6 Strona internetowa (geolokalizacja, pobrania)</h3>
+  <p>Strona ustala język po kraju, pytając usługę <b>GeoJS</b> o kraj na podstawie Twojego adresu IP (IP trafia do
+    GeoJS). Przy pobraniu aplikacji rejestrujemy zdarzenie (wersja, platforma), a adres IP jest przy tym
+    <b>haszowany</b> i nie jest przechowywany w postaci jawnej. Szczegóły:
+    <a href="polityka-cookies.html">Polityka cookies i pamięci lokalnej</a>.</p>
 
   <h2>4. Podstawy prawne (RODO)</h2>
   <ul>
@@ -97,8 +109,8 @@
   </ul>
 
   <h2>5. Odbiorcy danych</h2>
-  <p>Odbiorcami danych mogą być wyłącznie podmioty wymienione w pkt 3.2–3.4 (dostawcy funkcji, operator płatności,
-    dostawca hostingu). Nie przekazujemy danych poza te cele i nie sprzedajemy ich.</p>
+  <p>Odbiorcami danych mogą być wyłącznie podmioty wymienione w pkt 3.2–3.6 (dostawcy funkcji, serwer licencji,
+    operator płatności, GeoJS, dostawca hostingu). Nie przekazujemy danych poza te cele i nie sprzedajemy ich.</p>
 
   <h2>6. Przekazywanie poza EOG</h2>
   <p>Część dostawców (np. Microsoft, Groq, Anthropic) może przetwarzać dane poza Europejskim Obszarem Gospodarczym.
@@ -117,15 +129,16 @@
     <b>Prezesa Urzędu Ochrony Danych Osobowych</b> (UODO). Aby skorzystać z praw, napisz na
     <a href="mailto:kontakt@fulfillment-polska.pl">kontakt@fulfillment-polska.pl</a>.</p>
 
-  <h2>9. Pliki cookies (strona internetowa)</h2>
-  <p>Strona w obecnej wersji nie używa plików cookies do śledzenia ani narzędzi analitycznych. W razie ich
-    dodania zaktualizujemy tę politykę i — gdy będzie to wymagane — poprosimy o zgodę.</p>
+  <h2>9. Pliki cookies i pamięć lokalna (strona internetowa)</h2>
+  <p>Strona nie używa cookies śledzących ani narzędzi analitycznych. Korzysta z pamięci lokalnej (język/motyw),
+    geolokalizacji po IP (dobór języka, GeoJS) oraz liczenia pobrań (IP haszowane). Szczegóły:
+    <a href="polityka-cookies.html">Polityka cookies i pamięci lokalnej</a>.</p>
 
   <h2>10. Zmiany polityki</h2>
   <p>Możemy aktualizować tę politykę. Aktualna wersja zawsze będzie dostępna na tej stronie, z datą ostatniej zmiany.</p>
 
   <footer>
-    Vibe Coding Assistant · <a href="licencja.html">Licencja</a> · <a href="index.html">Strona główna</a><br>
+    Vibe Coding Assistant · <a href="licencja.html">Licencja</a> · <a href="regulamin.html">Regulamin</a> · <a href="polityka-cookies.html">Cookies</a> · <a href="index.html">Strona główna</a><br>
     © 2026 Fulfillment Polska. Kontakt: kontakt@fulfillment-polska.pl
   </footer>
 </div>
