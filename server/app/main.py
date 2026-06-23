@@ -25,7 +25,9 @@ _origins = ["*"] if settings.cors_origins.strip() == "*" \
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_origins,
-    allow_credentials=True,
+    # Panel uwierzytelnia się tokenem Bearer (nie ciasteczkami), więc credentials
+    # wyłączone — dzięki temu allow_origins="*" działa poprawnie w przeglądarce.
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
