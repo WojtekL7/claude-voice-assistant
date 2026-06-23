@@ -147,6 +147,54 @@ TTS_DEFAULT_VOICE = "pl-PL-ZofiaNeural"
 TTS_DEFAULT_RATE = "+0%"
 TTS_DEFAULT_VOLUME = "+0%"
 
+# Funkcja #3 (głos per-agent) — wbudowana lista głosów edge-tts do dropdowna.
+# ZGODNIE z obecnymi językami aplikacji: TYLKO polskie i angielskie. Polski ma
+# w edge-tts maksymalnie 2 głosy (Marek/Zofia — więcej nie istnieje). Angielski
+# w kilku regionach. Pełną, międzynarodową listę (~322) dialog dociąga na żądanie
+# przez edge_tts.list_voices() z wyszukiwarką po języku. Para (voice_id, etykieta);
+# symbole ♀/♂ zamiast słów — bez potrzeby tłumaczenia etykiet.
+TTS_VOICE_CHOICES = [
+    ("pl-PL-ZofiaNeural",        "Polski — Zofia ♀"),
+    ("pl-PL-MarekNeural",        "Polski — Marek ♂"),
+    ("en-US-AriaNeural",         "English US — Aria ♀"),
+    ("en-US-JennyNeural",        "English US — Jenny ♀"),
+    ("en-US-AvaNeural",          "English US — Ava ♀"),
+    ("en-US-EmmaNeural",         "English US — Emma ♀"),
+    ("en-US-MichelleNeural",     "English US — Michelle ♀"),
+    ("en-US-GuyNeural",          "English US — Guy ♂"),
+    ("en-US-AndrewNeural",       "English US — Andrew ♂"),
+    ("en-US-BrianNeural",        "English US — Brian ♂"),
+    ("en-US-ChristopherNeural",  "English US — Christopher ♂"),
+    ("en-US-EricNeural",         "English US — Eric ♂"),
+    ("en-US-RogerNeural",        "English US — Roger ♂"),
+    ("en-GB-SoniaNeural",        "English UK — Sonia ♀"),
+    ("en-GB-LibbyNeural",        "English UK — Libby ♀"),
+    ("en-GB-MaisieNeural",       "English UK — Maisie ♀"),
+    ("en-GB-RyanNeural",         "English UK — Ryan ♂"),
+    ("en-GB-ThomasNeural",       "English UK — Thomas ♂"),
+    ("en-AU-NatashaNeural",      "English AU — Natasha ♀"),
+    ("en-AU-WilliamNeural",      "English AU — William ♂"),
+    ("en-CA-ClaraNeural",        "English CA — Clara ♀"),
+    ("en-CA-LiamNeural",         "English CA — Liam ♂"),
+    ("en-IE-EmilyNeural",        "English IE — Emily ♀"),
+    ("en-IE-ConnorNeural",       "English IE — Connor ♂"),
+    ("en-IN-NeerjaNeural",       "English IN — Neerja ♀"),
+    ("en-IN-PrabhatNeural",      "English IN — Prabhat ♂"),
+]
+
+
+def tts_voice_label(short_name: str, gender: str = "", locale: str = "") -> str:
+    """Czytelna etykieta głosu z danych edge_tts.list_voices() (tryb „pobierz
+    wszystkie"). Jeśli głos jest w liście kuratorowanej — użyj jej etykiety."""
+    for vid, label in TTS_VOICE_CHOICES:
+        if vid == short_name:
+            return label
+    sym = "♀" if (gender or "").lower().startswith("f") else ("♂" if gender else "")
+    loc = locale or "-".join(short_name.split("-")[:2])
+    # Końcówka ShortName: "en-US-AriaNeural" -> "Aria"
+    tail = short_name.split("-")[-1].replace("Neural", "").replace("Multilingual", " (multi)")
+    return f"{loc} — {tail} {sym}".strip()
+
 # Audio Settings
 AUDIO_SAMPLE_RATE = 16000
 AUDIO_CHANNELS = 1
@@ -420,6 +468,15 @@ UI_TRANSLATIONS = {
         "dlg_agent_color_clear": "Bez koloru",
         "dlg_agent_color_tooltip": "Kliknij, aby wybrać dowolny kolor zakładki",
         "dlg_agent_color_hint": "Kolor zabarwia tekst tej zakładki oraz ramkę całego okna, gdy zakładka jest aktywna. Wybierz z palety obok albo kliknij kwadrat po lewej, by otworzyć pełną paletę. Puste = bez koloru.",
+        "dlg_agent_voice_label": "Głos czytającego",
+        "dlg_agent_voice_default": "Domyślny (wg języka aplikacji)",
+        "dlg_agent_voice_more": "🌐 Więcej głosów…",
+        "dlg_agent_voice_loading": "Pobieranie głosów z internetu…",
+        "dlg_agent_voice_load_failed": "Nie udało się pobrać listy głosów (brak internetu?)",
+        "dlg_agent_voice_search_title": "Wybierz głos — szukaj po języku",
+        "dlg_agent_voice_search_ph": "Szukaj języka lub głosu (np. polish, english, german, ja-JP)…",
+        "dlg_agent_voice_search_count": "Pasujące głosy: {n}",
+        "dlg_agent_voice_hint": "Głos, którym czytane są na głos odpowiedzi w tej zakładce. Puste = głos domyślny dla języka aplikacji. Lista wbudowana ma głosy polskie i angielskie; „Więcej głosów…” otwiera pełną listę z internetu z wyszukiwarką po języku.",
         "dlg_agent_icon_cat_dev": "Programowanie",
         "dlg_agent_icon_cat_sales": "Sprzedaż",
         "dlg_agent_icon_cat_seo": "SEO / pozycjonowanie",
@@ -724,7 +781,7 @@ UI_TRANSLATIONS = {
         "dlg_many_agents_title": "Dużo aktywnych agentów",
         "dlg_many_agents_msg": "Masz już {active} aktywnych agentów, a Twój komputer ({total} GB RAM) bezpiecznie uniesie około {recommended}. Każdy agent uruchamia osobny proces Claude zużywający 3–5 GB pamięci.\n\nUruchomienie kolejnego może spowolnić lub zawiesić komputer.\n\nCzy na pewno uruchomić tego agenta?",
         "dlg_many_agents_msg_noram": "Masz już {active} aktywnych agentów. Każdy uruchamia osobny proces Claude zużywający 3–5 GB pamięci RAM.\n\nUruchomienie kolejnego może spowolnić lub zawiesić komputer.\n\nCzy na pewno uruchomić tego agenta?",
-        "dlg_changes_after_restart": "Zmiany zostaną zastosowane po restarcie aplikacji.",
+        "status_agents_saved": "Zapisano zmiany agentów.",
         "dlg_quick_add_title": "Dodaj szybką akcję",
         "dlg_quick_label_placeholder": "np. Sprawdź błędy",
         "dlg_quick_command_placeholder": "np. Sprawdź czy w kodzie są błędy i je napraw",
@@ -1116,6 +1173,15 @@ UI_TRANSLATIONS = {
         "dlg_agent_color_clear": "No color",
         "dlg_agent_color_tooltip": "Click to pick any tab color",
         "dlg_agent_color_hint": "The color tints this tab's text and the whole window's frame while the tab is active. Pick from the palette, or click the square on the left for the full color picker. Empty = no color.",
+        "dlg_agent_voice_label": "Reading voice",
+        "dlg_agent_voice_default": "Default (by app language)",
+        "dlg_agent_voice_more": "🌐 More voices…",
+        "dlg_agent_voice_loading": "Downloading voices from the internet…",
+        "dlg_agent_voice_load_failed": "Could not download the voice list (no internet?)",
+        "dlg_agent_voice_search_title": "Choose a voice — search by language",
+        "dlg_agent_voice_search_ph": "Search language or voice (e.g. polish, english, german, ja-JP)…",
+        "dlg_agent_voice_search_count": "Matching voices: {n}",
+        "dlg_agent_voice_hint": "The voice used to read this tab's responses aloud. Empty = the default voice for the app language. The built-in list has Polish and English voices; \"More voices…\" opens the full internet list with search by language.",
         "dlg_agent_icon_cat_dev": "Programming",
         "dlg_agent_icon_cat_sales": "Sales",
         "dlg_agent_icon_cat_seo": "SEO / positioning",
@@ -1420,7 +1486,7 @@ UI_TRANSLATIONS = {
         "dlg_many_agents_title": "Many active agents",
         "dlg_many_agents_msg": "You already have {active} active agents, and your computer ({total} GB RAM) can safely handle about {recommended}. Each agent runs a separate Claude process using 3–5 GB of memory.\n\nLaunching another may slow down or freeze your computer.\n\nAre you sure you want to run this agent?",
         "dlg_many_agents_msg_noram": "You already have {active} active agents. Each one runs a separate Claude process using 3–5 GB of RAM.\n\nLaunching another may slow down or freeze your computer.\n\nAre you sure you want to run this agent?",
-        "dlg_changes_after_restart": "Changes will be applied after restarting the app.",
+        "status_agents_saved": "Agent changes saved.",
         "dlg_quick_add_title": "Add quick action",
         "dlg_quick_label_placeholder": "e.g. Check errors",
         "dlg_quick_command_placeholder": "e.g. Check the code for errors and fix them",

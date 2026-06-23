@@ -47,6 +47,9 @@ except ImportError:
 # Stylizacja paska przewijania QTermWidget — przeniesiona 1:1 z AgentTab.activate(),
 # żeby M2.3 było czystą podmianą (backend odtwarza dotychczasowy wygląd terminala).
 _QTERMWIDGET_SCROLLBAR_QSS = """
+    QTermWidget {
+        border: none;
+    }
     QScrollBar:vertical {
         background: transparent;
         width: 12px;

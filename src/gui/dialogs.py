@@ -28,7 +28,7 @@ from config import (
     MEMORY_PROJECTS_FILE, AGENTS_FILE, MEMORY_FILE_EXTENSIONS,
     DEFAULT_AGENTS, DEFAULT_MEMORY_PROJECTS, ASSETS_DIR,
     CLAUDE_MODELS, CLAUDE_MODELS_SHORT, DEFAULT_AGENT_MODEL,
-    NEW_AGENT_DEFAULT_MODEL,
+    NEW_AGENT_DEFAULT_MODEL, TTS_VOICE_CHOICES, tts_voice_label,
     t as tr, model_label, model_label_short,
 )
 from core.skills_manager import SkillsManager, Skill, SkillInstallError
@@ -682,6 +682,10 @@ class _ClickableLabel(QLabel):
 class AgentConfigDialog(QDialog):
     """Dialog for configuring a single agent."""
 
+    # Funkcja #3: pełna lista głosów dociągana w wątku tła — wynik wraca
+    # do GUI sygnałem (lista dictów z edge_tts.list_voices() albo [] przy błędzie).
+    _voices_loaded = pyqtSignal(list)
+
     def __init__(self, parent=None, agent: dict = None, memory_projects: list = None):
         super().__init__(parent)
         self.setWindowTitle(tr('dlg_agent_edit_title') if agent else tr('dlg_agent_new_title'))
@@ -943,6 +947,33 @@ class AgentConfigDialog(QDialog):
         color_hint.setWordWrap(True)
         form.addRow("", color_hint)
         self._update_color_preview()
+
+        # Głos czytającego (Funkcja #3): per-agent. Puste = domyślny dla języka.
+        self.tts_voice = self.agent.get('tts_voice') if isinstance(self.agent.get('tts_voice'), str) else None
+        self._all_voices = []  # cache pełnej listy z internetu (po „Więcej głosów…")
+        voice_chevron = str(ASSETS_DIR / "chevron-down.svg").replace("\\", "/")
+        voice_layout = QHBoxLayout()
+        voice_layout.setSpacing(6)
+        self.voice_combo = _StyledComboBox()
+        self.voice_combo.setMinimumHeight(34)
+        _voice_view = QListView()
+        _voice_view.setMouseTracking(True)
+        _voice_view.setFrameShape(QFrame.NoFrame)
+        self.voice_combo.setView(_voice_view)
+        # Ciemny styl rozwijanej listy — bez tego pozycje są czarne na ciemnym tle.
+        self.voice_combo.setStyleSheet(self._combo_dark_style(voice_chevron))
+        self._populate_voice_combo(TTS_VOICE_CHOICES)
+        voice_layout.addWidget(self.voice_combo, stretch=1)
+        self.voice_more_btn = QPushButton(tr('dlg_agent_voice_more'))
+        self.voice_more_btn.setToolTip(tr('dlg_agent_voice_hint'))
+        self.voice_more_btn.clicked.connect(self._open_voice_search)
+        voice_layout.addWidget(self.voice_more_btn)
+        form.addRow(tr('dlg_agent_voice_label'), voice_layout)
+        voice_hint = QLabel(tr('dlg_agent_voice_hint'))
+        voice_hint.setStyleSheet("color: #888888; font-size: 11px;")
+        voice_hint.setWordWrap(True)
+        form.addRow("", voice_hint)
+        self._voices_loaded.connect(self._on_voices_loaded)
 
         # Model Claude Code
         chevron_path = str(ASSETS_DIR / "chevron-down.svg").replace("\\", "/")
@@ -1308,6 +1339,185 @@ class AgentConfigDialog(QDialog):
                 "border-radius:4px;font-size:16px;")
             self.color_preview.setAlignment(Qt.AlignCenter)
 
+    # ---------- Głos czytającego (Funkcja #3) ----------
+
+    @staticmethod
+    def _combo_dark_style(chevron_path: str) -> str:
+        """Ciemny styl QComboBox + rozwijanej listy (jasny tekst na ciemnym tle)."""
+        return f"""
+            QComboBox {{
+                background-color: #2d0a1e; color: #ffffff;
+                border: 1px solid #4a1a3a; border-radius: 4px;
+                padding: 6px 36px 6px 10px; combobox-popup: 0;
+            }}
+            QComboBox:hover {{ border-color: #22c55e; }}
+            QComboBox:on {{ border-color: #22c55e; }}
+            QComboBox::drop-down {{
+                subcontrol-origin: padding; subcontrol-position: top right;
+                width: 28px; border-left: 1px solid #4a1a3a;
+                background-color: #3a0f28;
+                border-top-right-radius: 4px; border-bottom-right-radius: 4px;
+            }}
+            QComboBox::drop-down:hover {{ background-color: #4a1a3a; }}
+            QComboBox::down-arrow {{ image: url("{chevron_path}"); width: 10px; height: 6px; }}
+            QComboBox QAbstractItemView {{
+                background-color: #2d0a1e; color: #ffffff;
+                border: 1px solid #4a1a3a; outline: 0;
+                selection-background-color: #4a1a3a; selection-color: #ffffff;
+            }}
+            QComboBox QListView::item {{ padding: 8px 12px; min-height: 26px; border: none; }}
+            QComboBox QListView::item:selected {{ background-color: #4a1a3a; color: #ffffff; }}
+        """
+
+    def _populate_voice_combo(self, choices, selected=None):
+        """Wypełnij dropdown: 'Domyślny (wg języka)' + (voice_id, etykieta).
+        Zachowuje aktualnie wybrany głos spoza listy (np. dobrany wcześniej
+        z pełnej listy z internetu), żeby był widoczny i zaznaczony."""
+        sel = selected if selected is not None else self.tts_voice
+        self.voice_combo.blockSignals(True)
+        self.voice_combo.clear()
+        self.voice_combo.addItem(tr('dlg_agent_voice_default'), None)
+        ids = set()
+        for vid, label in choices:
+            self.voice_combo.addItem(label, vid)
+            ids.add(vid)
+        if sel and sel not in ids:
+            self.voice_combo.addItem(tts_voice_label(sel), sel)
+        idx = self.voice_combo.findData(sel) if sel else 0
+        self.voice_combo.setCurrentIndex(idx if idx >= 0 else 0)
+        self.voice_combo.blockSignals(False)
+
+    def _open_voice_search(self):
+        """Otwórz wyszukiwarkę pełnej listy głosów. Pierwsze użycie dociąga listę
+        z internetu w tle (potem z cache), następnie otwiera okno z wyszukiwarką."""
+        if self._all_voices:
+            self._open_voice_picker(self._all_voices)
+            return
+        self.voice_more_btn.setEnabled(False)
+        self.voice_more_btn.setText(tr('dlg_agent_voice_loading'))
+
+        def worker():
+            try:
+                import asyncio
+                import edge_tts
+                voices = asyncio.run(edge_tts.list_voices())
+            except Exception:
+                voices = []
+            # emit jest wątkowo bezpieczny — slot wykona się w wątku GUI.
+            self._voices_loaded.emit(voices or [])
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_voices_loaded(self, voices):
+        """Slot GUI: zapisz cache i otwórz wyszukiwarkę."""
+        self.voice_more_btn.setEnabled(True)
+        self.voice_more_btn.setText(tr('dlg_agent_voice_more'))
+        if not voices:
+            QMessageBox.information(self, tr('dlg_agent_voice_label'),
+                                    tr('dlg_agent_voice_load_failed'))
+            return
+        self._all_voices = voices
+        self._open_voice_picker(voices)
+
+    @staticmethod
+    def _voice_picker_label(v) -> str:
+        """Etykieta z pełnych danych edge-tts: '<język (region)> — <Imię> ♀/♂'."""
+        sn = v.get('ShortName', '')
+        sym = "♀" if (v.get('Gender', '') or '').lower().startswith('f') else "♂"
+        fn = v.get('FriendlyName', '') or ''
+        lang = fn.split(' - ')[-1].strip() if ' - ' in fn else v.get('Locale', '')
+        tail = sn.split('-')[-1].replace('Neural', '').replace('Multilingual', ' (multi)')
+        return f"{lang} — {tail} {sym}".strip()
+
+    def _open_voice_picker(self, voices):
+        """Okno wyboru głosu z pełnej listy, z wyszukiwarką po języku (po nazwie
+        języka z FriendlyName, kodzie locale lub imieniu głosu)."""
+        dlg = QDialog(self)
+        dlg.setWindowTitle(tr('dlg_agent_voice_search_title'))
+        dlg.setStyleSheet("QDialog{background:#1a0b14;} QLabel{color:#c9c2d6;}")
+        dlg.setMinimumSize(560, 520)
+        v = QVBoxLayout(dlg)
+        v.setContentsMargins(16, 16, 16, 12)
+        v.setSpacing(8)
+
+        search = QLineEdit()
+        search.setPlaceholderText(tr('dlg_agent_voice_search_ph'))
+        search.setStyleSheet(
+            "QLineEdit{background:#2d0a1e;color:#fff;border:1px solid #4a1a3a;"
+            "border-radius:6px;padding:8px;}")
+        v.addWidget(search)
+
+        count_lbl = QLabel("")
+        count_lbl.setStyleSheet("color:#888;font-size:11px;")
+        v.addWidget(count_lbl)
+
+        listw = QListWidget()
+        listw.setStyleSheet(
+            "QListWidget{background:#2d0a1e;color:#fff;border:1px solid #4a1a3a;border-radius:6px;}"
+            "QListWidget::item{padding:7px 10px;}"
+            "QListWidget::item:selected{background:#4a1a3a;color:#fff;}")
+        v.addWidget(listw, stretch=1)
+
+        # Pozycje: (etykieta, voice_id, tekst-do-wyszukania).
+        items = []
+        for vc in sorted(voices, key=lambda x: (x.get('Locale', ''), x.get('ShortName', ''))):
+            sn = vc.get('ShortName', '')
+            if not sn:
+                continue
+            label = self._voice_picker_label(vc)
+            search_text = f"{vc.get('FriendlyName', '')} {sn} {vc.get('Locale', '')}".lower()
+            items.append((label, sn, search_text))
+
+        def repopulate(query=""):
+            q = (query or "").strip().lower()
+            listw.clear()
+            n = 0
+            for label, sn, st in items:
+                if not q or q in st:
+                    it = QListWidgetItem(label)
+                    it.setData(Qt.UserRole, sn)
+                    listw.addItem(it)
+                    n += 1
+            count_lbl.setText(tr('dlg_agent_voice_search_count').format(n=n))
+
+        repopulate()
+        search.textChanged.connect(repopulate)
+
+        # Zaznacz bieżący głos, jeśli widoczny.
+        if self.tts_voice:
+            for i in range(listw.count()):
+                if listw.item(i).data(Qt.UserRole) == self.tts_voice:
+                    listw.setCurrentRow(i)
+                    break
+
+        btns = QHBoxLayout()
+        btns.addStretch()
+        cancel = QPushButton(tr('dlg_cancel'))
+        cancel.setStyleSheet(
+            "QPushButton{background:#2d0a1e;color:#ece7f5;border:1px solid #4a1a3a;"
+            "border-radius:6px;padding:7px 16px;}QPushButton:hover{border-color:#22c55e;}")
+        cancel.clicked.connect(dlg.reject)
+        btns.addWidget(cancel)
+        ok = QPushButton(tr('dlg_save'))
+        ok.setStyleSheet(
+            "QPushButton{background:#2d0a1e;color:#22c55e;font-weight:bold;"
+            "border:1px solid #4a1a3a;border-radius:6px;padding:7px 16px;}"
+            "QPushButton:hover{border-color:#22c55e;}")
+        ok.clicked.connect(dlg.accept)
+        btns.addWidget(ok)
+        v.addLayout(btns)
+
+        listw.itemDoubleClicked.connect(lambda _it: dlg.accept())
+
+        if dlg.exec_() == QDialog.Accepted:
+            it = listw.currentItem()
+            if it is not None:
+                sn = it.data(Qt.UserRole)
+                if sn:
+                    self.tts_voice = sn
+                    # Dołóż wybrany głos do dropdowna (PL+EN) i zaznacz.
+                    self._populate_voice_combo(TTS_VOICE_CHOICES, selected=sn)
+
     def _save(self):
         """Validate and save."""
         name = self.name_input.text().strip()
@@ -1353,6 +1563,7 @@ class AgentConfigDialog(QDialog):
             'model': self.model_combo.currentData() or DEFAULT_AGENT_MODEL,
             'icon': self.icon_spec,
             'tab_color': self.tab_color,
+            'tts_voice': self.voice_combo.currentData(),
         }
         # splitter_sizes tylko dla agenta, który już je ma (edycja istniejącego).
         # Nowy agent zostaje bez klucza — MainWindow dziedziczy proporcje

@@ -702,8 +702,12 @@ class AgentTab(QWidget):
                 valid_paths.append(file_path)
 
         if valid_paths:
-            # Send only paths - Claude Code will read them itself
-            paths_list = " ".join(valid_paths)
+            # Send only paths - Claude Code will read them itself.
+            # Każdą ścieżkę w cudzysłowach — inaczej ścieżka ZE SPACJĄ (np.
+            # ".../Strona Fulfillment-polska.pl/...") rozpada się na dwa błędne
+            # kawałki i Claude nie wczytuje pliku pamięci (objaw: „agent nie
+            # startuje z plikami pamięci"). Cudzysłów nie szkodzi ścieżkom bez spacji.
+            paths_list = " ".join(f'"{p}"' for p in valid_paths)
             context_message = f"{tr('read_memory_context')} {paths_list}"
             self.send_text_to_terminal(context_message)
             self.status_changed.emit(tr('sent_memory_files').format(n=len(valid_paths)))

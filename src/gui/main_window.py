@@ -21,7 +21,7 @@ from PyQt5.QtWidgets import (
     QTabWidget, QTabBar, QProgressBar, QProxyStyle, QStyle, QStyleFactory
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QObject, QEvent, QPoint
-from PyQt5.QtGui import QFont, QTextCursor, QIcon, QKeySequence, QPalette, QColor, QTextCharFormat
+from PyQt5.QtGui import QFont, QTextCursor, QIcon, QKeySequence, QPalette, QColor, QTextCharFormat, QPainter, QPen, QPixmap
 
 # QTermWidget for real terminal emulation
 try:
@@ -30,6 +30,37 @@ try:
 except ImportError:
     QTERMWIDGET_AVAILABLE = False
     print("Warning: QTermWidget not available, using fallback QTextEdit")
+
+
+class _AccentFrame(QWidget):
+    """Centralny widget rysujący kolorową ramkę akcentu (kolor aktywnego agenta,
+    Funkcja #2) RĘCZNIE w paintEvent — BEZ arkusza stylu.
+
+    Dlaczego nie QSS: arkusz stylu na centralnym widżecie (rodzicu terminala)
+    kaskaduje QStyleSheetStyle na QTermWidget → wokół terminala pojawiają się
+    białe ramki i zmieniają się suwaki. Ramka na QMainWindow z kolei gubi górę
+    i dół (zasłaniają je pasek menu i pasek statusu). Ręczne malowanie rysuje
+    pełną ramkę po 4 bokach i nie dotyka stylu dzieci."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._accent = None
+
+    def set_accent(self, color):
+        if color != self._accent:
+            self._accent = color
+            self.update()
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if not self._accent:
+            return
+        painter = QPainter(self)
+        pen = QPen(QColor(self._accent))
+        pen.setWidth(3)
+        painter.setPen(pen)
+        painter.drawRect(self.rect().adjusted(1, 1, -2, -2))
+        painter.end()
 
 
 class _LeftAlignedTabStyle(QProxyStyle):
@@ -593,6 +624,13 @@ class MainWindow(QMainWindow):
         # normalnie (emisje currentChanged z trakcie __init__ są ignorowane).
         self._ui_ready = True
 
+        # Ramka akcentu + kolory zakładek dla PRIMARY zakładki na starcie.
+        # Primary aktywuje się odroczonym QTimerem (nie przez _on_tab_changed),
+        # więc _apply_tab_change nie odpala i bez tego ramka pojawiłaby się
+        # dopiero po pierwszym przełączeniu zakładek (zgłoszenie usera).
+        QTimer.singleShot(0, self._recolor_all_tabs)
+        QTimer.singleShot(0, self._apply_active_tab_frame)
+
     def _setup_ui(self):
         """Setup user interface."""
         self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}{APP_TITLE_SUFFIX}")
@@ -600,7 +638,7 @@ class MainWindow(QMainWindow):
         self.resize(1100, 750)  # Domyślny rozmiar startowy
 
         # Central widget
-        central_widget = QWidget()
+        central_widget = _AccentFrame()
         self.setCentralWidget(central_widget)
 
         # Main layout
@@ -656,6 +694,7 @@ class MainWindow(QMainWindow):
                 width: 16px;
                 height: 16px;
                 margin: 2px;
+                {self._macos_close_btn_bg()}
             }}
             QTabBar::close-button:hover {{
                 background-color: #ef4444;
@@ -859,6 +898,17 @@ class MainWindow(QMainWindow):
     def _save_agents(self):
         """Save agents to file."""
         try:
+            # Siatka bezpieczeństwa: RAZ na sesję zachowaj poprzednią wersję pliku
+            # (agents.json.autobak). Apka nadpisuje agents.json przy każdym zapisie
+            # (suwak/zmiana zakładki), więc ręczna edycja pliku przy działającej
+            # apce bywa kasowana — backup pozwala odzyskać stan sprzed sesji.
+            if not getattr(self, '_agents_session_backed_up', False) and AGENTS_FILE.exists():
+                try:
+                    import shutil
+                    shutil.copy2(AGENTS_FILE, AGENTS_FILE.parent / (AGENTS_FILE.name + ".autobak"))
+                except Exception:
+                    pass
+                self._agents_session_backed_up = True
             with open(AGENTS_FILE, 'w') as f:
                 json.dump(self.agents, f, indent=2, ensure_ascii=False)
         except Exception as e:
@@ -1424,6 +1474,10 @@ class MainWindow(QMainWindow):
 
             if tab is active:
                 if getattr(tab, 'auto_read_responses', False):
+                    # Funkcja #3: czytaj głosem tej (aktywnej) zakładki.
+                    v = self._agent_voice(tab)
+                    if v:
+                        self.tts.set_voice(v)
                     for p in proses:
                         self.tts.enqueue(p)
                 # aktywna, ale auto-read wyłączone → nie czytamy, nie zbieramy
@@ -1644,8 +1698,9 @@ class MainWindow(QMainWindow):
                 continue
             label, icon = self._agent_label_icon(cfg)
             self.tab_widget.setTabText(index, label)
-            if not getattr(tab, '_question_flag_shown', False):
-                self.tab_widget.setTabIcon(index, icon)
+            # Ikona jest niezależna od flagi (flaga to osobny widżet LeftSide),
+            # więc ustawiamy ją zawsze.
+            self.tab_widget.setTabIcon(index, icon)
         # Funkcja #2: po edycji kolor zakładki/ramki mógł się zmienić.
         self._recolor_all_tabs()
         self._apply_active_tab_frame()
@@ -1674,8 +1729,11 @@ class MainWindow(QMainWindow):
                 if last_tab:
                     self.tab_widget.setCurrentWidget(last_tab)
             else:
-                QMessageBox.information(self, tr('dlg_saved_title'),
-                    tr('dlg_changes_after_restart'))
+                # Edycje istniejących agentów zostały już nałożone NA ŻYWO na
+                # otwarte zakładki (_refresh_open_agent_tabs wyżej) — nazwa,
+                # ikona, kolor, głos. Dawny modal „po restarcie" był mylący;
+                # zastępujemy go nieinwazyjnym komunikatem na pasku statusu.
+                self._update_status(tr('status_agents_saved'))
         # MCP toggle / lokalne MCP w dialogu agenta zapisywane są na bieżąco —
         # odśwież status żeby panel pokazał aktualne dane.
         self.mcp_status_widget.force_refresh()
@@ -2726,6 +2784,12 @@ class MainWindow(QMainWindow):
         # Initialize text cleaner with current language
         text_cleaner = TextCleanerForTTS(self.current_language)
 
+        # Funkcja #3: ręczny odczyt też głosem aktywnej zakładki (per-agent).
+        _vtab = self._get_current_agent_tab()
+        _voice = self._agent_voice(_vtab) if _vtab else None
+        if _voice:
+            self.tts.set_voice(_voice)
+
         if self.terminal_backend:
             # For terminal mode - read from buffer or selected text
             selected = self.terminal_backend.selected_text()
@@ -3409,20 +3473,21 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
             for agent_id, tab in self.agent_tabs.items():
                 _apply(getattr(tab, 'terminal_backend', None))
 
-    def apply_skin_colors(self, colors: dict = None):
-        """Apply skin colors to all UI elements.
+    @staticmethod
+    def _macos_close_btn_bg() -> str:
+        """macOS: obszar przycisku zamykania zakładki bywa jasny, przez co biały
+        X (close_x.svg) zlewa się z tłem i widać go dopiero na hover (czerwone
+        tło). Ciemna półprzezroczysta podkładka przywraca kontrast. Na Linux/Win
+        nic nie zmieniamy (tam X jest dobrze widoczny na ciemnej zakładce)."""
+        return ("background-color: rgba(0,0,0,0.38); border-radius: 3px;"
+                if sys.platform == "darwin" else "")
 
-        This method updates all styled elements with the new colors.
-        Can be called for live preview or permanent application.
-        """
-        if colors is None:
-            colors = self.skin_colors
-
-        # Path to checkmark icon for checkboxes
+    def _compose_main_qss(self, colors: dict) -> str:
+        """Arkusz stylu QMainWindow + menu/dialogi/checkboxy. BEZ ramki akcentu —
+        ramkę koloru aktywnego agenta rysuje ręcznie centralny widget (_AccentFrame),
+        żeby nie kaskadować stylu na QTermWidget i nie gubić górnej/dolnej krawędzi."""
         checkmark_path = str(ASSETS_DIR / "checkmark.png").replace("\\", "/")
-
-        # Main window
-        self.setStyleSheet(f"""
+        return f"""
             QMainWindow {{
                 background-color: {colors['main_window_bg']};
             }}
@@ -3525,7 +3590,22 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
                 border-radius: 5px;
                 padding: 6px;
             }}
-        """)
+        """
+
+    def apply_skin_colors(self, colors: dict = None):
+        """Apply skin colors to all UI elements.
+
+        This method updates all styled elements with the new colors.
+        Can be called for live preview or permanent application.
+        """
+        if colors is None:
+            colors = self.skin_colors
+
+        # Główny arkusz stylu okna w osobnej metodzie — bo ramkę akcentu
+        # (kolor aktywnego agenta) doklejamy do reguły QMainWindow, a NIE do
+        # centralnego widżetu (tamto kaskadowało styl na QTermWidget: białe
+        # ramki wokół terminala + zmienione suwaki).
+        self.setStyleSheet(self._compose_main_qss(colors))
 
         # Apply styles to all agent tabs
         for agent_tab in self.agent_tabs.values():
@@ -3559,15 +3639,17 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
                     width: 16px;
                     height: 16px;
                     margin: 2px;
+                    {self._macos_close_btn_bg()}
                 }}
                 QTabBar::close-button:hover {{
                     background-color: #ef4444;
                     border-radius: 2px;
                 }}
             """)
-            # Kolor tekstu zakładek (zależy od skórki) + ramka aktywnej (Funkcja #2).
+            # Kolor tekstu zakładek (zależy od skórki). Ramka akcentu jest już
+            # nałożona przez self.setStyleSheet(_compose_main_qss(...)) na górze
+            # apply_skin_colors (z właściwym `colors`, ważne przy podglądzie skórki).
             self._recolor_all_tabs()
-            self._apply_active_tab_frame()
 
         # Button icon styles (transparent with colored icons)
         self._apply_button_icon_styles()
@@ -3784,6 +3866,18 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
                 return c
         return None
 
+    def _agent_voice(self, tab):
+        """Głos TTS dla zakładki (Funkcja #3): własny 'tts_voice' agenta, a gdy
+        brak — domyślny głos dla języka aplikacji (zachowanie sprzed Funkcji #3)."""
+        cfg = getattr(tab, 'agent_config', None)
+        if isinstance(cfg, dict):
+            v = cfg.get('tts_voice')
+            if isinstance(v, str) and v:
+                return v
+        if self.current_language in SUPPORTED_LANGUAGES:
+            return SUPPORTED_LANGUAGES[self.current_language][2]
+        return None
+
     def _recolor_all_tabs(self):
         """Ustaw kolor TEKSTU każdej zakładki: własny kolor agenta albo domyślny
         kolor skórki. Sterujemy przez API (setTabTextColor), bo jawne 'color'
@@ -3799,29 +3893,19 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
                 if isinstance(w, AgentTab) else None
             bar.setTabTextColor(i, QColor(color) if color else default)
 
-    def _apply_active_tab_frame(self):
-        """Ramka całego okna w kolorze AKTYWNEGO agenta. Brak koloru → bez ramki.
-        Selektor po objectName, żeby nie kaskadować obramowania na dzieci."""
-        central = self.centralWidget()
-        if central is None:
-            return
-        if not central.objectName():
-            central.setObjectName('centralAccent')
+    def _active_accent_color(self):
+        """Kolor akcentu = tab_color AKTYWNEGO agenta (albo None)."""
         tab = self._get_current_agent_tab()
-        color = self._agent_tab_color(getattr(tab, 'agent_config', None)) \
+        return self._agent_tab_color(getattr(tab, 'agent_config', None)) \
             if isinstance(tab, AgentTab) else None
-        # ZAWSZE maluj tłem motywu. Sama ramka w QSS robi z widżetu „styled
-        # background" — bez podanego tła Qt maluje go DOMYŚLNYM SZARYM kolorem
-        # systemu (widać jako białe/szare pole tam, gdzie terminal nie zakrywa
-        # całości — np. na pionowym ekranie). Jawne tło motywu temu zapobiega.
-        bg = self.skin_colors.get('main_window_bg', '#300A24')
-        if color:
-            central.setStyleSheet(
-                f"QWidget#centralAccent {{ background-color: {bg}; "
-                f"border: 3px solid {color}; border-radius: 6px; }}")
-        else:
-            central.setStyleSheet(
-                f"QWidget#centralAccent {{ background-color: {bg}; }}")
+
+    def _apply_active_tab_frame(self):
+        """Ustaw kolor ramki akcentu = kolor AKTYWNEGO agenta (Funkcja #2).
+        Ramkę rysuje ręcznie centralny widget (_AccentFrame.paintEvent) — pełne
+        4 boki, bez arkusza stylu (więc bez białych ramek/suwaków na terminalu)."""
+        central = self.centralWidget()
+        if isinstance(central, _AccentFrame):
+            central.set_accent(self._active_accent_color())
 
     def _question_icon(self) -> QIcon:
         icon = getattr(self, "_question_icon_cached", None)
@@ -3830,6 +3914,16 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
             icon = QIcon(str(ASSETS_DIR / "icons" / "question.svg"))
             self._question_icon_cached = icon
         return icon
+
+    def _make_flag_widget(self) -> QLabel:
+        """Widżet flagi „agent czeka", pokazywany PO LEWEJ stronie zakładki
+        (QTabBar LeftSide). Niezależny od ikony agenta → stały rozmiar na każdej
+        zakładce i naturalna przerwa przed ikoną/nazwą (margines z prawej)."""
+        lbl = QLabel()
+        s = 16
+        lbl.setPixmap(self._question_icon().pixmap(s, s))
+        lbl.setStyleSheet("background: transparent; margin-right: 6px;")
+        return lbl
 
     def _arm_question(self, tab, armed: bool):
         """Ustaw stan 'agent czeka na odpowiedź' dla zakładki i odśwież ikonę.
@@ -3856,16 +3950,17 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         if show == getattr(tab, "_question_flag_shown", False):
             return  # bez zmian — nie ruszaj ikony niepotrzebnie
         tab._question_flag_shown = show
+        bar = self.tab_widget.tabBar()
+        # Flaga to OSOBNY widżet po lewej stronie zakładki (LeftSide), a nie ikona
+        # w slocie — dzięki temu własna ikona agenta NIGDY nie jest zasłaniana,
+        # flaga ma stały rozmiar na każdej zakładce, a między nią a ikoną/nazwą
+        # jest naturalna przerwa. Kolejność w zakładce: [flaga][ikona][nazwa].
         if show:
-            self.tab_widget.setTabIcon(index, self._question_icon())
-            self.tab_widget.tabBar().setTabToolTip(index, tr('dlg_agent_waiting_tooltip'))
+            bar.setTabButton(index, QTabBar.LeftSide, self._make_flag_widget())
+            bar.setTabToolTip(index, tr('dlg_agent_waiting_tooltip'))
         else:
-            # Przywróć bazową ikonę zakładki (własny plik agenta) zamiast pustej.
-            base = QIcon()
-            if isinstance(tab, AgentTab):
-                _, base = self._agent_label_icon(tab.agent_config)
-            self.tab_widget.setTabIcon(index, base)
-            self.tab_widget.tabBar().setTabToolTip(index, "")
+            bar.setTabButton(index, QTabBar.LeftSide, None)
+            bar.setTabToolTip(index, "")
 
     def _refresh_all_question_flags(self):
         """Przelicz flagi wszystkich zakładek (np. po zmianie aktywnej)."""
