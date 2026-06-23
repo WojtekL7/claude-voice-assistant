@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: cva
+      POSTGRES_PASSWORD: cva
+      POSTGRES_DB: cva
+    volumes:
+      - cva_pgdata:/var/lib/postgresql/data
+    # 5433 na hoście, żeby NIE kolidować z lokalnym Postgresem (5432)
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cva"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    environment:
+      DATABASE_URL: "postgresql+psycopg://cva:cva@db:5432/cva"
+      ADMIN_TOKEN: "${ADMIN_TOKEN:-dev-admin-token}"
+      IP_HASH_SALT: "${IP_HASH_SALT:-dev-salt}"
+      CORS_ORIGINS: "${CORS_ORIGINS:-*}"
+      TRIAL_DAYS: "30"
+      DEFAULT_MAX_DEVICES: "3"
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8088:8000"
+
+volumes:
+  cva_pgdata:
