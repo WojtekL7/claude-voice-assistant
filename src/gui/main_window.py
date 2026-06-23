@@ -639,7 +639,6 @@ class MainWindow(QMainWindow):
             }}
             QTabBar::tab {{
                 background-color: #2d0a1e;
-                color: #ffffff;
                 padding: 8px 16px;
                 margin-right: 2px;
                 border-top-left-radius: 6px;
@@ -696,6 +695,9 @@ class MainWindow(QMainWindow):
 
         # Add "+" tab at the end (must be after creating agent tabs)
         self._add_plus_tab()
+
+        # Kolory tekstu zakładek (po dodaniu „+"); QSS nie ustawia już 'color'.
+        self._recolor_all_tabs()
 
         main_layout.addWidget(self.tab_widget)
 
@@ -1058,6 +1060,9 @@ class MainWindow(QMainWindow):
         # Apply button icon styles to new tab
         self._apply_button_icon_styles()
 
+        # Kolor tekstu zakładki wg pola 'tab_color' agenta (Funkcja #2).
+        self._recolor_all_tabs()
+
         return agent_tab
 
     def _add_new_agent(self):
@@ -1322,6 +1327,9 @@ class MainWindow(QMainWindow):
         self._update_mcp_status_widget()
         self._refresh_context_label()
         self._handle_active_tab_switch()
+        # Funkcja #2: kolor tekstu zakładek + ramka okna w kolorze aktywnego agenta.
+        self._recolor_all_tabs()
+        self._apply_active_tab_frame()
         # Persist last_active_agent_id (settings JSON jest mały, ~2 KB,
         # zapis przy każdej zmianie zakładki jest niezauważalny).
         self._save_settings()
@@ -1638,6 +1646,9 @@ class MainWindow(QMainWindow):
             self.tab_widget.setTabText(index, label)
             if not getattr(tab, '_question_flag_shown', False):
                 self.tab_widget.setTabIcon(index, icon)
+        # Funkcja #2: po edycji kolor zakładki/ramki mógł się zmienić.
+        self._recolor_all_tabs()
+        self._apply_active_tab_frame()
 
     def _show_agents_manager_dialog(self):
         """Show agents manager dialog."""
@@ -3531,7 +3542,6 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
                 }}
                 QTabBar::tab {{
                     background-color: {colors.get('button_bg', '#2d0a1e')};
-                    color: {colors.get('text_color', '#ffffff')};
                     padding: 8px 16px;
                     margin-right: 2px;
                     border-top-left-radius: 6px;
@@ -3555,6 +3565,9 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
                     border-radius: 2px;
                 }}
             """)
+            # Kolor tekstu zakładek (zależy od skórki) + ramka aktywnej (Funkcja #2).
+            self._recolor_all_tabs()
+            self._apply_active_tab_frame()
 
         # Button icon styles (transparent with colored icons)
         self._apply_button_icon_styles()
@@ -3760,6 +3773,48 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
                 except Exception:
                     pass
         return f"🤖 {name}", QIcon()
+
+    # ============ Kolor zakładki + ramka okna (Funkcja #2) ============
+
+    def _agent_tab_color(self, agent_config):
+        """Zwróć hex koloru zakładki agenta (np. '#3b82f6') albo None."""
+        if isinstance(agent_config, dict):
+            c = agent_config.get('tab_color')
+            if isinstance(c, str) and c:
+                return c
+        return None
+
+    def _recolor_all_tabs(self):
+        """Ustaw kolor TEKSTU każdej zakładki: własny kolor agenta albo domyślny
+        kolor skórki. Sterujemy przez API (setTabTextColor), bo jawne 'color'
+        w arkuszu stylu QTabBar nadpisałoby ten kolor — dlatego usunęliśmy je
+        z QSS. Zakładka „+" i terminalowe bez koloru dostają domyślny."""
+        if not hasattr(self, 'tab_widget'):
+            return
+        bar = self.tab_widget.tabBar()
+        default = QColor(self.skin_colors.get('text_color', '#ffffff'))
+        for i in range(self.tab_widget.count()):
+            w = self.tab_widget.widget(i)
+            color = self._agent_tab_color(getattr(w, 'agent_config', None)) \
+                if isinstance(w, AgentTab) else None
+            bar.setTabTextColor(i, QColor(color) if color else default)
+
+    def _apply_active_tab_frame(self):
+        """Ramka całego okna w kolorze AKTYWNEGO agenta. Brak koloru → bez ramki.
+        Selektor po objectName, żeby nie kaskadować obramowania na dzieci."""
+        central = self.centralWidget()
+        if central is None:
+            return
+        if not central.objectName():
+            central.setObjectName('centralAccent')
+        tab = self._get_current_agent_tab()
+        color = self._agent_tab_color(getattr(tab, 'agent_config', None)) \
+            if isinstance(tab, AgentTab) else None
+        if color:
+            central.setStyleSheet(
+                f"QWidget#centralAccent {{ border: 3px solid {color}; border-radius: 6px; }}")
+        else:
+            central.setStyleSheet("")
 
     def _question_icon(self) -> QIcon:
         icon = getattr(self, "_question_icon_cached", None)

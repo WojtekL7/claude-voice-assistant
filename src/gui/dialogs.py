@@ -14,11 +14,11 @@ from PyQt5.QtWidgets import (
     QMessageBox, QListWidget, QListWidgetItem, QRadioButton,
     QButtonGroup, QWidget, QSplitter, QFrame, QInputDialog,
     QListView, QPlainTextEdit, QStackedWidget, QTabWidget, QProgressBar,
-    QScrollArea, QGridLayout
+    QScrollArea, QGridLayout, QColorDialog
 )
 from PyQt5.QtCore import Qt, QSize, QUrl, QTimer, pyqtSignal
 import threading
-from PyQt5.QtGui import QFont, QDesktopServices, QPixmap
+from PyQt5.QtGui import QFont, QDesktopServices, QPixmap, QColor
 
 import sys
 from pathlib import Path
@@ -658,6 +658,16 @@ AGENT_ICON_PALETTE = [
      ["📁", "🗂️", "📋", "✅", "🧠", "⭐", "🔥", "🤖"]),
 ]
 
+# Gotowa paleta kolorów zakładki (Funkcja #2). Kolor zabarwia tekst zakładki
+# oraz ramkę całego okna, gdy zakładka jest aktywna. Dobrane tak, by były
+# czytelne na ciemnym tle skórki.
+AGENT_TAB_COLORS = [
+    "#ef4444", "#f97316", "#f59e0b", "#eab308",
+    "#22c55e", "#10b981", "#14b8a6", "#06b6d4",
+    "#3b82f6", "#6366f1", "#8b5cf6", "#a855f7",
+    "#ec4899", "#f43f5e", "#94a3b8", "#e2e8f0",
+]
+
 
 class _ClickableLabel(QLabel):
     """QLabel z sygnałem clicked — renderuje kolorowe emoji (inaczej niż przycisk
@@ -900,6 +910,39 @@ class AgentConfigDialog(QDialog):
         icon_hint.setWordWrap(True)
         form.addRow("", icon_hint)
         self._update_icon_preview()
+
+        # Kolor zakładki (Funkcja #2): zabarwia tekst zakładki + ramkę okna gdy aktywna.
+        self.tab_color = self.agent.get('tab_color') if isinstance(self.agent.get('tab_color'), str) else None
+        color_layout = QHBoxLayout()
+        color_layout.setSpacing(4)
+        # _ClickableLabel (jak przy ikonie) — QLabel nie ma sygnału clicked.
+        self.color_preview = _ClickableLabel()
+        self.color_preview.setFixedSize(34, 34)
+        self.color_preview.setToolTip(tr('dlg_agent_color_tooltip'))
+        self.color_preview.setCursor(Qt.PointingHandCursor)
+        self.color_preview.clicked.connect(self._open_color_dialog)
+        color_layout.addWidget(self.color_preview)
+        # Inline paleta gotowych kolorów (szybki wybór bez dialogu systemowego).
+        for hexc in AGENT_TAB_COLORS:
+            sw = _ClickableLabel()
+            sw.setFixedSize(20, 20)
+            sw.setCursor(Qt.PointingHandCursor)
+            sw.setToolTip(hexc)
+            sw.setStyleSheet(
+                f"QLabel{{background:{hexc};border:1px solid #00000055;border-radius:4px;}}"
+                f"QLabel:hover{{border:2px solid #ffffff;}}")
+            sw.clicked.connect(lambda c=hexc: self._set_tab_color(c))
+            color_layout.addWidget(sw)
+        color_layout.addStretch()
+        color_clear_btn = QPushButton(tr('dlg_agent_color_clear'))
+        color_clear_btn.clicked.connect(self._clear_tab_color)
+        color_layout.addWidget(color_clear_btn)
+        form.addRow(tr('dlg_agent_color_label'), color_layout)
+        color_hint = QLabel(tr('dlg_agent_color_hint'))
+        color_hint.setStyleSheet("color: #888888; font-size: 11px;")
+        color_hint.setWordWrap(True)
+        form.addRow("", color_hint)
+        self._update_color_preview()
 
         # Model Claude Code
         chevron_path = str(ASSETS_DIR / "chevron-down.svg").replace("\\", "/")
@@ -1235,6 +1278,36 @@ class AgentConfigDialog(QDialog):
             self.icon_preview.setPixmap(QPixmap())
             self.icon_preview.setText("🤖")
 
+    # ---------- Kolor zakładki (Funkcja #2) ----------
+
+    def _open_color_dialog(self):
+        """Systemowy wybór koloru (pełna paleta). Pusty wybór = bez zmian."""
+        initial = QColor(self.tab_color) if self.tab_color else QColor("#8b5cf6")
+        color = QColorDialog.getColor(initial, self, tr('dlg_agent_color_label'))
+        if color.isValid():
+            self._set_tab_color(color.name())
+
+    def _set_tab_color(self, hexc: str):
+        self.tab_color = hexc
+        self._update_color_preview()
+
+    def _clear_tab_color(self):
+        self.tab_color = None
+        self._update_color_preview()
+
+    def _update_color_preview(self):
+        """Pokaż aktualny kolor w podglądzie; brak = szary placeholder ze znakiem."""
+        if self.tab_color:
+            self.color_preview.setText("")
+            self.color_preview.setStyleSheet(
+                f"background:{self.tab_color};border:1px solid #00000055;border-radius:4px;")
+        else:
+            self.color_preview.setText("∅")
+            self.color_preview.setStyleSheet(
+                "background:#2d0a1e;color:#888888;border:1px solid #4a1a3a;"
+                "border-radius:4px;font-size:16px;")
+            self.color_preview.setAlignment(Qt.AlignCenter)
+
     def _save(self):
         """Validate and save."""
         name = self.name_input.text().strip()
@@ -1279,6 +1352,7 @@ class AgentConfigDialog(QDialog):
             'send_memory_on_start': self.send_memory_checkbox.isChecked(),
             'model': self.model_combo.currentData() or DEFAULT_AGENT_MODEL,
             'icon': self.icon_spec,
+            'tab_color': self.tab_color,
         }
         # splitter_sizes tylko dla agenta, który już je ma (edycja istniejącego).
         # Nowy agent zostaje bez klucza — MainWindow dziedziczy proporcje
