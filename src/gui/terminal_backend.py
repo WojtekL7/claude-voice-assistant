@@ -30,7 +30,7 @@ from pathlib import Path
 
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtWidgets import QWidget, QApplication
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QClipboard
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from core.platform_utils import is_macos, is_windows, default_shell
@@ -222,6 +222,18 @@ class QTermWidgetBackend(TerminalBackend):
         self._term.receivedData.connect(self._on_received)
         self._term.finished.connect(self.finished)
 
+        # Zaznaczenie tekstu — pamięć podręczna. Chwytamy zaznaczony tekst
+        # W MOMENCIE puszczenia myszy (sygnał `copyAvailable(True)`), żeby
+        # kopiowanie/odczyt miały pewne źródło, gdyby późniejszy odczyt na żywo
+        # zwrócił pustkę. UWAGA: gdy program w terminalu (Claude Code) używa myszy
+        # do swojego interfejsu, zwykłe przeciągnięcie NIE zaznacza — trzeba
+        # przytrzymać Shift (standard terminali). Wtedy to wszystko działa.
+        self._cached_selection = ""
+        try:
+            self._term.copyAvailable.connect(self._on_copy_available)
+        except Exception:
+            pass  # starszy QTermWidget bez tego sygnału — zostaje sam odczyt na żywo
+
     @property
     def widget(self) -> QWidget:
         return self._term
@@ -257,11 +269,44 @@ class QTermWidgetBackend(TerminalBackend):
     def send_text(self, text: str):
         self._term.sendText(text)
 
+    def _on_copy_available(self, available: bool):
+        """Sygnał QTermWidget: zmieniła się dostępność zaznaczenia (mysz puszczona).
+        Gdy jest co kopiować — zapamiętaj tekst od razu (najpewniejszy moment)."""
+        if available:
+            try:
+                self._cached_selection = self._term.selectedText() or ""
+            except Exception:
+                self._cached_selection = ""
+        else:
+            self._cached_selection = ""
+
     def selected_text(self) -> str:
-        return self._term.selectedText()
+        """Zaznaczony tekst: najpierw świeży odczyt, w razie pustki — zapamiętany."""
+        live = ""
+        try:
+            live = self._term.selectedText() or ""
+        except Exception:
+            live = ""
+        return live or self._cached_selection
 
     def copy_selection(self):
-        self._term.copyClipboard()
+        """Skopiuj zaznaczenie do schowka. Pewniej niż `copyClipboard()`:
+        wprost przez Qt do schowka „Clipboard" (Ctrl+V) ORAZ „Selection"
+        (środkowy przycisk) — działa też na Wayland/GNOME. Zwraca liczbę
+        skopiowanych znaków (0 = brak zaznaczenia) do podglądu w pasku statusu."""
+        text = self.selected_text()
+        if text:
+            cb = QApplication.clipboard()
+            cb.setText(text, QClipboard.Clipboard)
+            if cb.supportsSelection():
+                cb.setText(text, QClipboard.Selection)
+        else:
+            # Brak zaznaczenia w modelu — ostatnia próba przez natywną kopię.
+            try:
+                self._term.copyClipboard()
+            except Exception:
+                pass
+        return len(text)
 
     def set_font(self, family: str, size: int):
         font = QFont(family, size)
@@ -338,7 +383,9 @@ class WebTerminalBackend(TerminalBackend):
 
     def copy_selection(self):
         # Schowek przez Qt działa wszędzie (w tym macOS/Windows).
-        QApplication.clipboard().setText(self.selected_text() or "")
+        text = self.selected_text() or ""
+        QApplication.clipboard().setText(text)
+        return len(text)
 
     def set_font(self, family: str, size: int):
         self._font = (family, size)

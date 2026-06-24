@@ -753,13 +753,20 @@ class AgentTab(QWidget):
         self.request_tts_stop.emit()
 
     def _copy_selection(self):
-        """Copy selected text from terminal."""
+        """Copy selected text from terminal.
+
+        Podgląd w pasku statusu pokazuje liczbę skopiowanych znaków (0 = brak
+        zaznaczenia) — i informacja dla użytkownika, i szybka diagnoza, czy
+        terminal w ogóle widzi zaznaczenie."""
         if self.terminal_backend:
-            self.terminal_backend.copy_selection()
-            self.status_changed.emit("Skopiowano do schowka")
+            n = self.terminal_backend.copy_selection() or 0
+            if n > 0:
+                self.status_changed.emit(tr('status_copied_chars').format(n=n))
+            else:
+                self.status_changed.emit(tr('status_copy_no_selection'))
         elif self.conversation_area:
             self.conversation_area.copy()
-            self.status_changed.emit("Skopiowano do schowka")
+            self.status_changed.emit(tr('status_copied_clipboard'))
 
     def _clear_input_field(self):
         """Clear the input field."""
