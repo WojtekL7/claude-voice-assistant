@@ -41,7 +41,7 @@ hiddenimports = [
     "PyQt5.QtCore", "PyQt5.QtGui", "PyQt5.QtWidgets",
     "PyQt5.QtWebEngineWidgets", "PyQt5.QtWebChannel",
     "edge_tts", "pygame", "sounddevice", "numpy", "scipy", "requests",
-    "ptyprocess", "pexpect",
+    "ptyprocess", "pexpect", "psutil",
 ]
 
 a = Analysis(

@@ -10,7 +10,7 @@ APP_NAME = "Claude Voice Assistant"
 # APP_VERSION — JEDYNE źródło prawdy o wersji. Używane przez auto-aktualizację
 # (M3) do porównania z wersją w pliku appcast na serwerze. Podbijaj przy każdym
 # wydaniu (semver: MAJOR.MINOR.PATCH).
-APP_VERSION = "1.0.21"
+APP_VERSION = "1.0.22"
 APP_AUTHOR = "Fulfillment Polska"
 
 # Tryb deweloperski — uruchomienie WPROST z kodu (`python3 src/main.py`).
@@ -740,6 +740,17 @@ UI_TRANSLATIONS = {
         # --- Lampka „nowa wersja" w pasku statusu ---
         "update_indicator_text": "⬆ Nowa wersja",
         "update_indicator_tooltip": "Dostępna jest nowa wersja. Kliknij, aby pobrać i zainstalować.",
+        # --- Wskaźnik zużycia pamięci RAM w pasku statusu ---
+        "ram_indicator_loading": "Pamięć RAM — pomiar…",
+        "ram_indicator_swap_none": "brak",
+        "ram_indicator_tooltip": (
+            "Pamięć komputera (RAM)\n"
+            "Program (z Claude Code): {prog}\n"
+            "System: {used} / {total} ({pct}%)\n"
+            "Plik wymiany (swap): {swap}\n\n"
+            "Kolor ostrzega przed zawieszeniem, gdy pamięć się zapełnia:\n"
+            "zielony → żółty → pomarańczowy → czerwony."
+        ),
         # --- ClaudeSetupDialog ---
         "dlg_setup_title": "Dokończ instalację — potrzebny Claude Code",
         "dlg_setup_header": "Jeszcze jeden krok — zainstaluj Claude Code",
@@ -1445,6 +1456,17 @@ UI_TRANSLATIONS = {
         # --- "New version" indicator in the status bar ---
         "update_indicator_text": "⬆ New version",
         "update_indicator_tooltip": "A new version is available. Click to download and install.",
+        # --- RAM usage indicator in the status bar ---
+        "ram_indicator_loading": "RAM — measuring…",
+        "ram_indicator_swap_none": "none",
+        "ram_indicator_tooltip": (
+            "Computer memory (RAM)\n"
+            "App (incl. Claude Code): {prog}\n"
+            "System: {used} / {total} ({pct}%)\n"
+            "Swap file: {swap}\n\n"
+            "Color warns about freezes as memory fills up:\n"
+            "green → yellow → orange → red."
+        ),
         # --- ClaudeSetupDialog ---
         "dlg_setup_title": "Finish setup — Claude Code is required",
         "dlg_setup_header": "One more step — install Claude Code",

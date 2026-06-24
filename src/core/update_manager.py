@@ -400,21 +400,48 @@ class UpdateManager(QObject):
             start_new_session=True)
 
     def _windows_self_replace(self, installer_path):
-        """Uruchom pobrany instalator Inno PO CICHU i odłączony od tej aplikacji.
+        """Zaktualizuj na Windows BEZ wyścigu o zablokowane pliki.
 
-        Instalator jest per-user ({localappdata}) → bez UAC. Z `CloseApplications=yes`
-        w skrypcie .iss Inno (Restart Manager) zamknie działającą aplikację, podmieni
-        pliki i — dzięki sekcji [Run] bez `skipifsilent` — wznowi nową wersję. My zaraz
-        po starcie instalatora emitujemy `relaunch_ready` (aplikacja sama się zamyka),
-        więc pliki nie są zablokowane.
+        Pułapka, którą to naprawia: dawniej instalator startował, gdy aplikacja
+        JESZCZE działała (a do tego wisiało blokujące okienko „Gotowe") → jej pliki
+        i procesy potomne (wbudowana przeglądarka QtWebEngine, terminale winpty)
+        były zajęte → cicha instalacja nie mogła ich podmienić i użytkownik zostawał
+        na starej wersji.
 
-        DETACHED_PROCESS + CREATE_NEW_PROCESS_GROUP: instalator przeżyje zamknięcie
-        aplikacji (inaczej zginąłby razem z procesem-rodzicem)."""
+        Rozwiązanie jak na macOS/Linux: odpalamy mały POMOCNIK (skrypt .cmd), który
+        najpierw CZEKA aż ta aplikacja (jej PID) zniknie, a DOPIERO POTEM uruchamia
+        instalator po cichu. Aplikacja zamyka się od razu (bez modala — patrz
+        `dialogs._on_relaunch_ready`), więc pliki są wolne. Instalator (Inno, per-user,
+        [InstallDelete] czyści stary folder, [Run] wznawia program) kończy resztę.
+
+        DETACHED_PROCESS + CREATE_NEW_PROCESS_GROUP: pomocnik przeżyje zamknięcie
+        aplikacji (inaczej zginąłby razem z procesem-rodzicem). `ping` zamiast
+        `timeout` — `timeout` w procesie bez konsoli pada na braku wejścia."""
         DETACHED_PROCESS = getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
         CREATE_NEW_PROCESS_GROUP = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200)
+        CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+
+        pid = os.getpid()
+        staging = Path(tempfile.mkdtemp(prefix="cva-update-"))
+        helper = staging / "cva-update.cmd"
+        # Czeka aż PID zniknie (find zwraca errorlevel 1, gdy procesu już nie ma),
+        # potem uruchamia instalator po cichu. Pętla z ~1 s pauzą (ping).
+        helper.write_text(
+            "@echo off\r\n"
+            "setlocal\r\n"
+            f"set PID={pid}\r\n"
+            ":waitloop\r\n"
+            'tasklist /FI "PID eq %PID%" 2>nul | find "%PID%" >nul\r\n'
+            "if errorlevel 1 goto run\r\n"
+            "ping -n 2 127.0.0.1 >nul\r\n"
+            "goto waitloop\r\n"
+            ":run\r\n"
+            "ping -n 2 127.0.0.1 >nul\r\n"
+            f'"{installer_path}" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART\r\n',
+            encoding="utf-8")
         subprocess.Popen(
-            [str(installer_path), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"],
-            creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+            ["cmd", "/c", str(helper)],
+            creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW,
             close_fds=True)
 
     def _linux_self_replace(self, appimage_path_new, target: Path):

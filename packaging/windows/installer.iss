@@ -60,6 +60,16 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 ; Claude Code (Check). Domyślnie zaznaczone — laik klika Dalej i ma komplet.
 Name: "nodecli"; Description: "Pobierz i zainstaluj Node.js + Claude Code (wymagane do działania programu)"; GroupDescription: "Dodatki wymagane do działania:"; Check: NodeCliMissing
 
+[InstallDelete]
+; Przy AKTUALIZACJI wyczyść stary zestaw plików PyInstallera PRZED wgraniem nowego.
+; PyInstaller (onedir) trzyma biblioteki w podfolderze "_internal"; między wersjami
+; zestaw plików potrafi się różnić, a kopiowanie nowych NIE usuwa starych →
+; „mieszanka" niepasujących bibliotek wywala start. Czyścimy folder programu, ale
+; NIE dane użytkownika (te są w %USERPROFILE%\.claude-voice-assistant, poza {app}).
+Type: filesandordirs; Name: "{app}\_internal"
+Type: files; Name: "{app}\*.dll"
+Type: files; Name: "{app}\*.pyd"
+
 [Files]
 ; Cała zawartość folderu onedir z PyInstallera.
 Source: "{#ProjectRoot}\dist\{#AppName}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion

@@ -3943,14 +3943,23 @@ class UpdateAvailableDialog(QDialog):
         self.manager.apply_update_async(path)
 
     def _on_relaunch_ready(self):
-        """macOS: podmiana przygotowana — zamknij aplikację, pomocnik ją wznowi."""
+        """Podmiana przygotowana — zamknij aplikację, pomocnik ją wznowi.
+
+        Windows: NIE pokazujemy blokującego okienka — pomocnik (cva-update.cmd)
+        czeka, aż program zniknie, i dopiero wtedy podmienia pliki. Każda sekunda
+        z otwartym modalem to sekunda z ZABLOKOWANYMI plikami → instalacja by się
+        nie udała (to był właśnie błąd „zostaje na starej wersji"). Dlatego na
+        Windows zamykamy NATYCHMIAST. Na macOS zostawiamy krótką informację —
+        tam pomocnik też czeka na PID, więc modal niczego nie blokuje."""
         from PyQt5.QtWidgets import QApplication
+        from core.platform_utils import is_windows
         self.status_label.setText(tr('dlg_update_relaunch_status'))
-        QMessageBox.information(
-            self, tr('dlg_update_ready_title'),
-            tr('dlg_update_ready_msg'))
+        if not is_windows():
+            QMessageBox.information(
+                self, tr('dlg_update_ready_title'),
+                tr('dlg_update_ready_msg'))
         self.accept()
-        # Zamknij całą aplikację — pomocnik czeka na to, by podmienić pakiet.
+        # Zamknij całą aplikację — pomocnik czeka na to, by podmienić pliki.
         QApplication.instance().quit()
 
     def _on_installer_opened(self, path):

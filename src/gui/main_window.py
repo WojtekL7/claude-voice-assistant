@@ -372,6 +372,7 @@ from gui.dialogs import (
     styled_get_open_file_names, styled_get_open_file_name, styled_get_save_file_name
 )
 from gui.mcp_status_widget import McpStatusWidget
+from gui.resource_monitor import ResourceMonitorWidget
 
 # Domyślne kolory skórki (motyw Ubuntu) - interfejs + terminal
 DEFAULT_SKIN_COLORS = {
@@ -548,14 +549,9 @@ class MainWindow(QMainWindow):
             public_key=UPDATE_PUBLIC_KEY, download_dir=UPDATE_DOWNLOAD_DIR)
         # True = sprawdzanie wywołane ręcznie z menu (wtedy pokazujemy też wynik
         # „masz najnowszą"/błąd); False = ciche sprawdzanie przy starcie.
+        # Aktualizacje sprawdzamy WYŁĄCZNIE przy starcie (i ręcznie z menu) —
+        # nie przy zamykaniu, więc zamknięcie jest natychmiastowe.
         self._manual_update_check = False
-        # Sprawdzanie aktualizacji PRZY ZAMYKANIU (Etap 1):
-        #  _force_close          — pomiń sprawdzanie, zamknij naprawdę (2. wywołanie close)
-        #  _update_checked_on_close — sprawdziliśmy już raz w tej sesji przy zamykaniu
-        #  _close_check_in_progress — czekamy na wynik sprawdzania uruchomionego z closeEvent
-        self._force_close = False
-        self._update_checked_on_close = False
-        self._close_check_in_progress = False
 
         # Settings
         self.current_language = "pl-PL"
@@ -872,6 +868,14 @@ class MainWindow(QMainWindow):
         self.mcp_status_widget.request_edit_agent.connect(self._open_edit_agent_from_status)
         # Drugie addPermanentWidget — ląduje bardziej na lewo niż _context_label
         self.status_bar.addPermanentWidget(self.mcp_status_widget)
+
+        # Wskaźnik zużycia RAM — ikona „kości RAM" zmieniająca kolor wg obciążenia
+        # pamięci komputera (zielony→żółty→pomarańczowy→czerwony). Ostrzega przed
+        # zawieszeniem przy zapchanej pamięci. Niezależny od aktywnej zakładki;
+        # sam się odświeża. Ukrywa się, gdy brak biblioteki psutil.
+        self.resource_monitor = ResourceMonitorWidget()
+        self.status_bar.addPermanentWidget(self.resource_monitor)
+
         # Synchronizuj z aktywną zakładką (która już istnieje po _create_agent_tabs)
         self._update_mcp_status_widget()
         # Inicjalna wartość globalnego licznika (Σ 0)
@@ -2050,29 +2054,23 @@ class MainWindow(QMainWindow):
 
     def _on_update_available(self, info):
         """Jest nowsza wersja. Zawsze zapalamy lampkę „nowa wersja" w pasku.
-        Okno pobierania otwieramy SAMO tylko gdy user sprawdzał ręcznie albo
-        przy zamykaniu; przy cichym sprawdzaniu przy starcie zostaje sama lampka
-        (nienachalnie — klik w nią otwiera okno)."""
+        Okno pobierania otwieramy SAMO tylko gdy user sprawdzał ręcznie z menu;
+        przy cichym sprawdzaniu przy starcie zostaje sama lampka (nienachalnie —
+        klik w nią otwiera okno)."""
         was_manual = self._manual_update_check
         self._manual_update_check = False
         self._update_status("")
-        was_closing = self._close_check_in_progress
-        self._close_check_in_progress = False
         # Lampka — niezależnie od trybu (zostaje jako przypomnienie).
         self._pending_update_info = info
         if hasattr(self, '_update_indicator'):
             self._update_indicator.setVisible(True)
-        if was_manual or was_closing:
-            self._show_update_dialog(info, was_closing)
+        if was_manual:
+            self._show_update_dialog(info)
 
-    def _show_update_dialog(self, info, was_closing=False):
+    def _show_update_dialog(self, info):
         """Otwórz okno pobierania/instalacji dla danej aktualizacji."""
         dlg = UpdateAvailableDialog(self.update_manager, info, APP_VERSION, self)
         dlg.exec_()
-        # Jeśli pytaliśmy przy zamykaniu, a użytkownik nie zaktualizował teraz
-        # (kliknął „Później") — dokończ zamykanie aplikacji.
-        if was_closing:
-            self._finish_close()
 
     def _open_pending_update(self):
         """Klik w lampkę „nowa wersja" — otwórz okno dla zapamiętanej wersji."""
@@ -2082,11 +2080,6 @@ class MainWindow(QMainWindow):
 
     def _on_no_update(self):
         """Brak nowszej — informuj tylko, gdy użytkownik sprawdzał ręcznie."""
-        if self._close_check_in_progress:
-            self._close_check_in_progress = False
-            self._update_status("")
-            self._finish_close()
-            return
         if self._manual_update_check:
             self._manual_update_check = False
             QMessageBox.information(
@@ -2095,29 +2088,12 @@ class MainWindow(QMainWindow):
 
     def _on_update_check_failed(self, msg):
         """Błąd sprawdzania — komunikat tylko przy ręcznym; przy cichym milczy."""
-        if self._close_check_in_progress:
-            # Brak internetu przy zamykaniu nie może blokować zamknięcia.
-            self._close_check_in_progress = False
-            self._update_status("")
-            self._finish_close()
-            return
         if self._manual_update_check:
             self._manual_update_check = False
             QMessageBox.warning(
                 self, "Aktualizacje",
                 f"Nie udało się sprawdzić aktualizacji.\n\n{msg}")
         self._update_status("")
-
-    def _close_check_timeout(self):
-        """Bezpiecznik: jeśli serwer milczy ~4 s przy zamykaniu — zamknij i tak."""
-        if self._close_check_in_progress:
-            self._close_check_in_progress = False
-            self._finish_close()
-
-    def _finish_close(self):
-        """Dokończ zamykanie aplikacji, pomijając ponowne sprawdzanie."""
-        self._force_close = True
-        self.close()
 
     def _on_auto_check_updates_toggled(self, checked):
         """Przełącznik 'Sprawdzaj przy starcie' z menu."""
@@ -4088,24 +4064,12 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         # This prevents unwanted jumps on rotated/portrait monitors
 
     def closeEvent(self, event):
-        """Handle window close."""
-        # Sprawdzenie aktualizacji PRZY ZAMYKANIU (Etap 1): zanim zamkniemy,
-        # raz na sesję cicho pytamy serwer o nowszą wersję. Jeśli jest — okno
-        # „aktualizować? tak/nie". Bezpiecznik 4 s, by brak/wolny internet nie
-        # blokował zamykania. _force_close pomija ten krok przy ponownym close().
-        if (getattr(self, 'auto_check_updates', True)
-                and not self._force_close
-                and not self._update_checked_on_close
-                and not self._close_check_in_progress):
-            self._update_checked_on_close = True
-            self._close_check_in_progress = True
-            self._manual_update_check = False
-            self._update_status(tr('status_checking_updates_close'))
-            QTimer.singleShot(4000, self._close_check_timeout)
-            self.update_manager.check_async()
-            event.ignore()
-            return
+        """Handle window close.
 
+        Aktualizacje sprawdzamy WYŁĄCZNIE przy starcie aplikacji (patrz
+        `_maybe_auto_check_updates`). Zamykanie jest natychmiastowe — żadnego
+        odpytywania serwera „na wyjściu", które kiedyś opóźniało zamknięcie.
+        """
         # Remove menu position fixer
         if hasattr(self, '_menu_fixer'):
             QApplication.instance().removeEventFilter(self._menu_fixer)
@@ -4113,6 +4077,10 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         # Stop scroll manager
         if hasattr(self, '_scroll_manager') and self._scroll_manager:
             self._scroll_manager.stop()
+
+        # Zatrzymaj wskaźnik zużycia RAM (timer odświeżania).
+        if hasattr(self, 'resource_monitor') and self.resource_monitor is not None:
+            self.resource_monitor.stop()
 
         self.tts.stop()
         self.stt.cancel_recording()
