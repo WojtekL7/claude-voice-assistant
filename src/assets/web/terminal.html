@@ -99,8 +99,39 @@
       }).catch(function () {});
     }
 
+    // ===== Zaznaczanie "jak w zwykłym terminalu" (bez Shift) — WebTerminal =====
+    // Problem: gdy działa Claude (TUI), włącza RAPORTOWANIE MYSZY (DECSET ?1000..?1006 h)
+    // → xterm.js wysyła ruchy myszy do programu zamiast zaznaczać (dawniej trzeba było
+    // Shift), a częste odświeżenia ekranu Claude zmazują zaznaczenie.
+    // Rozwiązanie dwuczęściowe:
+    //  (B1) wycinamy z wyjścia sekwencje WŁĄCZAJĄCE mysz → xterm NIGDY nie wchodzi w
+    //       tryb myszy → przeciągnięcie zaznacza natywnie, bez Shift (jak czysty bash).
+    //       Sekwencje WYŁĄCZAJĄCE (…l) przepuszczamy. Reszta wyjścia nietknięta.
+    //  (B2) na czas przeciągania ZAMRAŻAMY rysowanie wyjścia (kolejkujemy), żeby
+    //       odświeżenie Claude nie zmazało zaznaczenia; po puszczeniu myszy łapiemy
+    //       tekst i dorysowujemy zaległe wyjście.
+    // Claude traci obsługę myszy w swoim oknie (przewijanie kółkiem działa natywnie) —
+    // świadomy kompromis na rzecz pewnego zaznaczania/kopiowania.
+    var _carry = "";   // urwana sekwencja prywatna na styku porcji danych (B1)
+    function _stripMouse(data) {
+      data = _carry + data; _carry = "";
+      var m = data.match(/\x1b\[\?[0-9;]*$/);             // niedokończona ?... na końcu → przytrzymaj
+      if (m) { _carry = m[0]; data = data.slice(0, data.length - m[0].length); }
+      return data.replace(/\x1b\[\?(?:1000|1001|1002|1003|1005|1006|1015|1016)h/g, "");
+    }
+    var _writePaused = false, _writeQueue = [], _unfreezeTimer = null;   // B2
+    function _flushWrites() {
+      _writePaused = false;
+      if (_writeQueue.length) { var j = _writeQueue.join(""); _writeQueue = []; term.write(j); }
+    }
+    function safeWrite(data) {
+      data = _stripMouse(data);
+      if (!data) return;
+      if (_writePaused) _writeQueue.push(data); else term.write(data);
+    }
+
     // Funkcje wołane z Pythona.
-    window.__termWrite  = function (data) { term.write(data); };
+    window.__termWrite  = function (data) { safeWrite(data); };
     window.__termClear  = function () { term.clear(); };
     window.__termFocus  = function () { term.focus(); };
     // Pełny motyw xterm: tło, tekst, kursor, zaznaczenie + 16 kolorów ANSI.
@@ -118,8 +149,9 @@
     new QWebChannel(qt.webChannelTransport, function (channel) {
       const bridge = channel.objects.bridge;
       window.__bridge = bridge;  // udostępnij obsłudze upuszczania plików (drop) — patrz niżej
-      // Python → terminal (wyjście PTY).
-      bridge.output.connect(function (data) { term.write(data); });
+      // Python → terminal (wyjście PTY). Przez safeWrite: B1 (wytnij tryb myszy)
+      // + B2 (zamrożenie na czas przeciągania) — patrz blok wyżej.
+      bridge.output.connect(function (data) { safeWrite(data); });
       if (bridge.closed) bridge.closed.connect(function () {
         term.write('\r\n\x1b[90m[proces zakończony]\x1b[0m\r\n');
       });
@@ -143,14 +175,14 @@
 
     window.addEventListener('resize', function () { fitAddon.fit(); });
 
-    // ===== Utrzymanie zaznaczenia do kopiowania (WebTerminal) =====
-    // Potwierdzone diagnostycznie: gdy Claude (TUI) przejmie mysz, Shift+przeciagniecie
-    // ZAZNACZA poprawnie (dlugosc rosnie), ale odswiezenie ekranu Claude KASUJE
-    // zaznaczenie po ~1-2 s. QTermWidget trzyma zaznaczenie mimo odswiezen, xterm.js
-    // nie. Dlatego w trakcie przeciagania PROBKUJEMY zaznaczenie i wysylamy ostatnie
-    // NIEPUSTE do Pythona (_selection), z ktorego czyta kopiowanie
-    // (terminal_backend.WebTerminalBackend.copy_selection). Dzieki temu kopiowanie
-    // dziala, mimo ze podswietlenie miga. Pustym nigdy nie nadpisujemy.
+    // ===== Utrzymanie zaznaczenia + zamrożenie na czas przeciągania (B2) =====
+    // W trakcie przeciągania myszą: (1) WSTRZYMUJEMY rysowanie wyjścia (_writePaused),
+    // żeby odświeżenie Claude nie zmazało zaznaczenia; (2) próbkujemy zaznaczenie.
+    // Po puszczeniu myszy: łapiemy ostatnie NIEPUSTE zaznaczenie do Pythona
+    // (_selection — stąd czyta kopiowanie/odczyt: WebTerminalBackend.copy_selection),
+    // potem ODMRAŻAMY i dorysowujemy zaległe wyjście. Pustym nigdy nie nadpisujemy.
+    // Bezpiecznik czasowy gwarantuje, że nigdy nie zostaniemy zamrożeni (gdyby
+    // mouseup przepadł, np. puszczenie poza oknem).
     (function () {
       var el = document.getElementById('terminal');
       var poll = null;
@@ -160,16 +192,24 @@
           if (s && window.__bridge) window.__bridge.set_selection(s);
         } catch (e) {}
       }
-      el.addEventListener('mousedown', function () {
+      function startDrag() {
+        _writePaused = true;
+        if (_unfreezeTimer) clearTimeout(_unfreezeTimer);
+        _unfreezeTimer = setTimeout(endDrag, 6000);   // bezpiecznik: nie zostań zamrożony
         if (poll) clearInterval(poll);
-        poll = setInterval(grab, 80);   // lap zaznaczenie w trakcie ciagniecia, zanim Claude je zetrze
-      }, true);
-      window.addEventListener('mouseup', function () {
+        poll = setInterval(grab, 80);
+      }
+      function endDrag() {
         grab();
-        setTimeout(function () { grab(); if (poll) { clearInterval(poll); poll = null; } }, 150);
-      }, true);
+        if (poll) { clearInterval(poll); poll = null; }
+        if (_unfreezeTimer) { clearTimeout(_unfreezeTimer); _unfreezeTimer = null; }
+        // Daj zaznaczeniu „osiąść", złap raz jeszcze, potem odmroź i dorysuj zaległe.
+        setTimeout(function () { grab(); _flushWrites(); }, 120);
+      }
+      el.addEventListener('mousedown', startDrag, true);
+      window.addEventListener('mouseup', endDrag, true);
     })();
-    // ===== koniec utrzymania zaznaczenia =====
+    // ===== koniec =====
 
     // ---- Upuszczanie plików (drag & drop) ----
     // WebTerminal działa na Chromium (QtWebEngine). BEZ tego Chromium reaguje na
