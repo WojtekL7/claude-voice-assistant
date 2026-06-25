@@ -21,6 +21,7 @@ import os
 import re
 import json
 import glob
+import time
 from pathlib import Path
 from typing import List, Optional
 
@@ -60,12 +61,21 @@ class TranscriptReader:
         self._project_dir = self._find_project_dir()
         self._session_file = None
         self._offset = 0
+        # Moment startu czytnika (zegar ścienny). Służy do "przygarnięcia"
+        # sesji, która ISTNIAŁA już przy starcie, ale jest dalej zapisywana
+        # PO nim (= wznowiona sesja tej zakładki po restarcie/reopenie) — patrz
+        # _newest_session_file. mtime pliku i time.time() są w tym samym zegarze.
+        self._reader_start = time.time()
         # Sesją ZAKŁADKI jest plik, który powstanie PO jej starcie (czytnik
         # tworzymy w chwili uruchamiania claude). Pliki istniejące wcześniej —
         # w tym RÓWNOLEGŁE sesje Claude Code w tym samym katalogu (np. osobne
-        # okno terminala) — ignorujemy na zawsze. Bez tego "najnowszy plik
-        # po mtime" przeskakiwał na obcą, aktywnie pisaną sesję i zakładka
-        # czytała cudzy dziennik (auto-czytanie/flaga "?" ślepe na własny).
+        # okno terminala) — domyślnie pomijamy. WYJĄTEK (samonaprawa): jeśli
+        # zakładka NIE utworzyła własnego nowego pliku (np. po self-update apka
+        # wstała, a Claude WZNOWIŁ istniejący plik), przygarniamy plik istniejący
+        # wcześniej, ALE zapisywany po starcie czytnika — to żywa sesja tej
+        # zakładki. Stare, NIETKNIĘTE pliki dalej pomijamy (żeby nie czytać
+        # cudzych/starych wypowiedzi). Bez wznowienia "najnowszy po mtime"
+        # przeskakiwałby na obcą, aktywnie pisaną sesję.
         self._preexisting = self._existing_session_files()
 
     def _existing_session_files(self) -> set:
@@ -115,20 +125,50 @@ class TranscriptReader:
             if not self._project_dir:
                 return None
         files = glob.glob(str(self._project_dir / "*.jsonl"))
-        # Tylko pliki powstałe PO starcie zakładki (patrz set_working_directory).
-        # /clear w zakładce tworzy kolejny nowy plik → naturalnie przejmujemy.
-        candidates = [f for f in files if f not in getattr(self, "_preexisting", set())]
-        if not candidates:
-            return None
-        return max(candidates, key=lambda p: os.path.getmtime(p))
+        pre = getattr(self, "_preexisting", set())
+        # Poziom 1 (preferowany): pliki powstałe PO starcie zakładki — własna
+        # nowa sesja / kolejny plik po /clear. Tu zachowana stara ochrona:
+        # gdy zakładka ma swój świeży plik, cudze/stare sesje są ignorowane.
+        fresh = [f for f in files if f not in pre]
+        if fresh:
+            return max(fresh, key=self._safe_mtime)
+        # Poziom 2 (samonaprawa): brak własnego nowego pliku → przygarnij sesję,
+        # która ISTNIAŁA wcześniej, ale jest zapisywana PO starcie czytnika
+        # (mtime > _reader_start) — to wznowiona żywa sesja tej zakładki.
+        # Stare, nietknięte pliki (mtime <= start) zostają pominięte.
+        start = getattr(self, "_reader_start", 0)
+        resumed = [f for f in files if self._safe_mtime(f) > start]
+        if resumed:
+            return max(resumed, key=self._safe_mtime)
+        return None
+
+    @staticmethod
+    def _safe_mtime(path: str) -> float:
+        try:
+            return os.path.getmtime(path)
+        except OSError:
+            return 0.0
+
+    @staticmethod
+    def _safe_size(path: str) -> int:
+        try:
+            return os.path.getsize(path)
+        except OSError:
+            return 0
 
     def _ensure_session(self):
         """Upewnij się, że śledzimy najnowszy plik sesji (obsługa rotacji)."""
         newest = self._newest_session_file()
         if newest != self._session_file:
-            # Pojawił się nowy plik sesji (np. po /clear) — czytaj od początku.
             self._session_file = newest
-            self._offset = 0
+            if newest and newest in getattr(self, "_preexisting", set()):
+                # Przygarnięto wznowioną sesję istniejącą wcześniej — ma już
+                # historię. Przeskocz na KONIEC, żeby nie odgrywać na głos całej
+                # dotychczasowej rozmowy (czytamy tylko to, co przyjdzie dalej).
+                self._offset = self._safe_size(newest)
+            else:
+                # Świeży plik (nowa sesja / po /clear) — czytaj od początku.
+                self._offset = 0
 
     def seek_to_end(self):
         """Przeskocz na koniec bieżącej sesji (pomiń zaległości)."""
