@@ -126,7 +126,15 @@
       // terminal → Python.
       term.onData(function (d) { bridge.send_input(d); });
       term.onResize(function (sz) { bridge.resize(sz.cols, sz.rows); });
-      term.onSelectionChange(function () { bridge.set_selection(term.getSelection()); });
+      // Tylko NIEPUSTE zaznaczenia trafiaja do Pythona. Claude (TUI) co chwile
+      // odswieza ekran, a xterm.js KASUJE wtedy zaznaczenie (selectionChange z
+      // pustym tekstem). Bez tego straznika kazde odswiezenie zerowaloby
+      // _selection i kopiowanie zwracaloby pustke. Zapamietane zaznaczenie
+      // zostaje do skopiowania (patrz tez blok "Utrzymanie zaznaczenia" nizej).
+      term.onSelectionChange(function () {
+        var s = term.getSelection();
+        if (s) bridge.set_selection(s);
+      });
       // Dopasuj rozmiar i zgłoś gotowość (Python odpali wtedy powłokę).
       fitAddon.fit();
       bridge.frontend_ready(term.cols, term.rows);
@@ -134,6 +142,34 @@
     });
 
     window.addEventListener('resize', function () { fitAddon.fit(); });
+
+    // ===== Utrzymanie zaznaczenia do kopiowania (WebTerminal) =====
+    // Potwierdzone diagnostycznie: gdy Claude (TUI) przejmie mysz, Shift+przeciagniecie
+    // ZAZNACZA poprawnie (dlugosc rosnie), ale odswiezenie ekranu Claude KASUJE
+    // zaznaczenie po ~1-2 s. QTermWidget trzyma zaznaczenie mimo odswiezen, xterm.js
+    // nie. Dlatego w trakcie przeciagania PROBKUJEMY zaznaczenie i wysylamy ostatnie
+    // NIEPUSTE do Pythona (_selection), z ktorego czyta kopiowanie
+    // (terminal_backend.WebTerminalBackend.copy_selection). Dzieki temu kopiowanie
+    // dziala, mimo ze podswietlenie miga. Pustym nigdy nie nadpisujemy.
+    (function () {
+      var el = document.getElementById('terminal');
+      var poll = null;
+      function grab() {
+        try {
+          var s = term.getSelection();
+          if (s && window.__bridge) window.__bridge.set_selection(s);
+        } catch (e) {}
+      }
+      el.addEventListener('mousedown', function () {
+        if (poll) clearInterval(poll);
+        poll = setInterval(grab, 80);   // lap zaznaczenie w trakcie ciagniecia, zanim Claude je zetrze
+      }, true);
+      window.addEventListener('mouseup', function () {
+        grab();
+        setTimeout(function () { grab(); if (poll) { clearInterval(poll); poll = null; } }, 150);
+      }, true);
+    })();
+    // ===== koniec utrzymania zaznaczenia =====
 
     // ---- Upuszczanie plików (drag & drop) ----
     // WebTerminal działa na Chromium (QtWebEngine). BEZ tego Chromium reaguje na
