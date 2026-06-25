@@ -3915,18 +3915,26 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         self._refresh_question_flag(tab)
 
     def _refresh_question_flag(self, tab):
-        """Pokaż ikonę '?' wtw. gdy zakładka jest uzbrojona I nieaktywna."""
+        """Pokaż ikonę '?' wtw. gdy zakładka jest uzbrojona I nieaktywna.
+
+        Źródłem prawdy o tym, czy znaczek już wisi, jest REALNY stan paska
+        zakładek (``bar.tabButton``), a NIE pamiętana flaga — dzięki temu
+        funkcja jest samonaprawiająca się: jeśli widżet z jakiegokolwiek
+        powodu zniknął albo nie powstał, najbliższy tick odtworzy go
+        (porównujemy zamiar ``show`` z faktycznym stanem Qt, nie z własną
+        notatką, która mogła się rozjechać z rzeczywistością).
+        """
         if tab is None:
             return
         index = self.tab_widget.indexOf(tab)
         if index < 0:
             return
+        bar = self.tab_widget.tabBar()
         show = getattr(tab, "_armed_question", False) \
             and tab is not self.tab_widget.currentWidget()
-        if show == getattr(tab, "_question_flag_shown", False):
-            return  # bez zmian — nie ruszaj ikony niepotrzebnie
-        tab._question_flag_shown = show
-        bar = self.tab_widget.tabBar()
+        currently_shown = bar.tabButton(index, QTabBar.LeftSide) is not None
+        if show == currently_shown:
+            return  # realny stan paska już zgodny — nie ruszaj (bez zbędnych przerysowań)
         # Flaga to OSOBNY widżet po lewej stronie zakładki (LeftSide), a nie ikona
         # w slocie — dzięki temu własna ikona agenta NIGDY nie jest zasłaniana,
         # flaga ma stały rozmiar na każdej zakładce, a między nią a ikoną/nazwą
