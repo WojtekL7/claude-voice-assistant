@@ -89,12 +89,21 @@ class _LeftAlignedTabStyle(QProxyStyle):
             return Qt.AlignLeft
         return super().styleHint(hint, option, widget, returnData)
 
+    # O ile przesunąć flagę „?" (lewy widżet zakładki) w PRAWO, ku ikonie agenta.
+    # Qt zostawia tu duży, stały odstęp, którego NIE da się zamknąć marginesem CSS
+    # ani szerokością widżetu (sprawdzone) — jedyny pewny sposób to nadpisać tu
+    # geometrię prostokąta lewego przycisku.
+    FLAG_SHIFT_RIGHT = 28
+
     def subElementRect(self, element, option, widget=None):
         rect = super().subElementRect(element, option, widget)
         if element == QStyle.SE_TabWidgetTabBar and option is not None:
             # Dosuń pasek zakładek do lewej krawędzi (gdy styl bazowy wycentrował).
             if rect.left() > option.rect.left():
                 rect.moveLeft(option.rect.left())
+        elif element == QStyle.SE_TabBarTabLeftButton and not rect.isNull():
+            # Flaga bliżej ikony — przesuń jej prostokąt w prawo (życzenie usera).
+            rect.translate(self.FLAG_SHIFT_RIGHT, 0)
         return rect
 
 
@@ -667,6 +676,9 @@ class MainWindow(QMainWindow):
         )
         self.tab_widget.setStyle(self._tab_style)
         self.tab_widget.tabBar().setStyle(self._tab_style)
+        # Ikona agenta na zakładce ~2× większa (życzenie usera) — domyślnie Qt daje
+        # ~16 px; ustawiamy 30 px, żeby ikona (robot/własna) była wyraźnie widoczna.
+        self.tab_widget.setIconSize(QSize(30, 30))
         self.tab_widget.setTabsClosable(True)
         self.tab_widget.setMovable(True)
         self.tab_widget.tabCloseRequested.connect(self._close_agent_tab)
@@ -3922,17 +3934,14 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         (QTabBar LeftSide). Niezależny od ikony agenta → stały rozmiar na każdej
         zakładce i naturalna przerwa przed ikoną/nazwą (margines z prawej)."""
         lbl = QLabel()
-        # Flaga bliżej ikony agenta (user: „za daleko"). KLUCZ: QTabBar rezerwuje
-        # PEŁNĄ szerokość widżetu LeftSide, a `margin-right` go NIE przesuwa — więc
-        # jedyny pewny sposób na zbliżenie ikony to ZWĘŻENIE flagi. Zmniejszamy
-        # znaczek z 16 → 13 px (wciąż czytelny), co realnie ściąga ikonę w lewo
-        # o kilka pikseli. Pixmapa i ramka dokładnie 13 px, zero marginesów.
-        s = 13
+        # Flaga proporcjonalna do (teraz większej) ikony agenta. O jej ZBLIŻENIE do
+        # ikony dba styl (_LeftAlignedTabStyle.subElementRect przesuwa lewy przycisk
+        # w prawo) — bo margines/szerokość tego nie ruszają w QTabBar.
+        s = 18
         lbl.setPixmap(self._question_icon().pixmap(s, s))
         lbl.setFixedSize(s, s)
         lbl.setContentsMargins(0, 0, 0, 0)
-        lbl.setStyleSheet("background: transparent; margin: 0px; padding: 0px;"
-                          " margin-right: -2px;")
+        lbl.setStyleSheet("background: transparent; margin: 0px; padding: 0px;")
         return lbl
 
     def _arm_question(self, tab, armed: bool):
