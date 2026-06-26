@@ -22,7 +22,7 @@ from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QUrl, Qt, QTimer, QEvent
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import QWidget, QVBoxLayout
 from PyQt5.QtWebEngineWidgets import (
-    QWebEngineView, QWebEngineSettings, QWebEnginePage,
+    QWebEngineView, QWebEngineSettings, QWebEnginePage, QWebEngineProfile,
 )
 from PyQt5.QtWebChannel import QWebChannel
 
@@ -133,6 +133,9 @@ class WebTerminal(QWidget):
         # buforujemy i wysyłamy po frontend_ready (inaczej runJavaScript przepada).
         self._pending_theme = None
         self._pending_font = None
+        # Tryb myszy: 'claude' (domyślny — kółko przewija Claude, zaznaczanie z Shift)
+        # albo 'select' (zaznaczanie/kopiowanie bez Shift). Przełączany z UI.
+        self._mouse_mode = 'claude'
         # Wejście (np. komenda `claude`) potrafi przyjść ZANIM powłoka wstanie —
         # a powłoka startuje dopiero po frontend_ready (gdy xterm.js się załaduje,
         # bywa ~2 s przy wolniejszym QtWebEngine, np. w AppImage). Bez bufora
@@ -155,9 +158,15 @@ class WebTerminal(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self.view = QWebEngineView(self)
-        # Własna strona: loguje konsolę JS (diagnoza "pustego pola"). Ustawiana
-        # PRZED settings/webchannel — one działają na bieżącej stronie widoku.
-        self._page = _LoggingWebEnginePage(self.view)
+        # Profil "off-the-record" (bez nazwy magazynu) = wszystko w PAMIĘCI, ZERO
+        # zapisu na dysk. Terminal (xterm.js z pliku) nie potrzebuje ciasteczek ani
+        # cache. Dzięki temu nie powstaje współdzielona baza ciasteczek QtWebEngine,
+        # więc kilka kopii programu naraz NIE wywołuje już zalewu błędów
+        # "Cookie sqlite error: database is locked" (każda kopia ma własną pamięć).
+        self._profile = QWebEngineProfile(self.view)   # bez nazwy → off-the-record
+        # Własna strona NA TYM profilu: loguje konsolę JS (diagnoza "pustego pola").
+        # Ustawiana PRZED settings/webchannel — one działają na bieżącej stronie widoku.
+        self._page = _LoggingWebEnginePage(self._profile, self.view)
         self.view.setPage(self._page)
         # QtWebEngine maluje stronę na BIAŁO, dopóki terminal.html się nie wczyta
         # (~1 s: xterm.js + czcionka Ubuntu Mono) → widoczny biały błysk przy starcie.
@@ -248,6 +257,20 @@ class WebTerminal(QWidget):
     def focus_terminal(self):
         self.view.setFocus()
         self.view.page().runJavaScript("window.__termFocus && window.__termFocus();")
+
+    def set_mouse_mode(self, mode: str):
+        """Ustaw tryb myszy terminala:
+          'claude' = mysz do Claude (kółko przewija rozmowę, klik w menu, zaznaczanie z Shift),
+          'select' = zaznaczanie/kopiowanie przeciągnięciem BEZ Shift.
+        Przed gotowością frontu — buforuj (wyślemy w _on_frontend_ready)."""
+        self._mouse_mode = 'select' if mode == 'select' else 'claude'
+        if self._frontend_ready:
+            self._push_mouse_mode()
+
+    def _push_mouse_mode(self):
+        mode = json.dumps(getattr(self, '_mouse_mode', 'claude'))
+        self.view.page().runJavaScript(
+            f"window.__termSetMouseMode && window.__termSetMouseMode({mode});")
 
     def is_available(self) -> bool:
         return _PTY_AVAILABLE
@@ -366,6 +389,9 @@ class WebTerminal(QWidget):
         # Wyślij zbuforowany motyw/czcionkę, gdy xterm.js jest już gotowy.
         self._push_theme()
         self._push_font()
+        # Tryb myszy inny niż domyślny ('claude') — odtwórz po (re)starcie frontu.
+        if getattr(self, '_mouse_mode', 'claude') != 'claude':
+            self._push_mouse_mode()
         if self._proc is None:
             self._spawn()
 

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <!-- Tryb myszy: ZAZNACZANIE (przeciągnięciem bez Shift). Mysz + klasyczny
+       kursor-strzałka pod kątem (jak wskaźnik myszy w systemie) — czytelniejsze
+       niż przerywana ramka. -->
+  <rect x="2" y="2.5" width="9" height="19" rx="4.5" fill="none" stroke="#dbe2ea" stroke-width="1.6"/>
+  <line x1="6.5" y1="6" x2="6.5" y2="9.5" stroke="#dbe2ea" stroke-width="1.6" stroke-linecap="round"/>
+  <g transform="translate(13.5,6.5) scale(0.62)">
+    <path d="M 0 0 L 0 16.5 L 4.6 12 L 7.3 17.8 L 9.5 16.8 L 6.8 11.2 L 12.2 11.2 Z"
+          fill="#38bdf8" stroke="#1f2430" stroke-width="1.3" stroke-linejoin="round"/>
+  </g>
+</svg>

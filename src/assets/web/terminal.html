@@ -20,6 +20,13 @@
        wyglądał TAK SAMO, a nie domyślnym cienkim overlay-em przeglądarki.
        Zdefiniowanie ::-webkit-scrollbar wyłącza macowy overlay → suwak zawsze
        widoczny i spójny na wszystkich platformach. */
+    /* Suwak pojawia się TYLKO, gdy jest co przewijać (`overflow-y: auto`) — wtedy
+       widać ruchomy uchwyt pokazujący pozycję. Gdy nie ma czego przewijać (np.
+       Claude na pełnym ekranie zarządza ekranem sam), rynna jest SCHOWANA
+       (życzenie usera). Tor przezroczysty, uchwyt = szary gradient. */
+    .xterm-viewport {
+      overflow-y: auto !important;
+    }
     .xterm-viewport::-webkit-scrollbar {
       width: 12px;
       background: transparent;
@@ -99,25 +106,33 @@
       }).catch(function () {});
     }
 
-    // ===== Zaznaczanie "jak w zwykłym terminalu" (bez Shift) — WebTerminal =====
-    // Problem: gdy działa Claude (TUI), włącza RAPORTOWANIE MYSZY (DECSET ?1000..?1006 h)
-    // → xterm.js wysyła ruchy myszy do programu zamiast zaznaczać (dawniej trzeba było
-    // Shift), a częste odświeżenia ekranu Claude zmazują zaznaczenie.
-    // Rozwiązanie dwuczęściowe:
-    //  (B1) wycinamy z wyjścia sekwencje WŁĄCZAJĄCE mysz → xterm NIGDY nie wchodzi w
-    //       tryb myszy → przeciągnięcie zaznacza natywnie, bez Shift (jak czysty bash).
-    //       Sekwencje WYŁĄCZAJĄCE (…l) przepuszczamy. Reszta wyjścia nietknięta.
-    //  (B2) na czas przeciągania ZAMRAŻAMY rysowanie wyjścia (kolejkujemy), żeby
-    //       odświeżenie Claude nie zmazało zaznaczenia; po puszczeniu myszy łapiemy
-    //       tekst i dorysowujemy zaległe wyjście.
-    // Claude traci obsługę myszy w swoim oknie (przewijanie kółkiem działa natywnie) —
-    // świadomy kompromis na rzecz pewnego zaznaczania/kopiowania.
-    var _carry = "";   // urwana sekwencja prywatna na styku porcji danych (B1)
-    function _stripMouse(data) {
+    // ===== Tryb myszy w terminalu (przełączany przyciskiem w UI) — WebTerminal =====
+    // Dwa tryby, bo NIE DA SIĘ mieć obu naraz (mysz albo „należy" do Claude, albo do okna):
+    //  • 'claude'  (DOMYŚLNY): mysz idzie do Claude — kółko przewija ROZMOWĘ Claude,
+    //               klik w menu wyboru działa, a tekst zaznaczasz z SHIFT-em.
+    //               To naturalne zachowanie xterm: NIE ruszamy sekwencji włączających mysz.
+    //  • 'select': mysz odebrana Claude — przeciągnięciem zaznaczasz/kopiujesz BEZ Shift,
+    //               ale kółko/klik nie idą do Claude. Realizacja:
+    //               (B1) wycinamy z wyjścia sekwencje WŁĄCZAJĄCE mysz → xterm nie wchodzi
+    //                    w tryb myszy → drag zaznacza natywnie (sekwencje …l przepuszczamy);
+    //               (B2) na czas przeciągania ZAMRAŻAMY rysowanie wyjścia (odświeżenie
+    //                    Claude nie zmaże zaznaczenia), po puszczeniu łapiemy tekst i dorysowujemy.
+    // Przełączanie: window.__termSetMouseMode('claude'|'select'). Przy wejściu w 'select'
+    // wyłączamy AKTYWNY tryb myszy (…l), przy powrocie do 'claude' przywracamy zapamiętane
+    // włączenia, żeby Claude znów dostał mysz bez restartu.
+    var _mouseMode = 'claude';                 // DOMYŚLNY — mysz do Claude (kółko przewija)
+    var _lastMouseEnable = '';                 // ostatnie włączenia myszy od Claude (do przywrócenia)
+    var _MOUSE_ON_RE = /\x1b\[\?(?:1000|1001|1002|1003|1005|1006|1015|1016)h/g;
+    var _MOUSE_OFF_SEQ = '\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1005l\x1b[?1006l\x1b[?1015l\x1b[?1016l';
+    var _carry = "";   // urwana sekwencja prywatna na styku porcji danych
+    function _scanAndStrip(data) {
       data = _carry + data; _carry = "";
-      var m = data.match(/\x1b\[\?[0-9;]*$/);             // niedokończona ?... na końcu → przytrzymaj
+      var m = data.match(/\x1b\[\?[0-9;]*$/);            // niedokończona ?... na końcu → przytrzymaj
       if (m) { _carry = m[0]; data = data.slice(0, data.length - m[0].length); }
-      return data.replace(/\x1b\[\?(?:1000|1001|1002|1003|1005|1006|1015|1016)h/g, "");
+      var ons = data.match(_MOUSE_ON_RE);               // zapamiętaj włączenia (do przywrócenia)
+      if (ons) _lastMouseEnable = ons.join('');
+      if (_mouseMode === 'select') data = data.replace(_MOUSE_ON_RE, "");   // B1 tylko w 'select'
+      return data;
     }
     var _writePaused = false, _writeQueue = [], _unfreezeTimer = null;   // B2
     function _flushWrites() {
@@ -125,10 +140,23 @@
       if (_writeQueue.length) { var j = _writeQueue.join(""); _writeQueue = []; term.write(j); }
     }
     function safeWrite(data) {
-      data = _stripMouse(data);
+      data = _scanAndStrip(data);
       if (!data) return;
       if (_writePaused) _writeQueue.push(data); else term.write(data);
     }
+    // Wołane z Pythona przy kliknięciu przełącznika trybu myszy.
+    window.__termSetMouseMode = function (mode) {
+      if (mode !== 'select') mode = 'claude';
+      if (mode === _mouseMode) return;
+      _mouseMode = mode;
+      if (mode === 'select') {
+        term.write(_MOUSE_OFF_SEQ);                     // wyłącz aktywny tryb myszy → drag zaznacza
+      } else {
+        _writePaused = false; _writeQueue = [];         // bez resztek z trybu select
+        term.write(_lastMouseEnable || '\x1b[?1000h\x1b[?1006h');   // przywróć mysz Claude
+      }
+    };
+    window.__termMouseMode = function () { return _mouseMode; };
 
     // Funkcje wołane z Pythona.
     window.__termWrite  = function (data) { safeWrite(data); };
@@ -193,6 +221,7 @@
         } catch (e) {}
       }
       function startDrag() {
+        if (_mouseMode !== 'select') return;   // w trybie 'claude' nie zamrażamy — mysz idzie do Claude
         _writePaused = true;
         if (_unfreezeTimer) clearTimeout(_unfreezeTimer);
         _unfreezeTimer = setTimeout(endDrag, 6000);   // bezpiecznik: nie zostań zamrożony

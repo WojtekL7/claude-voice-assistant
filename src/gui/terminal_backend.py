@@ -180,6 +180,12 @@ class TerminalBackend(QObject):
     def focus_terminal(self):
         raise NotImplementedError
 
+    def set_mouse_mode(self, mode: str):
+        """Tryb myszy: 'claude' (kółko przewija rozmowę, zaznaczanie z Shift) albo
+        'select' (zaznaczanie/kopiowanie bez Shift). Domyślnie no-op — dotyczy
+        WebTerminala; QTermWidget obsługuje mysz natywnie (Shift zaznacza)."""
+        pass
+
     # ----- zamknięcie -----
     def shutdown(self):
         """Zatrzymaj proces/wątki terminala (bezpieczne do wielokrotnego wołania)."""
@@ -401,6 +407,9 @@ class WebTerminalBackend(TerminalBackend):
 
     def focus_terminal(self):
         self._term.focus_terminal()
+
+    def set_mouse_mode(self, mode: str):
+        self._term.set_mouse_mode(mode)
 
     def shutdown(self):
         self._term.shutdown()

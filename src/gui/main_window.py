@@ -552,6 +552,9 @@ class MainWindow(QMainWindow):
         # Aktualizacje sprawdzamy WYŁĄCZNIE przy starcie (i ręcznie z menu) —
         # nie przy zamykaniu, więc zamknięcie jest natychmiastowe.
         self._manual_update_check = False
+        # Wersja, dla której pokazaliśmy już SAMO okno pobierania — żeby cykliczne
+        # sprawdzanie (co 30 min) nie otwierało go w kółko; nowsza wersja = znów okno.
+        self._prompted_update_version = None
 
         # Settings
         self.current_language = "pl-PL"
@@ -604,9 +607,17 @@ class MainWindow(QMainWindow):
         # Apply again after longer delay to ensure it takes effect
         QTimer.singleShot(1500, lambda: self._apply_terminal_colors(self.skin_colors))
 
-        # Ciche sprawdzenie aktualizacji ~3 s po starcie (po rozruchu terminala),
-        # w tle; brak nowszej/błąd przy cichym = bez popupów.
+        # Sprawdzenie aktualizacji ~3 s po starcie (po rozruchu terminala), w tle;
+        # gdy jest nowsza wersja, _on_update_available SAM otworzy okno pobierania.
         QTimer.singleShot(3000, self._maybe_auto_check_updates)
+
+        # Cykliczne sprawdzanie aktualizacji co ~30 min (nie tylko przy starcie),
+        # żeby nowa wersja zgłosiła się sama bez restartu programu. Lampka „nowa
+        # wersja" zapala się od razu; okno pobierania wyskakuje RAZ na daną wersję.
+        self._update_poll_timer = QTimer(self)
+        self._update_poll_timer.setInterval(30 * 60 * 1000)  # 30 minut
+        self._update_poll_timer.timeout.connect(self._maybe_auto_check_updates)
+        self._update_poll_timer.start()
 
         # Brak Claude Code CLI (świeży komputer) → kreator „dokończ instalację"
         # zamiast surowego „command not found" w terminalu. Po rozruchu okna,
@@ -2053,10 +2064,12 @@ class MainWindow(QMainWindow):
             self.update_manager.check_async()
 
     def _on_update_available(self, info):
-        """Jest nowsza wersja. Zawsze zapalamy lampkę „nowa wersja" w pasku.
-        Okno pobierania otwieramy SAMO tylko gdy user sprawdzał ręcznie z menu;
-        przy cichym sprawdzaniu przy starcie zostaje sama lampka (nienachalnie —
-        klik w nią otwiera okno)."""
+        """Jest nowsza wersja. Zapalamy lampkę „nowa wersja" w pasku ORAZ
+        automatycznie otwieramy okno pobierania:
+          - ręczne sprawdzenie z menu → zawsze,
+          - start / cykliczne sprawdzanie (co ~30 min) → RAZ na daną wersję
+            (żeby okno nie wyskakiwało w kółko; lampka zostaje jako przypomnienie,
+            klik w nią znów otwiera okno)."""
         was_manual = self._manual_update_check
         self._manual_update_check = False
         self._update_status("")
@@ -2064,7 +2077,9 @@ class MainWindow(QMainWindow):
         self._pending_update_info = info
         if hasattr(self, '_update_indicator'):
             self._update_indicator.setVisible(True)
-        if was_manual:
+        already_prompted = (self._prompted_update_version == info.version)
+        if was_manual or not already_prompted:
+            self._prompted_update_version = info.version
             self._show_update_dialog(info)
 
     def _show_update_dialog(self, info):
@@ -2783,20 +2798,15 @@ class MainWindow(QMainWindow):
                     self._update_status(tr('status_selection_no_content'))
                 return
 
-            # Etap 3: bez zaznaczenia — najpierw zaległości tej zakładki.
+            # Bez zaznaczenia: przycisk „czytaj ostatnią" ma czytać NAJNOWSZĄ
+            # wypowiedź Claude'a — NIE zaległości zebrane od początku (te kasujemy,
+            # by nie odczytały się jako „od początku"; objaw zgłoszony przez usera).
+            # Źródłem prawdy jest dziennik sesji (czysta proza zamiast śmieci z
+            # bufora terminala).
             tab = self._get_current_agent_tab()
-            backlog = getattr(tab, 'pending_backlog', None) or [] if tab else []
-            if backlog:
-                tab.pending_backlog = []
-                joined = " ".join(backlog)
-                cleaned_text = prose_from_markdown(joined)
-                if cleaned_text:
-                    self.tts.speak(cleaned_text)
-                    self._update_status(tr('status_reading_backlog').format(n=len(backlog)))
-                    return
+            if tab is not None and getattr(tab, 'pending_backlog', None):
+                tab.pending_backlog = []  # odrzuć zaległości — chcemy tylko ostatnią
 
-            # Następnie: ostatnia wypowiedź z dziennika sesji (czysta proza,
-            # zamiast śmieci z bufora terminala).
             reader = getattr(tab, '_transcript_reader', None) if tab else None
             if reader is not None:
                 try:
@@ -3301,6 +3311,11 @@ class MainWindow(QMainWindow):
 
             if hasattr(tab, 'add_media_btn'):
                 self._apply_button_icon_style(tab.add_media_btn, 'icon_add_media_color')
+
+            # Przełącznik trybu myszy — ten sam styl (przezroczyste tło + zaokrąglenie),
+            # inaczej zostawał domyślny biały kwadrat (ikona niewidoczna na białym).
+            if hasattr(tab, 'mouse_mode_btn'):
+                self._apply_button_icon_style(tab.mouse_mode_btn, 'icon_copy_color')
 
             # Pause button - uses same style as other buttons but with disabled state
             if hasattr(tab, 'pause_btn'):
@@ -3830,7 +3845,18 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
                         return name, QIcon(str(val))
                 except Exception:
                     pass
-        return f"🤖 {name}", QIcon()
+        # Domyślnie (brak własnej ikony): wbudowany OBRAZEK robota — nie emoji 🤖,
+        # które na Windows renderowało się jak „diabełek". Ten sam wygląd wszędzie.
+        return name, self._default_agent_icon()
+
+    def _default_agent_icon(self) -> QIcon:
+        """Domyślna ikona agenta = wbudowana grafika robota (src/assets/agent-robot.png).
+        Cache'owana — jedna instancja QIcon na cały program."""
+        ic = getattr(self, '_robot_icon', None)
+        if ic is None:
+            ic = QIcon(str(ASSETS_DIR / "agent-robot.png"))
+            self._robot_icon = ic
+        return ic
 
     # ============ Kolor zakładki + ramka okna (Funkcja #2) ============
 
@@ -3898,7 +3924,14 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         lbl = QLabel()
         s = 16
         lbl.setPixmap(self._question_icon().pixmap(s, s))
-        lbl.setStyleSheet("background: transparent; margin-right: 6px;")
+        # Flaga MAKSYMALNIE blisko ikony agenta (user: „za daleko"). Gap brał się
+        # nie z marginesu, lecz z tego, że QLabel zajmował więcej miejsca niż sama
+        # ikonka. Przycinamy etykietę DOKŁADNIE do ikony, zerujemy marginesy
+        # i dokładamy mały UJEMNY margines z prawej, żeby ściągnąć ją tuż pod ikonę.
+        lbl.setFixedSize(s, s)
+        lbl.setContentsMargins(0, 0, 0, 0)
+        lbl.setStyleSheet("background: transparent; margin: 0px; padding: 0px;"
+                          " margin-right: -3px;")
         return lbl
 
     def _arm_question(self, tab, armed: bool):

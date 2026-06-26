@@ -10,7 +10,7 @@ APP_NAME = "Claude Voice Assistant"
 # APP_VERSION — JEDYNE źródło prawdy o wersji. Używane przez auto-aktualizację
 # (M3) do porównania z wersją w pliku appcast na serwerze. Podbijaj przy każdym
 # wydaniu (semver: MAJOR.MINOR.PATCH).
-APP_VERSION = "1.0.24"
+APP_VERSION = "1.0.25"
 APP_AUTHOR = "Fulfillment Polska"
 
 # Tryb deweloperski — uruchomienie WPROST z kodu (`python3 src/main.py`).
@@ -265,6 +265,15 @@ UI_TRANSLATIONS = {
         "pause_tooltip": "Pauza / Wznów",
         "stop_tooltip": "Zatrzymaj wszystko",
         "copy_tooltip": "Kopiuj zaznaczony tekst (zaznacz z Shift, gdy Claude używa myszy)",
+        "mouse_mode_scroll": "Mysz: przewijanie",
+        "mouse_mode_select": "Mysz: zaznaczanie",
+        "mouse_mode_tooltip": ("Przełącz, jak działa mysz w terminalu:\n"
+                               "• Przewijanie — kółko przewija rozmowę Claude, klikasz w menu wyboru,"
+                               " tekst zaznaczasz z Shift.\n"
+                               "• Zaznaczanie — zaznaczasz i kopiujesz tekst przeciągnięciem bez Shift"
+                               " (kółko/klik nie idą wtedy do Claude)."),
+        "status_mouse_scroll": "Mysz: przewijanie (kółko przewija Claude, zaznaczanie z Shift)",
+        "status_mouse_select": "Mysz: zaznaczanie tekstu bez Shift",
         "clear_input_tooltip": "Wyczyść pole tekstowe",
         "add_media_tooltip": "Dodaj media (zdjęcia, dokumenty, pliki)",
         "analyze_files_prefix": "Przeanalizuj te pliki:",
@@ -984,6 +993,15 @@ UI_TRANSLATIONS = {
         "pause_tooltip": "Pause / Resume",
         "stop_tooltip": "Stop everything",
         "copy_tooltip": "Copy selected text (hold Shift to select when Claude uses the mouse)",
+        "mouse_mode_scroll": "Mouse: scroll",
+        "mouse_mode_select": "Mouse: select",
+        "mouse_mode_tooltip": ("Switch how the mouse works in the terminal:\n"
+                               "• Scroll — the wheel scrolls the Claude conversation, you click menu"
+                               " options, and select text with Shift.\n"
+                               "• Select — select and copy text by dragging without Shift"
+                               " (wheel/click no longer go to Claude)."),
+        "status_mouse_scroll": "Mouse: scroll (wheel scrolls Claude, select with Shift)",
+        "status_mouse_select": "Mouse: select text without Shift",
         "clear_input_tooltip": "Clear input field",
         "add_media_tooltip": "Add media (images, documents, files)",
         "analyze_files_prefix": "Analyze these files:",

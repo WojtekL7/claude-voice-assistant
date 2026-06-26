@@ -42,6 +42,14 @@ if [ -f venv/bin/activate ]; then
     source venv/bin/activate
 fi
 
+# Wymuszenie silnika WebTerminal (xterm.js+QtWebEngine), DOKŁADNIE jak w
+# pobieranej paczce (AppImage startuje z CVA_WEBTERMINAL=1, bo .spec wyklucza
+# QTermWidget). Bez tego beta z kodu używałaby QTermWidgetu = INNEGO silnika
+# terminala niż wersja, której używa user → bugi nie reprodukują się 1:1.
+# Cel: beta testowa == apka pobrana ze strony. (Do testów QTermWidgetu uruchom
+# `python3 src/main.py` bez tej flagi.)
+export CVA_WEBTERMINAL=1
+
 # Limit pamięci. systemd-run --user --scope tworzy efemeryczny cgroup
 # pod systemd usera. MemoryHigh=10G to miękki próg (throttling do swapu),
 # MemoryMax=13G to twardy limit (OOM-killer zabije apkę zanim pamięć

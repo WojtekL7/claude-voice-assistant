@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
     QMessageBox
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QSize
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QFontMetrics, QIcon
 
 # QTermWidget for real terminal emulation
 try:
@@ -32,6 +32,7 @@ from config import (
     MEMORY_PROJECTS_FILE, MEMORY_FILE_EXTENSIONS,
     DEFAULT_QUICK_ACTIONS, QUICK_ACTIONS_FILE, DEFAULT_SPLITTER_SIZES,
     CRASH_LOG_DIR, TERMINAL_CAPTURE_BYTES, CRASH_LOG_KEEP, CRASH_LOG_DEBOUNCE_SECS,
+    ASSETS_DIR,
     t as tr,
 )
 from core.platform_utils import default_shell
@@ -51,17 +52,49 @@ class AutoResizeTextEdit(QTextEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.document().contentsChanged.connect(self._adjust_height)
+        # Suwak pionowy widoczny TYLKO przy długim poleceniu: pole rośnie do
+        # _max_lines (5) linii, a powyżej (≥6 linii) staje i pokazuje suwak
+        # (życzenie usera). Krótki tekst = brak suwaka — start jako WYŁĄCZONY,
+        # a _adjust_height włącza/wyłącza go jawnie wg wysokości tekstu (samo
+        # AsNeeded pokazywało go za wcześnie). Poziomy zawsze wyłączony (zawijamy).
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # Wygląd suwaka = ta sama ciemna rynna + szary uchwyt co w terminalu
+        # (WebTerminal). Stylujemy TYLKO sam pasek (verticalScrollBar), żeby nie
+        # ruszać palety/tła pola (chroni fix białego błysku po Enter).
+        self.verticalScrollBar().setStyleSheet(
+            "QScrollBar:vertical { width: 12px; background: #2a2a2d; margin: 0; }"
+            "QScrollBar::handle:vertical { background: #8a8a8a; border-radius: 5px;"
+            " min-height: 30px; }"
+            "QScrollBar::handle:vertical:hover { background: #a6a6a6; }"
+            "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+            " height: 0; background: none; border: none; }"
+            "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {"
+            " background: #2a2a2d; }")
+        self._max_lines = 5
+        self._padding = 20  # margines wewn. (ramka + padding dokumentu)
         self._min_height = 55
-        self._max_height = 180
+        self._max_height = 180  # przeliczane w _adjust_height wg czcionki (5 linii)
         self.setMinimumHeight(self._min_height)
         self.setMaximumHeight(self._min_height)
 
     def _adjust_height(self):
-        """Adjust height based on content."""
-        doc_height = self.document().size().height()
-        new_height = max(self._min_height, min(int(doc_height) + 20, self._max_height))
+        """Dopasuj wysokość do treści, z górnym limitem _max_lines linii.
+
+        Powyżej limitu pole nie rośnie — pojawia się suwak (ScrollBarAsNeeded).
+        Limit liczony z czcionki POLA (ustawianej po konstruktorze), więc działa
+        niezależnie od rozmiaru/rodziny czcionki."""
+        line_h = QFontMetrics(self.font()).lineSpacing()
+        self._max_height = line_h * self._max_lines + self._padding
+        doc_height = int(self.document().size().height())
+        # Suwak włączamy JAWNIE dopiero, gdy treść nie mieści się w 5 liniach —
+        # inaczej trzymamy go wyłączonego (żeby nie pokazywał się przy krótkim
+        # tekście ani pustym polu).
+        needs_scroll = doc_height + self._padding > self._max_height
+        self.setVerticalScrollBarPolicy(
+            Qt.ScrollBarAsNeeded if needs_scroll else Qt.ScrollBarAlwaysOff)
+        new_height = max(self._min_height,
+                         min(doc_height + self._padding, self._max_height))
         self.setMinimumHeight(new_height)
         self.setMaximumHeight(new_height)
 
@@ -140,6 +173,10 @@ class AgentTab(QWidget):
         self.terminal = None
         self.conversation_area = None
         self._terminal_output_buffer = ""
+        # Tryb myszy terminala: 'claude' (DOMYŚLNY — kółko przewija rozmowę Claude,
+        # klik w menu wyboru, zaznaczanie z Shift) albo 'select' (zaznaczanie/
+        # kopiowanie przeciągnięciem bez Shift). Przełącznik w pasku przycisków.
+        self._mouse_mode = 'claude'
         # „Czarna skrzynka": ring-bufor SUROWEGO wyjścia terminala (z ANSI) —
         # ostatnie ~64 KB. Niezależny od _terminal_output_buffer (ten liczy
         # tokeny, bywa czyszczony i okrojony do 5000 zn.). Przy wykryciu podpisu
@@ -294,6 +331,8 @@ class AgentTab(QWidget):
         # tworzeniu zakładki), więc ciężki widget wchodzi w gotową geometrię
         # (pułapka „szare pasy po prawej").
         self.terminal_backend.start_shell_program()
+        # Odtwórz wybrany tryb myszy (gdyby user przełączył przed restartem zakładki).
+        self.terminal_backend.set_mouse_mode(self._mouse_mode)
         self._swap_placeholder_with(self.terminal)
 
         self._activated = True
@@ -446,6 +485,19 @@ class AgentTab(QWidget):
         self.quick_actions_btn.setFixedSize(btn_size, btn_size)
         self._update_quick_actions_menu()
         layout.addWidget(self.quick_actions_btn)
+
+        # Przełącznik trybu myszy — NA KOŃCU paska, po „błyskawicy", ikoną w tej
+        # samej konwencji co reszta. Ikona pokazuje AKTUALNY tryb: mysz+strzałki
+        # (przewijanie) ↔ mysz+ramka (zaznaczanie). Klik przeskakuje między nimi.
+        self._icon_mouse_scroll = QIcon(str(ASSETS_DIR / "mouse-scroll.png"))
+        self._icon_mouse_select = QIcon(str(ASSETS_DIR / "mouse-select.png"))
+        self.mouse_mode_btn = QPushButton()
+        self.mouse_mode_btn.setIconSize(PANEL_ICON_SIZE)
+        self.mouse_mode_btn.setFixedSize(btn_size, btn_size)
+        self.mouse_mode_btn.setToolTip(tr('mouse_mode_tooltip'))
+        self.mouse_mode_btn.clicked.connect(self._toggle_mouse_mode)
+        self._update_mouse_mode_btn()
+        layout.addWidget(self.mouse_mode_btn)
 
         layout.addStretch()
 
@@ -767,6 +819,25 @@ class AgentTab(QWidget):
         elif self.conversation_area:
             self.conversation_area.copy()
             self.status_changed.emit(tr('status_copied_clipboard'))
+
+    def _toggle_mouse_mode(self):
+        """Przełącz tryb myszy terminala: 'claude' (kółko przewija rozmowę,
+        klik w menu, zaznaczanie z Shift) ↔ 'select' (zaznaczanie/kopiowanie
+        przeciągnięciem bez Shift). Dotyczy WebTerminala (na QTermWidget no-op)."""
+        self._mouse_mode = 'select' if self._mouse_mode == 'claude' else 'claude'
+        if self.terminal_backend:
+            self.terminal_backend.set_mouse_mode(self._mouse_mode)
+        self._update_mouse_mode_btn()
+        sel = (self._mouse_mode == 'select')
+        self.status_changed.emit(
+            tr('status_mouse_select') if sel else tr('status_mouse_scroll'))
+
+    def _update_mouse_mode_btn(self):
+        """Odśwież IKONĘ przełącznika trybu myszy wg self._mouse_mode (ikona
+        pokazuje aktualny tryb: przewijanie ↔ zaznaczanie)."""
+        sel = (self._mouse_mode == 'select')
+        self.mouse_mode_btn.setIcon(
+            self._icon_mouse_select if sel else self._icon_mouse_scroll)
 
     def _clear_input_field(self):
         """Clear the input field."""

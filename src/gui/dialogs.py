@@ -4025,6 +4025,20 @@ class ClaudeSetupDialog(QDialog):
         self.setMinimumWidth(600)
         self.setMinimumHeight(420)
 
+        # Tło i tekst USTAWIONE JAWNIE. Bez tego okno dziedziczy białą czcionkę
+        # z globalnego stylu skórki, ale natywne (jasne na Windows) tło → instrukcja
+        # „biały tekst na białym tle", kompletnie nieczytelna. Dotyczy WSZYSTKICH
+        # platform — na Linuksie z ciemnym motywem systemowym bug bywa zamaskowany.
+        # Chipy stanu (zielony „gotowe" / czerwony „do zrobienia") mają własny styl
+        # ustawiany bezpośrednio na widżecie (wyższy priorytet) → zostają czytelne.
+        self.setStyleSheet(
+            "QDialog { background-color: #232326; }"
+            "QScrollArea { background-color: #232326; border: none; }"
+            "QLabel { color: #e6e6e6; background: transparent; }"
+            "QGroupBox { background-color: #232326; color: #e6e6e6;"
+            " border: 1px solid #3a3a3d; border-radius: 4px; margin-top: 8px; }"
+            "QGroupBox::title { subcontrol-origin: margin; left: 8px; padding: 0 4px; }")
+
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
 
@@ -4049,6 +4063,11 @@ class ClaudeSetupDialog(QDialog):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setWidget(content_host)
+        # Ciemne tło JAWNIE na przewijanym obszarze, jego porcie widoku i widżecie
+        # treści — sam styl QDialog tego nie pokrywał (viewport świecił na biało →
+        # „biały tekst na białym tle" w środku okna, mimo ciemnej ramki okna).
+        content_host.setStyleSheet("background-color: #232326;")
+        scroll.viewport().setStyleSheet("background-color: #232326;")
         layout.addWidget(scroll, 1)
 
         # ---- Przyciski ----
