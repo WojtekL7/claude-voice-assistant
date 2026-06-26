@@ -683,6 +683,9 @@ class MainWindow(QMainWindow):
 
         # Style for tabs. Ikona zamykania (X) — biały SVG, bez tła. Hover czerwony.
         close_icon_url = (Path(__file__).parent / "close_x.svg").as_posix()
+        # Strzałki przewijania zakładek (gdy się nie mieszczą) — białe SVG.
+        chevron_left_url = (Path(__file__).parent / "chevron-left.svg").as_posix()
+        chevron_right_url = (Path(__file__).parent / "chevron-right.svg").as_posix()
         self.tab_widget.setStyleSheet(f"""
             QTabWidget::pane {{
                 border: none;
@@ -715,6 +718,26 @@ class MainWindow(QMainWindow):
             QTabBar::close-button:hover {{
                 background-color: #ef4444;
                 border-radius: 2px;
+            }}
+            /* Przyciski przewijania zakładek (dzióbki ‹ ›, gdy zakładki się nie
+               mieszczą) — tło jak zakładki (nie białe), białe strzałki SVG. */
+            QTabBar QToolButton {{
+                background-color: #2d0a1e;
+                border: none;
+                margin: 0;
+            }}
+            QTabBar QToolButton:hover {{
+                background-color: #6a2a5a;
+            }}
+            QTabBar QToolButton::left-arrow {{
+                image: url({chevron_left_url});
+                width: 8px;
+                height: 12px;
+            }}
+            QTabBar QToolButton::right-arrow {{
+                image: url({chevron_right_url});
+                width: 8px;
+                height: 12px;
             }}
         """)
 
