@@ -89,21 +89,12 @@ class _LeftAlignedTabStyle(QProxyStyle):
             return Qt.AlignLeft
         return super().styleHint(hint, option, widget, returnData)
 
-    # O ile przesunąć flagę „?" (lewy widżet zakładki) w PRAWO, ku ikonie agenta.
-    # Qt zostawia tu duży, stały odstęp, którego NIE da się zamknąć marginesem CSS
-    # ani szerokością widżetu (sprawdzone) — jedyny pewny sposób to nadpisać tu
-    # geometrię prostokąta lewego przycisku.
-    FLAG_SHIFT_RIGHT = 28
-
     def subElementRect(self, element, option, widget=None):
         rect = super().subElementRect(element, option, widget)
         if element == QStyle.SE_TabWidgetTabBar and option is not None:
             # Dosuń pasek zakładek do lewej krawędzi (gdy styl bazowy wycentrował).
             if rect.left() > option.rect.left():
                 rect.moveLeft(option.rect.left())
-        elif element == QStyle.SE_TabBarTabLeftButton and not rect.isNull():
-            # Flaga bliżej ikony — przesuń jej prostokąt w prawo (życzenie usera).
-            rect.translate(self.FLAG_SHIFT_RIGHT, 0)
         return rect
 
 
@@ -696,7 +687,12 @@ class MainWindow(QMainWindow):
             }}
             QTabBar::tab {{
                 background-color: #2d0a1e;
-                padding: 8px 16px;
+                /* LEWY padding mały (4px) — to on robił duży odstęp między flagą
+                   „?" a ikoną agenta; prawy zostaje 16px na ikonę X. */
+                padding: 8px 16px 8px 4px;
+                /* Większa czcionka zakładek — większe napisy ORAZ ikony-emoji
+                   (emoji to tekst, więc rośnie z czcionką). */
+                font-size: 15px;
                 margin-right: 2px;
                 border-top-left-radius: 6px;
                 border-top-right-radius: 6px;
