@@ -20,7 +20,7 @@ from PyQt5.QtWidgets import (
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
     QTabWidget, QTabBar, QProgressBar, QProxyStyle, QStyle, QStyleFactory
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QObject, QEvent, QPoint
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QObject, QEvent, QPoint, QRect
 from PyQt5.QtGui import QFont, QTextCursor, QIcon, QKeySequence, QPalette, QColor, QTextCharFormat, QPainter, QPen, QPixmap
 
 # QTermWidget for real terminal emulation
@@ -674,7 +674,7 @@ class MainWindow(QMainWindow):
         # ignorowany przy własnym QStyle/Fusion). Powiększa napisy ORAZ ikony-emoji
         # (emoji to tekst → rośnie z czcionką).
         _tab_font = self.tab_widget.tabBar().font()
-        _tab_font.setPointSize(14)
+        _tab_font.setPointSize(12)
         self.tab_widget.tabBar().setFont(_tab_font)
         self.tab_widget.setTabsClosable(True)
         self.tab_widget.setMovable(True)
@@ -3945,26 +3945,68 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         tab._armed_question = bool(armed)
         self._refresh_question_flag(tab)
 
-    def _refresh_question_flag(self, tab):
-        """Pokaż znak „?" w NAZWIE zakładki, gdy zakładka jest uzbrojona I nieaktywna.
+    def _icon_with_flag(self, base_icon: QIcon) -> QIcon:
+        """Ikona agenta z ŻÓŁTYM znaczkiem „?" wmalowanym w LEWY GÓRNY róg.
+        Dla agentów z ikoną-obrazkiem: flaga skrajnie z lewej, NA ikonie, żółta
+        (widoczna niezależnie od koloru nazwy), bez odstępu (część grafiki)."""
+        size = 30
+        src = base_icon.pixmap(size, size)
+        canvas = QPixmap(size, size)
+        canvas.fill(Qt.transparent)
+        p = QPainter(canvas)
+        p.setRenderHint(QPainter.Antialiasing, True)
+        if not src.isNull():
+            p.drawPixmap(0, 0, src)
+        d = 16  # średnica żółtego znaczka
+        p.setBrush(QColor("#ffd400"))
+        p.setPen(QPen(QColor("#7a5c00"), 1))
+        p.drawEllipse(0, 0, d, d)
+        p.setPen(QColor("#3a2c00"))
+        f = QFont()
+        f.setBold(True)
+        f.setPixelSize(12)
+        p.setFont(f)
+        p.drawText(QRect(0, 0, d, d), Qt.AlignCenter, "?")
+        p.end()
+        return QIcon(canvas)
 
-        Flaga jako prefiks tekstu (nie osobny widżet) → zawsze tuż przy ikonie,
-        bez odstępu. Samonaprawiająca się: porównujemy zamierzony tekst zakładki
-        z REALNYM (``tabText``) przy każdym ticku, więc rozjazd sam się koryguje.
-        """
+    def _tab_default_color(self, tab) -> QColor:
+        """Normalny kolor tekstu zakładki: kolor agenta albo domyślny ze skórki."""
+        c = self._agent_tab_color(getattr(tab, 'agent_config', None))
+        return QColor(c) if c else QColor(self.skin_colors.get('text_color', '#ffffff'))
+
+    def _refresh_question_flag(self, tab):
+        """Pokaż flagę „agent czeka", gdy zakładka uzbrojona I nieaktywna —
+        SKRAJNIE Z LEWEJ i ŻÓŁTĄ, by była widoczna i przy ikonie:
+          • agent z ikoną-obrazkiem → żółty znaczek „?" wmalowany w lewy róg ikony;
+          • agent z emoji (ikona = emoji w tekście) → żółty prefiks „❓ " + żółta nazwa.
+        Samonaprawiająca się (porównuje stan docelowy z realnym przy każdym ticku)."""
         if tab is None:
             return
         index = self.tab_widget.indexOf(tab)
         if index < 0:
             return
-        base_label, _icon = self._agent_label_icon(getattr(tab, 'agent_config', {}))
+        cfg = getattr(tab, 'agent_config', {})
+        base_label, base_icon = self._agent_label_icon(cfg)
         show = getattr(tab, "_armed_question", False) \
             and tab is not self.tab_widget.currentWidget()
-        desired = (self.QUESTION_FLAG_PREFIX + base_label) if show else base_label
-        if self.tab_widget.tabText(index) != desired:
-            self.tab_widget.setTabText(index, desired)
-            self.tab_widget.setTabToolTip(
-                index, tr('dlg_agent_waiting_tooltip') if show else "")
+        bar = self.tab_widget.tabBar()
+        if not base_icon.isNull():
+            # Ikona-obrazek: flaga = żółty badge NA ikonie; nazwa bez prefiksu, kolor normalny.
+            if self.tab_widget.tabText(index) != base_label:
+                self.tab_widget.setTabText(index, base_label)
+            self.tab_widget.setTabIcon(
+                index, self._icon_with_flag(base_icon) if show else base_icon)
+            bar.setTabTextColor(index, self._tab_default_color(tab))
+        else:
+            # Emoji w tekście: żółty prefiks „❓ " + żółta nazwa (widoczność).
+            desired = (self.QUESTION_FLAG_PREFIX + base_label) if show else base_label
+            if self.tab_widget.tabText(index) != desired:
+                self.tab_widget.setTabText(index, desired)
+            bar.setTabTextColor(
+                index, QColor("#ffd400") if show else self._tab_default_color(tab))
+        self.tab_widget.setTabToolTip(
+            index, tr('dlg_agent_waiting_tooltip') if show else "")
 
     def _refresh_all_question_flags(self):
         """Przelicz flagi wszystkich zakładek (np. po zmianie aktywnej)."""
