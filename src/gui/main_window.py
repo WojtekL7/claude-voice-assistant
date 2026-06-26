@@ -1743,11 +1743,11 @@ class MainWindow(QMainWindow):
             index = self.tab_widget.indexOf(tab)
             if index < 0:
                 continue
-            label, icon = self._agent_label_icon(cfg)
-            self.tab_widget.setTabText(index, label)
-            # Ikona jest niezależna od flagi (flaga to osobny widżet LeftSide),
-            # więc ustawiamy ją zawsze.
-            self.tab_widget.setTabIcon(index, icon)
+            # Nazwę, ikonę I flagę („?" żółta na ikonie) ustawia spójnie
+            # _refresh_question_flag. Reset sygnatury wymusza ponowne nałożenie po
+            # edycji (nowa nazwa/ikona), mimo strażnika no-op.
+            tab._flag_sig = None
+            self._refresh_question_flag(tab)
         # Funkcja #2: po edycji kolor zakładki/ramki mógł się zmienić.
         self._recolor_all_tabs()
         self._apply_active_tab_frame()
@@ -4030,6 +4030,15 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         base_label, base_icon = self._agent_label_icon(cfg)
         show = getattr(tab, "_armed_question", False) \
             and tab is not self.tab_widget.currentWidget()
+        # NO-OP, gdy nic się nie zmieniło. KLUCZOWE: ta metoda biegnie co ~0,8 s
+        # (timer flag), a setTabIcon/setTabTextColor RESETUJĄ przewinięcie paska
+        # zakładek — bez tego strażnika tabki wracały na miejsce zaraz po kliknięciu
+        # strzałki przewijania. Sygnatura ze STABILNYCH danych (nie z QIcon, bo dla
+        # ikony-pliku tworzona jest świeża instancja przy każdym wywołaniu).
+        sig = (show, base_label, repr(cfg.get('icon')))
+        if getattr(tab, "_flag_sig", None) == sig:
+            return
+        tab._flag_sig = sig
         bar = self.tab_widget.tabBar()
         # Nazwa i kolor tytułu ZAWSZE normalne — flaga to wyłącznie ŻÓŁTA IKONA z lewej.
         if self.tab_widget.tabText(index) != base_label:
