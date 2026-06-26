@@ -3922,16 +3922,17 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         (QTabBar LeftSide). Niezależny od ikony agenta → stały rozmiar na każdej
         zakładce i naturalna przerwa przed ikoną/nazwą (margines z prawej)."""
         lbl = QLabel()
-        s = 16
+        # Flaga bliżej ikony agenta (user: „za daleko"). KLUCZ: QTabBar rezerwuje
+        # PEŁNĄ szerokość widżetu LeftSide, a `margin-right` go NIE przesuwa — więc
+        # jedyny pewny sposób na zbliżenie ikony to ZWĘŻENIE flagi. Zmniejszamy
+        # znaczek z 16 → 13 px (wciąż czytelny), co realnie ściąga ikonę w lewo
+        # o kilka pikseli. Pixmapa i ramka dokładnie 13 px, zero marginesów.
+        s = 13
         lbl.setPixmap(self._question_icon().pixmap(s, s))
-        # Flaga MAKSYMALNIE blisko ikony agenta (user: „za daleko"). Gap brał się
-        # nie z marginesu, lecz z tego, że QLabel zajmował więcej miejsca niż sama
-        # ikonka. Przycinamy etykietę DOKŁADNIE do ikony, zerujemy marginesy
-        # i dokładamy mały UJEMNY margines z prawej, żeby ściągnąć ją tuż pod ikonę.
         lbl.setFixedSize(s, s)
         lbl.setContentsMargins(0, 0, 0, 0)
         lbl.setStyleSheet("background: transparent; margin: 0px; padding: 0px;"
-                          " margin-right: -3px;")
+                          " margin-right: -2px;")
         return lbl
 
     def _arm_question(self, tab, armed: bool):
