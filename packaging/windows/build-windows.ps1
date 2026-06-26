@@ -1,5 +1,5 @@
 <#
-  build-windows.ps1 - buduje wersje Windows Claude Voice Assistant (Etap W2/W4).
+  build-windows.ps1 - buduje wersje Windows Vibe Coding Assistant (Etap W2/W4).
 
   WAZNE: ten plik jest CELOWO w czystym ASCII (bez polskich znakow i emoji).
   Windows PowerShell 5.1 czyta .ps1 bez BOM jako ANSI i wielobajtowe znaki UTF-8
@@ -8,8 +8,8 @@
   Robi po kolei:
     1) instaluje zaleznosci (requirements + pyinstaller + pillow),
     2) generuje ikone .ico z src/assets/icon.png (make_ico.py),
-    3) sklada aplikacje PyInstallerem (onedir -> dist\Claude Voice Assistant\),
-    4) buduje instalator Inno Setup -> dist\ClaudeVoiceAssistant-Setup-<wersja>.exe.
+    3) sklada aplikacje PyInstallerem (onedir -> dist\Vibe Coding Assistant\),
+    4) buduje instalator Inno Setup -> dist\VibeCodingAssistant-Setup-<wersja>.exe.
 
   Uruchom NA Windows (PowerShell), z dowolnego katalogu:
     powershell -ExecutionPolicy Bypass -File packaging\windows\build-windows.ps1
@@ -49,8 +49,8 @@ if (Test-Path "build") { Remove-Item -Recurse -Force "build" }
 if (Test-Path "dist")  { Remove-Item -Recurse -Force "dist" }
 python -m PyInstaller --noconfirm --clean packaging\windows\ClaudeVoiceAssistant.spec
 
-$AppDir = "dist\Claude Voice Assistant"
-$AppExe = Join-Path $AppDir "Claude Voice Assistant.exe"
+$AppDir = "dist\Vibe Coding Assistant"
+$AppExe = Join-Path $AppDir "Vibe Coding Assistant.exe"
 if (-not (Test-Path $AppExe)) {
     throw "Build nie powiodl sie - brak pliku: $AppExe"
 }
@@ -71,7 +71,7 @@ if (-not $iscc) { throw "Nie znaleziono iscc.exe (Inno Setup 6). Zainstaluj: cho
 & $iscc "/DAppVersion=$Version" "packaging\windows\installer.iss"
 if ($LASTEXITCODE -ne 0) { throw "Inno Setup zwrocil blad ($LASTEXITCODE)" }
 
-$Setup = "dist\ClaudeVoiceAssistant-Setup-$Version.exe"
+$Setup = "dist\VibeCodingAssistant-Setup-$Version.exe"
 if (-not (Test-Path $Setup)) { throw "Brak pliku instalatora: $Setup" }
 
 Write-Host ""

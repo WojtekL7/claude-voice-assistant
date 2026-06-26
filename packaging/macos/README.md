@@ -32,7 +32,7 @@ chmod +x packaging/macos/build-macos.sh
 
 Wynik:
 - `dist/Vibe Coding Assistant.app`
-- `dist/ClaudeVoiceAssistant-<wersja>-macos-<arch>.dmg`
+- `dist/VibeCodingAssistant-<wersja>-macos-<arch>.dmg`
 
 **Pierwsze uruchomienie niepodpisanej aplikacji:** Finder → prawy klik na aplikacji
 → **Otwórz** → potwierdź (Gatekeeper zapyta raz). Późniejsze uruchomienia normalnie.
@@ -70,7 +70,7 @@ Potem `./packaging/macos/build-macos.sh` sam podpisze (hardened runtime +
 2. Wygeneruj/zaktualizuj wpis w feedzie:
    ```bash
    python3 packaging/make-appcast-entry.py \
-     "dist/ClaudeVoiceAssistant-1.0.0-macos-arm64.dmg" \
+     "dist/VibeCodingAssistant-1.0.0-macos-arm64.dmg" \
      --version 1.0.0 \
      --base-url https://srv1251441.hstgr.cloud/cva/ \
      --appcast packaging/appcast.json --merge

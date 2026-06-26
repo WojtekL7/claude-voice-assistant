@@ -20,7 +20,7 @@ Lokalnie na Windows:
 powershell -ExecutionPolicy Bypass -File packaging\windows\build-windows.ps1
 ```
 Wymaga: Python 3.12 na PATH + Inno Setup 6 (`choco install innosetup`).
-Wynik: `dist\ClaudeVoiceAssistant-Setup-<wersja>.exe`.
+Wynik: `dist\VibeCodingAssistant-Setup-<wersja>.exe`.
 
 ## Auto-aktualizacja
 Pobrany `Setup.exe` jest URUCHAMIANY po cichu (`/VERYSILENT`) przez

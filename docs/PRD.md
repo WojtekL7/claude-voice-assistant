@@ -1,4 +1,4 @@
-# PRD: Claude Voice Assistant — Roadmap komercjalizacji 2026
+# PRD: Vibe Coding Assistant — Roadmap komercjalizacji 2026
 
 | Pole | Wartość |
 |------|---------|
@@ -48,7 +48,7 @@ PRD v2.0 jest **realignmentem PRD do faktycznej architektury kodu**, z **Claude 
 
 ## 1. Executive Summary (TL;DR)
 
-Claude Voice Assistant przekształcamy z **osobistego narzędzia developerskiego** w **komercyjny produkt freemium (open-core) dla użytkowników Claude Code** dostępny na Linux (faza 0-1), Windows + macOS (faza 2), a docelowo także na mobile (faza 4).
+Vibe Coding Assistant przekształcamy z **osobistego narzędzia developerskiego** w **komercyjny produkt freemium (open-core) dla użytkowników Claude Code** dostępny na Linux (faza 0-1), Windows + macOS (faza 2), a docelowo także na mobile (faza 4).
 
 **Wizja:** *"Claude Code Voice Studio z MCP & Skills — premium GUI dla Claude Code z głosem, MCP serverami i ekosystemem Skills."*
 
@@ -86,7 +86,7 @@ Claude Voice Assistant przekształcamy z **osobistego narzędzia developerskiego
 | Cursor ($20/mc) | AI w edytorze kodu | Brak terminala, brak głosu, tylko 1 model, brak Claude Code |
 | Warp ($20/mc) | Terminal z AI | Słabe AI vs Claude Code, brak głosu, tylko macOS/Linux |
 | Claude Desktop (free) | Czat z Claude (chat-only) | Brak terminala, brak Claude Code, brak głosu |
-| **Claude Voice Assistant** | **Claude Code w GUI + głos + multi-agent + MCP/Skills manager + freemium** | (to nasz wyróżnik) |
+| **Vibe Coding Assistant** | **Claude Code w GUI + głos + multi-agent + MCP/Skills manager + freemium** | (to nasz wyróżnik) |
 
 ### Target market (kolejność priorytetów)
 1. **Solo deweloperzy używający Claude Code** (główny target — power users Anthropic, którzy już płacą za Claude Code)
@@ -835,7 +835,7 @@ Zamiast refactorować `claude_bridge.py` na `AIProvider` ABC (4-6 tyg pracy + ry
 
 ### Zależności biznesowe
 - **Konsultacja prawna** dla Terms of Service / Privacy Policy (jednorazowo €100-300)
-- **Konsultacja brandingowa:** czy "Claude Voice Assistant" jest bezpieczne? (R11) — możliwa zmiana nazwy
+- **Konsultacja brandingowa:** czy "Vibe Coding Assistant" jest bezpieczne? (R11) — możliwa zmiana nazwy
 - **GDPR compliance** dla EU klientów — w onboardingu opt-in dla telemetrii (Q8)
 - **Anthropic Partner Program** — czy aplikujemy? Ułatwia legitimacy + co-marketing
 
@@ -945,7 +945,7 @@ Funkcje **rozważane** ale przesunięte poza zakres tego PRD. Możemy do nich wr
 
 | # | Nazwa | Etymologia | Status walidacji |
 |---|-------|------------|------------------|
-| 11 | **CVA** (cva.app) | Skrót od Cloud/Claude Voice Assistant | ❌ **DOMENA NA SPRZEDAŻ** — cva.app na Aftermarket.com (premium, szac. $1000-10000) + 5 trademarków w innych branżach (finanse, medycyna, security) |
+| 11 | **CVA** (cva.app) | Skrót od Cloud/Vibe Coding Assistant | ❌ **DOMENA NA SPRZEDAŻ** — cva.app na Aftermarket.com (premium, szac. $1000-10000) + 5 trademarków w innych branżach (finanse, medycyna, security) |
 | 12 | **VibeCode** (vibecode.app) | "Vibe" + "Code" | ❌ **TRADEMARK CONFLICT KRYTYCZNY** — Vibecode to aktywny startup (vibecodeapp.com, vibecode.dev), AI mobile app builder, Product Hunt featured, $100M konkurent |
 | 13 | **VibeShell** | "Vibe" + "Shell" (terminal) | Niewalidowane (top kandydat) |
 | 14 | **VibeVox** | "Vibe" + "Vox" | Niewalidowane (top kandydat) |

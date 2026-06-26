@@ -10,7 +10,7 @@ ani — zwykle — problem RAM. Pełny opis metody: `CLAUDE-VOICE-ASSISTANT.md`
 ## 📋 Prompt do wklejenia następnemu agentowi
 
 ```
-Zbadaj crash zakładki w CVA (Claude Voice Assistant). Zakładka "wypadła" do
+Zbadaj crash zakładki w CVA (Vibe Coding Assistant). Zakładka "wypadła" do
 promptu basha z hintem `claude --resume`.
 
 Zacznij od czarnej skrzynki — to ślad, który teraz zapisujemy automatycznie:

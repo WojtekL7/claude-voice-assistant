@@ -5,7 +5,7 @@
 cd "$(dirname "$0")" || exit 1
 
 echo "================================================"
-echo "   Budowanie .dmg — Claude Voice Assistant"
+echo "   Budowanie .dmg — Vibe Coding Assistant"
 echo "================================================"
 echo "To potrwa kilka–kilkanaście minut."
 echo "Poleci DUŻO napisów — to normalne, poczekaj cierpliwie."

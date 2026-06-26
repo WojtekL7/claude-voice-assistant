@@ -43,7 +43,7 @@ jobs:
 
       - name: Komplet plikow winpty w paczce
         shell: pwsh
-        run: Get-ChildItem "dist\Claude Voice Assistant\_internal\winpty" | Format-Table Name,Length -AutoSize
+        run: Get-ChildItem "dist\Vibe Coding Assistant\_internal\winpty" | Format-Table Name,Length -AutoSize
 
       - name: Uruchom Z KODU + zrzut ekranu + logi
         shell: pwsh
@@ -59,7 +59,7 @@ jobs:
         run: >-
           powershell -ExecutionPolicy Bypass
           -File packaging\windows\diag_run_and_screenshot.ps1
-          -Exe "dist\Claude Voice Assistant\Claude Voice Assistant.exe"
+          -Exe "dist\Vibe Coding Assistant\Vibe Coding Assistant.exe"
           -OutPrefix packaged -WaitSeconds 35
 
       - name: Artefakt diagnostyczny

@@ -1,12 +1,12 @@
 #!/bin/bash
-# Uruchom-Mac.command — dwuklik uruchamia Claude Voice Assistant na macOS.
+# Uruchom-Mac.command — dwuklik uruchamia Vibe Coding Assistant na macOS.
 # Przy PIERWSZYM uruchomieniu sam przygotuje środowisko (kilka minut), potem
 # każde kolejne uruchomienie jest szybkie. Nie trzeba nic wpisywać.
 
 cd "$(dirname "$0")" || exit 1
 
 echo "======================================"
-echo "   Claude Voice Assistant"
+echo "   Vibe Coding Assistant"
 echo "======================================"
 
 # 1) Znajdź Pythona (3.12 najlepiej; w razie czego nowszy/3.x)
@@ -47,5 +47,5 @@ fi
 
 # 3) Uruchom aplikację
 echo ""
-echo "🚀 Uruchamiam Claude Voice Assistant..."
+echo "🚀 Uruchamiam Vibe Coding Assistant..."
 exec ./venv/bin/python src/main.py

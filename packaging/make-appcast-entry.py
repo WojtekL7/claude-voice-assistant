@@ -12,12 +12,12 @@ Format odpowiada packaging/appcast.example.json oraz core/update_manager.py.
 Przykłady:
   # tylko wypisz wpis na ekran
   python3 packaging/make-appcast-entry.py \
-      dist/ClaudeVoiceAssistant-1.0.0-macos-arm64.dmg \
+      dist/VibeCodingAssistant-1.0.0-macos-arm64.dmg \
       --version 1.0.0 --base-url https://srv1251441.hstgr.cloud/cva/
 
   # wstaw/zaktualizuj wpis w pliku appcast.json
   python3 packaging/make-appcast-entry.py \
-      dist/ClaudeVoiceAssistant-1.0.0-macos-arm64.dmg \
+      dist/VibeCodingAssistant-1.0.0-macos-arm64.dmg \
       --version 1.0.0 --base-url https://srv1251441.hstgr.cloud/cva/ \
       --appcast packaging/appcast.json --merge
 
