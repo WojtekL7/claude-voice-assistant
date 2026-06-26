@@ -3926,12 +3926,6 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
             self._question_icon_cached = icon
         return icon
 
-    # Znak flagi „agent czeka" wplatany w NAZWĘ zakładki jako TEKST (nie osobny
-    # widżet). Widżet LeftSide zostawiał nieusuwalny odstęp od ikony — margines,
-    # szerokość ani nadpisanie stylu tego nie ruszały (potwierdzone zrzutem usera).
-    # Tekst jest ZAWSZE tuż przy ikonie/nazwie — odstęp fizycznie niemożliwy.
-    QUESTION_FLAG_PREFIX = "❓ "
-
     def _arm_question(self, tab, armed: bool):
         """Ustaw stan 'agent czeka na odpowiedź' dla zakładki i odśwież ikonę.
 
@@ -3970,6 +3964,29 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         p.end()
         return QIcon(canvas)
 
+    def _flag_only_icon(self) -> QIcon:
+        """Samodzielny ŻÓŁTY znaczek „?" jako ikona zakładki — dla agentów z emoji
+        (emoji zostaje w tekście; flaga jako ikona = skrajnie z lewej, żółta, BEZ
+        zmiany koloru nazwy)."""
+        size = 30
+        canvas = QPixmap(size, size)
+        canvas.fill(Qt.transparent)
+        p = QPainter(canvas)
+        p.setRenderHint(QPainter.Antialiasing, True)
+        d = 22
+        off = (size - d) // 2
+        p.setBrush(QColor("#ffd400"))
+        p.setPen(QPen(QColor("#7a5c00"), 1))
+        p.drawEllipse(off, off, d, d)
+        p.setPen(QColor("#3a2c00"))
+        f = QFont()
+        f.setBold(True)
+        f.setPixelSize(15)
+        p.setFont(f)
+        p.drawText(QRect(off, off, d, d), Qt.AlignCenter, "?")
+        p.end()
+        return QIcon(canvas)
+
     def _tab_default_color(self, tab) -> QColor:
         """Normalny kolor tekstu zakładki: kolor agenta albo domyślny ze skórki."""
         c = self._agent_tab_color(getattr(tab, 'agent_config', None))
@@ -3991,20 +4008,19 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         show = getattr(tab, "_armed_question", False) \
             and tab is not self.tab_widget.currentWidget()
         bar = self.tab_widget.tabBar()
+        # Nazwa i kolor tytułu ZAWSZE normalne — flaga to wyłącznie ŻÓŁTA IKONA z lewej.
+        if self.tab_widget.tabText(index) != base_label:
+            self.tab_widget.setTabText(index, base_label)
+        bar.setTabTextColor(index, self._tab_default_color(tab))
         if not base_icon.isNull():
-            # Ikona-obrazek: flaga = żółty badge NA ikonie; nazwa bez prefiksu, kolor normalny.
-            if self.tab_widget.tabText(index) != base_label:
-                self.tab_widget.setTabText(index, base_label)
+            # Ikona-obrazek: żółty znaczek „?" wmalowany w róg ikony agenta.
             self.tab_widget.setTabIcon(
                 index, self._icon_with_flag(base_icon) if show else base_icon)
-            bar.setTabTextColor(index, self._tab_default_color(tab))
         else:
-            # Emoji w tekście: żółty prefiks „❓ " + żółta nazwa (widoczność).
-            desired = (self.QUESTION_FLAG_PREFIX + base_label) if show else base_label
-            if self.tab_widget.tabText(index) != desired:
-                self.tab_widget.setTabText(index, desired)
-            bar.setTabTextColor(
-                index, QColor("#ffd400") if show else self._tab_default_color(tab))
+            # Emoji w tekście: flaga jako samodzielna żółta ikonka „?" (emoji zostaje
+            # w tekście, tytuł normalny). Brak flagi → brak ikony (emoji w nazwie).
+            self.tab_widget.setTabIcon(
+                index, self._flag_only_icon() if show else QIcon())
         self.tab_widget.setTabToolTip(
             index, tr('dlg_agent_waiting_tooltip') if show else "")
 
