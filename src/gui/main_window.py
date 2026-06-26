@@ -670,6 +670,12 @@ class MainWindow(QMainWindow):
         # Ikona agenta na zakładce ~2× większa (życzenie usera) — domyślnie Qt daje
         # ~16 px; ustawiamy 30 px, żeby ikona (robot/własna) była wyraźnie widoczna.
         self.tab_widget.setIconSize(QSize(30, 30))
+        # Większa czcionka zakładek przez API (nie QSS — font-size w QTabBar::tab jest
+        # ignorowany przy własnym QStyle/Fusion). Powiększa napisy ORAZ ikony-emoji
+        # (emoji to tekst → rośnie z czcionką).
+        _tab_font = self.tab_widget.tabBar().font()
+        _tab_font.setPointSize(14)
+        self.tab_widget.tabBar().setFont(_tab_font)
         self.tab_widget.setTabsClosable(True)
         self.tab_widget.setMovable(True)
         self.tab_widget.tabCloseRequested.connect(self._close_agent_tab)
@@ -687,12 +693,7 @@ class MainWindow(QMainWindow):
             }}
             QTabBar::tab {{
                 background-color: #2d0a1e;
-                /* LEWY padding mały (4px) — to on robił duży odstęp między flagą
-                   „?" a ikoną agenta; prawy zostaje 16px na ikonę X. */
-                padding: 8px 16px 8px 4px;
-                /* Większa czcionka zakładek — większe napisy ORAZ ikony-emoji
-                   (emoji to tekst, więc rośnie z czcionką). */
-                font-size: 15px;
+                padding: 8px 16px;
                 margin-right: 2px;
                 border-top-left-radius: 6px;
                 border-top-right-radius: 6px;
@@ -3925,20 +3926,11 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
             self._question_icon_cached = icon
         return icon
 
-    def _make_flag_widget(self) -> QLabel:
-        """Widżet flagi „agent czeka", pokazywany PO LEWEJ stronie zakładki
-        (QTabBar LeftSide). Niezależny od ikony agenta → stały rozmiar na każdej
-        zakładce i naturalna przerwa przed ikoną/nazwą (margines z prawej)."""
-        lbl = QLabel()
-        # Flaga proporcjonalna do (teraz większej) ikony agenta. O jej ZBLIŻENIE do
-        # ikony dba styl (_LeftAlignedTabStyle.subElementRect przesuwa lewy przycisk
-        # w prawo) — bo margines/szerokość tego nie ruszają w QTabBar.
-        s = 18
-        lbl.setPixmap(self._question_icon().pixmap(s, s))
-        lbl.setFixedSize(s, s)
-        lbl.setContentsMargins(0, 0, 0, 0)
-        lbl.setStyleSheet("background: transparent; margin: 0px; padding: 0px;")
-        return lbl
+    # Znak flagi „agent czeka" wplatany w NAZWĘ zakładki jako TEKST (nie osobny
+    # widżet). Widżet LeftSide zostawiał nieusuwalny odstęp od ikony — margines,
+    # szerokość ani nadpisanie stylu tego nie ruszały (potwierdzone zrzutem usera).
+    # Tekst jest ZAWSZE tuż przy ikonie/nazwie — odstęp fizycznie niemożliwy.
+    QUESTION_FLAG_PREFIX = "❓ "
 
     def _arm_question(self, tab, armed: bool):
         """Ustaw stan 'agent czeka na odpowiedź' dla zakładki i odśwież ikonę.
@@ -3954,36 +3946,25 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         self._refresh_question_flag(tab)
 
     def _refresh_question_flag(self, tab):
-        """Pokaż ikonę '?' wtw. gdy zakładka jest uzbrojona I nieaktywna.
+        """Pokaż znak „?" w NAZWIE zakładki, gdy zakładka jest uzbrojona I nieaktywna.
 
-        Źródłem prawdy o tym, czy znaczek już wisi, jest REALNY stan paska
-        zakładek (``bar.tabButton``), a NIE pamiętana flaga — dzięki temu
-        funkcja jest samonaprawiająca się: jeśli widżet z jakiegokolwiek
-        powodu zniknął albo nie powstał, najbliższy tick odtworzy go
-        (porównujemy zamiar ``show`` z faktycznym stanem Qt, nie z własną
-        notatką, która mogła się rozjechać z rzeczywistością).
+        Flaga jako prefiks tekstu (nie osobny widżet) → zawsze tuż przy ikonie,
+        bez odstępu. Samonaprawiająca się: porównujemy zamierzony tekst zakładki
+        z REALNYM (``tabText``) przy każdym ticku, więc rozjazd sam się koryguje.
         """
         if tab is None:
             return
         index = self.tab_widget.indexOf(tab)
         if index < 0:
             return
-        bar = self.tab_widget.tabBar()
+        base_label, _icon = self._agent_label_icon(getattr(tab, 'agent_config', {}))
         show = getattr(tab, "_armed_question", False) \
             and tab is not self.tab_widget.currentWidget()
-        currently_shown = bar.tabButton(index, QTabBar.LeftSide) is not None
-        if show == currently_shown:
-            return  # realny stan paska już zgodny — nie ruszaj (bez zbędnych przerysowań)
-        # Flaga to OSOBNY widżet po lewej stronie zakładki (LeftSide), a nie ikona
-        # w slocie — dzięki temu własna ikona agenta NIGDY nie jest zasłaniana,
-        # flaga ma stały rozmiar na każdej zakładce, a między nią a ikoną/nazwą
-        # jest naturalna przerwa. Kolejność w zakładce: [flaga][ikona][nazwa].
-        if show:
-            bar.setTabButton(index, QTabBar.LeftSide, self._make_flag_widget())
-            bar.setTabToolTip(index, tr('dlg_agent_waiting_tooltip'))
-        else:
-            bar.setTabButton(index, QTabBar.LeftSide, None)
-            bar.setTabToolTip(index, "")
+        desired = (self.QUESTION_FLAG_PREFIX + base_label) if show else base_label
+        if self.tab_widget.tabText(index) != desired:
+            self.tab_widget.setTabText(index, desired)
+            self.tab_widget.setTabToolTip(
+                index, tr('dlg_agent_waiting_tooltip') if show else "")
 
     def _refresh_all_question_flags(self):
         """Przelicz flagi wszystkich zakładek (np. po zmianie aktywnej)."""
