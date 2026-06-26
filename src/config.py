@@ -1,12 +1,12 @@
 """
-Claude Voice Assistant - Configuration
+Vibe Coding Assistant - Configuration
 """
 import os
 import sys
 from pathlib import Path
 
 # Application Info
-APP_NAME = "Claude Voice Assistant"
+APP_NAME = "Vibe Coding Assistant"
 # APP_VERSION — JEDYNE źródło prawdy o wersji. Używane przez auto-aktualizację
 # (M3) do porównania z wersją w pliku appcast na serwerze. Podbijaj przy każdym
 # wydaniu (semver: MAJOR.MINOR.PATCH).
@@ -19,7 +19,7 @@ APP_AUTHOR = "Fulfillment Polska"
 # osobny WM_CLASS (pasek zadań Linuksa nie skleja obu w jedną ikonę) + dopisek
 # „— DEV" w tytule. Wersji wydanej NIE dotyczy (oba poniżej puste/bazowe).
 IS_DEV = not getattr(sys, "frozen", False)
-APP_WM_CLASS = "claude-voice-assistant" + ("-beta" if IS_DEV else "")
+APP_WM_CLASS = "vibe-coding-assistant" + ("-beta" if IS_DEV else "")
 APP_TITLE_SUFFIX = "  —  beta" if IS_DEV else ""
 
 # Paths
@@ -34,7 +34,18 @@ else:
 SRC_DIR = BASE_DIR / "src"
 ASSETS_DIR = SRC_DIR / "assets"
 I18N_DIR = SRC_DIR / "i18n"
-CONFIG_DIR = Path.home() / ".claude-voice-assistant"
+CONFIG_DIR = Path.home() / ".vibe-coding-assistant"
+# Migracja ustawień ze starej nazwy (Vibe Coding Assistant → Vibe Coding Assistant).
+# Przy pierwszym starcie nowej wersji przenosimy istniejącą konfigurację (klucz Groq,
+# język, skórki, agenci, licencja), żeby obecni użytkownicy NIC nie stracili.
+# Jednorazowe i bezpieczne: tylko gdy nowy folder jeszcze nie istnieje.
+_OLD_CONFIG_DIR = Path.home() / ".claude-voice-assistant"
+if not CONFIG_DIR.exists() and _OLD_CONFIG_DIR.is_dir():
+    try:
+        import shutil
+        shutil.copytree(_OLD_CONFIG_DIR, CONFIG_DIR)
+    except Exception:
+        pass
 CONFIG_FILE = CONFIG_DIR / "config.json"
 QUICK_ACTIONS_FILE = CONFIG_DIR / "quick_actions.json"
 LICENSE_FILE = CONFIG_DIR / "license.key"
@@ -231,7 +242,7 @@ SUPPORTED_LANGUAGES = {
 # UI Translations
 UI_TRANSLATIONS = {
     "pl-PL": {
-        "app_title": "Claude Voice Assistant",
+        "app_title": "Vibe Coding Assistant",
         "dictate": "Dyktuj",
         "read": "Czytaj",
         "copy": "Kopiuj",
@@ -959,7 +970,7 @@ UI_TRANSLATIONS = {
         "skin_icon_quick_actions": "Szybkie akcje",
     },
     "en-US": {
-        "app_title": "Claude Voice Assistant",
+        "app_title": "Vibe Coding Assistant",
         "dictate": "Dictate",
         "read": "Read",
         "copy": "Copy",

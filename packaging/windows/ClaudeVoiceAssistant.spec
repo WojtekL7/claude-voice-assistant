@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-PyInstaller spec — Claude Voice Assistant dla Windows (.exe, onedir) — Etap W2.
+PyInstaller spec — Vibe Coding Assistant dla Windows (.exe, onedir) — Etap W2.
 
 Buduj NA Windows:  pyinstaller --noconfirm --clean packaging/windows/ClaudeVoiceAssistant.spec
 (zwykle przez packaging/windows/build-windows.ps1, który dodatkowo robi .ico i instalator Inno Setup).
@@ -29,7 +29,7 @@ def _read_app_version():
     return m.group(1) if m else "0.0.0"
 
 
-APP_NAME = "Claude Voice Assistant"
+APP_NAME = "Vibe Coding Assistant"
 APP_VERSION = _read_app_version()
 ICON = os.path.join(SRC, "assets", "icon.ico")  # build-windows.ps1 zrobi .ico z .png
 
@@ -78,7 +78,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name=APP_NAME,            # nazwa pliku .exe: "Claude Voice Assistant.exe"
+    name=APP_NAME,            # nazwa pliku .exe: "Vibe Coding Assistant.exe"
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

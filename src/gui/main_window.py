@@ -1,5 +1,5 @@
 """
-Claude Voice Assistant - Main Window
+Vibe Coding Assistant - Main Window
 PyQt5-based GUI for the application.
 """
 import sys
@@ -3435,7 +3435,7 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
 
         # Create custom color scheme directory and file
         import os
-        custom_scheme_dir = Path.home() / '.config' / 'claude-voice-assistant' / 'color-schemes'
+        custom_scheme_dir = Path.home() / '.config' / 'vibe-coding-assistant' / 'color-schemes'
         custom_scheme_dir.mkdir(parents=True, exist_ok=True)
 
         scheme_file = custom_scheme_dir / 'CustomSkin.colorscheme'

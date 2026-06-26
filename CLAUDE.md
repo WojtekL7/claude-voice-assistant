@@ -1,4 +1,4 @@
-# Claude Voice Assistant — instrukcje dla Claude Code
+# Vibe Coding Assistant — instrukcje dla Claude Code
 
 Ten plik jest **automatycznie ładowany** przez Claude Code przy starcie w tym katalogu. Czytaj go **przed jakąkolwiek pracą nad kodem**.
 
@@ -17,7 +17,7 @@ Ten plik jest **automatycznie ładowany** przez Claude Code przy starcie w tym k
 
 ## 🎯 Cel projektu (TL;DR z PRD)
 
-**Claude Voice Assistant** przekształcamy z osobistego narzędzia w **komercyjny produkt freemium (open-core) dla użytkowników Claude Code**.
+**Vibe Coding Assistant** przekształcamy z osobistego narzędzia w **komercyjny produkt freemium (open-core) dla użytkowników Claude Code**.
 
 Pozycjonowanie: *"Claude Code Voice Studio z MCP & Skills — premium GUI dla Claude Code z głosem, multi-agent w zakładkach, ekosystemem MCP i Skills."*
 

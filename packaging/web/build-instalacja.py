@@ -116,14 +116,14 @@ def build_install_page(lang):
     panels_html = "\n".join(panels)
 
     if lang == "en":
-        title = "Full install guide — macOS, Linux, Windows | Claude Voice Assistant"
-        desc = "Step-by-step install guide for Claude Voice Assistant on macOS, Linux and Windows, plus dictation — explained for everyone."
+        title = "Full install guide — macOS, Linux, Windows | Vibe Coding Assistant"
+        desc = "Step-by-step install guide for Vibe Coding Assistant on macOS, Linux and Windows, plus dictation — explained for everyone."
         h1 = "Full install guide"
         tagline = "Pick your system in the top menu. Everything explained step by step, so anyone can do it — no technical knowledge needed."
         back = "← Back to the download page"
     else:
-        title = "Pełna instrukcja instalacji — macOS, Linux, Windows | Claude Voice Assistant"
-        desc = "Instrukcja instalacji Claude Voice Assistant krok po kroku na macOS, Linuksie i Windows, plus dyktowanie — wytłumaczone dla każdego."
+        title = "Pełna instrukcja instalacji — macOS, Linux, Windows | Vibe Coding Assistant"
+        desc = "Instrukcja instalacji Vibe Coding Assistant krok po kroku na macOS, Linuksie i Windows, plus dyktowanie — wytłumaczone dla każdego."
         h1 = "Pełna instrukcja instalacji"
         tagline = "Wybierz swój system w górnym menu. Wszystko krok po kroku, tak żeby zrozumiał każdy — bez wiedzy technicznej."
         back = "← Wróć do strony pobierania"
@@ -187,7 +187,7 @@ def build_install_page(lang):
 
     <footer>
       <p><a href="https://pobierz.srv1251441.hstgr.cloud/">{back}</a></p>
-      <p>Claude Voice Assistant • kontakt@fulfillment-polska.pl</p>
+      <p>Vibe Coding Assistant • kontakt@fulfillment-polska.pl</p>
     </footer>
   </div>
 {js}

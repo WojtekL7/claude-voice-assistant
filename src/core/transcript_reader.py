@@ -1,5 +1,5 @@
 """
-Claude Voice Assistant - Transcript Reader (Etap 2, Droga A)
+Vibe Coding Assistant - Transcript Reader (Etap 2, Droga A)
 
 Czyta czyste wypowiedzi Claude'a z pliku-dziennika sesji Claude Code
 (`~/.claude/projects/<katalog>/<sesja>.jsonl`) — zamiast parsować śmieciowy,

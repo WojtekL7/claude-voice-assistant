@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-PyInstaller spec — Claude Voice Assistant dla macOS (.app) — Etap M4.
+PyInstaller spec — Vibe Coding Assistant dla macOS (.app) — Etap M4.
 
 Buduj NA macOS:  pyinstaller --noconfirm --clean packaging/macos/ClaudeVoiceAssistant.spec
 (zwykle przez packaging/macos/build-macos.sh, który dodatkowo robi .dmg i podpis).
@@ -23,7 +23,7 @@ def _read_app_version():
     return m.group(1) if m else "0.0.0"
 
 
-APP_NAME = "Claude Voice Assistant"
+APP_NAME = "Vibe Coding Assistant"
 APP_VERSION = _read_app_version()
 BUNDLE_ID = "pl.fulfillment.claude-voice-assistant"
 ICON = os.path.join(SRC, "assets", "icon.icns")  # build-macos.sh zrobi .icns z .png

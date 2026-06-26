@@ -1,5 +1,5 @@
 """
-Claude Voice Assistant — wskaźnik zużycia pamięci RAM (pasek statusu).
+Vibe Coding Assistant — wskaźnik zużycia pamięci RAM (pasek statusu).
 
 Rysowana ikona „kości RAM" (moduł DIMM) zmienia kolor wg obciążenia pamięci
 CAŁEGO komputera (RAM + swap):

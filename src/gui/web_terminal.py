@@ -1,5 +1,5 @@
 """
-Claude Voice Assistant - WebTerminal (Etap M2.1)
+Vibe Coding Assistant - WebTerminal (Etap M2.1)
 
 Wieloplatformowy terminal: xterm.js renderowany w QtWebEngine, napędzany
 pythonowym PTY. Zastąpi linuksowy QTermWidget na macOS/Windows (i opcjonalnie

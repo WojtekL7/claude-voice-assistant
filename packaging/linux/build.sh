@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build Linux AppImage dla Claude Voice Assistant.
+# Build Linux AppImage dla Vibe Coding Assistant.
 #
 # URUCHAMIAĆ NA Linuksie x86_64. Produkuje jeden przenośny plik .AppImage
 # (użytkownik: chmod +x i klik — bez instalacji). Terminalem w paczce jest
@@ -16,11 +16,11 @@ DIST_DIR="$PROJECT_DIR/dist"
 BUILD_DIR="$PROJECT_DIR/build"
 SPEC="$SCRIPT_DIR/ClaudeVoiceAssistant.spec"
 
-APP_NAME="Claude Voice Assistant"
+APP_NAME="Vibe Coding Assistant"
 APP_BIN="claude-voice-assistant"
 APP_VERSION="$(grep -E '^APP_VERSION' "$SRC_DIR/config.py" | head -1 | sed -E 's/.*["'"'"']([^"'"'"']+)["'"'"'].*/\1/')"
 PLATFORM_ID="linux-x64"
-APPIMAGE="$DIST_DIR/ClaudeVoiceAssistant-$APP_VERSION-$PLATFORM_ID.AppImage"
+APPIMAGE="$DIST_DIR/VibeCodingAssistant-$APP_VERSION-$PLATFORM_ID.AppImage"
 
 echo "=========================================="
 echo "Build: $APP_NAME v$APP_VERSION  ($PLATFORM_ID)"
@@ -97,6 +97,7 @@ Exec=$APP_BIN
 Icon=$APP_BIN
 Categories=Development;Utility;
 Terminal=false
+StartupWMClass=vibe-coding-assistant
 "
 mkdir -p "$APPDIR/usr/share/applications"
 printf '%s' "$DESKTOP_CONTENT" > "$APPDIR/usr/share/applications/$APP_BIN.desktop"

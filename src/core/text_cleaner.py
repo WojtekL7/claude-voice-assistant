@@ -1,5 +1,5 @@
 """
-Claude Voice Assistant - Text Cleaner for TTS
+Vibe Coding Assistant - Text Cleaner for TTS
 Cleans terminal output for natural speech synthesis.
 """
 import re

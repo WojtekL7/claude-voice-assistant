@@ -1,5 +1,5 @@
 """
-Claude Voice Assistant - Platform utilities (Linux / macOS / Windows)
+Vibe Coding Assistant - Platform utilities (Linux / macOS / Windows)
 
 Jedno miejsce rozstrzygające różnice między systemami operacyjnymi: backend Qt,
 Input Method, natywny pasek menu, domyślna powłoka, ścieżka do CLI `claude`,
@@ -134,7 +134,7 @@ def configure_qt_environment():
         # cyklu życia strony — pisze go gui/web_terminal.py).
         if os.environ.get("CVA_WEBENGINE_LOG") == "1":
             try:
-                log_dir = Path.home() / ".claude-voice-assistant"
+                log_dir = Path.home() / ".vibe-coding-assistant"
                 log_dir.mkdir(parents=True, exist_ok=True)
                 os.environ.setdefault(
                     "QTWEBENGINE_CHROMIUM_FLAGS",
@@ -355,7 +355,7 @@ def macos_app_bundle() -> Path:
     albo None gdy to nie macOS / nie spakowana / nie wygląda na `.app`.
 
     `sys.executable` w spakowanej apce to
-    `…/Claude Voice Assistant.app/Contents/MacOS/Claude Voice Assistant` —
+    `…/Vibe Coding Assistant.app/Contents/MacOS/Vibe Coding Assistant` —
     pakiet `.app` to katalog trzy poziomy wyżej. Ta ścieżka jest celem
     samo-podmiany (updater wymienia cały ten katalog)."""
     if not (is_macos() and is_frozen()):

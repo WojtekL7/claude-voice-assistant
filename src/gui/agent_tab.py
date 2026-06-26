@@ -1,5 +1,5 @@
 """
-Claude Voice Assistant - Agent Tab
+Vibe Coding Assistant - Agent Tab
 Single agent tab with terminal and input panel.
 """
 import json

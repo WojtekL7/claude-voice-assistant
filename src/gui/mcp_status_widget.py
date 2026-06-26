@@ -1,5 +1,5 @@
 """
-Claude Voice Assistant - Agent Status Widget (w pasku statusu)
+Vibe Coding Assistant - Agent Status Widget (w pasku statusu)
 
 Pokazuje 4 liczniki dla aktywnego agenta:
   🔌 N  — aktywne (connected) serwery MCP

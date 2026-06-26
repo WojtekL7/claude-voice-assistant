@@ -9,9 +9,9 @@ systemu, pobierają, instalują jak każdy program. Bez Terminala.
 packaging/web/
 ├── index.html              # cała strona (jeden plik, samowystarczalny)
 └── downloads/              # tu wgrywasz gotowe pliki do pobrania
-    ├── ClaudeVoiceAssistant-macos.dmg        (po zbudowaniu na Macu)
-    ├── ClaudeVoiceAssistant-linux.AppImage   (po zbudowaniu na Linuksie)
-    └── ClaudeVoiceAssistant-windows.exe       (w przyszłości — przycisk wyszarzony)
+    ├── VibeCodingAssistant-macos.dmg        (po zbudowaniu na Macu)
+    ├── VibeCodingAssistant-linux.AppImage   (po zbudowaniu na Linuksie)
+    └── VibeCodingAssistant-windows.exe       (w przyszłości — przycisk wyszarzony)
 ```
 
 **Ważne:** przyciski na stronie wskazują DOKŁADNIE te nazwy plików powyżej.
@@ -44,8 +44,8 @@ stacka n8n/CRM), routowany przez istniejący traefik:
 scp packaging/web/index.html root@168.231.127.133:/opt/cva-web/html/index.html
 
 # wgranie gotowej paczki (przykład — Mac); nazwa MUSI zgadzać się z linkiem w index.html
-scp dist/ClaudeVoiceAssistant-1.0.0-macos-arm64.dmg \
-    root@168.231.127.133:/opt/cva-web/html/downloads/ClaudeVoiceAssistant-macos.dmg
+scp dist/VibeCodingAssistant-1.0.0-macos-arm64.dmg \
+    root@168.231.127.133:/opt/cva-web/html/downloads/VibeCodingAssistant-macos.dmg
 ```
 nginx serwuje na żywo — bez restartu kontenera.
 
@@ -57,10 +57,10 @@ Kliknij dwukrotnie `index.html` — otworzy się w przeglądarce. Tak wygląda.
 
 | System | Przycisk | Plik |
 |--------|----------|------|
-| macOS | aktywny | `downloads/ClaudeVoiceAssistant-macos.dmg` |
-| Linux | aktywny | `downloads/ClaudeVoiceAssistant-linux.AppImage` |
+| macOS | aktywny | `downloads/VibeCodingAssistant-macos.dmg` |
+| Linux | aktywny | `downloads/VibeCodingAssistant-linux.AppImage` |
 | Windows | **wyszarzony** („Wkrótce") | — (włączymy, gdy powstanie `.exe`) |
 
 Aby później **włączyć Windows**: w `index.html` znajdź `id="dl-windows"`,
 zamień `<button class="btn disabled" disabled>` na link
-`<a class="btn" href="downloads/ClaudeVoiceAssistant-windows.exe" download>`.
+`<a class="btn" href="downloads/VibeCodingAssistant-windows.exe" download>`.

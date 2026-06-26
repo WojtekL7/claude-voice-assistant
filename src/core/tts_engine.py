@@ -1,5 +1,5 @@
 """
-Claude Voice Assistant - Text-to-Speech Engine
+Vibe Coding Assistant - Text-to-Speech Engine
 Uses edge-tts for high-quality multilingual speech synthesis.
 
 Gapless streaming model (Etap 1):
@@ -522,7 +522,7 @@ class TTSEngine:
         """
         try:
             import datetime
-            log_dir = os.path.join(os.path.expanduser("~"), ".claude-voice-assistant")
+            log_dir = os.path.join(os.path.expanduser("~"), ".vibe-coding-assistant")
             os.makedirs(log_dir, exist_ok=True)
             ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             with open(os.path.join(log_dir, "tts.log"), "a", encoding="utf-8") as f:

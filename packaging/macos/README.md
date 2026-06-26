@@ -1,6 +1,6 @@
 # Pakowanie macOS (Etap M4)
 
-Budowanie `.app`/`.dmg` Claude Voice Assistant na **macOS** (Apple Silicon M1–M4
+Budowanie `.app`/`.dmg` Vibe Coding Assistant na **macOS** (Apple Silicon M1–M4
 lub Intel). Z Linuksa się **nie da** — `.app` powstaje wyłącznie na Macu.
 
 ## Pliki tutaj
@@ -31,7 +31,7 @@ chmod +x packaging/macos/build-macos.sh
 ```
 
 Wynik:
-- `dist/Claude Voice Assistant.app`
+- `dist/Vibe Coding Assistant.app`
 - `dist/ClaudeVoiceAssistant-<wersja>-macos-<arch>.dmg`
 
 **Pierwsze uruchomienie niepodpisanej aplikacji:** Finder → prawy klik na aplikacji
@@ -93,7 +93,7 @@ Potem `./packaging/macos/build-macos.sh` sam podpisze (hardened runtime +
 
 | Objaw | Przyczyna / rozwiązanie |
 |-------|--------------------------|
-| „aplikacja uszkodzona / nie można otworzyć” | Niepodpisany build + kwarantanna z internetu. Prawy klik → Otwórz, albo `xattr -dr com.apple.quarantine "Claude Voice Assistant.app"` |
+| „aplikacja uszkodzona / nie można otworzyć” | Niepodpisany build + kwarantanna z internetu. Prawy klik → Otwórz, albo `xattr -dr com.apple.quarantine "Vibe Coding Assistant.app"` |
 | Pusty/biały terminal | QtWebEngine nie doszło do bundla — sprawdź, czy `PyQtWebEngine` jest w venv i czy spec ma `PyQt5.QtWebEngineWidgets` w `hiddenimports` |
 | Brak ikony | `icon.icns` nie wygenerowane — sprawdź, czy `src/assets/icon.png` istnieje (skrypt robi `.icns` przez `sips`/`iconutil`) |
 | Mikrofon nie działa | Brak zgody systemowej — System Settings → Privacy → Microphone; w `.app` musi być `NSMicrophoneUsageDescription` (jest w spec) |

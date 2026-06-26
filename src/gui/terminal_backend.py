@@ -1,5 +1,5 @@
 """
-Claude Voice Assistant - Wspólny interfejs terminala + fabryka backendów (Etap M2.2)
+Vibe Coding Assistant - Wspólny interfejs terminala + fabryka backendów (Etap M2.2)
 
 Cel: dać reszcie aplikacji JEDNĄ „deskę rozdzielczą" terminala, niezależną od
 tego, który silnik pracuje pod spodem:

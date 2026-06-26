@@ -1,4 +1,4 @@
-# Claude Voice Assistant
+# Vibe Coding Assistant
 
 Asystent głosowy dla Claude Code - dyktuj polecenia i słuchaj odpowiedzi.
 

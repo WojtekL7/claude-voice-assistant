@@ -1,5 +1,5 @@
-﻿; Inno Setup — Claude Voice Assistant (Windows) — Etap W4
-; Buduje Setup.exe z folderu onedir (dist\Claude Voice Assistant\).
+﻿; Inno Setup — Vibe Coding Assistant (Windows) — Etap W4
+; Buduje Setup.exe z folderu onedir (dist\Vibe Coding Assistant\).
 ; Wywołanie (z korzenia repo):  iscc /DAppVersion=1.0.12 packaging\windows\installer.iss
 ; Zwykle robi to packaging\windows\build-windows.ps1.
 ;
@@ -21,8 +21,8 @@
   #define AppVersion "0.0.0"
 #endif
 
-#define AppName "Claude Voice Assistant"
-#define AppExe "Claude Voice Assistant.exe"
+#define AppName "Vibe Coding Assistant"
+#define AppExe "Vibe Coding Assistant.exe"
 #define Publisher "Fulfillment Polska"
 ; {#SourcePath} = katalog tego .iss (packaging\windows); korzeń repo = dwa wyżej.
 #define ProjectRoot AddBackslash(SourcePath) + "..\.."
@@ -38,7 +38,7 @@ DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir={#ProjectRoot}\dist
-OutputBaseFilename=ClaudeVoiceAssistant-Setup-{#AppVersion}
+OutputBaseFilename=VibeCodingAssistant-Setup-{#AppVersion}
 SetupIconFile={#ProjectRoot}\src\assets\icon.ico
 UninstallDisplayIcon={app}\{#AppExe}
 Compression=lzma2

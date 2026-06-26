@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Claude Voice Assistant
+Vibe Coding Assistant
 Main entry point for the application.
 """
 import sys

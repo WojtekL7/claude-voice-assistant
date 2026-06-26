@@ -1,5 +1,5 @@
 #!/bin/bash
-# Claude Voice Assistant — uruchomienie z limitem pamięci (ochrona systemu)
+# Vibe Coding Assistant — uruchomienie z limitem pamięci (ochrona systemu)
 #
 # Dlaczego:
 #   System (Ubuntu 24.04, Lenovo Z51-70, ~15 GB RAM / 16 GB fizyczne, Intel HD 5500) zawieszał

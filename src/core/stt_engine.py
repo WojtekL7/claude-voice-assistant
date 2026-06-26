@@ -1,5 +1,5 @@
 """
-Claude Voice Assistant - Speech-to-Text Engine
+Vibe Coding Assistant - Speech-to-Text Engine
 Uses Groq Whisper API for fast, accurate transcription.
 """
 import io

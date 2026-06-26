@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-PyInstaller spec — Claude Voice Assistant dla Linuksa (onedir → AppImage).
+PyInstaller spec — Vibe Coding Assistant dla Linuksa (onedir → AppImage).
 
 Buduj NA Linuksie:  pyinstaller --noconfirm --clean packaging/linux/ClaudeVoiceAssistant.spec
 (zwykle przez packaging/linux/build.sh, który dodatkowo składa AppImage).

@@ -1,5 +1,5 @@
 """
-Claude Voice Assistant - License Manager
+Vibe Coding Assistant - License Manager
 Handles trial period, license validation, and activation.
 """
 import json
@@ -44,7 +44,7 @@ class LicenseManager:
         if config_dir:
             self.config_dir = config_dir
         else:
-            self.config_dir = Path.home() / ".claude-voice-assistant"
+            self.config_dir = Path.home() / ".vibe-coding-assistant"
 
         self.config_dir.mkdir(parents=True, exist_ok=True)
 

@@ -1,5 +1,5 @@
 """
-Claude Voice Assistant - Dialogs
+Vibe Coding Assistant - Dialogs
 Dialog windows for agents and memory projects management.
 """
 import json

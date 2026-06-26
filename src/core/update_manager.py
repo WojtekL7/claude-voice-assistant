@@ -1,5 +1,5 @@
 """
-Claude Voice Assistant - Auto-aktualizacja (Etap M3)
+Vibe Coding Assistant - Auto-aktualizacja (Etap M3)
 
 Klient aktualizacji w aplikacji. Cały ruch sieciowy idzie w wątku tła i wraca
 do GUI przez sygnały Qt (kolejkowane = bezpieczne wątkowo), więc nigdy nie
@@ -81,7 +81,7 @@ class UpdateManager(QObject):
         self.platform_id = platform_id
         self.public_key = public_key or ""
         self.download_dir = Path(download_dir) if download_dir else (
-            Path.home() / ".claude-voice-assistant" / "updates")
+            Path.home() / ".vibe-coding-assistant" / "updates")
 
     # ==================== Porównanie wersji (czysta logika) ====================
 
@@ -379,7 +379,7 @@ class UpdateManager(QObject):
         script = staging / "cva-swap.sh"
         script.write_text(
             "#!/bin/bash\n"
-            "# Auto-podmiana Claude Voice Assistant — generowane przez updater.\n"
+            "# Auto-podmiana Vibe Coding Assistant — generowane przez updater.\n"
             f"PID={pid}\n"
             f'NEW_APP="{new_app}"\n'
             f'TARGET="{target_app}"\n'
@@ -463,7 +463,7 @@ class UpdateManager(QObject):
         # Plik tymczasowy obok celu (ten sam katalog = ten sam FS → mv atomowy).
         script.write_text(
             "#!/bin/bash\n"
-            "# Auto-podmiana Claude Voice Assistant (Linux/AppImage) — updater.\n"
+            "# Auto-podmiana Vibe Coding Assistant (Linux/AppImage) — updater.\n"
             f"PID={pid}\n"
             f'NEW="{appimage_path_new}"\n'
             f'TARGET="{target}"\n'

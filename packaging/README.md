@@ -1,4 +1,4 @@
-# Packaging & Release — Claude Voice Assistant
+# Packaging & Release — Vibe Coding Assistant
 
 Konfiguracja budowania, pakowania, podpisu i auto-aktualizacji.
 Wieloplatformowo: **Linux**, **macOS** (najpierw), **Windows** (w przyszłości).

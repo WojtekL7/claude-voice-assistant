@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build macOS .app + .dmg dla Claude Voice Assistant (Etap M4).
+# Build macOS .app + .dmg dla Vibe Coding Assistant (Etap M4).
 #
 # URUCHAMIAĆ NA macOS (Apple Silicon lub Intel). Z Linuksa NIE zbuduje się .app.
 # Krok podpisu/notaryzacji jest opcjonalny i sterowany przez ../signing.conf
@@ -16,7 +16,7 @@ SPEC="$SCRIPT_DIR/ClaudeVoiceAssistant.spec"
 ENTITLEMENTS="$SCRIPT_DIR/entitlements.plist"
 SIGNING_CONF="$SCRIPT_DIR/../signing.conf"
 
-APP_NAME="Claude Voice Assistant"
+APP_NAME="Vibe Coding Assistant"
 APP_VERSION="$(grep -E '^APP_VERSION' "$SRC_DIR/config.py" | head -1 | sed -E 's/.*["'"'"']([^"'"'"']+)["'"'"'].*/\1/')"
 ARCH="$(uname -m)"
 case "$ARCH" in
@@ -98,7 +98,7 @@ else
 fi
 
 # 5) DMG (z aliasem do /Applications, by przeciągnąć ikonę) — dla NOWYCH instalacji
-DMG="$DIST_DIR/ClaudeVoiceAssistant-$APP_VERSION-$PLATFORM_ID.dmg"
+DMG="$DIST_DIR/VibeCodingAssistant-$APP_VERSION-$PLATFORM_ID.dmg"
 echo "== Tworzenie DMG =="
 STAGING="$(mktemp -d)/dmg"
 mkdir -p "$STAGING"
@@ -110,7 +110,7 @@ hdiutil create -volname "$APP_NAME" -srcfolder "$STAGING" -ov -format UDZO "$DMG
 # .dmg nie nadaje się do podmiany w miejscu; updater rozpakowuje .zip przez
 # `ditto -x -k`. `ditto -c -k --keepParent` zachowuje symlinki/uprawnienia i
 # trzyma pakiet „Foo.app" jako katalog nadrzędny w archiwum (tak jak Sparkle).
-ZIP="$DIST_DIR/ClaudeVoiceAssistant-$APP_VERSION-$PLATFORM_ID.zip"
+ZIP="$DIST_DIR/VibeCodingAssistant-$APP_VERSION-$PLATFORM_ID.zip"
 echo "== Tworzenie ZIP (samo-aktualizacja) =="
 ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$ZIP"
 

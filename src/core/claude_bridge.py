@@ -1,5 +1,5 @@
 """
-Claude Voice Assistant - Claude Code Bridge
+Vibe Coding Assistant - Claude Code Bridge
 Handles communication with Claude Code CLI using --print mode.
 
 Implementacja na QProcess (PyQt5) zamiast subprocess.Popen + threading.Thread.
@@ -22,7 +22,7 @@ from pathlib import Path
 from PyQt5.QtCore import QObject, QProcess, pyqtSignal
 
 # Debug log file
-DEBUG_LOG = Path.home() / ".claude-voice-assistant" / "debug.log"
+DEBUG_LOG = Path.home() / ".vibe-coding-assistant" / "debug.log"
 
 
 def debug_log(msg: str):
