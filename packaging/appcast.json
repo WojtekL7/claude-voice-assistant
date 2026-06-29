@@ -1,26 +1,26 @@
 {
   "_comment": "Feed auto-aktualizacji Claude Voice Assistant. PUBLICZNY na VPS: /opt/cva-web/html/cva/appcast.json -> https://pobierz.srv1251441.hstgr.cloud/cva/appcast.json . Aplikacja porownuje config.APP_VERSION z 'version' wpisu dla swojej platformy (core.platform_utils.update_platform_id). macOS uzywa paczki .zip (samo-podmiana). Wpisy aktualizuj generatorem: packaging/make-appcast-entry.py PACZKA.zip --version X.Y.Z --base-url https://pobierz.srv1251441.hstgr.cloud/cva/ --appcast packaging/appcast.json --merge",
   "latest": {
-    "version": "1.0.25",
+    "version": "1.0.26",
     "notes_url": "",
     "mandatory": false,
     "platforms": {
       "macos-arm64": {
-        "url": "https://pobierz.srv1251441.hstgr.cloud/cva/VibeCodingAssistant-1.0.25-macos-arm64.zip",
-        "size": 123289870,
-        "sha256": "b5e8fda748758ee0605000af6df20c4f2884e10fd9cfe2eefc87a4961c6fd84b",
+        "url": "https://pobierz.srv1251441.hstgr.cloud/cva/VibeCodingAssistant-1.0.26-macos-arm64.zip",
+        "size": 123292478,
+        "sha256": "d303bca2633a1be650d45ad2b56eac2c450638543fb67b432c816f102bd8acea",
         "signature": ""
       },
       "windows-x64": {
-        "url": "https://pobierz.srv1251441.hstgr.cloud/cva/VibeCodingAssistant-Setup-1.0.25.exe",
-        "size": 103089176,
-        "sha256": "aacc634bc5ae5fa6118bd1acad3aea57b32749cb2a41930c9d4360fc51ddf1f9",
+        "url": "https://pobierz.srv1251441.hstgr.cloud/cva/VibeCodingAssistant-Setup-1.0.26.exe",
+        "size": 103121793,
+        "sha256": "46eccde36ccb0ee3b4998ec2ab26a30cdffc1dec638a2ad4feec82fe41d86fcc",
         "signature": ""
       },
       "linux-x64": {
-        "url": "https://pobierz.srv1251441.hstgr.cloud/cva/VibeCodingAssistant-1.0.25-linux-x64.AppImage",
-        "size": 179782848,
-        "sha256": "cd68c45bd2fffdc50795ad63bea196ad8d375fb30fec9f1b87225070140ab6f8",
+        "url": "https://pobierz.srv1251441.hstgr.cloud/cva/VibeCodingAssistant-1.0.26-linux-x64.AppImage",
+        "size": 198141120,
+        "sha256": "c1f0196f224653019eb7567ace0e93d4d4bb74b6f61cdad3b2a1106ed8e32b6d",
         "signature": ""
       }
     }
