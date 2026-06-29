@@ -3,9 +3,11 @@ Vibe Coding Assistant - Main Window
 PyQt5-based GUI for the application.
 """
 import sys
+import os
 import json
 import re
 import time
+import uuid
 from pathlib import Path
 from typing import Optional
 from datetime import datetime
@@ -349,6 +351,7 @@ from config import (
     SUPPORTED_LANGUAGES, UI_TRANSLATIONS, DEFAULT_QUICK_ACTIONS,
     CONFIG_FILE, QUICK_ACTIONS_FILE, CLAUDE_COMMAND, GROQ_API_KEY,
     AGENTS_FILE, MEMORY_PROJECTS_FILE, DEFAULT_AGENTS, DEFAULT_MEMORY_PROJECTS,
+    CONFIG_DIR,
     ASSETS_DIR, CLAUDE_MODEL_CONTEXT_LIMITS, DEFAULT_AGENT_MODEL,
     APP_TITLE_SUFFIX,
     UPDATE_APPCAST_URL, UPDATE_PUBLIC_KEY, UPDATE_DOWNLOAD_DIR,
@@ -373,6 +376,12 @@ from gui.dialogs import (
 )
 from gui.mcp_status_widget import McpStatusWidget
 from gui.resource_monitor import ResourceMonitorWidget
+
+# Diagnostyka flagi „?" — PASYWNY czujnik, domyślnie WYŁĄCZONY (zero kosztu
+# w wydanej apce). Włącz przez zmienną środowiskową CVA_FLAG_DEBUG=1. Zapisuje
+# stan każdego ogniwa flagi do ~/.vibe-coding-assistant/flag-debug.log, żeby
+# ustalić, dlaczego flaga „agent czeka" nie pokazuje się na zakładce w tle.
+_FLAG_DEBUG = bool(os.environ.get("CVA_FLAG_DEBUG"))
 
 # Domyślne kolory skórki (motyw Ubuntu) - interfejs + terminal
 DEFAULT_SKIN_COLORS = {
@@ -1471,14 +1480,17 @@ class MainWindow(QMainWindow):
                 continue
             reader = getattr(tab, '_transcript_reader', None)
             if reader is None:
+                self._flag_dbg(tab, "reader=None (brak czytnika)")
                 continue
             try:
                 if not reader.has_session():
+                    self._flag_dbg(tab, "has_session=N (nie znaleziono pliku sesji)")
                     continue
                 # Priming — pomiń to, co było przed startem czytania.
                 if not getattr(tab, '_transcript_primed', False):
                     reader.seek_to_end()
                     tab._transcript_primed = True
+                    self._flag_dbg(tab, "priming (pierwszy tick — pomijam)")
                     continue
                 # Flaga "?": czy agent ZATRZYMAŁ się i czeka na odpowiedź?
                 # Sprawdzane KAŻDY tick (nie zależy od nowej prozy) — stan
@@ -1499,11 +1511,17 @@ class MainWindow(QMainWindow):
                 # reader.waiting_for_user() wołamy ZAWSZE (nie za '... and'),
                 # żeby jego wewnętrzny licznik stabilności był świeży.
                 journal_quiet = reader.waiting_for_user()
-                terminal_quiet = (
-                    time.monotonic()
-                    - getattr(tab, '_last_terminal_data_ts', 0.0)
-                ) >= self.QUESTION_TERMINAL_QUIET_SECS
-                self._arm_question(tab, journal_quiet and terminal_quiet)
+                _term_idle = time.monotonic() - getattr(tab, '_last_terminal_data_ts', 0.0)
+                terminal_quiet = _term_idle >= self.QUESTION_TERMINAL_QUIET_SECS
+                _armed = journal_quiet and terminal_quiet
+                _active = tab is self.tab_widget.currentWidget()
+                self._flag_dbg(
+                    tab,
+                    f"jq={int(journal_quiet)} term_idle={_term_idle:.1f}s "
+                    f"tq={int(terminal_quiet)} ARMED={int(_armed)} "
+                    f"active={int(_active)} SHOW={int(_armed and not _active)}",
+                )
+                self._arm_question(tab, _armed)
 
                 new_blocks = reader.poll()
             except Exception:
@@ -1586,6 +1604,11 @@ class MainWindow(QMainWindow):
             try:
                 agent_tab._transcript_reader = TranscriptReader(agent_tab.working_directory)
                 agent_tab._transcript_primed = False
+                # Gdyby komenda claude (z --session-id) zbudowała się wcześniej,
+                # podepnij już znany identyfikator sesji do świeżego czytnika.
+                _pinned = getattr(agent_tab, '_pinned_session_id', None)
+                if _pinned:
+                    agent_tab._transcript_reader.pin_session(_pinned)
             except Exception:
                 agent_tab._transcript_reader = None
 
@@ -2291,12 +2314,39 @@ class MainWindow(QMainWindow):
     def _build_claude_command(self, agent_tab) -> str:
         """Build the claude launch command for a given agent tab,
         appending --model when the agent has a non-default model selected.
+
+        Przypina też KONKRETNĄ sesję: generujemy własny identyfikator i
+        przekazujemy `claude --session-id <uuid>`, a czytnikowi dziennika
+        wskazujemy DOKŁADNY plik tej sesji. Dzięki temu wykrywanie „agent
+        czeka" (flaga „?") oraz auto-czytanie nie muszą ZGADYWAĆ pliku z
+        katalogu (zgadywanie zawodziło dla sesji wznowionych/cichych i myliło
+        sesje między oknami) — działają od razu i deterministycznie.
         """
         cmd = self.claude_command
         model = getattr(agent_tab, 'model', 'default')
         if model and model != 'default':
             cmd = f"{cmd} --model {model}"
+        session_id = str(uuid.uuid4())
+        cmd = f"{cmd} --session-id {session_id}"
+        self._pin_tab_session(agent_tab, session_id)
         return cmd
+
+    def _pin_tab_session(self, agent_tab, session_id: str):
+        """Wskaż czytnikowi dziennika DOKŁADNY plik sesji (po --session-id).
+
+        Resetuje priming, by przy RESTARCIE zakładki (Stop→Uruchom) czytnik
+        zaczął od nowej sesji od zera. Bezpieczne, gdy czytnik jeszcze nie
+        istnieje — id zostaje na zakładce i zostanie podpięte przy jego
+        utworzeniu (patrz _on_terminal_ready).
+        """
+        try:
+            agent_tab._pinned_session_id = session_id
+            agent_tab._transcript_primed = False
+            reader = getattr(agent_tab, '_transcript_reader', None)
+            if reader is not None:
+                reader.pin_session(session_id)
+        except Exception:
+            pass
 
     def _auto_run_claude_command(self):
         """Auto-run Claude command in all terminals with auto_start enabled.
@@ -4015,6 +4065,28 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         c = self._agent_tab_color(getattr(tab, 'agent_config', None))
         return QColor(c) if c else QColor(self.skin_colors.get('text_color', '#ffffff'))
 
+    def _flag_dbg(self, tab, state: str, key: str = "poll"):
+        """Czujnik flagi „?": zapisz stan do pliku, ale TYLKO gdy się zmienił
+        (throttle per (tab, key)) — żeby nie zalać logu. Aktywny wyłącznie przy
+        CVA_FLAG_DEBUG=1. Pasywny: nie zmienia żadnego zachowania apki."""
+        if not _FLAG_DEBUG:
+            return
+        try:
+            name = (getattr(tab, 'agent_config', {}) or {}).get('name', '?')
+            cache = getattr(tab, '_flag_dbg_last', None)
+            if cache is None:
+                cache = {}
+                tab._flag_dbg_last = cache
+            line = f"[{name}] {key}: {state}"
+            if cache.get(key) == line:
+                return  # bez zmiany — nie loguj ponownie
+            cache[key] = line
+            ts = datetime.now().strftime('%H:%M:%S')
+            with open(CONFIG_DIR / "flag-debug.log", "a", encoding="utf-8") as f:
+                f.write(f"{ts} {line}\n")
+        except Exception:
+            pass
+
     def _refresh_question_flag(self, tab):
         """Pokaż flagę „agent czeka", gdy zakładka uzbrojona I nieaktywna —
         SKRAJNIE Z LEWEJ i ŻÓŁTĄ, by była widoczna i przy ikonie:
@@ -4036,7 +4108,19 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         # strzałki przewijania. Sygnatura ze STABILNYCH danych (nie z QIcon, bo dla
         # ikony-pliku tworzona jest świeża instancja przy każdym wywołaniu).
         sig = (show, base_label, repr(cfg.get('icon')))
-        if getattr(tab, "_flag_sig", None) == sig:
+        _skipped = getattr(tab, "_flag_sig", None) == sig
+        if _FLAG_DEBUG:
+            try:
+                _icon_null = int(self.tab_widget.tabIcon(index).isNull())
+            except Exception:
+                _icon_null = -1
+            self._flag_dbg(
+                tab,
+                f"show={int(show)} skip={int(_skipped)} "
+                f"real_icon_null={_icon_null} base_icon_null={int(base_icon.isNull())}",
+                key="refresh",
+            )
+        if _skipped:
             return
         tab._flag_sig = sig
         bar = self.tab_widget.tabBar()

@@ -51,6 +51,11 @@ class TranscriptReader:
         # których plik był STATYCZNY (do odrzucenia krótkich pauz w streamingu).
         self._wait_last_size = -1
         self._wait_stable = 0
+        # Gdy znamy DOKŁADNY identyfikator sesji (apka uruchamia
+        # `claude --session-id <uuid>`), czytnik patrzy tylko na ten jeden
+        # plik <uuid>.jsonl — bez zgadywania z katalogu. None = tryb zgadywania
+        # (np. sesja wznowiona ręcznie po crashu, spoza kontroli apki).
+        self._pinned_session_id: Optional[str] = None
         self.set_working_directory(working_directory)
 
     # ---------- konfiguracja ----------
@@ -156,8 +161,42 @@ class TranscriptReader:
         except OSError:
             return 0
 
+    def pin_session(self, session_id: str):
+        """Przypnij DOKŁADNY plik sesji — znamy go z `claude --session-id <uuid>`.
+
+        Koniec zgadywania: czytnik patrzy wyłącznie na <project_dir>/<uuid>.jsonl.
+        Plik może jeszcze nie istnieć (claude utworzy go przy starcie) — wtedy
+        has_session()/waiting_for_user() zwracają „brak/nie czeka", a zaczną
+        działać w chwili, gdy plik się pojawi. Reset stanu offsetu i liczników
+        ciszy, by przy RESTARCIE zakładki zacząć od nowej sesji od zera.
+        """
+        self._pinned_session_id = (session_id or "").strip() or None
+        self._session_file = None
+        self._offset = 0
+        self._wait_last_size = -1
+        self._wait_stable = 0
+
     def _ensure_session(self):
-        """Upewnij się, że śledzimy najnowszy plik sesji (obsługa rotacji)."""
+        """Upewnij się, że śledzimy właściwy plik sesji.
+
+        Tryb PRZYPIĘTY (znamy --session-id): pilnujemy dokładnie <uuid>.jsonl.
+        Tryb ZGADYWANIA (pin=None): bierzemy najnowszy plik wg dotychczasowej
+        heurystyki (wznowienia ręczne spoza apki).
+        """
+        pinned = getattr(self, "_pinned_session_id", None)
+        if pinned:
+            if not self._project_dir or not self._project_dir.is_dir():
+                # katalog projektu powstaje dopiero gdy claude wystartuje
+                self._project_dir = self._find_project_dir()
+            if not self._project_dir:
+                return
+            cand = str(self._project_dir / f"{pinned}.jsonl")
+            if os.path.exists(cand):
+                if cand != self._session_file:
+                    self._session_file = cand
+                    self._offset = 0
+            # plik jeszcze nie powstał → czekamy (session_file zostaje None)
+            return
         newest = self._newest_session_file()
         if newest != self._session_file:
             self._session_file = newest
