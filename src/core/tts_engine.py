@@ -399,16 +399,25 @@ class TTSEngine:
                 self._play_audio_file(path)
 
                 # Czekaj na koniec odtwarzania (respektując pauzę/stop).
+                # KOLEJNOŚĆ MA ZNACZENIE: pauzę sprawdzamy PRZED get_busy().
+                # W pygame 2.6/SDL 2.28 `get_busy()` przy wstrzymanym odtwarzaniu
+                # zwraca False (zweryfikowane empirycznie) — gdyby sprawdzić busy
+                # najpierw, pauza wyglądałaby jak „koniec zdania": pętla pękała,
+                # bieżące zdanie było wyrzucane i lektor wznawiał od NASTĘPNEGO
+                # (objaw: „pomija resztę zdania i czyta od kropki dalej").
                 while True:
+                    if stop_event.is_set():
+                        break
+                    if not self._pause_event.is_set():
+                        # Wstrzymane — czekaj na wznowienie, NIE kończ zdania.
+                        self._pause_event.wait()
+                        continue
                     try:
                         busy = pygame.mixer.music.get_busy()
                     except Exception:
                         busy = False
                     if not busy:
                         break
-                    if stop_event.is_set():
-                        break
-                    self._pause_event.wait()
                     pygame.time.wait(50)
 
                 self._safe_remove(path)
