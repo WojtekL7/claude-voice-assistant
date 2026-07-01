@@ -50,6 +50,11 @@ fi
 # `python3 src/main.py` bez tej flagi.)
 export CVA_WEBTERMINAL=1
 
+# >>> DIAGNOSTYKA FLAGI „agent czeka" (TYMCZASOWE — usunąć po ustaleniu przyczyny) <<<
+# Pasywny czujnik: zapisuje stan flagi do ~/.vibe-coding-assistant/flag-debug.log.
+export CVA_FLAG_DEBUG=1
+# >>> koniec bloku diagnostycznego <<<
+
 # Limit pamięci. systemd-run --user --scope tworzy efemeryczny cgroup
 # pod systemd usera. MemoryHigh=10G to miękki próg (throttling do swapu),
 # MemoryMax=13G to twardy limit (OOM-killer zabije apkę zanim pamięć

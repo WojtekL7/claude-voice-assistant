@@ -221,6 +221,34 @@ class TranscriptReader:
         self._ensure_session()
         return self._session_file is not None
 
+    def debug_state(self) -> dict:
+        """Migawka wewnętrznego stanu czytnika — WYŁĄCZNIE do diagnostyki flagi
+        (czujnik CVA_FLAG_DEBUG). Pasywna: nie zmienia offsetu ani liczników.
+
+        Zwraca m.in. przypięty identyfikator sesji, rozwiązany katalog projektu,
+        OCZEKIWANY plik <uuid>.jsonl i to, czy fizycznie istnieje na dysku —
+        żeby jednoznacznie rozróżnić „nie kliknięto zakładki" od „claude nie
+        utworzył przypiętego pliku"."""
+        pinned = getattr(self, "_pinned_session_id", None)
+        expected = None
+        if pinned and self._project_dir:
+            expected = str(self._project_dir / f"{pinned}.jsonl")
+        sf = self._session_file
+        try:
+            exists = bool(sf and os.path.exists(sf)) or bool(
+                expected and os.path.exists(expected))
+        except Exception:
+            exists = False
+        return {
+            "pinned": pinned,
+            "project_dir": str(self._project_dir) if self._project_dir else None,
+            "session_file": sf,
+            "expected": expected,
+            "exists": exists,
+            "offset": self._offset,
+            "wait_stable": self._wait_stable,
+        }
+
     # ---------- odczyt ----------
 
     def poll(self) -> List[str]:

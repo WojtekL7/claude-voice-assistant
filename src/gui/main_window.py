@@ -1473,6 +1473,17 @@ class MainWindow(QMainWindow):
         tabs = getattr(self, 'agent_tabs', None)
         if not tabs:
             return
+        # DIAG: baner startu w logu flagi — odróżnia świeży przebieg od
+        # nieaktualnego (throttle _flag_dbg loguje tylko zmiany, więc bez tego
+        # nie widać, kiedy zaczął się nowy przebieg). Raz na uruchomienie.
+        if _FLAG_DEBUG and not getattr(self, '_flag_dbg_banner', False):
+            self._flag_dbg_banner = True
+            try:
+                with open(CONFIG_DIR / "flag-debug.log", "a", encoding="utf-8") as f:
+                    f.write(f"\n===== START {datetime.now():%Y-%m-%d %H:%M:%S} "
+                            f"v{APP_VERSION} =====\n")
+            except Exception:
+                pass
         active = self.tab_widget.currentWidget()
 
         for tab in list(tabs.values()):
@@ -1480,11 +1491,30 @@ class MainWindow(QMainWindow):
                 continue
             reader = getattr(tab, '_transcript_reader', None)
             if reader is None:
-                self._flag_dbg(tab, "reader=None (brak czytnika)")
+                # DIAG: rozróżnij „zakładki nie kliknięto" (leniwa aktywacja —
+                # aktyw=0) od zwykłego terminala/awarii tworzenia czytnika.
+                self._flag_dbg(
+                    tab,
+                    "reader=None aktyw={} plain={} pin={}".format(
+                        int(bool(getattr(tab, '_terminal_ready_handled', False))),
+                        int(bool(getattr(tab, 'is_plain_terminal', False))),
+                        getattr(tab, '_pinned_session_id', None) or '-',
+                    ),
+                )
                 continue
             try:
                 if not reader.has_session():
-                    self._flag_dbg(tab, "has_session=N (nie znaleziono pliku sesji)")
+                    # DIAG: pokaż przypięty uuid, oczekiwany plik i czy istnieje —
+                    # rozróżni „claude nie utworzył przypiętego pliku" od reszty.
+                    if _FLAG_DEBUG:
+                        st = reader.debug_state()
+                        self._flag_dbg(
+                            tab,
+                            "has_session=N pin={} dir={} plik={} istnieje={}".format(
+                                st['pinned'] or '-', st['project_dir'] or '-',
+                                st['expected'] or '-', int(st['exists']),
+                            ),
+                        )
                     continue
                 # Priming — pomiń to, co było przed startem czytania.
                 if not getattr(tab, '_transcript_primed', False):
