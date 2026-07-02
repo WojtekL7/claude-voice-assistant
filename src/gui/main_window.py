@@ -2897,6 +2897,11 @@ class MainWindow(QMainWindow):
             # For terminal mode - read from buffer or selected text
             selected = self.terminal_backend.selected_text()
 
+            # Diagnostyka „czyta przedostatnią/coś innego" (pasywna, CVA_FLAG_DEBUG=1).
+            # Wołana TU (przed gałęzią zaznaczenia), by zarejestrować też przypadek
+            # „czyta stare/przypadkowe zaznaczenie zamiast ostatniej odpowiedzi".
+            self._read_last_dbg(selected)
+
             if selected:
                 # Fix Polish encoding first
                 selected = fix_polish_encoding(selected)
@@ -4114,6 +4119,88 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
             ts = datetime.now().strftime('%H:%M:%S')
             with open(CONFIG_DIR / "flag-debug.log", "a", encoding="utf-8") as f:
                 f.write(f"{ts} {line}\n")
+        except Exception:
+            pass
+
+    def _read_last_dbg(self, selected=None):
+        """Diagnostyka przycisku 🔊 „czytaj ostatnią": dlaczego czyta coś innego?
+
+        Loguje do read-last-debug.log stan DOKŁADNIE w chwili kliknięcia:
+          • czy w terminalu jest ZAZNACZENIE (wtedy apka czyta je, NIE ostatnią
+            odpowiedź — najczęstszy podejrzany o „czyta zupełnie coś innego");
+          • stan pliku sesji: świeżość zapisu, liczbę wypowiedzi Claude'a, treść
+            ostatniej i przedostatniej, kompletność ostatniej linii JSON;
+          • co zwróci last_response() (ścieżka poprawna).
+        Dzięki temu widać, KTÓRĄ gałęzią pójdzie odczyt. Aktywne tylko przy
+        CVA_FLAG_DEBUG=1. Pasywne — NIE zmienia zachowania."""
+        if not _FLAG_DEBUG:
+            return
+        try:
+            tab = self._get_current_agent_tab()
+            name = (getattr(tab, 'agent_config', {}) or {}).get('name', '?')
+            reader = getattr(tab, '_transcript_reader', None) if tab else None
+            ts = datetime.now().strftime('%H:%M:%S')
+            sel = selected if isinstance(selected, str) else ''
+            sel_prev = ' '.join(sel.split())[:80]
+            branch = ("ZAZNACZENIE (czyta zaznaczenie!)" if sel.strip()
+                      else "czytnik/last_response" if reader is not None
+                      else "fallback bufor terminala")
+            out = [f"{ts} [{name}] KLIK 🔊 czytaj-ostatnią  -> gałąź: {branch}"]
+            out.append(f"   selected_text: len={len(sel)} treść={sel_prev!r}")
+            if reader is None:
+                out.append("   reader=None (brak czytnika)")
+            else:
+                ds = reader.debug_state() if hasattr(reader, 'debug_state') else {}
+                sf = ds.get('session_file')
+                out.append(f"   session_file={sf}")
+                out.append(f"   exists={ds.get('exists')} pinned={ds.get('pinned')} "
+                           f"offset={ds.get('offset')} wait_stable={ds.get('wait_stable')}")
+                try:
+                    out.append(f"   waiting_for_user={reader.waiting_for_user()}")
+                except Exception as e:
+                    out.append(f"   waiting_for_user błąd: {e}")
+                texts = []
+                last_line_ok = None  # czy ostatnia niepusta linia = kompletny JSON?
+                if sf and os.path.exists(sf):
+                    age = time.time() - os.path.getmtime(sf)
+                    out.append(f"   plik: rozmiar={os.path.getsize(sf)}B  "
+                               f"ostatni_zapis={age:.1f}s temu")
+                    try:
+                        with open(sf, encoding='utf-8', errors='ignore') as f:
+                            for ln in f:
+                                ln = ln.strip()
+                                if not ln:
+                                    continue
+                                try:
+                                    o = json.loads(ln)
+                                    last_line_ok = True
+                                except Exception:
+                                    last_line_ok = False
+                                    continue
+                                if o.get('type') != 'assistant' or o.get('isSidechain'):
+                                    continue
+                                msg = o.get('message') or {}
+                                c = msg.get('content')
+                                if isinstance(c, list):
+                                    parts = [b.get('text') for b in c if isinstance(b, dict)
+                                             and b.get('type') == 'text' and b.get('text')]
+                                    if parts:
+                                        texts.append(' '.join('\n\n'.join(parts).split())[:80])
+                    except Exception as e:
+                        out.append(f"   (błąd czytania pliku: {e})")
+                out.append(f"   ostatnia_linia_kompletny_JSON={last_line_ok}")
+                out.append(f"   wypowiedzi_Claude_w_pliku={len(texts)}")
+                if texts:
+                    out.append(f"   OSTATNIA w pliku (to PRZECZYTA): {texts[-1]!r}")
+                if len(texts) >= 2:
+                    out.append(f"   PRZEDOSTATNIA w pliku:           {texts[-2]!r}")
+                try:
+                    lr = reader.last_response() or ''
+                    out.append(f"   last_response() -> {' '.join(lr.split())[:80]!r}")
+                except Exception as e:
+                    out.append(f"   last_response() błąd: {e}")
+            with open(CONFIG_DIR / "read-last-debug.log", "a", encoding="utf-8") as f:
+                f.write("\n".join(out) + "\n")
         except Exception:
             pass
 
