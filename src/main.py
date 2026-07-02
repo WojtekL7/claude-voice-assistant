@@ -78,7 +78,12 @@ def main():
     app = QApplication(sys.argv)
     # W trybie deweloperskim doklej „ (beta)" do nazwy i użyj osobnego WM_CLASS,
     # by pasek zadań Linuksa NIE sklejał okna z kodu z wersją wydaną (AppImage).
-    app.setApplicationName(APP_NAME + (" (beta)" if IS_DEV else ""))
+    # Imię aplikacji = slug (APP_WM_CLASS). Na Linuksie (XWayland) to ONO trafia
+    # do WM_CLASS okna, po którym pasek zadań GNOME dobiera ikonę z pliku .desktop
+    # (StartupWMClass=<slug>). Ładną nazwę pokazujemy osobno przez displayName —
+    # dzięki temu na dolnym pasku widać właściwą ikonę (a nie domyślną zębatkę).
+    app.setApplicationName(APP_WM_CLASS)
+    app.setApplicationDisplayName(APP_NAME + (" (beta)" if IS_DEV else ""))
     app.setDesktopFileName(APP_WM_CLASS)
     app.setOrganizationName("Fulfillment Polska")
 
