@@ -43,6 +43,47 @@ from gui import icon_set
 # Rozmiar ikon SVG w przyciskach dolnego panelu.
 PANEL_ICON_SIZE = QSize(24, 24)
 
+# --- Czujnik ruchu terminala a MIGAJĄCA KROPKA bezczynności -------------------
+# Gdy agent CZEKA na użytkownika, Claude Code rysuje na dole ekranu migającą
+# szarą kropkę „●" (U+25CF; co ~0,5 s na przemian z pustym miejscem). To wysyła
+# kilkadziesiąt bajtów co pół sekundy — a nasz czujnik „terminal cichy" (flaga
+# „agent czeka", MainWindow._poll_transcripts) traktował KAŻDĄ porcję jako ruch,
+# więc licznik ciszy nigdy nie dobijał do progu i flaga się nie uzbrajała.
+# Rozwiązanie: porcję będącą WYŁĄCZNIE tą kropką (po zdjęciu kodów ANSI/kursora
+# zostaje tylko „●" i/lub biały znak) NIE liczymy jako ruch. Każda inna treść —
+# spinner myślenia (gwiazdki „✶✻✽" + „thinking"), strumień odpowiedzi, kod —
+# ma realną treść, więc dalej liczy się jako ruch (flaga słusznie nie wchodzi).
+# Diagnoza potwierdzona strace: idle = same ramki „●"/spacja, praca = gwiazdki
+# i tekst. Uwaga: gdy „●" wystąpi jako punktor WEWNĄTRZ tekstu (biała kropka),
+# porcja ma też inną treść → nie zostanie uznana za bezczynność.
+_ANSI_STRIP_RE = re.compile(
+    r'\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)'      # OSC (np. tytuł okna) ... BEL/ST
+    r'|\x1b[\[\]][0-9;?]*[ -/]*[@-~]'          # CSI (kolory, kursor, tryby)
+    r'|\x1b[()][A-Za-z0-9]'                    # wybór zestawu znaków
+    r'|\x1b[=>]'                               # tryb klawiatury
+    r'|[\x00-\x08\x0b-\x1f\x7f]'               # znaki sterujące (bez \n, \t)
+)
+# Znaki uznawane za „ozdobę bezczynności" (nic nie znaczące dla treści).
+_IDLE_MARKER_CHARS = '●'                   # ● — migający wskaźnik „czekam"
+
+
+def _is_terminal_activity(data: str) -> bool:
+    """Czy porcja z terminala to REALNY ruch, czy tylko migająca kropka idle?
+
+    Zwraca False WYŁĄCZNIE, gdy po zdjęciu kodów sterujących zostają jedynie
+    znaki-ozdoby bezczynności (● / spacje) — wtedy nie odświeżamy czujnika ruchu,
+    dzięki czemu cisza terminala może narosnąć i flaga „agent czeka" się uzbroi.
+    Każda inna (choćby jednoznakowa realna) treść → True.
+    """
+    if not data:
+        return False
+    text = data if isinstance(data, str) else str(data)
+    residual = _ANSI_STRIP_RE.sub('', text)
+    # zdejmij białe znaki i znaki-ozdoby; jeśli coś zostaje → realna treść
+    for ch in _IDLE_MARKER_CHARS:
+        residual = residual.replace(ch, '')
+    return residual.strip() != ''
+
 
 class AutoResizeTextEdit(QTextEdit):
     """Text input that auto-resizes based on content."""
@@ -560,8 +601,12 @@ class AgentTab(QWidget):
         if not self.terminal_backend:
             return
 
+        # Puls aktywności terminala — ale POMIŃ migającą kropkę bezczynności,
+        # bo inaczej „czekający" agent wygląda na wiecznie aktywny i flaga
+        # „agent czeka" nigdy się nie uzbraja (patrz _is_terminal_activity).
+        if _is_terminal_activity(data):
+            self._last_terminal_data_ts = time.monotonic()
         # Emit signal for MainWindow
-        self._last_terminal_data_ts = time.monotonic()
         self.terminal_output.emit(data)
 
         text = data if isinstance(data, str) else str(data)
