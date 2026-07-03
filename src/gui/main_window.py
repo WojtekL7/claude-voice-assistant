@@ -2925,6 +2925,51 @@ class MainWindow(QMainWindow):
                 tab.pending_backlog = []  # odrzuć zaległości — chcemy tylko ostatnią
 
             reader = getattr(tab, '_transcript_reader', None) if tab else None
+
+            def _speak_from_terminal_buffer(clear_after: bool) -> bool:
+                """Odczytaj ostatnią odpowiedź z bufora EKRANU (terminala).
+
+                Zwraca True gdy udało się coś odczytać. Używane dwutorowo:
+                jako obejście pułapki „agent czeka" (poniżej) oraz jako końcowy
+                fallback, gdy dziennik nic nie zwróci.
+                """
+                buf = self._terminal_output_buffer
+                if not buf.strip():
+                    return False
+                resp = extract_last_claude_response(buf)
+                if not resp:
+                    return False
+                resp = fix_polish_encoding(resp)
+                cleaned = text_cleaner.clean(resp, use_dictionary=False)
+                if not cleaned:
+                    return False
+                # Stop auto-read timer to prevent double reading
+                if hasattr(self, '_tts_timer') and self._tts_timer is not None:
+                    self._tts_timer.stop()
+                self.tts.speak(cleaned)
+                self._update_status(tr('status_reading_last'))
+                if clear_after:
+                    self._terminal_output_buffer = ""
+                return True
+
+            # PUŁAPKA Claude Code (potwierdzona diagnostyką 2026-07-03): gdy agent
+            # WŁAŚNIE czeka na Twoją odpowiedź (na ekranie wisi pytanie
+            # AskUserQuestion / prośba o zgodę), Claude Code zapisuje swoją OSTATNIĄ
+            # wypowiedź do dziennika sesji DOPIERO po Twojej odpowiedzi. W tym oknie
+            # dziennik ma jeszcze PRZEDOSTATNIĄ wypowiedź → reader.last_response()
+            # zwróciłby ją (objaw: „🔊 czyta przedostatnią"). Dlatego w stanie
+            # „czeka" czytamy z EKRANU (bufor terminala), gdzie najnowsza odpowiedź
+            # już JEST. Bufora NIE czyścimy (rozmowa trwa). Bezpiecznik: gdy z ekranu
+            # nic sensownego nie wyjdzie → spadamy niżej na dziennik (jak dotąd).
+            agent_waiting = False
+            if reader is not None:
+                try:
+                    agent_waiting = reader.waiting_for_user()
+                except Exception:
+                    agent_waiting = False
+            if agent_waiting and _speak_from_terminal_buffer(clear_after=False):
+                return
+
             if reader is not None:
                 try:
                     last = reader.last_response()
