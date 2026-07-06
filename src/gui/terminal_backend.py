@@ -28,7 +28,7 @@ import os
 import sys
 from pathlib import Path
 
-from PyQt5.QtCore import QObject, pyqtSignal
+from PyQt5.QtCore import QObject, QEvent, pyqtSignal
 from PyQt5.QtWidgets import QWidget, QApplication
 from PyQt5.QtGui import QFont, QClipboard
 
@@ -239,6 +239,42 @@ class QTermWidgetBackend(TerminalBackend):
             self._term.copyAvailable.connect(self._on_copy_available)
         except Exception:
             pass  # starszy QTermWidget bez tego sygnału — zostaje sam odczyt na żywo
+
+        # Most dla POLSKICH liter wpisywanych WPROST w terminalu (AltGr/iBus).
+        # QTermWidget (Konsole) gubi znaki narodowe składane prawym Altem lub
+        # metodą wprowadzania — docierają jako znak spoza ASCII w KeyPress albo
+        # jako commit InputMethod, a wewnętrzna obsługa NIE przekazuje ich do
+        # PTY (objaw: 'żółć' nie wchodzi w terminalu, choć w polu na dole tak).
+        # Przechwytujemy je filtrem i wysyłamy wprost przez sendText (UTF-8) —
+        # tą samą pewną drogą co pole na dole. Filtr wisi na widgecie ORAZ na
+        # jego focusProxy (to ON dostaje zdarzenia klawiatury).
+        self._term.installEventFilter(self)
+        _fp = self._term.focusProxy()
+        if _fp is not None:
+            _fp.installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        """Przepuść polskie/narodowe znaki (spoza ASCII) wprost do PTY.
+
+        Ryzyko zerowe: reagujemy WYŁĄCZNIE na drukowalne znaki spoza ASCII
+        (ą, ż, ó… — dziś i tak nieobsługiwane w terminalu) oraz na commit
+        metody wprowadzania. ASCII, Enter, strzałki, Ctrl+C, skróty — nietknięte
+        (płyną normalną drogą QTermWidget)."""
+        try:
+            et = event.type()
+            if et == QEvent.KeyPress:
+                text = event.text()
+                if text and text.isprintable() and any(ord(c) > 127 for c in text):
+                    self._term.sendText(text)
+                    return True
+            elif et == QEvent.InputMethod:
+                commit = event.commitString()
+                if commit:
+                    self._term.sendText(commit)
+                    return True
+        except Exception:
+            pass  # nigdy nie blokuj pętli zdarzeń z powodu tego mostu
+        return super().eventFilter(obj, event)
 
     @property
     def widget(self) -> QWidget:
