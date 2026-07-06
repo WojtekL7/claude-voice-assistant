@@ -265,8 +265,16 @@ class TranscriptReader:
         try:
             size = os.path.getsize(self._session_file)
             if size < self._offset:
-                # Plik się skurczył (rotacja/truncate) — zacznij od początku.
-                self._offset = 0
+                # Plik się skurczył — Claude Code SKOMPAKTOWAŁ dziennik (auto-
+                # compact przy długiej sesji) albo /clear przepisał <uuid>.jsonl
+                # na krótszy. NIE wracamy na początek (self._offset = 0): poll()
+                # oddałby wtedy CAŁY plik i lektor recytowałby całą rozmowę od
+                # nowa przy każdym compact. Skaczemy na KONIEC (filozofia
+                # primingu): czytamy tylko to, co przyjdzie DALEJ. Flaga „?"
+                # (waiting_for_user) ma osobny licznik _wait_last_size i sam się
+                # koryguje, więc na nią to nie wpływa.
+                self._offset = size
+                return []
             if size == self._offset:
                 return []
             with open(self._session_file, "rb") as f:
