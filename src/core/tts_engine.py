@@ -11,6 +11,7 @@ Gapless streaming model (Etap 1):
 """
 import asyncio
 import queue
+import re
 import tempfile
 import threading
 import os
@@ -19,6 +20,45 @@ from enum import Enum
 
 import edge_tts
 import pygame
+
+
+# === Bezpiecznik na WYJŚCIU do głosu (jeden punkt kontrolny dla WSZYSTKICH dróg
+# czytania) ===
+# Każda droga (auto-czytaj, 🔊 ostatnia, zaznaczenie, request_tts) przechodzi
+# przez enqueue(). Niezależnie od tego, który „czyścik" ją poprzedził, tu jeszcze
+# raz zdejmujemy emoji/symbole/emotikony — gwarancja, że lektor NIGDY ich nie
+# wypowie. Filtr jest samodzielny (bez zależności od text_cleaner), bo silnik TTS
+# jest współdzielony między projektami; wycinanie emoji jest pożądane w obu.
+_SPEECH_EMOJI_RE = re.compile(
+    "["
+    "\U0001F000-\U0001FAFF"   # emoji + piktogramy + flagi
+    "\U00002600-\U000027BF"   # symbole różne + dingbaty
+    "\U00002300-\U000023FF"   # Misc Technical: ⏳ ⌛ ⌚ ⏰ …
+    "\U00002100-\U0000214F"   # letterlike: ™ ℹ № …
+    "\U00002190-\U000021FF"   # strzałki
+    "\U00002B00-\U00002BFF"   # strzałki/symbole
+    "\U00002500-\U000025FF"   # ramki + bloki + figury
+    "\U0000FE00-\U0000FE0F"   # variation selectors
+    "\U000020E3"              # enclosing keycap
+    "]",
+    flags=re.UNICODE,
+)
+_SPEECH_EMOTICON_RE = re.compile(
+    r"(?<!\w)(?:"
+    r"[:;=][-~^']?[)(\]\[DPpOo|/\\3<>]"
+    r"|[xX][DdPp]"
+    r"|<3|</3|\^\^|\^_\^|-_-|>_<|[Tt]_[Tt]|;_;|[oO]_[oO]"
+    r")(?!\w)",
+)
+
+
+def _sanitize_for_speech(text: str) -> str:
+    """Ostatnia bramka przed syntezą: usuń emoji/symbole/emotikony."""
+    if not text:
+        return text
+    text = _SPEECH_EMOJI_RE.sub(" ", text)
+    text = _SPEECH_EMOTICON_RE.sub(" ", text)
+    return text
 
 
 class TTSState(Enum):
@@ -126,6 +166,13 @@ class TTSEngine:
         co pozwala generować audio z wyprzedzeniem i grać bez przerw.
         """
         if not text or not text.strip():
+            return
+
+        # Bramka wyjściowa: zdejmij emoji/symbole/emotikony niezależnie od tego,
+        # którą drogą (i którym czyścikiem) tekst tu dotarł. Gdy po oczyszczeniu
+        # zostanie pusto (np. sama klepsydra) — nie kolejkujemy.
+        text = _sanitize_for_speech(text)
+        if not text.strip():
             return
 
         # Bez urządzenia audio nie kolejkujemy (workery i tak nie zagrają);

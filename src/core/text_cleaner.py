@@ -293,6 +293,12 @@ class TextCleanerForTTS:
         text = self._patterns['code_blocks'].sub('', text)
         text = self._patterns['inline_code'].sub('', text)
 
+        # Step 2b: Remove markdown tables (dotąd BRAK w tej drodze — dlatego
+        # zaznaczenie tabelki myszką było czytane). Najpierw separator |---|,
+        # potem zwykłe wiersze |...|.
+        text = re.sub(r'^\s*\|[-:\s|]+\|?\s*$', '', text, flags=re.MULTILINE)
+        text = re.sub(r'^\s*\|.*\|\s*$', '', text, flags=re.MULTILINE)
+
         # Step 3: Remove package manager output
         text = self._patterns['package_managers'].sub('', text)
 
@@ -313,7 +319,8 @@ class TextCleanerForTTS:
         text = self._patterns['separators'].sub(' ', text)
         text = self._patterns['dots'].sub('.', text)
         text = self._patterns['special_chars'].sub('', text)
-        text = self._patterns['emoji'].sub('', text)
+        # Wspólny, kompletny filtr emoji + emotikonów (zamiast wąskiego wzorca).
+        text = strip_emoji_and_emoticons(text)
 
         # Step 7: Filter words
         if use_dictionary:
@@ -749,19 +756,49 @@ def clean_for_tts(text: str, language: str = "pl_PL", use_dictionary: bool = Tru
 # prostu wycinamy to, czego użytkownik nie chce słyszeć: bloki kodu, kod w
 # tekście (ta "niebieska czcionka"), tabele, linki, obrazki — a zostawiamy prozę.
 
-# Zakresy znaków emoji/symboli/strzałek/ramek do usunięcia (TTS i tak ich nie czyta sensownie)
+# === WSPÓLNY, KOMPLETNY filtr emoji/symboli/emotikonów (jedno źródło prawdy) ===
+# Używany przez prose_from_markdown ORAZ TextCleanerForTTS.clean, żeby WSZYSTKIE
+# drogi czytania (auto-czytaj, 🔊 ostatnia, zaznaczenie) miały ten sam, pełny
+# zestaw. Poprzednio każda droga miała inną, dziurawą listę — m.in. klepsydra ⏳
+# (U+23F3, blok „Misc Technical" 2300–23FF) nie była nigdzie łapana i lektor ją
+# czytał. TTS i tak nie wypowiada tych znaków sensownie → wycinamy w całości.
 _EMOJI_SYMBOLS = re.compile(
     "["
-    "\U0001F000-\U0001FAFF"   # emoji
-    "\U00002600-\U000027BF"   # symbole różne, dingbaty
+    "\U0001F000-\U0001FAFF"   # emoji + piktogramy + symbole uzupełniające + flagi
+    "\U00002600-\U000027BF"   # symbole różne + dingbaty
+    "\U00002300-\U000023FF"   # Misc Technical: ⏳ ⌛ ⌚ ⏰ ⏱ ⏲ ⏸ ⏹ ⏺ …
+    "\U00002100-\U0000214F"   # letterlike: ™ ℹ № ℮ …
     "\U00002190-\U000021FF"   # strzałki
     "\U00002B00-\U00002BFF"   # strzałki/symbole
-    "\U00002500-\U0000257F"   # ramki (box drawing)
-    "\U0000FE00-\U0000FE0F"   # variation selectors
-    "\U00002022\U000025CF\U000025CB\U000025AA\U000025A0"  # • ● ○ ▪ ■
+    "\U00002500-\U000025FF"   # ramki (box drawing) + bloki + figury geometryczne
+    "\U0000FE00-\U0000FE0F"   # variation selectors (np. wariant emoji)
+    "\U000020E3"              # combining enclosing keycap (klawisze 0⃣–9⃣)
     "]",
     flags=re.UNICODE,
 )
+
+# Emotikony TEKSTOWE (zwykłe znaki ASCII, nie emoji) — np. :) :-( ;) :D xD :/ <3.
+# Żaden filtr emoji ich nie łapie (to dwukropek/nawias/itd.), a lektor je wymawia.
+# Ograniczenia (?<!\w)/(?!\w) chronią zwykły tekst i liczby (np. „10:30", „(x)").
+_EMOTICONS = re.compile(
+    r"(?<!\w)(?:"
+    r"[:;=][-~^']?[)(\]\[DPpOo|/\\3<>]"   # :) :-( ;D =| :/ :3 :> :| :o …
+    r"|[xX][DdPp]"                          # xD XD xP
+    r"|<3|</3|\^\^|\^_\^|-_-|>_<|[Tt]_[Tt]|;_;|[oO]_[oO]"
+    r")(?!\w)",
+)
+
+
+def strip_emoji_and_emoticons(text: str) -> str:
+    """Usuń emoji, symbole graficzne ORAZ emotikony tekstowe (:) :( ⏳ itd.).
+
+    Jedno źródło prawdy dla wszystkich dróg TTS. Bezpieczne do wołania wielokrotnie.
+    """
+    if not text:
+        return text
+    text = _EMOJI_SYMBOLS.sub(" ", text)
+    text = _EMOTICONS.sub(" ", text)
+    return text
 
 
 def prose_from_markdown(md_text: str) -> str:
@@ -833,8 +870,8 @@ def prose_from_markdown(md_text: str) -> str:
     # 8) Resztki HTML.
     text = re.sub(r"<[^>]+>", " ", text)
 
-    # 9) Emoji/symbole/ramki.
-    text = _EMOJI_SYMBOLS.sub(" ", text)
+    # 9) Emoji/symbole/ramki + emotikony tekstowe (wspólny filtr).
+    text = strip_emoji_and_emoticons(text)
 
     # 10) Normalizacja białych znaków (zachowujemy interpunkcję zdań).
     text = re.sub(r"[ \t]+", " ", text)
