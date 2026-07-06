@@ -2933,7 +2933,11 @@ class MainWindow(QMainWindow):
                 jako obejście pułapki „agent czeka" (poniżej) oraz jako końcowy
                 fallback, gdy dziennik nic nie zwróci.
                 """
-                buf = self._terminal_output_buffer
+                # Notes TEJ zakładki (zasilany wyłącznie przez jej własny
+                # terminal), a NIE wspólny bufor MainWindow — tamten miesza
+                # wyjście WSZYSTKICH zakładek naraz, więc „ostatnia odpowiedź"
+                # bywała treścią agenta z tła (np. Strona F-P), a nie bieżącego.
+                buf = getattr(tab, '_terminal_output_buffer', '') if tab else ''
                 if not buf.strip():
                     return False
                 resp = extract_last_claude_response(buf)
@@ -2948,8 +2952,8 @@ class MainWindow(QMainWindow):
                     self._tts_timer.stop()
                 self.tts.speak(cleaned)
                 self._update_status(tr('status_reading_last'))
-                if clear_after:
-                    self._terminal_output_buffer = ""
+                if clear_after and tab is not None:
+                    tab._terminal_output_buffer = ""
                 return True
 
             # PUŁAPKA Claude Code (potwierdzona diagnostyką 2026-07-03): gdy agent
@@ -2982,10 +2986,13 @@ class MainWindow(QMainWindow):
                         self._update_status(tr('status_reading_last'))
                         return
 
-            # Fallback (stary tor) — ekstrakcja z bufora terminala.
-            if self._terminal_output_buffer.strip():
+            # Fallback (stary tor) — ekstrakcja z bufora terminala TEJ zakładki
+            # (nie ze wspólnego MainWindow, który miesza wyjście wszystkich
+            # zakładek → czytał treść agenta z tła).
+            tab_buf = getattr(tab, '_terminal_output_buffer', '') if tab else ''
+            if tab_buf.strip():
                 # Extract only the last response (strips UI frames, spinners, user prompts)
-                last_response = extract_last_claude_response(self._terminal_output_buffer)
+                last_response = extract_last_claude_response(tab_buf)
 
                 if last_response:
                     last_response = fix_polish_encoding(last_response)
@@ -2998,13 +3005,15 @@ class MainWindow(QMainWindow):
                         self.tts.speak(cleaned_text)
                         self._update_status(tr('status_reading_last'))
                         # Clear buffer after reading
-                        self._terminal_output_buffer = ""
+                        if tab is not None:
+                            tab._terminal_output_buffer = ""
                     else:
                         self._update_status(tr('status_response_no_content'))
                 else:
                     self._update_status(tr('status_no_response_found'))
                     # Clear buffer anyway to prevent accumulation
-                    self._terminal_output_buffer = ""
+                    if tab is not None:
+                        tab._terminal_output_buffer = ""
             else:
                 self._update_status(tr('status_no_text'))
             return
