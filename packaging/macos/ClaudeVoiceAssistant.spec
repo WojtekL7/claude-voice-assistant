@@ -38,7 +38,7 @@ if os.path.isdir(os.path.join(SRC, "i18n")):
     datas.append((os.path.join(SRC, "i18n"), "src/i18n"))
 
 hiddenimports = [
-    "PyQt5.QtCore", "PyQt5.QtGui", "PyQt5.QtWidgets",
+    "PyQt5.QtCore", "PyQt5.QtGui", "PyQt5.QtWidgets", "PyQt5.QtSvg",
     "PyQt5.QtWebEngineWidgets", "PyQt5.QtWebChannel",
     "edge_tts", "pygame", "sounddevice", "numpy", "scipy", "requests",
     "ptyprocess", "pexpect", "psutil",

@@ -56,14 +56,12 @@ _QTERMWIDGET_SCROLLBAR_QSS = """
         margin: 2px;
     }
     QScrollBar::handle:vertical {
-        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-            stop:0 #888888, stop:0.5 #aaaaaa, stop:1 #888888);
+        background: #3a2a5a;
         border-radius: 5px;
         min-height: 30px;
     }
     QScrollBar::handle:vertical:hover {
-        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-            stop:0 #999999, stop:0.5 #bbbbbb, stop:1 #999999);
+        background: #6b46a8;
     }
     QScrollBar::add-line:vertical,
     QScrollBar::sub-line:vertical {

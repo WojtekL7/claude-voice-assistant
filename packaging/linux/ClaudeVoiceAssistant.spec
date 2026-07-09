@@ -47,7 +47,7 @@ for _svg in glob.glob(os.path.join(SRC, "gui", "*.svg")):
     datas.append((_svg, "gui"))
 
 hiddenimports = [
-    "PyQt5.QtCore", "PyQt5.QtGui", "PyQt5.QtWidgets",
+    "PyQt5.QtCore", "PyQt5.QtGui", "PyQt5.QtWidgets", "PyQt5.QtSvg",
     "PyQt5.QtWebEngineWidgets", "PyQt5.QtWebChannel",
     "edge_tts", "pygame", "sounddevice", "numpy", "scipy", "requests",
     "ptyprocess", "pexpect", "psutil",

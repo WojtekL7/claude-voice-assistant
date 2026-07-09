@@ -4,15 +4,27 @@
   <meta charset="utf-8">
   <link rel="stylesheet" href="vendor/xterm.css">
   <style>
-    /* Ubuntu Mono dołączony do aplikacji — żeby terminal na macOS/Windows
-       wyglądał TAK SAMO jak na Linuksie (a nie cienkim zamiennikiem systemu). */
+    /* Czcionki dołączone do aplikacji — terminal na macOS/Windows ma wyglądać
+       TAK SAMO jak na Linuksie (a nie cienkim zamiennikiem systemu). */
+    @font-face {
+      font-family: 'JetBrains Mono';
+      src: url('../fonts/JetBrainsMono-Regular.ttf') format('truetype');
+      font-weight: 400;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'JetBrains Mono';
+      src: url('../fonts/JetBrainsMono-Bold.ttf') format('truetype');
+      font-weight: 700;
+      font-style: normal;
+    }
     @font-face {
       font-family: 'Ubuntu Mono';
       src: url('../fonts/UbuntuMono.ttf') format('truetype');
       font-weight: 400;
       font-style: normal;
     }
-    html, body { margin: 0; padding: 0; height: 100%; background: #1b1b1d; overflow: hidden; }
+    html, body { margin: 0; padding: 0; height: 100%; background: #0a080e; overflow: hidden; }
     #terminal { width: 100%; height: 100%; }
 
     /* Suwak boczny terminala — odwzorowanie 1:1 wyglądu z Linuksa (QTermWidget,
@@ -35,16 +47,16 @@
       background: transparent;
     }
     .xterm-viewport::-webkit-scrollbar-thumb {
-      /* Gradient poziomy #888 → #aaa → #888, rogi 5px, min. wysokość 30px.
+      /* Fioletowy uchwyt w kolorze akcentu (gui/theme.py), rogi 5px.
          Margines 2px (jak w Qt) odtworzony przezroczystą ramką + background-clip. */
-      background: linear-gradient(to right, #888888 0%, #aaaaaa 50%, #888888 100%);
+      background: rgba(168, 85, 247, 0.28);
       border-radius: 5px;
       min-height: 30px;
       border: 2px solid transparent;
       background-clip: padding-box;
     }
     .xterm-viewport::-webkit-scrollbar-thumb:hover {
-      background: linear-gradient(to right, #999999 0%, #bbbbbb 50%, #999999 100%);
+      background: rgba(168, 85, 247, 0.5);
       background-clip: padding-box;
     }
     /* Brak strzałek góra/dół (jak add-line/sub-line: height 0 w Qt). */
@@ -81,7 +93,7 @@
   <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
   <script>
     const term = new Terminal({
-      fontFamily: '"Ubuntu Mono", Menlo, "DejaVu Sans Mono", Consolas, monospace',
+      fontFamily: '"JetBrains Mono", "Ubuntu Mono", Menlo, "DejaVu Sans Mono", Consolas, monospace',
       // 17 px = 13 pt przeliczone (96/72) — wartość startowa zgodna z tym, co
       // Python dośle przez __termFont (patrz web_terminal._push_font). Dzięki
       // temu litery nie "mrugają" mniejszym rozmiarem przez pierwszą klatkę.
@@ -89,7 +101,7 @@
       cursorBlink: true,
       scrollback: 10000,
       allowProposedApi: true,
-      theme: { background: '#1b1b1d', foreground: '#e0e0e0' }
+      theme: { background: '#0a080e', foreground: '#b8b2c4' }
     });
     const fitAddon = new FitAddon.FitAddon();
     term.loadAddon(fitAddon);

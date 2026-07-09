@@ -1,9 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-  <!-- Flaga "agent czeka na odpowiedź": pomarańczowe kółko + znak zapytania.
-       Znak rysowany ścieżką (nie <text>) — silnik SVG Qt pewnie renderuje
-       ścieżki, a tekst bywa pomijany. -->
-  <circle cx="12" cy="12" r="11" fill="#f59e0b"/>
-  <path d="M8.6 9.0 a3.4 3.4 0 1 1 5.9 2.4 c-1.2 1.2 -2.5 1.7 -2.5 3.4"
-        fill="none" stroke="#241303" stroke-width="2.6" stroke-linecap="round"/>
-  <circle cx="12" cy="18.7" r="1.7" fill="#241303"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.2 9.2a3 3 0 0 1 5.6 1c0 2-2.8 2.6-2.8 4"/><line x1="12" y1="17.5" x2="12.01" y2="17.5"/></svg>

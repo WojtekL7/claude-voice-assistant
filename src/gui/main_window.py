@@ -23,7 +23,7 @@ from PyQt5.QtWidgets import (
     QTabWidget, QTabBar, QProgressBar, QProxyStyle, QStyle, QStyleFactory
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QObject, QEvent, QPoint, QRect
-from PyQt5.QtGui import QFont, QTextCursor, QIcon, QKeySequence, QPalette, QColor, QTextCharFormat, QPainter, QPen, QPixmap
+from PyQt5.QtGui import QFont, QTextCursor, QIcon, QKeySequence, QPalette, QColor, QTextCharFormat, QPainter, QPen, QPixmap, QLinearGradient
 
 # QTermWidget for real terminal emulation
 try:
@@ -98,6 +98,44 @@ class _LeftAlignedTabStyle(QProxyStyle):
             if rect.left() > option.rect.left():
                 rect.moveLeft(option.rect.left())
         return rect
+
+
+class _AccentTabBar(QTabBar):
+    """Pasek zakładek z gradientową kreską nad aktywną zakładką.
+
+    QSS nie umie gradientu w `border-top` (tylko jednolity kolor), a przez
+    `background` nie da się namalować samej kreski. Dlatego dokładamy ją ręcznie
+    po tym, jak styl narysuje zakładki. Kreska jest wcięta po bokach — jak w
+    makiecie — i nie zasłania ikony ani flagi „?" (rysowana w górnych 2 px).
+
+    Kolor jest STAŁY (akcent aplikacji), niezależny od koloru agenta: kreska ma
+    mówić „ta zakładka jest aktywna", a nie dublować informację, którą już niesie
+    kolor tytułu.
+    """
+
+    _STRIPE_H = 2      # grubość kreski
+    _STRIPE_INSET = 8  # wcięcie od lewej i prawej krawędzi zakładki
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        idx = self.currentIndex()
+        if idx < 0:
+            return
+        rect = self.tabRect(idx)
+        if rect.isNull() or rect.width() <= 2 * self._STRIPE_INSET:
+            return
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        stripe = QRect(rect.left() + self._STRIPE_INSET, rect.top(),
+                       rect.width() - 2 * self._STRIPE_INSET, self._STRIPE_H)
+        grad = QLinearGradient(stripe.left(), 0, stripe.right(), 0)
+        grad.setColorAt(0.0, QColor(theme.ACCENT))
+        grad.setColorAt(1.0, QColor(theme.ACCENT_GLOW))
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(grad)
+        painter.drawRoundedRect(stripe, 1, 1)
+        painter.end()
 
 
 class SignalBridge(QObject):
@@ -368,6 +406,7 @@ from core.update_manager import UpdateManager
 from core.platform_utils import update_platform_id, total_ram_gb, recommended_max_agents
 from gui.agent_tab import AgentTab
 from gui import icon_set
+from gui import theme
 from gui.dialogs import (
     MemoryProjectsDialog, AgentConfigDialog, AgentsManagerDialog,
     SkillsManagerDialog, McpManagerDialog, UpdateAvailableDialog,
@@ -383,51 +422,15 @@ from gui.resource_monitor import ResourceMonitorWidget
 # ustalić, dlaczego flaga „agent czeka" nie pokazuje się na zakładce w tle.
 _FLAG_DEBUG = bool(os.environ.get("CVA_FLAG_DEBUG"))
 
-# Domyślne kolory skórki (motyw Ubuntu) - interfejs + terminal
-DEFAULT_SKIN_COLORS = {
-    # === Kolory interfejsu ===
-    'main_window_bg': '#300A24',        # Tło głównego okna
-    'menu_bar_bg': '#300A24',           # Tło paska menu
-    'status_bar_bg': '#300A24',         # Tło paska statusu
-    'bottom_panel_bg': '#131314',       # Tło panelu z przyciskami
-    'border_color': '#4a1a3a',          # Kolor obramowań
-    'hover_color': '#6a2a5a',           # Kolor przy najechaniu
-    'splitter_color': '#4a1a3a',        # Kolor rozdzielacza
-    'text_color': '#ffffff',            # Kolor tekstu
-    'button_bg': '#4a1a3a',             # Tło przycisków
-    'button_hover': '#6a2a5a',          # Przycisk przy najechaniu
-    'input_bg': '#300A24',              # Tło pola tekstowego
-    'inactive_panel_bg': '#3a3a3c',     # Tło panelu gdy okno nieaktywne
-    # === Kolory ikon przycisków ===
-    'icon_dictate_color': '#22c55e',    # Kolor ikony mikrofonu (zielony)
-    'icon_read_color': '#06b6d4',       # Kolor ikony głośnika (turkusowy)
-    'icon_pause_color': '#a855f7',      # Kolor ikony pauzy (fioletowy)
-    'icon_stop_color': '#ef4444',       # Kolor ikony stop (czerwony)
-    'icon_copy_color': '#f59e0b',       # Kolor ikony kopiuj (pomarańczowy)
-    'icon_clear_input_color': '#ef4444',  # Kolor ikony wyczyść (czerwony)
-    'icon_add_media_color': '#3b82f6',  # Kolor ikony dodaj media (niebieski)
-    'icon_send_color': '#22c55e',       # Kolor ikony wyślij (zielony)
-    'icon_quick_actions_color': '#facc15',  # Kolor ikony szybkich akcji (żółty)
-    # === Kolory terminala ===
-    'terminal_bg': '#300A24',           # Tło terminala
-    'terminal_fg': '#EEEEEC',           # Tekst terminala
-    'terminal_color_0': '#2E3436',      # Czarny
-    'terminal_color_1': '#CC0000',      # Czerwony
-    'terminal_color_2': '#4E9A06',      # Zielony
-    'terminal_color_3': '#C4A000',      # Żółty
-    'terminal_color_4': '#3465A4',      # Niebieski
-    'terminal_color_5': '#75507B',      # Magenta
-    'terminal_color_6': '#06989A',      # Cyan
-    'terminal_color_7': '#D3D7CF',      # Biały
-    'terminal_color_0_bright': '#555753',  # Jasny czarny
-    'terminal_color_1_bright': '#EF2929',  # Jasny czerwony
-    'terminal_color_2_bright': '#8AE234',  # Jasny zielony
-    'terminal_color_3_bright': '#FCE94F',  # Jasny żółty
-    'terminal_color_4_bright': '#729FCF',  # Jasny niebieski
-    'terminal_color_5_bright': '#AD7FA8',  # Jasna magenta
-    'terminal_color_6_bright': '#34E2E2',  # Jasny cyan
-    'terminal_color_7_bright': '#EEEEEC',  # Jasny biały
-}
+# Domyślne kolory skórki (motyw „Vibe Purple") — interfejs + terminal.
+# Wartości pochodzą z jednej palety (gui/theme.py), nie są tu wpisywane wprost.
+DEFAULT_SKIN_COLORS = theme.skin_colors()
+
+# Wersja schematu skórki. Podbicie = zapisana u użytkownika skórka jest
+# PORZUCANA na rzecz nowych domyślnych (z kopią zapasową configu). Bez tego
+# redesign byłby niewidoczny: `_load_settings` nadpisuje defaulty wartościami
+# z config.json, więc kto raz uruchomił starą wersję, ten oglądałby ją dalej.
+SKIN_VERSION = 2
 
 # Nazwy kolorów do wyświetlenia w UI (po polsku)
 SKIN_COLOR_NAMES = {
@@ -664,6 +667,9 @@ class MainWindow(QMainWindow):
 
         # Tab widget for agents
         self.tab_widget = QTabWidget()
+        # Własny pasek — dokłada gradientową kreskę nad aktywną zakładką.
+        # Musi trafić przed dodaniem zakładek (QTabWidget.setTabBar).
+        self.tab_widget.setTabBar(_AccentTabBar())
         # Wyrównaj zakładki do lewej także na macOS. Centrowanie liczy styl
         # QTabWidget (SE_TabWidgetTabBar), a QMacStyle ignoruje hint wyrównania —
         # dlatego bazujemy na silniku Fusion (respektuje lewą) i dosuwamy pasek
@@ -679,76 +685,20 @@ class MainWindow(QMainWindow):
         # Ikona agenta na zakładce ~2× większa (życzenie usera) — domyślnie Qt daje
         # ~16 px; ustawiamy 30 px, żeby ikona (robot/własna) była wyraźnie widoczna.
         self.tab_widget.setIconSize(QSize(30, 30))
-        # Większa czcionka zakładek przez API (nie QSS — font-size w QTabBar::tab jest
-        # ignorowany przy własnym QStyle/Fusion). Powiększa napisy ORAZ ikony-emoji
-        # (emoji to tekst → rośnie z czcionką).
-        _tab_font = self.tab_widget.tabBar().font()
-        _tab_font.setPointSize(12)
+        # Czcionka zakładek przez API (nie QSS — font-size w QTabBar::tab jest
+        # ignorowany przy własnym QStyle/Fusion). Rodzina interfejsu z palety;
+        # rozmiar dobrany pod makietę. Uwaga: ikony-emoji to TEKST, więc rosną
+        # razem z czcionką (obrazki skalują się przez setIconSize).
+        _tab_font = QFont(theme.ui_family())
+        _tab_font.setPointSize(11)
+        _tab_font.setWeight(QFont.Medium)
         self.tab_widget.tabBar().setFont(_tab_font)
         self.tab_widget.setTabsClosable(True)
         self.tab_widget.setMovable(True)
         self.tab_widget.tabCloseRequested.connect(self._close_agent_tab)
         self.tab_widget.currentChanged.connect(self._on_tab_changed)
 
-        # Style for tabs. Ikona zamykania (X) — biały SVG, bez tła. Hover czerwony.
-        close_icon_url = (Path(__file__).parent / "close_x.svg").as_posix()
-        # Strzałki przewijania zakładek (gdy się nie mieszczą) — białe SVG.
-        chevron_left_url = (Path(__file__).parent / "chevron-left.svg").as_posix()
-        chevron_right_url = (Path(__file__).parent / "chevron-right.svg").as_posix()
-        self.tab_widget.setStyleSheet(f"""
-            QTabWidget::pane {{
-                border: none;
-                background-color: transparent;
-            }}
-            QTabWidget::tab-bar {{
-                alignment: left;
-            }}
-            QTabBar::tab {{
-                background-color: #2d0a1e;
-                padding: 8px 16px;
-                margin-right: 2px;
-                border-top-left-radius: 6px;
-                border-top-right-radius: 6px;
-            }}
-            QTabBar::tab:selected {{
-                background-color: #4a1a3a;
-            }}
-            QTabBar::tab:hover {{
-                background-color: #6a2a5a;
-            }}
-            QTabBar::close-button {{
-                image: url({close_icon_url});
-                subcontrol-position: right;
-                width: 16px;
-                height: 16px;
-                margin: 2px;
-                {self._macos_close_btn_bg()}
-            }}
-            QTabBar::close-button:hover {{
-                background-color: #ef4444;
-                border-radius: 2px;
-            }}
-            /* Przyciski przewijania zakładek (dzióbki ‹ ›, gdy zakładki się nie
-               mieszczą) — tło jak zakładki (nie białe), białe strzałki SVG. */
-            QTabBar QToolButton {{
-                background-color: #2d0a1e;
-                border: none;
-                margin: 0;
-            }}
-            QTabBar QToolButton:hover {{
-                background-color: #6a2a5a;
-            }}
-            QTabBar QToolButton::left-arrow {{
-                image: url({chevron_left_url});
-                width: 8px;
-                height: 12px;
-            }}
-            QTabBar QToolButton::right-arrow {{
-                image: url({chevron_right_url});
-                width: 8px;
-                height: 12px;
-            }}
-        """)
+        self.tab_widget.setStyleSheet(self._compose_tabbar_qss(self.skin_colors))
 
         # Create dropdown menu for "+" tab
         self._add_tab_menu = QMenu(self)
@@ -1165,6 +1115,9 @@ class MainWindow(QMainWindow):
 
         # Apply button icon styles to new tab
         self._apply_button_icon_styles()
+        # ...oraz same ikony w kolorach skórki (AgentTab tworzy je w kolorze
+        # domyślnym, bo nie zna palety).
+        self._apply_skin_icons()
 
         # Kolor tekstu zakładki wg pola 'tab_color' agenta (Funkcja #2).
         self._recolor_all_tabs()
@@ -1241,6 +1194,7 @@ class MainWindow(QMainWindow):
         # apply_styles było wywołane przy tworzeniu, dawno przed activate().
         agent_tab.apply_styles(self.skin_colors, self.skin_icons)
         self._apply_button_icon_styles()
+        self._apply_skin_icons()
 
         # Dopiero teraz aktywuj — terminal powstanie w już ostylowanym splitterze.
         self.tab_widget.setCurrentIndex(index)
@@ -2222,13 +2176,23 @@ class MainWindow(QMainWindow):
                     self.current_language = settings.get('language', self.current_language)
                     self.auto_read_responses = settings.get('auto_read', False)
 
-                    # Load custom skin colors including terminal colors (merge with defaults)
-                    saved_skin = settings.get('skin_colors', {})
-                    for key in DEFAULT_SKIN_COLORS:
-                        if key in saved_skin:
-                            self.skin_colors[key] = saved_skin[key]
+                    # Skórka: wczytaj zapisaną TYLKO gdy pochodzi z bieżącego
+                    # schematu. Starsza (np. motyw Ubuntu sprzed redesignu)
+                    # jest porzucana na rzecz nowych domyślnych — inaczej stare
+                    # kolory z config.json przykryłyby nowy motyw i użytkownik
+                    # nie zobaczyłby żadnej zmiany. Kopia zapasowa poniżej.
+                    saved_version = settings.get('skin_version', 1)
+                    if saved_version >= SKIN_VERSION:
+                        saved_skin = settings.get('skin_colors', {})
+                        for key in DEFAULT_SKIN_COLORS:
+                            if key in saved_skin:
+                                self.skin_colors[key] = saved_skin[key]
+                    elif settings.get('skin_colors'):
+                        self._backup_config_before_skin_migration(settings, saved_version)
 
-                    # Load custom skin icons (merge with defaults)
+                    # Ikony przycisków NIE podlegają migracji — to własne napisy
+                    # i emoji użytkownika (np. „Poszło" na przycisku wysyłania),
+                    # niezależne od palety. Zmiana motywu nie ma ich kasować.
                     saved_icons = settings.get('skin_icons', {})
                     for key in DEFAULT_SKIN_ICONS:
                         if key in saved_icons:
@@ -2265,6 +2229,28 @@ class MainWindow(QMainWindow):
         # zanim powstaną menu i zakładki (kolejność w __init__: load → setup_ui).
         set_ui_language(self.current_language)
 
+    def _backup_config_before_skin_migration(self, settings: dict, old_version: int):
+        """Zachowaj poprzednie KOLORY, zanim zastąpi je nowy motyw domyślny.
+
+        Zapisuje tylko klucze skórki (nie cały config — tam siedzą klucze API).
+        Plik jest jednorazowy per wersja, więc kolejne starty go nie nadpisują
+        świeżo zmigrowanymi wartościami. Kto miał własną paletę, odtworzy ją
+        stąd ręcznie w oknie „Skórka".
+        """
+        backup = CONFIG_FILE.with_suffix(f'.skin-v{old_version}.bak')
+        if backup.exists():
+            return
+        try:
+            with open(backup, 'w') as f:
+                json.dump({
+                    'skin_version': old_version,
+                    'skin_colors': settings.get('skin_colors', {}),
+                    'skin_icons': settings.get('skin_icons', {}),
+                }, f, indent=2, ensure_ascii=False)
+            print(f"Skórka zmigrowana do v{SKIN_VERSION}; poprzednia zapisana w {backup}")
+        except Exception as e:
+            print(f"Nie udało się zapisać kopii starej skórki: {e}")
+
     def _save_settings(self):
         """Save settings to file."""
         settings = {
@@ -2272,6 +2258,7 @@ class MainWindow(QMainWindow):
             'auto_read': self.auto_read_responses,
             'groq_api_key': self.stt.api_key,
             'anthropic_api_key': getattr(self, 'anthropic_api_key', ''),
+            'skin_version': SKIN_VERSION,     # patrz _load_settings (migracja)
             'skin_colors': self.skin_colors,  # Zawiera kolory interfejsu + terminala
             'skin_icons': self.skin_icons,    # Zawiera ikony przycisków
             'claude_command': self.claude_command,
@@ -2611,7 +2598,7 @@ class MainWindow(QMainWindow):
             tab.pause_btn.setVisible(True)
             tab.stop_btn.setVisible(True)
             tab.pause_btn.setEnabled(True)
-            tab.pause_btn.setIcon(icon_set.button_icon('pause', 'normal'))
+            tab.pause_btn.setIcon(self._icon('pause', 'normal'))
             # Start speaker animation
             self._speaker_anim_timer.start(300)
             # Stop pause blink if running
@@ -2621,10 +2608,10 @@ class MainWindow(QMainWindow):
             # Keep buttons visible during pause
             tab.pause_btn.setVisible(True)
             tab.stop_btn.setVisible(True)
-            tab.pause_btn.setIcon(icon_set.button_icon('pause', 'active'))
+            tab.pause_btn.setIcon(self._icon('pause', 'active'))
             # Stop speaker animation
             self._speaker_anim_timer.stop()
-            tab.read_btn.setIcon(icon_set.button_icon('read', 'normal'))
+            tab.read_btn.setIcon(self._icon('read', 'normal'))
             # Start pause blink animation
             self._pause_blink_timer.start(500)
             self._update_status(tr('paused'))
@@ -2637,11 +2624,11 @@ class MainWindow(QMainWindow):
             tab.pause_btn.setVisible(False)
             tab.stop_btn.setVisible(False)
             tab.pause_btn.setEnabled(False)
-            tab.pause_btn.setIcon(icon_set.button_icon('pause', 'normal'))
+            tab.pause_btn.setIcon(self._icon('pause', 'normal'))
             # Stop all animations
             self._speaker_anim_timer.stop()
             self._pause_blink_timer.stop()
-            tab.read_btn.setIcon(icon_set.button_icon('read', 'normal'))
+            tab.read_btn.setIcon(self._icon('read', 'normal'))
             self._update_status(tr('status_ready'))
 
     def _on_tts_finished(self):
@@ -2655,7 +2642,7 @@ class MainWindow(QMainWindow):
         tab.stop_btn.setVisible(False)
         # Stop speaker animation
         self._speaker_anim_timer.stop()
-        tab.read_btn.setIcon(icon_set.button_icon('read', 'normal'))
+        tab.read_btn.setIcon(self._icon('read', 'normal'))
         self._update_status(tr('status_ready'))
 
     def _on_stt_state_changed(self, state: STTState):
@@ -2670,12 +2657,12 @@ class MainWindow(QMainWindow):
             self._mic_pulse_timer.start(400)
             self._update_status(tr('status_recording_click'))
         elif state == STTState.PROCESSING:
-            tab.dictate_btn.setIcon(icon_set.button_icon('dictate', 'processing'))
+            tab.dictate_btn.setIcon(self._icon('dictate', 'processing'))
             # Stop pulse animation
             self._mic_pulse_timer.stop()
             self._update_status(tr('status_processing_speech'))
         else:
-            tab.dictate_btn.setIcon(icon_set.button_icon('dictate', 'normal'))
+            tab.dictate_btn.setIcon(self._icon('dictate', 'normal'))
             tab.dictate_btn.setChecked(False)
             # Stop pulse animation and reset style
             self._mic_pulse_timer.stop()
@@ -2691,32 +2678,27 @@ class MainWindow(QMainWindow):
             return
 
         self._mic_pulse_state = not self._mic_pulse_state
-        # Ikona mikrofonu bez zmian; nagrywanie sygnalizuje PULSUJĄCA czerwona ramka.
-        tab.dictate_btn.setIcon(icon_set.button_icon('dictate', 'active'))
-        if self._mic_pulse_state:
-            # Bright recording state - jasna czerwona ramka
-            tab.dictate_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: transparent;
-                    border: 2px solid #ff0000;
-                    border-radius: 12px;
-                }
-            """)
-        else:
-            # Darker recording state - ciemniejsza czerwona ramka
-            tab.dictate_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: transparent;
-                    border: 2px solid #b91c1c;
-                    border-radius: 12px;
-                }
-            """)
+        # Nagrywanie = czerwone WYPEŁNIENIE przycisku (jak w makiecie), więc ikona
+        # musi być biała — w kolorze skórki (fiolet) zlałaby się z czerwienią.
+        tab.dictate_btn.setIcon(icon_set.button_icon('dictate', 'active', '#ffffff'))
+        # Puls: jaśniejsza/ciemniejsza czerwień + rosnąca poświata.
+        bg, glow = ((theme.DANGER, '3px') if self._mic_pulse_state
+                    else (theme.DANGER_LIGHT, '1px'))
+        tab.dictate_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {bg};
+                border: {glow} solid {theme.DANGER_LIGHT};
+                border-radius: {theme.RADIUS}px;
+            }}
+        """)
 
     def _reset_mic_style(self):
         """Reset microphone button to default style."""
         tab = self._get_current_agent_tab()
         if tab:
             self._apply_button_icon_style(tab.dictate_btn, 'icon_dictate_color')
+            # ...i cofnij BIAŁĄ ikonę z trybu nagrywania na kolor skórki.
+            tab.dictate_btn.setIcon(self._icon('dictate', 'normal'))
 
     def _animate_speaker(self):
         """Animate speaker icon showing sound waves."""
@@ -2725,7 +2707,9 @@ class MainWindow(QMainWindow):
             return
 
         self._speaker_anim_state = (self._speaker_anim_state + 1) % 3
-        tab.read_btn.setIcon(icon_set.icon_by_name(self._speaker_icons[self._speaker_anim_state]))
+        tab.read_btn.setIcon(icon_set.icon_by_name(
+            self._speaker_icons[self._speaker_anim_state],
+            self.skin_colors.get('icon_read_color', theme.TEXT_DIM)))
 
     def _animate_pause_blink(self):
         """Animate pause button blinking - icon only, button stays in place."""
@@ -2736,7 +2720,7 @@ class MainWindow(QMainWindow):
         self._pause_blink_state = not self._pause_blink_state
         if self._pause_blink_state:
             # Ikona „play" widoczna (wznów)
-            tab.pause_btn.setIcon(icon_set.button_icon('pause', 'active'))
+            tab.pause_btn.setIcon(self._icon('pause', 'active'))
         else:
             # Mrugnięcie — chwilowo pusta ikona, by przyciągnąć wzrok
             tab.pause_btn.setIcon(QIcon())
@@ -3196,7 +3180,7 @@ class MainWindow(QMainWindow):
             return
 
         # Change to green checkmark icon + green border
-        tab.copy_btn.setIcon(icon_set.button_icon('copy', 'active'))
+        tab.copy_btn.setIcon(self._icon('copy', 'active'))
         tab.copy_btn.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
@@ -3211,7 +3195,7 @@ class MainWindow(QMainWindow):
         """Reset copy button to default style."""
         tab = self._get_current_agent_tab()
         if tab:
-            tab.copy_btn.setIcon(icon_set.button_icon('copy', 'normal'))
+            tab.copy_btn.setIcon(self._icon('copy', 'normal'))
             self._apply_button_icon_style(tab.copy_btn, 'icon_copy_color')
 
     def _toggle_pause(self):
@@ -3416,7 +3400,25 @@ class MainWindow(QMainWindow):
             ):
                 btn = getattr(tab, attr, None)
                 if btn is not None:
-                    btn.setIcon(icon_set.button_icon(key))
+                    btn.setIcon(self._icon(key))
+
+            # Przełącznik trybu myszy trzyma DWIE ikony (stan przewijania /
+            # zaznaczania) poza pętlą powyżej — przemaluj obie i odśwież bieżącą.
+            if hasattr(tab, '_update_mouse_mode_btn'):
+                mouse_color = self.skin_colors.get('icon_copy_color', theme.TEXT_DIM)
+                tab._icon_mouse_scroll = icon_set.icon_by_name("mouse-scroll", mouse_color)
+                tab._icon_mouse_select = icon_set.icon_by_name("mouse-select", mouse_color)
+                tab._update_mouse_mode_btn()
+
+    def _icon(self, key: str, state: str = 'normal', color_key: str = None) -> QIcon:
+        """Ikona przycisku pomalowana kolorem z bieżącej skórki.
+
+        Ikony SVG są jednokolorowe (`currentColor`), więc barwę podaje skórka —
+        inaczej ustawienia „Kolor ikony…" w oknie Skórka nie robiłyby nic.
+        """
+        ck = color_key or f'icon_{key}_color'
+        color = self.skin_colors.get(ck, theme.TEXT_DIM)
+        return icon_set.button_icon(key, state, color)
 
     def _get_icon(self, button_name: str, state: str = 'normal') -> str:
         """Get icon for a button from skin_icons."""
@@ -3431,34 +3433,73 @@ class MainWindow(QMainWindow):
             font_size: Font size for the icon
             with_disabled: If True, add :disabled pseudo-selector styling
         """
-        icon_color = self.skin_colors.get(color_key, '#ffffff')
-        border_color = self.skin_colors.get('border_color', '#4a1a3a')
-        hover_color = self.skin_colors.get('hover_color', '#6a2a5a')
+        icon_color = self.skin_colors.get(color_key, theme.TEXT_DIM)
+        border_color = self.skin_colors.get('border_color', theme.BORDER)
+        surface = self.skin_colors.get('button_bg', theme.SURFACE)
 
         disabled_style = ""
         if with_disabled:
             disabled_style = f"""
             QPushButton:disabled {{
-                background-color: transparent;
-                color: {border_color};
-                border: 1px solid {border_color};
+                background-color: {surface};
+                color: {theme.BORDER};
+                border: 1px solid {theme.BORDER_SUBTLE};
             }}"""
 
+        # Miękki kwadrat na powierzchni wypukłej; po najechaniu rozświetla się
+        # ramka w kolorze akcentu (jak w makiecie), a nie całe tło.
         button.setStyleSheet(f"""
             QPushButton {{
-                background-color: transparent;
+                background-color: {surface};
                 color: {icon_color};
                 border: 1px solid {border_color};
-                border-radius: 12px;
+                border-radius: {theme.RADIUS}px;
                 font-size: {font_size}px;
             }}
             QPushButton:hover {{
-                background-color: {hover_color};
+                background-color: {theme.SURFACE_HOVER};
+                border: 1px solid {theme.ACCENT};
+            }}
+            QPushButton:pressed {{
+                background-color: {theme.BG_INPUT};
             }}
             QPushButton:checked {{
-                color: #ff0000;
-                border: 2px solid #ff0000;
+                color: #ffffff;
+                background-color: {theme.DANGER};
+                border: 1px solid {theme.DANGER};
             }}{disabled_style}
+        """)
+
+    def _apply_send_button_style(self, button):
+        """Przycisk „Wyślij" — akcent aplikacji: gradient fioletowy + biały napis.
+
+        Napis pozostaje ten ze skórki (użytkownik może mieć własny, np. „Poszło"),
+        ale kolor liter wymuszamy na biały: dowolna barwa ze skórki na fioletowym
+        gradiencie bywa nieczytelna. Poświatę pod przyciskiem daje jaśniejsza
+        ramka — QSS nie zna box-shadow.
+        """
+        button.setStyleSheet(f"""
+            QPushButton {{
+                background: {theme.accent_gradient()};
+                color: #ffffff;
+                border: 1px solid {theme.ACCENT};
+                border-radius: {theme.RADIUS_LG}px;
+                font-size: 14px;
+                font-weight: 600;
+                padding: 0 16px;
+            }}
+            QPushButton:hover {{
+                background: {theme.accent_gradient()};
+                border: 1px solid {theme.ACCENT_GLOW};
+            }}
+            QPushButton:pressed {{
+                background: {theme.ACCENT_DEEP};
+            }}
+            QPushButton:disabled {{
+                background: {theme.SURFACE};
+                color: {theme.TEXT_FAINT};
+                border: 1px solid {theme.BORDER_SUBTLE};
+            }}
         """)
 
     def _apply_button_icon_styles(self):
@@ -3492,9 +3533,10 @@ class MainWindow(QMainWindow):
             if hasattr(tab, 'pause_btn'):
                 self._apply_button_icon_style(tab.pause_btn, 'icon_pause_color', with_disabled=True)
 
-            # Send button - transparent style like other buttons
+            # Wyślij — jedyny przycisk „pierwszoplanowy": gradient akcentu z
+            # poświatą, biały napis (kolor ze skórki byłby nieczytelny na fiolecie).
             if hasattr(tab, 'send_btn'):
-                self._apply_button_icon_style(tab.send_btn, 'icon_send_color', font_size=16)
+                self._apply_send_button_style(tab.send_btn)
 
             # Quick actions button (QToolButton - needs different selector)
             if hasattr(tab, 'quick_actions_btn'):
@@ -3644,11 +3686,97 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         return ("background-color: rgba(0,0,0,0.38); border-radius: 3px;"
                 if sys.platform == "darwin" else "")
 
+    def _compose_tabbar_qss(self, colors: dict) -> str:
+        """Arkusz stylu paska zakładek — JEDNO źródło dla startu i zmiany skórki.
+
+        Wcześniej ten sam QSS istniał w dwóch kopiach (budowa UI i
+        `apply_skin_colors`), które potrafiły się rozjechać. Gradientowej kreski
+        nad aktywną zakładką tu NIE ma — QSS nie zna gradientu w ramce, rysuje ją
+        `_AccentTabBar.paintEvent`.
+
+        Uwaga: `padding`/`font-size` w `QTabBar::tab` są IGNOROWANE, bo pasek ma
+        własny QStyle (Fusion). Rozmiar czcionki i ikon ustawiamy przez API.
+        """
+        close_icon_url = (Path(__file__).parent / "close_x.svg").as_posix()
+        close_hover_url = (Path(__file__).parent / "close_x_hover.svg").as_posix()
+        chevron_left_url = (Path(__file__).parent / "chevron-left.svg").as_posix()
+        chevron_right_url = (Path(__file__).parent / "chevron-right.svg").as_posix()
+        panel = colors.get('menu_bar_bg', theme.BG_PANEL)
+        surface = colors.get('button_bg', theme.SURFACE)
+        return f"""
+            QTabWidget::pane {{
+                border: none;
+                background-color: transparent;
+            }}
+            QTabWidget::tab-bar {{
+                alignment: left;
+            }}
+            QTabBar {{
+                background-color: {panel};
+            }}
+            /* UWAGA: żadnej reguły `color` — nadpisałaby setTabTextColor, czyli
+               kolor zakładki per agent (Funkcja #2 z 1.0.21). */
+            QTabBar::tab {{
+                background-color: transparent;
+                padding: 8px 14px;
+                margin-right: 2px;
+                border: 1px solid transparent;
+                border-bottom: none;
+                border-top-left-radius: 9px;
+                border-top-right-radius: 9px;
+            }}
+            QTabBar::tab:selected {{
+                background-color: {surface};
+                border: 1px solid {colors.get('border_color', theme.BORDER)};
+                border-bottom: none;
+            }}
+            QTabBar::tab:hover:!selected {{
+                background-color: {theme.SURFACE_HOVER};
+            }}
+            /* X zamykający: cienki, szary; po najechaniu biały na czerwonym kółku. */
+            QTabBar::close-button {{
+                image: url({close_icon_url});
+                subcontrol-position: right;
+                width: 16px;
+                height: 16px;
+                margin: 2px;
+                border-radius: 4px;
+                {self._macos_close_btn_bg()}
+            }}
+            QTabBar::close-button:hover {{
+                image: url({close_hover_url});
+                background-color: {theme.DANGER};
+                border-radius: 4px;
+            }}
+            /* Strzałki przewijania (gdy zakładki się nie mieszczą). */
+            QTabBar QToolButton {{
+                background-color: {panel};
+                border: none;
+                border-radius: 6px;
+                margin: 2px 0;
+            }}
+            QTabBar QToolButton:hover {{
+                background-color: {theme.SURFACE_HOVER};
+            }}
+            QTabBar QToolButton::left-arrow {{
+                image: url({chevron_left_url});
+                width: 14px;
+                height: 14px;
+            }}
+            QTabBar QToolButton::right-arrow {{
+                image: url({chevron_right_url});
+                width: 14px;
+                height: 14px;
+            }}
+        """
+
     def _compose_main_qss(self, colors: dict) -> str:
         """Arkusz stylu QMainWindow + menu/dialogi/checkboxy. BEZ ramki akcentu —
         ramkę koloru aktywnego agenta rysuje ręcznie centralny widget (_AccentFrame),
         żeby nie kaskadować stylu na QTermWidget i nie gubić górnej/dolnej krawędzi."""
         checkmark_path = str(ASSETS_DIR / "checkmark.png").replace("\\", "/")
+        toggle_off_path = str(ASSETS_DIR / "icons" / "toggle-off.svg").replace("\\", "/")
+        toggle_on_path = str(ASSETS_DIR / "icons" / "toggle-on.svg").replace("\\", "/")
         return f"""
             QMainWindow {{
                 background-color: {colors['main_window_bg']};
@@ -3685,17 +3813,38 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
                 width: 18px;
                 height: 18px;
                 border: 2px solid {colors['border_color']};
-                border-radius: 3px;
-                background-color: transparent;
+                border-radius: 5px;
+                background-color: {theme.SURFACE};
             }}
             QCheckBox::indicator:hover {{
-                border-color: #22c55e;
+                border-color: {theme.ACCENT};
             }}
             QCheckBox::indicator:checked {{
-                background-color: #22c55e;
-                border-color: #22c55e;
-                border-radius: 3px;
+                background-color: {theme.ACCENT};
+                border-color: {theme.ACCENT};
+                border-radius: 5px;
                 image: url("{checkmark_path}");
+            }}
+            /* „Auto-czytaj odpowiedzi" — przełącznik zamiast kwadracika.
+               Qt nie animuje gałki, więc oba stany to gotowe obrazki. */
+            QCheckBox#autoReadToggle {{
+                color: {theme.TEXT_DIM};
+                spacing: 10px;
+            }}
+            QCheckBox#autoReadToggle::indicator {{
+                width: 42px;
+                height: 24px;
+                border: none;
+                border-radius: 12px;
+                background-color: transparent;
+                image: url("{toggle_off_path}");
+            }}
+            QCheckBox#autoReadToggle::indicator:checked {{
+                background-color: transparent;
+                image: url("{toggle_on_path}");
+            }}
+            QCheckBox#autoReadToggle:hover {{
+                color: {theme.TEXT};
             }}
             QMessageBox {{
                 background-color: {colors['main_window_bg']};
@@ -3773,41 +3922,10 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         for agent_tab in self.agent_tabs.values():
             agent_tab.apply_styles(colors, self.skin_icons)
 
-        # Tab widget styling. Style close-button są tu kopiowane z _setup_ui,
-        # bo bez nich zmiana skórki kasowała ikonę X (regresja).
+        # Tab widget styling — ten sam arkusz co przy budowie UI (jedno źródło,
+        # inaczej zmiana skórki gubiła ikonę X i kształt zakładek).
         if hasattr(self, 'tab_widget'):
-            close_icon_url = (Path(__file__).parent / "close_x.svg").as_posix()
-            self.tab_widget.setStyleSheet(f"""
-                QTabWidget::pane {{
-                    border: none;
-                    background-color: transparent;
-                }}
-                QTabBar::tab {{
-                    background-color: {colors.get('button_bg', '#2d0a1e')};
-                    padding: 8px 16px;
-                    margin-right: 2px;
-                    border-top-left-radius: 6px;
-                    border-top-right-radius: 6px;
-                }}
-                QTabBar::tab:selected {{
-                    background-color: {colors.get('hover_color', '#4a1a3a')};
-                }}
-                QTabBar::tab:hover {{
-                    background-color: {colors.get('hover_color', '#6a2a5a')};
-                }}
-                QTabBar::close-button {{
-                    image: url({close_icon_url});
-                    subcontrol-position: right;
-                    width: 16px;
-                    height: 16px;
-                    margin: 2px;
-                    {self._macos_close_btn_bg()}
-                }}
-                QTabBar::close-button:hover {{
-                    background-color: #ef4444;
-                    border-radius: 2px;
-                }}
-            """)
+            self.tab_widget.setStyleSheet(self._compose_tabbar_qss(colors))
             # Kolor tekstu zakładek (zależy od skórki). Ramka akcentu jest już
             # nałożona przez self.setStyleSheet(_compose_main_qss(...)) na górze
             # apply_skin_colors (z właściwym `colors`, ważne przy podglądzie skórki).

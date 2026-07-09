@@ -30,7 +30,6 @@ for _stream in (sys.stdout, sys.stderr):
 # - macOS/Windows: backendy natywne, nic nie wymuszamy.
 from core.platform_utils import (
     configure_qt_environment, use_native_menu_bar, prefer_webengine_terminal,
-    is_linux,
 )
 configure_qt_environment()
 
@@ -87,19 +86,30 @@ def main():
     app.setDesktopFileName(APP_WM_CLASS)
     app.setOrganizationName("Fulfillment Polska")
 
-    # Czcionki dołączone do aplikacji (Ubuntu / Ubuntu Mono) — żeby wygląd na
-    # macOS/Windows był taki jak na Linuksie, a nie cienki zamiennik systemu.
+    # Czcionki dołączone do aplikacji — wygląd ma być IDENTYCZNY na każdym
+    # systemie, a nie zdany na to, co akurat ma użytkownik. Motyw używa
+    # IBM Plex Sans (interfejs) i JetBrains Mono (terminal, dane techniczne);
+    # Ubuntu zostaje jako zapas dla starszych skórek i systemów bez assets.
     from PyQt5.QtGui import QFontDatabase, QFont
     from config import ASSETS_DIR
-    for _fp in (ASSETS_DIR / "fonts" / "UbuntuMono.ttf",
-                ASSETS_DIR / "fonts" / "Ubuntu.ttf"):
+    from gui import theme
+    _fonts_dir = ASSETS_DIR / "fonts"
+    for _name in ("IBMPlexSans-Regular.ttf", "IBMPlexSans-Medium.ttf",
+                  "IBMPlexSans-SemiBold.ttf", "IBMPlexSans-Bold.ttf",
+                  "JetBrainsMono-Regular.ttf", "JetBrainsMono-Bold.ttf",
+                  "UbuntuMono.ttf", "Ubuntu.ttf"):
+        _fp = _fonts_dir / _name
         if _fp.exists():
             QFontDatabase.addApplicationFont(str(_fp))
-    # Poza Linuksem ustaw czytelny font UI (Ubuntu) — natywny bywa zbyt cienki.
-    if not is_linux():
-        _ui_font = QFont("Ubuntu", 13)
-        _ui_font.setWeight(QFont.Normal)
-        app.setFont(_ui_font)
+
+    # Domyślna czcionka interfejsu na WSZYSTKICH systemach (wcześniej tylko poza
+    # Linuksem). Gdy plik .ttf nie wszedł do paczki, Qt cicho podstawia zamiennik
+    # — dlatego sprawdzamy, czy rodzina faktycznie się zarejestrowała.
+    _families = set(QFontDatabase().families())
+    _ui_family = theme.FONT_UI if theme.FONT_UI in _families else theme.FONT_UI_FALLBACK
+    _ui_font = QFont(_ui_family, 10)
+    _ui_font.setWeight(QFont.Normal)
+    app.setFont(_ui_font)
 
     # Set application icon
     icon_path = ASSETS_DIR / "icon.png"

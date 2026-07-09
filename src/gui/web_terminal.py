@@ -26,6 +26,13 @@ from PyQt5.QtWebEngineWidgets import (
 )
 from PyQt5.QtWebChannel import QWebChannel
 
+# Ten moduł bywa uruchamiany WPROST (`python3 src/gui/web_terminal.py` — izolowany
+# test WebTerminala), a wtedy korzeniem sys.path jest src/gui, nie src.
+try:
+    from gui import theme
+except ImportError:  # pragma: no cover - ścieżka tylko dla trybu demo
+    import theme
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from core.platform_utils import default_shell, is_windows
 from config import ASSETS_DIR, CONFIG_DIR
@@ -169,10 +176,10 @@ class WebTerminal(QWidget):
         self._page = _LoggingWebEnginePage(self._profile, self.view)
         self.view.setPage(self._page)
         # QtWebEngine maluje stronę na BIAŁO, dopóki terminal.html się nie wczyta
-        # (~1 s: xterm.js + czcionka Ubuntu Mono) → widoczny biały błysk przy starcie.
+        # (~1 s: xterm.js + czcionka) → widoczny biały błysk przy starcie.
         # Ustawiamy z góry tło strony na ten sam ciemny kolor co terminal.html
-        # (#1b1b1d), żeby od pierwszej klatki było ciemno, bez białej "pustej kartki".
-        self._page.setBackgroundColor(QColor(0x1b, 0x1b, 0x1d))
+        # (theme.BG_CANVAS), żeby od pierwszej klatki było ciemno.
+        self._page.setBackgroundColor(QColor(theme.BG_CANVAS))
         st = self.view.settings()
         st.setAttribute(QWebEngineSettings.LocalContentCanAccessFileUrls, True)
         st.setAttribute(QWebEngineSettings.LocalContentCanAccessRemoteUrls, True)
@@ -370,7 +377,7 @@ class WebTerminal(QWidget):
         self._failure_shown = True
         _log(f"FAILURE: {reason}")
         html = (
-            "<html><body style='background:#1b1b1d;color:#e0e0e0;"
+            f"<html><body style='background:{theme.BG_CANVAS};color:{theme.TEXT};"
             "font-family:sans-serif;padding:18px'>"
             "<h3 style='color:#ef8080'>Terminal nie wystartował</h3>"
             f"<p>{reason}</p>"

@@ -39,6 +39,7 @@ from core.platform_utils import default_shell
 from gui.dialogs import styled_get_open_file_names
 from gui.terminal_backend import create_terminal_backend
 from gui import icon_set
+from gui import theme
 
 # Rozmiar ikon SVG w przyciskach dolnego panelu.
 PANEL_ICON_SIZE = QSize(24, 24)
@@ -349,7 +350,7 @@ class AgentTab(QWidget):
         self.terminal_backend = create_terminal_backend(
             working_directory=self.working_directory,
             shell=default_shell(),
-            font_family="Ubuntu Mono",
+            font_family=theme.mono_family(),
             font_size=13,
         )
         self.terminal = self.terminal_backend.widget
@@ -429,7 +430,7 @@ class AgentTab(QWidget):
 
         self.input_field = AutoResizeTextEdit()
         self.input_field.setPlaceholderText(tr('input_placeholder'))
-        input_font = QFont("Ubuntu Mono", 13)
+        input_font = QFont(theme.mono_family(), 13)
         input_font.setStyleHint(QFont.Monospace)
         self.input_field.setFont(input_font)
         self.input_field.setCursorWidth(8)
@@ -530,8 +531,10 @@ class AgentTab(QWidget):
         # Przełącznik trybu myszy — NA KOŃCU paska, po „błyskawicy", ikoną w tej
         # samej konwencji co reszta. Ikona pokazuje AKTUALNY tryb: mysz+strzałki
         # (przewijanie) ↔ mysz+ramka (zaznaczanie). Klik przeskakuje między nimi.
-        self._icon_mouse_scroll = QIcon(str(ASSETS_DIR / "mouse-scroll.png"))
-        self._icon_mouse_select = QIcon(str(ASSETS_DIR / "mouse-select.png"))
+        # Kreskowe SVG w kolorze skórki (dawniej kolorowe PNG — odstawały od reszty
+        # paska). Kolor nadpisze main_window._apply_skin_icons przy zmianie skórki.
+        self._icon_mouse_scroll = icon_set.icon_by_name("mouse-scroll", theme.TEXT_DIM)
+        self._icon_mouse_select = icon_set.icon_by_name("mouse-select", theme.TEXT_DIM)
         self.mouse_mode_btn = QPushButton()
         self.mouse_mode_btn.setIconSize(PANEL_ICON_SIZE)
         self.mouse_mode_btn.setFixedSize(btn_size, btn_size)
@@ -542,8 +545,11 @@ class AgentTab(QWidget):
 
         layout.addStretch()
 
-        # Auto-read checkbox
+        # Auto-read checkbox — rysowany jako PRZEŁĄCZNIK (suwak), nie kwadracik.
+        # Nazwa obiektu jest haczykiem dla QSS w main_window._compose_main_qss;
+        # dzięki niej styl suwaka nie dotyka checkboxów w dialogach.
         self.auto_read_checkbox = QCheckBox(tr('auto_read'))
+        self.auto_read_checkbox.setObjectName('autoReadToggle')
         self.auto_read_checkbox.setChecked(self.auto_read_responses)
         self.auto_read_checkbox.stateChanged.connect(self._on_auto_read_changed)
         layout.addWidget(self.auto_read_checkbox)
