@@ -32,6 +32,7 @@ from core.mcp_manager import (
     STATUS_CONNECTED, STATUS_NEEDS_AUTH, STATUS_FAILED, STATUS_UNKNOWN,
 )
 from core.agent_mcp_settings import AgentMcpSettings
+from gui import theme
 from core.skills_manager import SkillsManager, Skill
 from core.agent_skills_settings import AgentSkillsSettings
 from config import (
@@ -42,23 +43,23 @@ from config import (
 
 CACHE_TTL_SECONDS = 30
 
-# Wspólny styl klikalnych "kafelków" w pasku statusu.
-_TILE_STYLE = """
-    QPushButton, QToolButton {
+# Wspólny styl klikalnych "kafelków" w pasku statusu (kolory z palety — gui/theme.py).
+_TILE_STYLE = f"""
+    QPushButton, QToolButton {{
         background: transparent;
-        color: #ffffff;
+        color: {theme.TEXT};
         border: 1px solid transparent;
-        border-radius: 4px;
+        border-radius: {theme.RADIUS_SM}px;
         padding: 2px 6px;
         font-size: 11px;
-    }
-    QPushButton:hover, QToolButton:hover {
-        background-color: #4a1a3a;
-        border-color: #6a2a5a;
-    }
-    QPushButton:disabled, QToolButton:disabled {
-        color: #888888;
-    }
+    }}
+    QPushButton:hover, QToolButton:hover {{
+        background-color: {theme.SURFACE_HOVER};
+        border-color: {theme.ACCENT};
+    }}
+    QPushButton:disabled, QToolButton:disabled {{
+        color: {theme.TEXT_FAINT};
+    }}
 """
 
 
@@ -191,13 +192,13 @@ class McpStatusWidget(QWidget):
         # nieklikalny — czysta informacja. Aktualizowany przez set_total_tokens()
         # wywoływane z MainWindow.
         self.total_tokens_label = QLabel("Σ 0")
-        self.total_tokens_label.setStyleSheet("""
-            QLabel {
-                color: #ffffff;
+        self.total_tokens_label.setStyleSheet(f"""
+            QLabel {{
+                color: {theme.TEXT};
                 font-size: 11px;
                 padding: 2px 6px;
                 font-weight: 500;
-            }
+            }}
         """)
         self.total_tokens_label.setToolTip(tr('total_tokens_tooltip'))
         # Stała zarezerwowana szerokość pod największą realną sumę — bez tego
@@ -398,7 +399,7 @@ class McpStatusWidget(QWidget):
                 if p.exists():
                     lines.append(f"  📄 {p.name} <span style='color:#888'>({p.parent})</span>")
                 else:
-                    lines.append(f"  ⚠️ {p.name} <span style='color:#cc4444'>({tr('file_missing')})</span>")
+                    lines.append(f"  ⚠️ {p.name} <span style='color:{theme.DANGER}'>({tr('file_missing')})</span>")
             if len(self._memory_files) > 30:
                 lines.append(f"  <i>{tr('and_n_more').format(n=len(self._memory_files) - 30)}</i>")
         else:

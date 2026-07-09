@@ -46,10 +46,14 @@ TEXT_DIM = '#9b93a8'    # drugorzędny (podpisy, nieaktywne zakładki)
 TEXT_FAINT = '#605868'  # monospace w pasku statusu, metadane
 
 # === Kolory znaczeniowe ===
+# Niosą ZNACZENIE, nie dekorację: czerwony = groźne/błąd, zielony = OK/zapisz,
+# żółty = uwaga, niebieski = informacja. Nigdy nie zastępuj ich akcentem —
+# „Usuń agenta" nie może wyglądać jak „Anuluj".
 DANGER = '#f0616d'
 DANGER_LIGHT = '#f0868f'
 SUCCESS = '#3ecf8e'
 WARNING = '#e6b053'
+ALERT = '#f08b4c'   # pośredni stopień ostrzeżenia (skala obciążenia RAM)
 INFO = '#5b9dd9'
 TEAL = '#4fb3a8'
 

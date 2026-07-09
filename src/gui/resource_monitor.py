@@ -22,6 +22,8 @@ from PyQt5.QtCore import Qt, QTimer, QSize, QRectF
 from PyQt5.QtGui import QPainter, QColor, QPen, QBrush, QFont
 from PyQt5.QtWidgets import QWidget
 
+from gui import theme
+
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import t as tr
@@ -35,10 +37,11 @@ except Exception:  # ImportError lub błąd ładowania natywnego rozszerzenia
     PSUTIL_AVAILABLE = False
 
 # Progi kolorów (procent obciążenia pamięci → kolor ikony).
-_GREEN = QColor(0x4a, 0xde, 0x80)
-_YELLOW = QColor(0xfa, 0xcc, 0x15)
-_ORANGE = QColor(0xfb, 0x92, 0x3c)
-_RED = QColor(0xef, 0x44, 0x44)
+# To SKALA OSTRZEGANIA, nie dekoracja — kolory znaczeniowe z palety, nigdy akcent.
+_GREEN = QColor(theme.SUCCESS)
+_YELLOW = QColor(theme.WARNING)
+_ORANGE = QColor(theme.ALERT)
+_RED = QColor(theme.DANGER)
 
 # Co ile odświeżać pomiar (ms). 2,5 s = na bieżąco, bez obciążania CPU.
 _REFRESH_MS = 2500

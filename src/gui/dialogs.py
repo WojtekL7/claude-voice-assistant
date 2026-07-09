@@ -31,6 +31,7 @@ from config import (
     NEW_AGENT_DEFAULT_MODEL, TTS_VOICE_CHOICES, tts_voice_label,
     t as tr, model_label, model_label_short,
 )
+from gui import theme
 from core.skills_manager import SkillsManager, Skill, SkillInstallError
 from core.agent_skills_settings import AgentSkillsSettings
 from core.mcp_manager import (
@@ -49,12 +50,12 @@ from core.mcp_templates import MCP_TEMPLATES, McpTemplate
 # jest tu dostępne dla Qt (brak aktywnej integracji portal/GTK dla okien plików),
 # więc dajemy czysty, neutralny zamiennik dopasowany do ciemnej aplikacji.
 DIALOG_COLORS = {
-    'bg': '#2e2e2e',          # tło okna (ciemnoszare)
-    'text': '#eeeeee',        # jasny tekst
-    'input_bg': '#1e1e1e',    # pola/listy (ciemniejsze)
-    'border': '#4a4a4a',      # neutralna ramka
-    'hover': '#3a3a3a',       # podświetlenie najechania
-    'selection': '#3584e4',   # zaznaczenie = niebieski akcent GNOME
+    'bg': f'{theme.SURFACE}',          # tło okna (ciemnoszare)
+    'text': f'{theme.TEXT}',        # jasny tekst
+    'input_bg': f'{theme.BG_WINDOW}',    # pola/listy (ciemniejsze)
+    'border': f'{theme.BORDER}',      # neutralna ramka
+    'hover': f'{theme.SURFACE_HOVER}',       # podświetlenie najechania
+    'selection': f'{theme.ACCENT}',   # zaznaczenie = niebieski akcent GNOME
 }
 
 
@@ -276,12 +277,12 @@ class MemoryProjectsDialog(QDialog):
 
         # Header
         header = QLabel(tr('dlg_mem_header'))
-        header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
+        header.setStyleSheet(f"font-size: 14px; font-weight: bold; color: {theme.TEXT};")
         layout.addWidget(header)
 
         # Description
         desc = QLabel(tr('dlg_mem_desc'))
-        desc.setStyleSheet("color: #aaaaaa; font-size: 11px;")
+        desc.setStyleSheet(f"color: {theme.TEXT_DIM}; font-size: 11px;")
         desc.setWordWrap(True)
         layout.addWidget(desc)
 
@@ -291,30 +292,30 @@ class MemoryProjectsDialog(QDialog):
         self.tree.setColumnWidth(0, 250)
         self.tree.setStyleSheet(f"""
             QTreeWidget {{
-                background-color: #2d0a1e;
-                color: #ffffff;
-                border: 1px solid #4a1a3a;
+                background-color: {theme.SURFACE_ALT};
+                color: {theme.TEXT};
+                border: 1px solid {theme.BORDER};
                 border-radius: 4px;
             }}
             QTreeWidget::item {{
                 padding: 5px;
             }}
             QTreeWidget::item:selected {{
-                background-color: #6a2a5a;
+                background-color: {theme.HOVER};
             }}
             QTreeWidget::indicator {{
                 width: 18px;
                 height: 18px;
-                border: 2px solid #4a1a3a;
+                border: 2px solid {theme.BORDER};
                 border-radius: 3px;
                 background-color: transparent;
             }}
             QTreeWidget::indicator:hover {{
-                border-color: #22c55e;
+                border-color: {theme.ACCENT};
             }}
             QTreeWidget::indicator:checked {{
-                background-color: #22c55e;
-                border-color: #22c55e;
+                background-color: {theme.ACCENT};
+                border-color: {theme.ACCENT};
                 border-radius: 3px;
                 image: url("{checkmark_path}");
             }}
@@ -329,8 +330,8 @@ class MemoryProjectsDialog(QDialog):
                 image: none;
             }}
             QHeaderView::section {{
-                background-color: #4a1a3a;
-                color: #ffffff;
+                background-color: {theme.BORDER};
+                color: {theme.TEXT};
                 padding: 5px;
                 border: none;
                 font-weight: bold;
@@ -361,7 +362,7 @@ class MemoryProjectsDialog(QDialog):
         project_btn_layout.addWidget(edit_btn)
 
         delete_btn = QPushButton(f"🗑️ {tr('dlg_delete')}")
-        delete_btn.setStyleSheet("QPushButton { color: #ef4444; }")
+        delete_btn.setStyleSheet(f"QPushButton {{ color: {theme.DANGER}; }}")
         delete_btn.clicked.connect(self._delete_selected)
         project_btn_layout.addWidget(delete_btn)
 
@@ -377,7 +378,7 @@ class MemoryProjectsDialog(QDialog):
 
         save_btn = QPushButton(tr('dlg_save'))
         save_btn.clicked.connect(self._save_and_close)
-        save_btn.setStyleSheet("QPushButton { color: #22c55e; font-weight: bold; }")
+        save_btn.setStyleSheet(f"QPushButton {{ color: {theme.SUCCESS}; font-weight: bold; }}")
         bottom_layout.addWidget(save_btn)
 
         layout.addLayout(bottom_layout)
@@ -581,14 +582,14 @@ class ProjectEditDialog(QDialog):
 
         self.name_input = QLineEdit(self.project.get('name', ''))
         self.name_input.setPlaceholderText(tr('dlg_proj_name_placeholder'))
-        self.name_input.setStyleSheet("""
-            QLineEdit {
-                background-color: #2d0a1e;
-                color: #ffffff;
-                border: 1px solid #4a1a3a;
+        self.name_input.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {theme.BG_INPUT};
+                color: {theme.TEXT};
+                border: 1px solid {theme.BORDER};
                 border-radius: 4px;
                 padding: 8px;
-            }
+            }}
         """)
         form.addRow(tr('dlg_proj_name_label'), self.name_input)
 
@@ -604,7 +605,7 @@ class ProjectEditDialog(QDialog):
 
         save_btn = QPushButton(tr('dlg_save'))
         save_btn.clicked.connect(self._save)
-        save_btn.setStyleSheet("QPushButton { color: #22c55e; }")
+        save_btn.setStyleSheet(f"QPushButton {{ color: {theme.SUCCESS}; }}")
         btn_layout.addWidget(save_btn)
 
         layout.addLayout(btn_layout)
@@ -631,8 +632,8 @@ class _StyledComboBox(QComboBox):
     """
 
     _POPUP_CONTAINER_STYLE = (
-        "background-color: #2d0a1e;"
-        "border: 1px solid #4a1a3a;"
+        f"background-color: {theme.SURFACE_ALT};"
+        f"border: 1px solid {theme.BORDER};"
         "border-radius: 4px;"
     )
 
@@ -709,73 +710,73 @@ class AgentConfigDialog(QDialog):
 
     @staticmethod
     def _input_style() -> str:
-        return """
-            QLineEdit {
-                background-color: #2d0a1e;
-                color: #ffffff;
-                border: 1px solid #4a1a3a;
+        return f"""
+            QLineEdit {{
+                background-color: {theme.BG_INPUT};
+                color: {theme.TEXT};
+                border: 1px solid {theme.BORDER};
                 border-radius: 4px;
                 padding: 8px;
-            }
+            }}
         """
 
     @staticmethod
     def _section_button_style() -> str:
         """Styl przycisków „Zarządzaj lokalnymi skillami/MCP"."""
-        return """
-            QPushButton {
-                background-color: #2d0a1e;
-                color: #ffffff;
-                border: 1px solid #4a1a3a;
+        return f"""
+            QPushButton {{
+                background-color: {theme.SURFACE_ALT};
+                color: {theme.TEXT};
+                border: 1px solid {theme.BORDER};
                 border-radius: 4px;
                 padding: 8px;
                 text-align: left;
-            }
-            QPushButton:hover:enabled {
-                border-color: #22c55e;
-            }
-            QPushButton:disabled {
-                color: #777777;
-            }
+            }}
+            QPushButton:hover:enabled {{
+                border-color: {theme.ACCENT};
+            }}
+            QPushButton:disabled {{
+                color: {theme.TEXT_FAINT};
+            }}
         """
 
     @staticmethod
     def _list_style() -> str:
-        return """
-            QListWidget {
-                background-color: #2d0a1e;
-                color: #ffffff;
-                border: 1px solid #4a1a3a;
+        return f"""
+            QListWidget {{
+                background-color: {theme.SURFACE_ALT};
+                color: {theme.TEXT};
+                border: 1px solid {theme.BORDER};
                 border-radius: 4px;
-            }
-            QListWidget::item {
+            }}
+            QListWidget::item {{
                 padding: 4px;
-                border-bottom: 1px solid #3a1428;
-            }
-            QListWidget::item:selected {
-                background-color: #4a1a3a;
-            }
+                border-bottom: 1px solid {theme.BORDER_SUBTLE};
+            }}
+            QListWidget::item:selected {{
+                background-color: {theme.SURFACE_HOVER};
+            }}
         """
 
     def _checkbox_style(self) -> str:
         return f"""
             QCheckBox {{
-                color: #ffffff;
+                color: {theme.TEXT};
                 spacing: 8px;
             }}
             QCheckBox::indicator {{
                 width: 18px;
                 height: 18px;
-                border: 2px solid #4a1a3a;
+                border: 2px solid {theme.BORDER};
                 border-radius: 3px;
                 background-color: transparent;
             }}
             QCheckBox::indicator:hover {{
-                border-color: #22c55e;
+                border-color: {theme.ACCENT};
             }}
             QCheckBox::indicator:checked {{
-                background-color: #22c55e;
-                border-color: #22c55e;
+                background-color: {theme.ACCENT};
+                border-color: {theme.ACCENT};
                 border-radius: 3px;
                 image: url("{self._checkmark_path}");
             }}
@@ -791,36 +792,36 @@ class AgentConfigDialog(QDialog):
 
         # Header
         header = QLabel(tr('dlg_agent_config_header'))
-        header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
+        header.setStyleSheet(f"font-size: 14px; font-weight: bold; color: {theme.TEXT};")
         main_layout.addWidget(header)
 
         # Tabs
         self.tabs = QTabWidget()
-        self.tabs.setStyleSheet("""
-            QTabWidget::pane {
-                border: 1px solid #4a1a3a;
-                background: #2d0a1e;
+        self.tabs.setStyleSheet(f"""
+            QTabWidget::pane {{
+                border: 1px solid {theme.BORDER};
+                background: {theme.SURFACE_ALT};
                 border-radius: 4px;
                 top: -1px;
-            }
-            QTabBar::tab {
-                background: #1d0518;
-                color: #cccccc;
+            }}
+            QTabBar::tab {{
+                background: {theme.BG_WINDOW};
+                color: {theme.TEXT_DIM};
                 padding: 8px 14px;
-                border: 1px solid #4a1a3a;
+                border: 1px solid {theme.BORDER};
                 border-bottom: none;
                 border-top-left-radius: 4px;
                 border-top-right-radius: 4px;
                 margin-right: 2px;
-            }
-            QTabBar::tab:selected {
-                background: #2d0a1e;
-                color: #ffffff;
-            }
-            QTabBar::tab:hover:!selected {
-                background: #4a1a3a;
-                color: #ffffff;
-            }
+            }}
+            QTabBar::tab:selected {{
+                background: {theme.SURFACE_ALT};
+                color: {theme.TEXT};
+            }}
+            QTabBar::tab:hover:!selected {{
+                background: {theme.SURFACE_HOVER};
+                color: {theme.TEXT};
+            }}
         """)
         self.tabs.addTab(self._build_tab_basic(), tr('dlg_agent_tab_basic'))
         self.tabs.addTab(self._build_tab_memory(), tr('dlg_agent_tab_memory'))
@@ -842,12 +843,12 @@ class AgentConfigDialog(QDialog):
 
         save_btn = QPushButton(tr('dlg_save'))
         save_btn.clicked.connect(self._save)
-        save_btn.setStyleSheet("QPushButton { color: #22c55e; font-weight: bold; }")
+        save_btn.setStyleSheet(f"QPushButton {{ color: {theme.SUCCESS}; font-weight: bold; }}")
         btn_layout.addWidget(save_btn)
 
         save_run_btn = QPushButton(tr('dlg_agent_save_run'))
         save_run_btn.clicked.connect(self._save_and_run)
-        save_run_btn.setStyleSheet("QPushButton { color: #22c55e; font-weight: bold; }")
+        save_run_btn.setStyleSheet(f"QPushButton {{ color: {theme.SUCCESS}; font-weight: bold; }}")
         btn_layout.addWidget(save_run_btn)
 
         main_layout.addLayout(btn_layout)
@@ -891,7 +892,7 @@ class AgentConfigDialog(QDialog):
         self.icon_preview.setCursor(Qt.PointingHandCursor)
         self.icon_preview.setToolTip(tr('dlg_agent_icon_pick_tooltip'))
         self.icon_preview.setStyleSheet(
-            "background:#2d0a1e;border:1px solid #4a1a3a;border-radius:4px;font-size:20px;")
+            f"background:{theme.SURFACE_ALT};border:1px solid {theme.BORDER};border-radius:4px;font-size:20px;")
         self.icon_preview.clicked.connect(self._open_icon_palette)
         icon_layout.addWidget(self.icon_preview)
         self.icon_emoji_input = QLineEdit()
@@ -910,7 +911,7 @@ class AgentConfigDialog(QDialog):
         icon_layout.addWidget(icon_clear_btn)
         form.addRow(tr('dlg_agent_icon_label'), icon_layout)
         icon_hint = QLabel(tr('dlg_agent_icon_hint'))
-        icon_hint.setStyleSheet("color: #888888; font-size: 11px;")
+        icon_hint.setStyleSheet(f"color: {theme.TEXT_FAINT}; font-size: 11px;")
         icon_hint.setWordWrap(True)
         form.addRow("", icon_hint)
         self._update_icon_preview()
@@ -943,7 +944,7 @@ class AgentConfigDialog(QDialog):
         color_layout.addWidget(color_clear_btn)
         form.addRow(tr('dlg_agent_color_label'), color_layout)
         color_hint = QLabel(tr('dlg_agent_color_hint'))
-        color_hint.setStyleSheet("color: #888888; font-size: 11px;")
+        color_hint.setStyleSheet(f"color: {theme.TEXT_FAINT}; font-size: 11px;")
         color_hint.setWordWrap(True)
         form.addRow("", color_hint)
         self._update_color_preview()
@@ -970,7 +971,7 @@ class AgentConfigDialog(QDialog):
         voice_layout.addWidget(self.voice_more_btn)
         form.addRow(tr('dlg_agent_voice_label'), voice_layout)
         voice_hint = QLabel(tr('dlg_agent_voice_hint'))
-        voice_hint.setStyleSheet("color: #888888; font-size: 11px;")
+        voice_hint.setStyleSheet(f"color: {theme.TEXT_FAINT}; font-size: 11px;")
         voice_hint.setWordWrap(True)
         form.addRow("", voice_hint)
         self._voices_loaded.connect(self._on_voices_loaded)
@@ -985,33 +986,33 @@ class AgentConfigDialog(QDialog):
         self.model_combo.setView(model_view)
         self.model_combo.setStyleSheet(f"""
             QComboBox {{
-                background-color: #2d0a1e;
-                color: #ffffff;
-                border: 1px solid #4a1a3a;
+                background-color: {theme.BG_INPUT};
+                color: {theme.TEXT};
+                border: 1px solid {theme.BORDER};
                 border-radius: 4px;
                 padding: 6px 36px 6px 10px;
                 combobox-popup: 0;
             }}
-            QComboBox:hover {{ border-color: #22c55e; }}
-            QComboBox:on {{ border-color: #22c55e; }}
+            QComboBox:hover {{ border-color: {theme.ACCENT}; }}
+            QComboBox:on {{ border-color: {theme.ACCENT}; }}
             QComboBox::drop-down {{
                 subcontrol-origin: padding;
                 subcontrol-position: top right;
                 width: 28px;
-                border-left: 1px solid #4a1a3a;
-                background-color: #3a0f28;
+                border-left: 1px solid {theme.BORDER};
+                background-color: {theme.SURFACE};
                 border-top-right-radius: 4px;
                 border-bottom-right-radius: 4px;
             }}
-            QComboBox::drop-down:hover {{ background-color: #4a1a3a; }}
+            QComboBox::drop-down:hover {{ background-color: {theme.SURFACE}; }}
             QComboBox::down-arrow {{
                 image: url("{chevron_path}");
                 width: 10px;
                 height: 6px;
             }}
             QComboBox QListView {{
-                background-color: #2d0a1e;
-                color: #ffffff;
+                background-color: {theme.SURFACE_ALT};
+                color: {theme.TEXT};
                 border: none;
                 outline: 0;
                 padding: 0;
@@ -1022,8 +1023,8 @@ class AgentConfigDialog(QDialog):
                 border: none;
             }}
             QComboBox QListView::item:selected {{
-                background-color: #4a1a3a;
-                color: #ffffff;
+                background-color: {theme.SURFACE_HOVER};
+                color: {theme.TEXT};
             }}
         """)
         for key in CLAUDE_MODELS.keys():
@@ -1036,7 +1037,7 @@ class AgentConfigDialog(QDialog):
         form.addRow(tr('dlg_agent_model_label'), self.model_combo)
 
         model_hint = QLabel(tr('dlg_agent_model_hint'))
-        model_hint.setStyleSheet("color: #888888; font-size: 11px;")
+        model_hint.setStyleSheet(f"color: {theme.TEXT_FAINT}; font-size: 11px;")
         form.addRow("", model_hint)
 
         layout.addLayout(form)
@@ -1065,11 +1066,11 @@ class AgentConfigDialog(QDialog):
         layout.setContentsMargins(12, 16, 12, 12)
 
         memory_label = QLabel(tr('dlg_agent_memory_files_label'))
-        memory_label.setStyleSheet("color: #ffffff; font-weight: bold;")
+        memory_label.setStyleSheet(f"color: {theme.TEXT}; font-weight: bold;")
         layout.addWidget(memory_label)
 
         memory_info = QLabel(tr('dlg_agent_memory_info'))
-        memory_info.setStyleSheet("color: #aaaaaa; font-size: 11px;")
+        memory_info.setStyleSheet(f"color: {theme.TEXT_DIM}; font-size: 11px;")
         memory_info.setWordWrap(True)
         layout.addWidget(memory_info)
 
@@ -1082,17 +1083,17 @@ class AgentConfigDialog(QDialog):
         layout.addLayout(self.memory_files_container)
 
         add_file_btn = QPushButton(tr('dlg_agent_add_file'))
-        add_file_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #2d0a1e;
-                color: #22c55e;
-                border: 1px dashed #4a1a3a;
+        add_file_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {theme.SURFACE_ALT};
+                color: {theme.SUCCESS};
+                border: 1px dashed {theme.BORDER};
                 border-radius: 4px;
                 padding: 8px;
-            }
-            QPushButton:hover {
-                border-color: #22c55e;
-            }
+            }}
+            QPushButton:hover {{
+                border-color: {theme.ACCENT};
+            }}
         """)
         add_file_btn.clicked.connect(self._add_memory_file)
         layout.addWidget(add_file_btn)
@@ -1109,11 +1110,11 @@ class AgentConfigDialog(QDialog):
 
         # === Lokalne skille agenta ===
         skills_label = QLabel(tr('dlg_agent_skills_label'))
-        skills_label.setStyleSheet("color: #ffffff; font-weight: bold;")
+        skills_label.setStyleSheet(f"color: {theme.TEXT}; font-weight: bold;")
         layout.addWidget(skills_label)
 
         skills_info = QLabel(tr('dlg_agent_skills_info'))
-        skills_info.setStyleSheet("color: #aaaaaa; font-size: 11px;")
+        skills_info.setStyleSheet(f"color: {theme.TEXT_DIM}; font-size: 11px;")
         skills_info.setWordWrap(True)
         layout.addWidget(skills_info)
 
@@ -1125,16 +1126,16 @@ class AgentConfigDialog(QDialog):
 
         # === Wyłączanie globalnych skilli ===
         disable_skills_label = QLabel(tr('dlg_agent_disable_skills_label'))
-        disable_skills_label.setStyleSheet("color: #ffffff; margin-top: 6px;")
+        disable_skills_label.setStyleSheet(f"color: {theme.TEXT}; margin-top: 6px;")
         layout.addWidget(disable_skills_label)
 
         disable_skills_info = QLabel(tr('dlg_agent_disable_skills_info'))
-        disable_skills_info.setStyleSheet("color: #aaaaaa; font-size: 11px;")
+        disable_skills_info.setStyleSheet(f"color: {theme.TEXT_DIM}; font-size: 11px;")
         disable_skills_info.setWordWrap(True)
         layout.addWidget(disable_skills_info)
 
         self.global_skills_count_label = QLabel("")
-        self.global_skills_count_label.setStyleSheet("color: #cccccc; font-size: 11px;")
+        self.global_skills_count_label.setStyleSheet(f"color: {theme.TEXT_DIM}; font-size: 11px;")
         layout.addWidget(self.global_skills_count_label)
 
         self.global_skills_list = QListWidget()
@@ -1157,11 +1158,11 @@ class AgentConfigDialog(QDialog):
 
         # === Lokalne MCP agenta ===
         mcp_label = QLabel(tr('dlg_agent_mcp_label'))
-        mcp_label.setStyleSheet("color: #ffffff; font-weight: bold;")
+        mcp_label.setStyleSheet(f"color: {theme.TEXT}; font-weight: bold;")
         layout.addWidget(mcp_label)
 
         mcp_info = QLabel(tr('dlg_agent_mcp_info'))
-        mcp_info.setStyleSheet("color: #aaaaaa; font-size: 11px;")
+        mcp_info.setStyleSheet(f"color: {theme.TEXT_DIM}; font-size: 11px;")
         mcp_info.setWordWrap(True)
         layout.addWidget(mcp_info)
 
@@ -1173,16 +1174,16 @@ class AgentConfigDialog(QDialog):
 
         # === Wyłączanie globalnych MCP ===
         disable_mcp_label = QLabel(tr('dlg_agent_disable_mcp_label'))
-        disable_mcp_label.setStyleSheet("color: #ffffff; margin-top: 6px;")
+        disable_mcp_label.setStyleSheet(f"color: {theme.TEXT}; margin-top: 6px;")
         layout.addWidget(disable_mcp_label)
 
         disable_mcp_info = QLabel(tr('dlg_agent_disable_mcp_info'))
-        disable_mcp_info.setStyleSheet("color: #aaaaaa; font-size: 11px;")
+        disable_mcp_info.setStyleSheet(f"color: {theme.TEXT_DIM}; font-size: 11px;")
         disable_mcp_info.setWordWrap(True)
         layout.addWidget(disable_mcp_info)
 
         self.global_mcp_count_label = QLabel("")
-        self.global_mcp_count_label.setStyleSheet("color: #cccccc; font-size: 11px;")
+        self.global_mcp_count_label.setStyleSheet(f"color: {theme.TEXT_DIM}; font-size: 11px;")
         layout.addWidget(self.global_mcp_count_label)
 
         self.global_mcp_list = QListWidget()
@@ -1212,20 +1213,20 @@ class AgentConfigDialog(QDialog):
         nie ściska, emoji widoczne. Wybór ustawia ikonę i zamyka popup."""
         dlg = QDialog(self)
         dlg.setWindowTitle(tr('dlg_agent_icon_label'))
-        dlg.setStyleSheet("QDialog{background:#1a0b14;}")
+        dlg.setStyleSheet(f"QDialog{{background:{theme.BG_WINDOW};}}")
         outer = QVBoxLayout(dlg)
         outer.setContentsMargins(16, 16, 16, 12)
         outer.setSpacing(8)
 
         content = QWidget()
-        content.setStyleSheet("background:#1a0b14;")
+        content.setStyleSheet(f"background:{theme.BG_WINDOW};")
         v = QVBoxLayout(content)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(6)
         cols = 12
         for cat_key, emojis in AGENT_ICON_PALETTE:
             lab = QLabel(tr(cat_key))
-            lab.setStyleSheet("color:#c084fc;font-size:11px;font-weight:bold;margin-top:4px;")
+            lab.setStyleSheet(f"color:{theme.ACCENT_LIGHT};font-size:11px;font-weight:bold;margin-top:4px;")
             v.addWidget(lab)
             grid = QGridLayout()
             grid.setSpacing(5)
@@ -1237,9 +1238,9 @@ class AgentConfigDialog(QDialog):
                 cell.setCursor(Qt.PointingHandCursor)
                 cell.setToolTip(emoji)
                 cell.setStyleSheet(
-                    "QLabel{background:#2d0a1e;border:1px solid #4a1a3a;"
+                    f"QLabel{{background:{theme.SURFACE_ALT};border:1px solid {theme.BORDER};"
                     "border-radius:8px;font-size:24px;}"
-                    "QLabel:hover{border:2px solid #22c55e;background:#3a0f28;}")
+                    f"QLabel:hover{{border:2px solid {theme.ACCENT};background:{theme.SURFACE};}}")
                 cell.clicked.connect(
                     lambda em=emoji: (self._set_emoji_icon(em), dlg.accept()))
                 grid.addWidget(cell, i // cols, i % cols)
@@ -1254,14 +1255,14 @@ class AgentConfigDialog(QDialog):
         scroll.setWidget(content)
         scroll.setMinimumWidth(560)
         scroll.setMinimumHeight(420)
-        scroll.setStyleSheet("QScrollArea{background:#1a0b14;border:none;}")
-        scroll.viewport().setStyleSheet("background:#1a0b14;")
+        scroll.setStyleSheet(f"QScrollArea{{background:{theme.BG_WINDOW};border:none;}}")
+        scroll.viewport().setStyleSheet(f"background:{theme.BG_WINDOW};")
         outer.addWidget(scroll)
 
         close_btn = QPushButton(tr('dlg_close'))
         close_btn.setStyleSheet(
-            "QPushButton{background:#2d0a1e;color:#ece7f5;border:1px solid #4a1a3a;"
-            "border-radius:6px;padding:7px 18px;}QPushButton:hover{border-color:#22c55e;}")
+            f"QPushButton{{background:{theme.SURFACE_ALT};color:{theme.TEXT};border:1px solid {theme.BORDER};"
+            f"border-radius:6px;padding:7px 18px;}}QPushButton:hover{{border-color:{theme.ACCENT};}}")
         close_btn.clicked.connect(dlg.reject)
         outer.addWidget(close_btn, alignment=Qt.AlignRight)
         dlg.exec_()
@@ -1313,7 +1314,7 @@ class AgentConfigDialog(QDialog):
 
     def _open_color_dialog(self):
         """Systemowy wybór koloru (pełna paleta). Pusty wybór = bez zmian."""
-        initial = QColor(self.tab_color) if self.tab_color else QColor("#8b5cf6")
+        initial = QColor(self.tab_color) if self.tab_color else QColor(theme.ACCENT)
         color = QColorDialog.getColor(initial, self, tr('dlg_agent_color_label'))
         if color.isValid():
             self._set_tab_color(color.name())
@@ -1335,7 +1336,7 @@ class AgentConfigDialog(QDialog):
         else:
             self.color_preview.setText("∅")
             self.color_preview.setStyleSheet(
-                "background:#2d0a1e;color:#888888;border:1px solid #4a1a3a;"
+                f"background:{theme.SURFACE_ALT};color:{theme.TEXT_FAINT};border:1px solid {theme.BORDER};"
                 "border-radius:4px;font-size:16px;")
             self.color_preview.setAlignment(Qt.AlignCenter)
 
@@ -1346,27 +1347,27 @@ class AgentConfigDialog(QDialog):
         """Ciemny styl QComboBox + rozwijanej listy (jasny tekst na ciemnym tle)."""
         return f"""
             QComboBox {{
-                background-color: #2d0a1e; color: #ffffff;
-                border: 1px solid #4a1a3a; border-radius: 4px;
+                background-color: {theme.BG_INPUT}; color: {theme.TEXT};
+                border: 1px solid {theme.BORDER}; border-radius: 4px;
                 padding: 6px 36px 6px 10px; combobox-popup: 0;
             }}
-            QComboBox:hover {{ border-color: #22c55e; }}
-            QComboBox:on {{ border-color: #22c55e; }}
+            QComboBox:hover {{ border-color: {theme.ACCENT}; }}
+            QComboBox:on {{ border-color: {theme.ACCENT}; }}
             QComboBox::drop-down {{
                 subcontrol-origin: padding; subcontrol-position: top right;
-                width: 28px; border-left: 1px solid #4a1a3a;
-                background-color: #3a0f28;
+                width: 28px; border-left: 1px solid {theme.BORDER};
+                background-color: {theme.SURFACE};
                 border-top-right-radius: 4px; border-bottom-right-radius: 4px;
             }}
-            QComboBox::drop-down:hover {{ background-color: #4a1a3a; }}
+            QComboBox::drop-down:hover {{ background-color: {theme.SURFACE}; }}
             QComboBox::down-arrow {{ image: url("{chevron_path}"); width: 10px; height: 6px; }}
             QComboBox QAbstractItemView {{
-                background-color: #2d0a1e; color: #ffffff;
-                border: 1px solid #4a1a3a; outline: 0;
-                selection-background-color: #4a1a3a; selection-color: #ffffff;
+                background-color: {theme.SURFACE_ALT}; color: {theme.TEXT};
+                border: 1px solid {theme.BORDER}; outline: 0;
+                selection-background-color: {theme.BORDER}; selection-color: {theme.TEXT};
             }}
             QComboBox QListView::item {{ padding: 8px 12px; min-height: 26px; border: none; }}
-            QComboBox QListView::item:selected {{ background-color: #4a1a3a; color: #ffffff; }}
+            QComboBox QListView::item:selected {{ background-color: {theme.SURFACE_HOVER}; color: {theme.TEXT}; }}
         """
 
     def _populate_voice_combo(self, choices, selected=None):
@@ -1434,7 +1435,7 @@ class AgentConfigDialog(QDialog):
         języka z FriendlyName, kodzie locale lub imieniu głosu)."""
         dlg = QDialog(self)
         dlg.setWindowTitle(tr('dlg_agent_voice_search_title'))
-        dlg.setStyleSheet("QDialog{background:#1a0b14;} QLabel{color:#c9c2d6;}")
+        dlg.setStyleSheet(f"QDialog{{background:{theme.BG_WINDOW};}} QLabel{{color:{theme.TEXT};}}")
         dlg.setMinimumSize(560, 520)
         v = QVBoxLayout(dlg)
         v.setContentsMargins(16, 16, 16, 12)
@@ -1443,19 +1444,19 @@ class AgentConfigDialog(QDialog):
         search = QLineEdit()
         search.setPlaceholderText(tr('dlg_agent_voice_search_ph'))
         search.setStyleSheet(
-            "QLineEdit{background:#2d0a1e;color:#fff;border:1px solid #4a1a3a;"
+            f"QLineEdit{{background:{theme.BG_INPUT};color:#fff;border:1px solid {theme.BORDER};"
             "border-radius:6px;padding:8px;}")
         v.addWidget(search)
 
         count_lbl = QLabel("")
-        count_lbl.setStyleSheet("color:#888;font-size:11px;")
+        count_lbl.setStyleSheet(f"color:{theme.TEXT_FAINT};font-size:11px;")
         v.addWidget(count_lbl)
 
         listw = QListWidget()
         listw.setStyleSheet(
-            "QListWidget{background:#2d0a1e;color:#fff;border:1px solid #4a1a3a;border-radius:6px;}"
+            f"QListWidget{{background:{theme.SURFACE_ALT};color:#fff;border:1px solid {theme.BORDER};border-radius:6px;}}"
             "QListWidget::item{padding:7px 10px;}"
-            "QListWidget::item:selected{background:#4a1a3a;color:#fff;}")
+            f"QListWidget::item:selected{{background:{theme.SURFACE_HOVER};color:#fff;}}")
         v.addWidget(listw, stretch=1)
 
         # Pozycje: (etykieta, voice_id, tekst-do-wyszukania).
@@ -1494,15 +1495,15 @@ class AgentConfigDialog(QDialog):
         btns.addStretch()
         cancel = QPushButton(tr('dlg_cancel'))
         cancel.setStyleSheet(
-            "QPushButton{background:#2d0a1e;color:#ece7f5;border:1px solid #4a1a3a;"
-            "border-radius:6px;padding:7px 16px;}QPushButton:hover{border-color:#22c55e;}")
+            f"QPushButton{{background:{theme.SURFACE_ALT};color:{theme.TEXT};border:1px solid {theme.BORDER};"
+            f"border-radius:6px;padding:7px 16px;}}QPushButton:hover{{border-color:{theme.ACCENT};}}")
         cancel.clicked.connect(dlg.reject)
         btns.addWidget(cancel)
         ok = QPushButton(tr('dlg_save'))
         ok.setStyleSheet(
-            "QPushButton{background:#2d0a1e;color:#22c55e;font-weight:bold;"
-            "border:1px solid #4a1a3a;border-radius:6px;padding:7px 16px;}"
-            "QPushButton:hover{border-color:#22c55e;}")
+            f"QPushButton{{background:{theme.SURFACE_ALT};color:{theme.SUCCESS};font-weight:bold;"
+            f"border:1px solid {theme.BORDER};border-radius:6px;padding:7px 16px;}}"
+            f"QPushButton:hover{{border-color:{theme.ACCENT};}}")
         ok.clicked.connect(dlg.accept)
         btns.addWidget(ok)
         v.addLayout(btns)
@@ -1663,12 +1664,12 @@ class AgentConfigDialog(QDialog):
         if settings is None:
             self.global_skills_count_label.setText(tr('dlg_agent_skills_count_no_dir'))
             self.global_skills_count_label.setStyleSheet(
-                "color: #f59e0b; font-size: 11px;"
+                f"color: {theme.WARNING}; font-size: 11px;"
             )
         elif not global_skills:
             self.global_skills_count_label.setText(tr('dlg_agent_skills_count_none'))
             self.global_skills_count_label.setStyleSheet(
-                "color: #cccccc; font-size: 11px;"
+                f"color: {theme.TEXT_DIM}; font-size: 11px;"
             )
         else:
             disabled_count = sum(1 for s in global_skills if s.name in disabled_set)
@@ -1676,7 +1677,7 @@ class AgentConfigDialog(QDialog):
                 tr('dlg_agent_disabled_of_global').format(disabled=disabled_count, total=len(global_skills))
             )
             self.global_skills_count_label.setStyleSheet(
-                "color: #cccccc; font-size: 11px;"
+                f"color: {theme.TEXT_DIM}; font-size: 11px;"
             )
 
         # Populate list
@@ -1709,7 +1710,7 @@ class AgentConfigDialog(QDialog):
             text_v.setSpacing(2)
             name_l = QLabel(skill.name)
             name_l.setStyleSheet(
-                "color: #ffffff; font-size: 13px; font-weight: bold; "
+                f"color: {theme.TEXT}; font-size: 13px; font-weight: bold; "
                 "background: transparent; border: none;"
             )
             text_v.addWidget(name_l)
@@ -1718,7 +1719,7 @@ class AgentConfigDialog(QDialog):
             short_description = self._shorten_skill_description(full_description)
             desc_l = QLabel(short_description)
             desc_l.setStyleSheet(
-                "color: #aaaaaa; font-size: 11px; background: transparent; border: none;"
+                f"color: {theme.TEXT_DIM}; font-size: 11px; background: transparent; border: none;"
             )
             desc_l.setWordWrap(True)
             desc_l.setToolTip(full_description)
@@ -1854,16 +1855,16 @@ class AgentConfigDialog(QDialog):
 
         if settings is None:
             self.global_mcp_count_label.setText(tr('dlg_agent_skills_count_no_dir'))
-            self.global_mcp_count_label.setStyleSheet("color: #f59e0b; font-size: 11px;")
+            self.global_mcp_count_label.setStyleSheet(f"color: {theme.WARNING}; font-size: 11px;")
         elif not global_mcps:
             self.global_mcp_count_label.setText(tr('dlg_agent_mcp_count_none'))
-            self.global_mcp_count_label.setStyleSheet("color: #cccccc; font-size: 11px;")
+            self.global_mcp_count_label.setStyleSheet(f"color: {theme.TEXT_DIM}; font-size: 11px;")
         else:
             disabled_count = sum(1 for s in global_mcps if s.sanitized_name in disabled_set)
             self.global_mcp_count_label.setText(
                 tr('dlg_agent_disabled_of_global').format(disabled=disabled_count, total=len(global_mcps))
             )
-            self.global_mcp_count_label.setStyleSheet("color: #cccccc; font-size: 11px;")
+            self.global_mcp_count_label.setStyleSheet(f"color: {theme.TEXT_DIM}; font-size: 11px;")
 
         if not global_mcps:
             return
@@ -1892,10 +1893,10 @@ class AgentConfigDialog(QDialog):
             text_v = QVBoxLayout()
             text_v.setSpacing(2)
             scope_label = _mcp_scope_label(srv.scope)
-            name_l = QLabel(f"{srv.name}  <span style='color:#888;'>[{scope_label}]</span>")
+            name_l = QLabel(f"{srv.name}  <span style='color:{theme.TEXT_FAINT};'>[{scope_label}]</span>")
             name_l.setTextFormat(Qt.RichText)
             name_l.setStyleSheet(
-                "color: #ffffff; font-size: 13px; font-weight: bold; "
+                f"color: {theme.TEXT}; font-size: 13px; font-weight: bold; "
                 "background: transparent; border: none;"
             )
             text_v.addWidget(name_l)
@@ -1903,7 +1904,7 @@ class AgentConfigDialog(QDialog):
             target_text = srv.target if len(srv.target) <= 80 else srv.target[:77] + "..."
             desc_l = QLabel(target_text)
             desc_l.setStyleSheet(
-                "color: #aaaaaa; font-size: 11px; background: transparent; border: none;"
+                f"color: {theme.TEXT_DIM}; font-size: 11px; background: transparent; border: none;"
             )
             desc_l.setWordWrap(True)
             desc_l.setToolTip(srv.target)
@@ -1938,12 +1939,12 @@ class AgentConfigDialog(QDialog):
     def _add_memory_file_chip(self, file_path: str):
         """Add a file chip to the memory files list."""
         chip = QFrame()
-        chip.setStyleSheet("""
-            QFrame {
-                background-color: #2d0a1e;
-                border: 1px solid #4a1a3a;
+        chip.setStyleSheet(f"""
+            QFrame {{
+                background-color: {theme.SURFACE_ALT};
+                border: 1px solid {theme.BORDER};
                 border-radius: 4px;
-            }
+            }}
         """)
         chip_layout = QHBoxLayout(chip)
         chip_layout.setContentsMargins(8, 4, 4, 4)
@@ -1952,25 +1953,25 @@ class AgentConfigDialog(QDialog):
         # File icon and name
         file_name = Path(file_path).name
         label = QLabel(f"📄 {file_name}")
-        label.setStyleSheet("color: #ffffff; font-size: 12px; border: none;")
+        label.setStyleSheet(f"color: {theme.TEXT}; font-size: 12px; border: none;")
         label.setToolTip(file_path)  # Show full path on hover
         chip_layout.addWidget(label, stretch=1)
 
         # Remove button
         remove_btn = QPushButton("✕")
         remove_btn.setFixedSize(24, 24)
-        remove_btn.setStyleSheet("""
-            QPushButton {
+        remove_btn.setStyleSheet(f"""
+            QPushButton {{
                 background-color: transparent;
-                color: #ef4444;
+                color: {theme.DANGER};
                 border: none;
                 font-size: 14px;
-            }
-            QPushButton:hover {
-                color: #ffffff;
-                background-color: #ef4444;
+            }}
+            QPushButton:hover {{
+                color: {theme.TEXT};
+                background-color: {theme.DANGER};
                 border-radius: 12px;
-            }
+            }}
         """)
         remove_btn.clicked.connect(lambda: self._remove_memory_file(file_path, chip))
         chip_layout.addWidget(remove_btn)
@@ -2028,12 +2029,12 @@ class AgentsManagerDialog(QDialog):
 
         # Header
         header = QLabel(tr('dlg_agents_header'))
-        header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
+        header.setStyleSheet(f"font-size: 14px; font-weight: bold; color: {theme.TEXT};")
         layout.addWidget(header)
 
         # Description
         desc = QLabel(tr('dlg_agents_desc'))
-        desc.setStyleSheet("color: #aaaaaa; font-size: 11px;")
+        desc.setStyleSheet(f"color: {theme.TEXT_DIM}; font-size: 11px;")
         desc.setWordWrap(True)
         layout.addWidget(desc)
 
@@ -2047,20 +2048,20 @@ class AgentsManagerDialog(QDialog):
         # long names with "...", hiding the second line entirely.
         self.list_widget.setWordWrap(True)
         self.list_widget.setTextElideMode(Qt.ElideNone)
-        self.list_widget.setStyleSheet("""
-            QListWidget {
-                background-color: #2d0a1e;
-                color: #ffffff;
-                border: 1px solid #4a1a3a;
+        self.list_widget.setStyleSheet(f"""
+            QListWidget {{
+                background-color: {theme.SURFACE_ALT};
+                color: {theme.TEXT};
+                border: 1px solid {theme.BORDER};
                 border-radius: 4px;
-            }
-            QListWidget::item {
+            }}
+            QListWidget::item {{
                 padding: 10px;
-                border-bottom: 1px solid #4a1a3a;
-            }
-            QListWidget::item:selected {
-                background-color: #6a2a5a;
-            }
+                border-bottom: 1px solid {theme.BORDER};
+            }}
+            QListWidget::item:selected {{
+                background-color: {theme.HOVER};
+            }}
         """)
         self._populate_list()
         list_layout.addWidget(self.list_widget, stretch=1)
@@ -2081,14 +2082,14 @@ class AgentsManagerDialog(QDialog):
 
         self.run_btn = QPushButton(tr('dlg_agents_run'))
         self.run_btn.clicked.connect(self._run_agent)
-        self.run_btn.setStyleSheet("QPushButton { color: #3b82f6; }")
+        self.run_btn.setStyleSheet(f"QPushButton {{ color: {theme.INFO}; }}")
         btn_layout.addWidget(self.run_btn)
 
         btn_layout.addSpacing(15)
 
         self.add_btn = QPushButton(tr('dlg_agents_add'))
         self.add_btn.clicked.connect(self._add_agent)
-        self.add_btn.setStyleSheet("QPushButton { color: #22c55e; }")
+        self.add_btn.setStyleSheet(f"QPushButton {{ color: {theme.SUCCESS}; }}")
         btn_layout.addWidget(self.add_btn)
 
         self.edit_btn = QPushButton(tr('dlg_agents_edit'))
@@ -2101,7 +2102,7 @@ class AgentsManagerDialog(QDialog):
 
         self.delete_btn = QPushButton(tr('dlg_agents_delete'))
         self.delete_btn.clicked.connect(self._delete_agent)
-        self.delete_btn.setStyleSheet("QPushButton { color: #ef4444; }")
+        self.delete_btn.setStyleSheet(f"QPushButton {{ color: {theme.DANGER}; }}")
         btn_layout.addWidget(self.delete_btn)
 
         btn_layout.addStretch()
@@ -2119,7 +2120,7 @@ class AgentsManagerDialog(QDialog):
 
         save_btn = QPushButton(tr('dlg_save'))
         save_btn.clicked.connect(self.accept)
-        save_btn.setStyleSheet("QPushButton { color: #22c55e; font-weight: bold; }")
+        save_btn.setStyleSheet(f"QPushButton {{ color: {theme.SUCCESS}; font-weight: bold; }}")
         bottom_layout.addWidget(save_btn)
 
         layout.addLayout(bottom_layout)
@@ -2180,7 +2181,7 @@ class AgentsManagerDialog(QDialog):
 
             name_label = QLabel(agent_name)
             name_label.setStyleSheet(
-                "color: #ffffff; font-size: 13px; font-weight: bold; background: transparent; border: none;"
+                f"color: {theme.TEXT}; font-size: 13px; font-weight: bold; background: transparent; border: none;"
             )
             row_layout.addWidget(name_label)
 
@@ -2188,7 +2189,7 @@ class AgentsManagerDialog(QDialog):
             # niosą dodatkową informację (📁 pliki, 🧩 skille); część z modelem
             # jest już w pełni widoczna w tekście, więc nie ma tooltipa.
             info_style = (
-                "color: #aaaaaa; font-size: 11px; background: transparent; border: none;"
+                f"color: {theme.TEXT_DIM}; font-size: 11px; background: transparent; border: none;"
             )
 
             files_label = QLabel(f"   📁 {memory_info}")
@@ -2607,7 +2608,7 @@ class SkillsManagerDialog(QDialog):
             header_text = tr('dlg_skills_global_title')
 
         header = QLabel(header_text)
-        header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
+        header.setStyleSheet(f"font-size: 14px; font-weight: bold; color: {theme.TEXT};")
         layout.addWidget(header)
 
         if self._is_per_agent:
@@ -2615,12 +2616,12 @@ class SkillsManagerDialog(QDialog):
         else:
             desc_text = tr('dlg_skills_global_desc')
         desc = QLabel(desc_text)
-        desc.setStyleSheet("color: #cccccc; font-size: 13px;")
+        desc.setStyleSheet(f"color: {theme.TEXT_DIM}; font-size: 13px;")
         desc.setWordWrap(True)
         layout.addWidget(desc)
 
         path_label = QLabel(tr('dlg_skills_location').format(path=self.skills_manager.skills_dir))
-        path_label.setStyleSheet("color: #aaaaaa; font-size: 12px;")
+        path_label.setStyleSheet(f"color: {theme.TEXT_DIM}; font-size: 12px;")
         layout.addWidget(path_label)
 
         list_layout = QHBoxLayout()
@@ -2628,20 +2629,20 @@ class SkillsManagerDialog(QDialog):
         self.list_widget = QListWidget()
         self.list_widget.setWordWrap(True)
         self.list_widget.setTextElideMode(Qt.ElideNone)
-        self.list_widget.setStyleSheet("""
-            QListWidget {
-                background-color: #2d0a1e;
-                color: #ffffff;
-                border: 1px solid #4a1a3a;
+        self.list_widget.setStyleSheet(f"""
+            QListWidget {{
+                background-color: {theme.SURFACE_ALT};
+                color: {theme.TEXT};
+                border: 1px solid {theme.BORDER};
                 border-radius: 4px;
-            }
-            QListWidget::item {
+            }}
+            QListWidget::item {{
                 padding: 10px;
-                border-bottom: 1px solid #4a1a3a;
-            }
-            QListWidget::item:selected {
-                background-color: #6a2a5a;
-            }
+                border-bottom: 1px solid {theme.BORDER};
+            }}
+            QListWidget::item:selected {{
+                background-color: {theme.HOVER};
+            }}
         """)
         list_layout.addWidget(self.list_widget, stretch=1)
 
@@ -2650,12 +2651,12 @@ class SkillsManagerDialog(QDialog):
 
         self.add_zip_btn = QPushButton(tr('dlg_skills_add_zip'))
         self.add_zip_btn.clicked.connect(self._add_from_zip)
-        self.add_zip_btn.setStyleSheet("QPushButton { color: #22c55e; }")
+        self.add_zip_btn.setStyleSheet(f"QPushButton {{ color: {theme.SUCCESS}; }}")
         btn_layout.addWidget(self.add_zip_btn)
 
         self.add_folder_btn = QPushButton(tr('dlg_skills_add_folder'))
         self.add_folder_btn.clicked.connect(self._add_from_folder)
-        self.add_folder_btn.setStyleSheet("QPushButton { color: #22c55e; }")
+        self.add_folder_btn.setStyleSheet(f"QPushButton {{ color: {theme.SUCCESS}; }}")
         btn_layout.addWidget(self.add_folder_btn)
 
         btn_layout.addSpacing(15)
@@ -2672,7 +2673,7 @@ class SkillsManagerDialog(QDialog):
 
         self.delete_btn = QPushButton(tr('dlg_skills_delete'))
         self.delete_btn.clicked.connect(self._delete_skill)
-        self.delete_btn.setStyleSheet("QPushButton { color: #ef4444; }")
+        self.delete_btn.setStyleSheet(f"QPushButton {{ color: {theme.DANGER}; }}")
         btn_layout.addWidget(self.delete_btn)
 
         btn_layout.addStretch()
@@ -2706,7 +2707,7 @@ class SkillsManagerDialog(QDialog):
             placeholder_layout.setSpacing(4)
             empty_label = QLabel(tr('dlg_skills_empty'))
             empty_label.setStyleSheet(
-                "color: #cccccc; font-size: 14px; background: transparent;"
+                f"color: {theme.TEXT_DIM}; font-size: 14px; background: transparent;"
             )
             empty_label.setWordWrap(True)
             empty_label.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
@@ -2729,7 +2730,7 @@ class SkillsManagerDialog(QDialog):
             icon = "🧩" if skill.has_metadata else "⚠️"
             name_label = QLabel(f"{icon} {skill.name}")
             name_label.setStyleSheet(
-                "color: #ffffff; font-size: 13px; font-weight: bold; "
+                f"color: {theme.TEXT}; font-size: 13px; font-weight: bold; "
                 "background: transparent; border: none;"
             )
             row_layout.addWidget(name_label)
@@ -2737,7 +2738,7 @@ class SkillsManagerDialog(QDialog):
             description = skill.description or tr('dlg_skills_no_desc')
             desc_label = QLabel(f"   {description}")
             desc_label.setStyleSheet(
-                "color: #aaaaaa; font-size: 11px; background: transparent; border: none;"
+                f"color: {theme.TEXT_DIM}; font-size: 11px; background: transparent; border: none;"
             )
             desc_label.setWordWrap(True)
             row_layout.addWidget(desc_label)
@@ -2856,9 +2857,9 @@ class SkillsManagerDialog(QDialog):
 # tłumaczona w locie przez _mcp_status_badge() — tu trzymamy tylko ikonę,
 # kolor i klucz tłumaczenia.
 _MCP_STATUS_BADGE_DATA = {
-    STATUS_CONNECTED: ("✅", "#22c55e", "dlg_mcp_status_connected"),
-    STATUS_NEEDS_AUTH: ("🔐", "#eab308", "dlg_mcp_status_needs_auth"),
-    STATUS_FAILED: ("❌", "#ef4444", "dlg_mcp_status_failed"),
+    STATUS_CONNECTED: ("✅", f"{theme.SUCCESS}", "dlg_mcp_status_connected"),
+    STATUS_NEEDS_AUTH: ("🔐", f"{theme.WARNING}", "dlg_mcp_status_needs_auth"),
+    STATUS_FAILED: ("❌", f"{theme.DANGER}", "dlg_mcp_status_failed"),
     STATUS_UNKNOWN: ("❓", "#94a3b8", "dlg_mcp_status_unknown"),
 }
 
@@ -2930,11 +2931,11 @@ class McpManagerDialog(QDialog):
             desc_text = tr('dlg_mcp_global_desc')
 
         header = QLabel(header_text)
-        header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
+        header.setStyleSheet(f"font-size: 14px; font-weight: bold; color: {theme.TEXT};")
         layout.addWidget(header)
 
         desc = QLabel(desc_text)
-        desc.setStyleSheet("color: #cccccc; font-size: 13px;")
+        desc.setStyleSheet(f"color: {theme.TEXT_DIM}; font-size: 13px;")
         desc.setWordWrap(True)
         layout.addWidget(desc)
 
@@ -2944,20 +2945,20 @@ class McpManagerDialog(QDialog):
         self.list_widget = QListWidget()
         self.list_widget.setWordWrap(True)
         self.list_widget.setTextElideMode(Qt.ElideNone)
-        self.list_widget.setStyleSheet("""
-            QListWidget {
-                background-color: #2d0a1e;
-                color: #ffffff;
-                border: 1px solid #4a1a3a;
+        self.list_widget.setStyleSheet(f"""
+            QListWidget {{
+                background-color: {theme.SURFACE_ALT};
+                color: {theme.TEXT};
+                border: 1px solid {theme.BORDER};
                 border-radius: 4px;
-            }
-            QListWidget::item {
+            }}
+            QListWidget::item {{
                 padding: 10px;
-                border-bottom: 1px solid #4a1a3a;
-            }
-            QListWidget::item:selected {
-                background-color: #6a2a5a;
-            }
+                border-bottom: 1px solid {theme.BORDER};
+            }}
+            QListWidget::item:selected {{
+                background-color: {theme.HOVER};
+            }}
         """)
         list_layout.addWidget(self.list_widget, stretch=1)
 
@@ -2966,17 +2967,17 @@ class McpManagerDialog(QDialog):
 
         self.add_template_btn = QPushButton(tr('dlg_mcp_add_template'))
         self.add_template_btn.clicked.connect(self._add_from_template)
-        self.add_template_btn.setStyleSheet("QPushButton { color: #22c55e; }")
+        self.add_template_btn.setStyleSheet(f"QPushButton {{ color: {theme.SUCCESS}; }}")
         btn_layout.addWidget(self.add_template_btn)
 
         self.add_manual_btn = QPushButton(tr('dlg_mcp_add_manual'))
         self.add_manual_btn.clicked.connect(self._add_manual)
-        self.add_manual_btn.setStyleSheet("QPushButton { color: #22c55e; }")
+        self.add_manual_btn.setStyleSheet(f"QPushButton {{ color: {theme.SUCCESS}; }}")
         btn_layout.addWidget(self.add_manual_btn)
 
         self.add_json_btn = QPushButton(tr('dlg_mcp_add_json'))
         self.add_json_btn.clicked.connect(self._add_from_json)
-        self.add_json_btn.setStyleSheet("QPushButton { color: #22c55e; }")
+        self.add_json_btn.setStyleSheet(f"QPushButton {{ color: {theme.SUCCESS}; }}")
         btn_layout.addWidget(self.add_json_btn)
 
         btn_layout.addSpacing(15)
@@ -2984,7 +2985,7 @@ class McpManagerDialog(QDialog):
         # Akcje na zaznaczonym serwerze
         self.authorize_btn = QPushButton(tr('dlg_mcp_authorize'))
         self.authorize_btn.clicked.connect(self._authorize_selected)
-        self.authorize_btn.setStyleSheet("QPushButton { color: #eab308; }")
+        self.authorize_btn.setStyleSheet(f"QPushButton {{ color: {theme.WARNING}; }}")
         self.authorize_btn.setToolTip(tr('dlg_mcp_authorize_tooltip'))
         btn_layout.addWidget(self.authorize_btn)
 
@@ -3008,7 +3009,7 @@ class McpManagerDialog(QDialog):
 
         self.delete_btn = QPushButton(tr('dlg_mcp_delete'))
         self.delete_btn.clicked.connect(self._delete_selected)
-        self.delete_btn.setStyleSheet("QPushButton { color: #ef4444; }")
+        self.delete_btn.setStyleSheet(f"QPushButton {{ color: {theme.DANGER}; }}")
         btn_layout.addWidget(self.delete_btn)
 
         btn_layout.addStretch()
@@ -3051,7 +3052,7 @@ class McpManagerDialog(QDialog):
             pl_layout.setContentsMargins(16, 8, 16, 8)
             empty_label = QLabel(tr('dlg_mcp_empty'))
             empty_label.setStyleSheet(
-                "color: #cccccc; font-size: 14px; background: transparent;"
+                f"color: {theme.TEXT_DIM}; font-size: 14px; background: transparent;"
             )
             empty_label.setWordWrap(True)
             pl_layout.addWidget(empty_label)
@@ -3075,12 +3076,12 @@ class McpManagerDialog(QDialog):
 
             name_html = (
                 f"{icon} <b>{srv.name}</b> "
-                f"<span style='color: #aaaaaa; font-weight: normal;'>"
+                f"<span style='color: {theme.TEXT_DIM}; font-weight: normal;'>"
                 f"[{srv.transport} · {scope_label}]</span>"
             )
             name_label = QLabel(name_html)
             name_label.setStyleSheet(
-                "color: #ffffff; font-size: 13px; background: transparent; border: none;"
+                f"color: {theme.TEXT}; font-size: 13px; background: transparent; border: none;"
             )
             name_label.setTextFormat(Qt.RichText)
             row_layout.addWidget(name_label)
@@ -3088,7 +3089,7 @@ class McpManagerDialog(QDialog):
             target_text = srv.target if len(srv.target) <= 90 else srv.target[:87] + "..."
             detail_label = QLabel(
                 f"<span style='color: {color};'>{status_label}</span> "
-                f"<span style='color: #888888;'>· {target_text}</span>"
+                f"<span style='color: {theme.TEXT_FAINT};'>· {target_text}</span>"
             )
             detail_label.setStyleSheet(
                 "font-size: 11px; background: transparent; border: none;"
@@ -3325,31 +3326,31 @@ class _McpTemplatePickerDialog(QDialog):
         layout.setSpacing(10)
 
         header = QLabel(tr('dlg_mcptpl_header'))
-        header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
+        header.setStyleSheet(f"font-size: 14px; font-weight: bold; color: {theme.TEXT};")
         layout.addWidget(header)
 
         desc = QLabel(tr('dlg_mcptpl_desc'))
-        desc.setStyleSheet("color: #cccccc; font-size: 12px;")
+        desc.setStyleSheet(f"color: {theme.TEXT_DIM}; font-size: 12px;")
         desc.setWordWrap(True)
         layout.addWidget(desc)
 
         self.list_widget = QListWidget()
         self.list_widget.setWordWrap(True)
         self.list_widget.setTextElideMode(Qt.ElideNone)
-        self.list_widget.setStyleSheet("""
-            QListWidget {
-                background-color: #2d0a1e;
-                color: #ffffff;
-                border: 1px solid #4a1a3a;
+        self.list_widget.setStyleSheet(f"""
+            QListWidget {{
+                background-color: {theme.SURFACE_ALT};
+                color: {theme.TEXT};
+                border: 1px solid {theme.BORDER};
                 border-radius: 4px;
-            }
-            QListWidget::item {
+            }}
+            QListWidget::item {{
                 padding: 10px;
-                border-bottom: 1px solid #4a1a3a;
-            }
-            QListWidget::item:selected {
-                background-color: #6a2a5a;
-            }
+                border-bottom: 1px solid {theme.BORDER};
+            }}
+            QListWidget::item:selected {{
+                background-color: {theme.HOVER};
+            }}
         """)
         self.list_widget.itemDoubleClicked.connect(lambda _: self._accept())
         layout.addWidget(self.list_widget, stretch=1)
@@ -3366,15 +3367,15 @@ class _McpTemplatePickerDialog(QDialog):
             v.setContentsMargins(4, 4, 4, 4)
             v.setSpacing(2)
 
-            title = QLabel(f"{tpl.title} <span style='color:#aaaaaa;'>[{tpl.transport}]</span>")
+            title = QLabel(f"{tpl.title} <span style='color:{theme.TEXT_DIM};'>[{tpl.transport}]</span>")
             title.setTextFormat(Qt.RichText)
             title.setStyleSheet(
-                "color: #ffffff; font-size: 13px; font-weight: bold; "
+                f"color: {theme.TEXT}; font-size: 13px; font-weight: bold; "
                 "background: transparent; border: none;"
             )
             v.addWidget(title)
             d = QLabel(tpl.description)
-            d.setStyleSheet("color: #aaaaaa; font-size: 11px; background: transparent; border: none;")
+            d.setStyleSheet(f"color: {theme.TEXT_DIM}; font-size: 11px; background: transparent; border: none;")
             d.setWordWrap(True)
             v.addWidget(d)
             self.list_widget.setItemWidget(item, row)
@@ -3419,17 +3420,17 @@ class _McpTemplateConfigDialog(QDialog):
         layout.setSpacing(10)
 
         header = QLabel(f"⚙️ {self.template.title}")
-        header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
+        header.setStyleSheet(f"font-size: 14px; font-weight: bold; color: {theme.TEXT};")
         layout.addWidget(header)
 
         desc = QLabel(self.template.description)
-        desc.setStyleSheet("color: #cccccc; font-size: 12px;")
+        desc.setStyleSheet(f"color: {theme.TEXT_DIM}; font-size: 12px;")
         desc.setWordWrap(True)
         layout.addWidget(desc)
 
         if self.template.install_hint:
             hint = QLabel(f"💡 {self.template.install_hint}")
-            hint.setStyleSheet("color: #eab308; font-size: 11px;")
+            hint.setStyleSheet(f"color: {theme.WARNING}; font-size: 11px;")
             hint.setWordWrap(True)
             layout.addWidget(hint)
 
@@ -3483,7 +3484,7 @@ class _McpTemplateConfigDialog(QDialog):
         layout.addLayout(form)
 
         if self.template.homepage:
-            home = QLabel(f"<a href='{self.template.homepage}' style='color:#7dd3fc;'>{tr('dlg_mcpcfg_docs')}</a>")
+            home = QLabel(f"<a href='{self.template.homepage}' style='color:{theme.INFO};'>{tr('dlg_mcpcfg_docs')}</a>")
             home.setTextFormat(Qt.RichText)
             home.setOpenExternalLinks(True)
             layout.addWidget(home)
@@ -3495,7 +3496,7 @@ class _McpTemplateConfigDialog(QDialog):
         bottom.addWidget(cancel)
         install = QPushButton(tr('dlg_mcpcfg_install'))
         install.setDefault(True)
-        install.setStyleSheet("QPushButton { color: #22c55e; }")
+        install.setStyleSheet(f"QPushButton {{ color: {theme.SUCCESS}; }}")
         install.clicked.connect(self._validate_and_accept)
         bottom.addWidget(install)
         layout.addLayout(bottom)
@@ -3600,12 +3601,12 @@ class _McpAddManualDialog(QDialog):
 
         header_text = tr('dlg_mcpman_edit_header') if self._is_edit else tr('dlg_mcpman_add_header')
         header = QLabel(header_text)
-        header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
+        header.setStyleSheet(f"font-size: 14px; font-weight: bold; color: {theme.TEXT};")
         layout.addWidget(header)
 
         if self._is_edit:
             note = QLabel(tr('dlg_mcpman_edit_note'))
-            note.setStyleSheet("color: #aaaaaa; font-size: 11px;")
+            note.setStyleSheet(f"color: {theme.TEXT_DIM}; font-size: 11px;")
             note.setWordWrap(True)
             layout.addWidget(note)
 
@@ -3642,8 +3643,8 @@ class _McpAddManualDialog(QDialog):
         self.env_input.setPlaceholderText(tr('dlg_mcpman_env_placeholder'))
         self.env_input.setMaximumHeight(70)
         self.env_input.setStyleSheet(
-            "QPlainTextEdit { background-color: #4a1a3a; color: #ffffff; "
-            "border: 1px solid #6a2a5a; border-radius: 4px; padding: 4px; }"
+            f"QPlainTextEdit {{ background-color: {theme.SURFACE}; color: {theme.TEXT}; "
+            f"border: 1px solid {theme.HOVER}; border-radius: 4px; padding: 4px; }}"
         )
         form.addRow(tr('dlg_mcpman_env_label'), self.env_input)
 
@@ -3672,7 +3673,7 @@ class _McpAddManualDialog(QDialog):
         ok_label = tr('dlg_mcpman_ok_save') if self._is_edit else tr('dlg_mcpman_ok_add')
         ok = QPushButton(ok_label)
         ok.setDefault(True)
-        ok.setStyleSheet("QPushButton { color: #22c55e; }")
+        ok.setStyleSheet(f"QPushButton {{ color: {theme.SUCCESS}; }}")
         ok.clicked.connect(self._validate_and_accept)
         bottom.addWidget(ok)
         layout.addLayout(bottom)
@@ -3684,7 +3685,7 @@ class _McpAddManualDialog(QDialog):
         self.name_input.setText(srv.name)
         # W edycji blokujemy zmianę nazwy — to upraszcza rollback
         self.name_input.setReadOnly(True)
-        self.name_input.setStyleSheet("QLineEdit { color: #aaaaaa; }")
+        self.name_input.setStyleSheet(f"QLineEdit {{ color: {theme.TEXT_DIM}; }}")
         self.name_input.setToolTip(tr('dlg_mcpman_name_immutable_tooltip'))
 
         # Transport
@@ -3786,12 +3787,12 @@ class _McpJsonImportDialog(QDialog):
         layout.setSpacing(10)
 
         header = QLabel(tr('dlg_mcpjson_header'))
-        header.setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;")
+        header.setStyleSheet(f"font-size: 14px; font-weight: bold; color: {theme.TEXT};")
         layout.addWidget(header)
 
         desc = QLabel(tr('dlg_mcpjson_desc'))
         desc.setTextFormat(Qt.RichText)
-        desc.setStyleSheet("color: #cccccc; font-size: 12px;")
+        desc.setStyleSheet(f"color: {theme.TEXT_DIM}; font-size: 12px;")
         desc.setWordWrap(True)
         layout.addWidget(desc)
 
@@ -3813,8 +3814,8 @@ class _McpJsonImportDialog(QDialog):
             '{\n  "type": "stdio",\n  "command": "npx",\n  "args": ["-y", "@scope/server"]\n}'
         )
         self.json_input.setStyleSheet(
-            "QPlainTextEdit { background-color: #4a1a3a; color: #ffffff; "
-            "border: 1px solid #6a2a5a; border-radius: 4px; padding: 6px; "
+            f"QPlainTextEdit {{ background-color: {theme.SURFACE}; color: {theme.TEXT}; "
+            f"border: 1px solid {theme.HOVER}; border-radius: 4px; padding: 6px; "
             "font-family: monospace; }"
         )
         layout.addWidget(self.json_input, stretch=1)
@@ -3826,7 +3827,7 @@ class _McpJsonImportDialog(QDialog):
         bottom.addWidget(cancel)
         ok = QPushButton(tr('dlg_mcpjson_ok_add'))
         ok.setDefault(True)
-        ok.setStyleSheet("QPushButton { color: #22c55e; }")
+        ok.setStyleSheet(f"QPushButton {{ color: {theme.SUCCESS}; }}")
         ok.clicked.connect(self._validate_and_accept)
         bottom.addWidget(ok)
         layout.addLayout(bottom)
@@ -4031,13 +4032,25 @@ class ClaudeSetupDialog(QDialog):
         # platform — na Linuksie z ciemnym motywem systemowym bug bywa zamaskowany.
         # Chipy stanu (zielony „gotowe" / czerwony „do zrobienia") mają własny styl
         # ustawiany bezpośrednio na widżecie (wyższy priorytet) → zostają czytelne.
+        # Przyciski i pole z komendą MUSZĄ mieć jawny styl: bez niego dostają
+        # domyślny (jasny) wygląd systemowy, a na ciemnym tle robi się ciemny
+        # tekst na ciemnym tle — nieczytelne akurat w oknie, które nowy
+        # użytkownik widzi jako pierwsze.
         self.setStyleSheet(
-            "QDialog { background-color: #232326; }"
-            "QScrollArea { background-color: #232326; border: none; }"
-            "QLabel { color: #e6e6e6; background: transparent; }"
-            "QGroupBox { background-color: #232326; color: #e6e6e6;"
-            " border: 1px solid #3a3a3d; border-radius: 4px; margin-top: 8px; }"
-            "QGroupBox::title { subcontrol-origin: margin; left: 8px; padding: 0 4px; }")
+            f"QDialog {{ background-color: {theme.BG_WINDOW}; }}"
+            f"QScrollArea {{ background-color: {theme.BG_WINDOW}; border: none; }}"
+            f"QLabel {{ color: {theme.TEXT}; background: transparent; }}"
+            f"QGroupBox {{ background-color: {theme.BG_WINDOW}; color: {theme.TEXT};"
+            f" border: 1px solid {theme.BORDER}; border-radius: 8px; margin-top: 8px; }}"
+            "QGroupBox::title { subcontrol-origin: margin; left: 8px; padding: 0 4px; }"
+            f"QPushButton {{ background-color: {theme.SURFACE}; color: {theme.TEXT};"
+            f" border: 1px solid {theme.BORDER}; border-radius: {theme.RADIUS}px;"
+            " padding: 7px 14px; }"
+            f"QPushButton:hover {{ background-color: {theme.SURFACE_HOVER};"
+            f" border-color: {theme.ACCENT}; }}"
+            f"QLineEdit {{ background-color: {theme.BG_INPUT}; color: {theme.TEXT};"
+            f" border: 1px solid {theme.BORDER}; border-radius: {theme.RADIUS_SM}px;"
+            f" padding: 6px 8px; font-family: '{theme.mono_family()}'; }}")
 
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
@@ -4066,8 +4079,8 @@ class ClaudeSetupDialog(QDialog):
         # Ciemne tło JAWNIE na przewijanym obszarze, jego porcie widoku i widżecie
         # treści — sam styl QDialog tego nie pokrywał (viewport świecił na biało →
         # „biały tekst na białym tle" w środku okna, mimo ciemnej ramki okna).
-        content_host.setStyleSheet("background-color: #232326;")
-        scroll.viewport().setStyleSheet("background-color: #232326;")
+        content_host.setStyleSheet(f"background-color: {theme.BG_WINDOW};")
+        scroll.viewport().setStyleSheet(f"background-color: {theme.BG_WINDOW};")
         layout.addWidget(scroll, 1)
 
         # ---- Przyciski ----
@@ -4145,8 +4158,8 @@ class ClaudeSetupDialog(QDialog):
         h.addWidget(name)
         h.addStretch()
         status = QLabel(tr('dlg_setup_ready') if ok else tr('dlg_setup_missing'))
-        status.setStyleSheet("color:#16a34a;font-weight:700;" if ok
-                             else "color:#dc2626;font-weight:700;")
+        status.setStyleSheet(f"color:{theme.SUCCESS};font-weight:700;" if ok
+                             else f"color:{theme.DANGER};font-weight:700;")
         h.addWidget(status)
         return row
 
