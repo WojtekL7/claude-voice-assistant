@@ -3,6 +3,7 @@ Vibe Coding Assistant - Agent Tab
 Single agent tab with terminal and input panel.
 """
 import json
+import math
 import re
 import time
 from pathlib import Path
@@ -14,7 +15,7 @@ from PyQt5.QtWidgets import (
     QFrame, QMenu, QAction, QLabel, QFileDialog,
     QMessageBox
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QSize
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QSize, QEvent
 from PyQt5.QtGui import QFont, QFontMetrics, QIcon
 
 # QTermWidget for real terminal emulation
@@ -114,29 +115,78 @@ class AutoResizeTextEdit(QTextEdit):
             "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {"
             " background: #2a2a2d; }")
         self._max_lines = 5
-        self._padding = 20  # margines wewn. (ramka + padding dokumentu)
-        self._min_height = 55
+        # Ile pikseli POZA obszarem tekstu zjada sama oprawa pola: ramka QSS
+        # (2 px × 2) + padding QSS (12 px × 2) = 28. Używane tylko dopóki nie da
+        # się tego ZMIERZYĆ (patrz _chrome) — nie zgadujemy w ciemno.
+        self._fallback_chrome = 28
+        self._min_height = 55  # dolna granica estetyczna (równanie z przyciskami)
         self._max_height = 180  # przeliczane w _adjust_height wg czcionki (5 linii)
         self.setMinimumHeight(self._min_height)
         self.setMaximumHeight(self._min_height)
+
+    def _chrome(self) -> int:
+        """Ile pikseli zjada ramka + padding pola (oprawa wokół tekstu).
+
+        MIERZONE, nie zgadywane: różnica między wysokością widżetu a wysokością
+        jego `viewport()` (właściwego obszaru tekstu). Stała wartość była
+        źródłem błędu — przy zmianie paddingu/ramki w QSS albo czcionki
+        rozjeżdżała się z rzeczywistością i ucinała ogonki liter (p, y, ż).
+
+        ⚠️ Pomiar jest wiarygodny DOPIERO po pokazaniu widżetu — wcześniej Qt
+        nie nałożyło jeszcze marginesów viewportu z arkusza stylów i zwraca 2.
+        Do tego czasu bierzemy ostrożny zapas `_fallback_chrome`.
+        """
+        extra = self.height() - self.viewport().height()
+        if self.isVisible() and extra > 0:
+            return extra
+        return self._fallback_chrome
+
+    def showEvent(self, event):
+        """Po pokazaniu oprawa jest wreszcie mierzalna → przelicz wysokość."""
+        super().showEvent(event)
+        self._adjust_height()
+
+    def changeEvent(self, event):
+        """Zmiana czcionki zmienia wysokość linii → przelicz (font ustawiany
+        JUŻ PO konstruktorze, a wtedy `contentsChanged` samo nie zaskoczy)."""
+        super().changeEvent(event)
+        if event.type() == QEvent.FontChange:
+            self._adjust_height()
 
     def _adjust_height(self):
         """Dopasuj wysokość do treści, z górnym limitem _max_lines linii.
 
         Powyżej limitu pole nie rośnie — pojawia się suwak (ScrollBarAsNeeded).
-        Limit liczony z czcionki POLA (ustawianej po konstruktorze), więc działa
-        niezależnie od rozmiaru/rodziny czcionki."""
-        line_h = QFontMetrics(self.font()).lineSpacing()
-        self._max_height = line_h * self._max_lines + self._padding
-        doc_height = int(self.document().size().height())
+        Wszystko liczone z REALNYCH metryk: wysokość dokumentu (zawiera już jego
+        własne marginesy) + zmierzona oprawa pola. Dzięki temu ani zmiana
+        czcionki (JetBrains Mono jest wyższa od Ubuntu Mono), ani zmiana
+        paddingu w skórce nie utnie dolnych ogonków liter.
+        """
+        doc = self.document()
+        chrome = self._chrome()
+        doc_margins = int(2 * doc.documentMargin())
+        # Wysokość linii bierzemy z REALNEGO układu dokumentu, nie z metryki
+        # czcionki: Qt układa wiersz odrobinę wyżej niż `lineSpacing()`
+        # (JetBrains Mono 13pt: 25 px vs 24 px). Różnica 1 px × 5 linii sprawiała,
+        # że limit wypadał PONIŻEJ realnej wysokości 5 linii → suwak pojawiał się
+        # już przy 5 linii, a piąta linia była przycięta.
+        try:
+            line_h = math.ceil(
+                doc.documentLayout().blockBoundingRect(doc.firstBlock()).height())
+        except Exception:
+            line_h = 0
+        if line_h <= 0:
+            line_h = QFontMetrics(self.font()).lineSpacing()
+        self._max_height = line_h * self._max_lines + doc_margins + chrome
+        doc_height = math.ceil(doc.size().height())
         # Suwak włączamy JAWNIE dopiero, gdy treść nie mieści się w 5 liniach —
         # inaczej trzymamy go wyłączonego (żeby nie pokazywał się przy krótkim
         # tekście ani pustym polu).
-        needs_scroll = doc_height + self._padding > self._max_height
+        needs_scroll = doc_height + chrome > self._max_height
         self.setVerticalScrollBarPolicy(
             Qt.ScrollBarAsNeeded if needs_scroll else Qt.ScrollBarAlwaysOff)
         new_height = max(self._min_height,
-                         min(doc_height + self._padding, self._max_height))
+                         min(doc_height + chrome, self._max_height))
         self.setMinimumHeight(new_height)
         self.setMaximumHeight(new_height)
 
@@ -1044,6 +1094,9 @@ class AgentTab(QWidget):
                 border: 2px solid {hover_color};
             }}
         """)
+        # Nowy arkusz = potencjalnie inna ramka/padding, czyli inna oprawa pola.
+        # Przelicz wysokość, żeby zmiana skórki nie ucięła ogonków liter.
+        self.input_field._adjust_height()
 
         # Anti-flash: ten sam ciemny kolor także w PALECIE pola (rola Base), nie
         # tylko w stylesheet. Bez tego po wyczyszczeniu pola (Enter) Qt na ~1 klatkę

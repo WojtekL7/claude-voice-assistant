@@ -18,7 +18,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QSize, QUrl, QTimer, pyqtSignal
 import threading
-from PyQt5.QtGui import QFont, QDesktopServices, QPixmap, QColor
+from PyQt5.QtGui import QFont, QDesktopServices, QPixmap, QColor, QGuiApplication
 
 import sys
 from pathlib import Path
@@ -680,6 +680,26 @@ class _ClickableLabel(QLabel):
         super().mouseReleaseEvent(event)
 
 
+class _PageScrollArea(QScrollArea):
+    """QScrollArea, która przyznaje się do PEŁNEGO rozmiaru swojej treści.
+
+    Zwykła QScrollArea ma malutkie `sizeHint()` (bo „przecież można przewinąć"),
+    więc okno zbudowane z takich zakładek otwierałoby się mniejsze niż treść i
+    pokazywało suwak nawet na dużym monitorze. Tu `sizeHint()` = rozmiar strony,
+    dzięki czemu okno startuje w wygodnym rozmiarze, a suwak pojawia się dopiero
+    wtedy, gdy ekran naprawdę jest za mały (przycięcie robi `_fit_to_screen`).
+    """
+
+    def sizeHint(self) -> QSize:
+        page = self.widget()
+        if page is None:
+            return super().sizeHint()
+        hint = page.sizeHint()
+        frame = 2 * self.frameWidth()
+        bar = self.verticalScrollBar().sizeHint().width()
+        return QSize(hint.width() + frame + bar, hint.height() + frame)
+
+
 class AgentConfigDialog(QDialog):
     """Dialog for configuring a single agent."""
 
@@ -697,14 +717,57 @@ class AgentConfigDialog(QDialog):
         self.memory_files = list(self.agent.get('memory_files', []))  # list of file paths
         self.run_immediately = False  # Flag: should open tab immediately after save
 
-        # Stała wysokość — żeby okno mieściło się na każdym ekranie laptopowym
-        self.setFixedHeight(580)
-        self.setMinimumWidth(640)
-
         # Path to checkmark icon (used by checkboxes inside Tab "Podstawowe")
         self._checkmark_path = str(ASSETS_DIR / "checkmark.png").replace("\\", "/")
 
         self._setup_ui()
+
+        # Rozmiar DOBIERANY DO TREŚCI, przycięty do ekranu (patrz _fit_to_screen).
+        # Wcześniej było `setFixedHeight(580)` + `setMinimumWidth(640)` — sztywne
+        # liczby, które po redesignie („Vibe Purple": IBM Plex Sans jest wyższy i
+        # szerszy) wypadły PONIŻEJ minimum treści (607×696 px). Qt ściskał wtedy
+        # rzędy poniżej ich naturalnej wysokości → wszystkim polom naraz ucinało
+        # dolne ogonki liter (p, y, ż), a przycisk „Bez koloru" znikał bokiem.
+        # Zamiar „zmieści się na małym laptopie" realizują teraz suwaki zakładek.
+        self._fit_to_screen()
+
+    def _fit_to_screen(self):
+        """Otwórz okno w rozmiarze wynikającym z treści, ale nie większe niż ekran.
+
+        Duży monitor → pełny, wygodny rozmiar. Mały laptop → okno kurczy się, a
+        zawartość zakładek przewija się (każda siedzi w QScrollArea), zamiast być
+        po cichu ściskana i przycinana.
+        """
+        hint = self.sizeHint()
+        screen = self.screen() if hasattr(self, 'screen') and self.screen() \
+            else QGuiApplication.primaryScreen()
+        if screen is not None:
+            avail = screen.availableGeometry()
+            width = min(hint.width(), int(avail.width() * 0.95))
+            height = min(hint.height(), int(avail.height() * 0.90))
+        else:
+            width, height = hint.width(), hint.height()
+        # Dolna granica jest BEZPIECZNA tylko dlatego, że zakładki się przewijają.
+        self.setMinimumSize(min(560, width), min(420, height))
+        self.resize(width, height)
+
+    @staticmethod
+    def _scrollable(page: QWidget) -> QScrollArea:
+        """Owiń stronę zakładki w obszar przewijany (pionowo, gdy brak miejsca).
+
+        ⚠️ Ciemne tło trzeba nadać JAWNIE także `viewport()` — sam styl okna go
+        nie pokrywa i port widoku świeci na biało (znana pułapka projektu).
+        Poziomy suwak wyłączony: okno ma minimalną szerokość na całą treść.
+        """
+        area = _PageScrollArea()
+        area.setWidgetResizable(True)
+        area.setFrameShape(QFrame.NoFrame)
+        area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        area.setWidget(page)
+        page.setStyleSheet(f"background: {theme.SURFACE_ALT};")
+        area.setStyleSheet(f"QScrollArea {{ background: {theme.SURFACE_ALT}; border: none; }}")
+        area.viewport().setStyleSheet(f"background: {theme.SURFACE_ALT};")
+        return area
 
     # ---------- Style helpers ----------
 
@@ -823,10 +886,13 @@ class AgentConfigDialog(QDialog):
                 color: {theme.TEXT};
             }}
         """)
-        self.tabs.addTab(self._build_tab_basic(), tr('dlg_agent_tab_basic'))
-        self.tabs.addTab(self._build_tab_memory(), tr('dlg_agent_tab_memory'))
-        self.tabs.addTab(self._build_tab_skills(), tr('dlg_agent_tab_skills'))
-        self.tabs.addTab(self._build_tab_mcp(), tr('dlg_agent_tab_mcp'))
+        # Każda zakładka w obszarze przewijanym: na niskim ekranie pojawia się
+        # suwak, zamiast ściskania rzędów (które ucinało litery). Pola pozostają
+        # tymi samymi obiektami (self.name_input itd.) — zapis agenta bez zmian.
+        self.tabs.addTab(self._scrollable(self._build_tab_basic()), tr('dlg_agent_tab_basic'))
+        self.tabs.addTab(self._scrollable(self._build_tab_memory()), tr('dlg_agent_tab_memory'))
+        self.tabs.addTab(self._scrollable(self._build_tab_skills()), tr('dlg_agent_tab_skills'))
+        self.tabs.addTab(self._scrollable(self._build_tab_mcp()), tr('dlg_agent_tab_mcp'))
         main_layout.addWidget(self.tabs, stretch=1)
 
         # Single connection — wszystkie sekcje (skills 1A/1B + MCP 1A/1B) odświeżają się
@@ -956,7 +1022,7 @@ class AgentConfigDialog(QDialog):
         voice_layout = QHBoxLayout()
         voice_layout.setSpacing(6)
         self.voice_combo = _StyledComboBox()
-        self.voice_combo.setMinimumHeight(34)
+        self.voice_combo.setMinimumHeight(34)  # podnoszone do natury na końcu zakładki
         _voice_view = QListView()
         _voice_view.setMouseTracking(True)
         _voice_view.setFrameShape(QFrame.NoFrame)
@@ -979,7 +1045,7 @@ class AgentConfigDialog(QDialog):
         # Model Claude Code
         chevron_path = str(ASSETS_DIR / "chevron-down.svg").replace("\\", "/")
         self.model_combo = _StyledComboBox()
-        self.model_combo.setMinimumHeight(36)
+        self.model_combo.setMinimumHeight(36)  # podnoszone do natury na końcu zakładki
         model_view = QListView()
         model_view.setMouseTracking(True)
         model_view.setFrameShape(QFrame.NoFrame)
@@ -1056,6 +1122,14 @@ class AgentConfigDialog(QDialog):
         layout.addWidget(self.send_memory_checkbox)
 
         layout.addStretch()
+
+        # Wyrównanie minimalnych wysokości list rozwijanych DOPIERO TERAZ — ich
+        # naturalna wysokość rośnie po nałożeniu arkusza stylów (padding), więc
+        # policzona przy tworzeniu byłaby za mała i Qt ścisnęłoby listę o 1 px
+        # (ogonek litery „j" w „Polski — Marek"). Minimum nigdy poniżej natury.
+        for _combo in (self.voice_combo, self.model_combo):
+            _combo.setMinimumHeight(max(_combo.minimumHeight(),
+                                        _combo.sizeHint().height()))
         return widget
 
     def _build_tab_memory(self) -> QWidget:
