@@ -304,6 +304,25 @@ class TranscriptReader:
                 results.append(text)
         return results
 
+    def journal_lags_screen(self) -> bool:
+        """Czy dziennik NIE ma jeszcze ostatniej wypowiedzi (jest o nią w tyle)?
+
+        Claude Code odracza zapis wypowiedzi kończącej turę pytaniem
+        `AskUserQuestion` — dopisuje ją dopiero po odpowiedzi użytkownika.
+        W tym oknie ostatnim wpisem z rolą zostaje `user` (polecenie albo
+        `tool_result`), bo tekst asystenta jeszcze nie wylądował w pliku.
+
+        Po ZWYKŁYM końcu tury jest odwrotnie: ostatnim wpisem z rolą jest
+        `assistant` (jego wypowiedź jest już w pliku, w komplecie i czysta).
+        Zweryfikowane na żywym dzienniku 2026-07-10.
+
+        Zwraca True tylko gdy trzeba sięgnąć po brudny bufor EKRANU.
+        """
+        self._ensure_session()
+        if not self._session_file or not os.path.exists(self._session_file):
+            return True
+        return self._last_entry_role() == "user"
+
     def last_response(self) -> Optional[str]:
         """Zwróć OSTATNIĄ wypowiedź tekstową Claude'a z bieżącej sesji.
 

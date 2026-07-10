@@ -2940,22 +2940,24 @@ class MainWindow(QMainWindow):
                     tab._terminal_output_buffer = ""
                 return True
 
-            # PUŁAPKA Claude Code (potwierdzona diagnostyką 2026-07-03): gdy agent
-            # WŁAŚNIE czeka na Twoją odpowiedź (na ekranie wisi pytanie
-            # AskUserQuestion / prośba o zgodę), Claude Code zapisuje swoją OSTATNIĄ
-            # wypowiedź do dziennika sesji DOPIERO po Twojej odpowiedzi. W tym oknie
-            # dziennik ma jeszcze PRZEDOSTATNIĄ wypowiedź → reader.last_response()
-            # zwróciłby ją (objaw: „🔊 czyta przedostatnią"). Dlatego w stanie
-            # „czeka" czytamy z EKRANU (bufor terminala), gdzie najnowsza odpowiedź
-            # już JEST. Bufora NIE czyścimy (rozmowa trwa). Bezpiecznik: gdy z ekranu
-            # nic sensownego nie wyjdzie → spadamy niżej na dziennik (jak dotąd).
-            agent_waiting = False
+            # PUŁAPKA Claude Code (potwierdzona diagnostyką 2026-07-03): gdy tura
+            # kończy się pytaniem AskUserQuestion, Claude Code zapisuje swoją
+            # OSTATNIĄ wypowiedź do dziennika DOPIERO po odpowiedzi użytkownika.
+            # W tym oknie dziennik ma jeszcze PRZEDOSTATNIĄ wypowiedź → czytamy
+            # wtedy z EKRANU (bufor terminala), gdzie najnowsza odpowiedź już JEST.
+            #
+            # ⚠️ Bramką NIE może być `waiting_for_user()` (= „dziennik stoi ≥1,6 s"):
+            # w chwili kliknięcia 🔊 agent PRAWIE ZAWSZE czeka, więc brudny bufor
+            # ekranu (ramki TUI, wywołania narzędzi, ucięty początek — cap 5000 zn.)
+            # wypierał czysty dziennik przy KAŻDYM odczycie. Pytamy więc wprost, czy
+            # dziennik jest o tę wypowiedź w tyle. Bufora NIE czyścimy (rozmowa trwa).
+            journal_stale = True
             if reader is not None:
                 try:
-                    agent_waiting = reader.waiting_for_user()
+                    journal_stale = reader.journal_lags_screen()
                 except Exception:
-                    agent_waiting = False
-            if agent_waiting and _speak_from_terminal_buffer(clear_after=False):
+                    journal_stale = False
+            if journal_stale and _speak_from_terminal_buffer(clear_after=False):
                 return
 
             if reader is not None:

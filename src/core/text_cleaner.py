@@ -338,11 +338,10 @@ class TextCleanerForTTS:
         # Step 10: Clean up punctuation
         text = self._clean_punctuation(text)
 
-        # Step 11: Limit length (max ~500 words for TTS)
-        words = text.split()
-        if len(words) > 500:
-            text = ' '.join(words[:500]) + '...'
-
+        # Step 11: BEZ obcinania długości. Lektor tnie tekst na zdania i czyta je
+        # po kolei (tts_engine._split_into_sentences), więc limit niczego nie
+        # chronił — gubił tylko końcówkę dłuższej wypowiedzi/zaznaczenia
+        # (objaw: „czytanie urywa się w połowie").
         return text
 
     def _remove_duplicates(self, text: str) -> str:
