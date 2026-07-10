@@ -4624,6 +4624,16 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         super().changeEvent(event)
 
 
+def _fit_icon_button(btn, width: int, min_height: int):
+    """Stała szerokość, ale wysokość NIGDY poniżej naturalnej wysokości przycisku.
+
+    Emoji w wyższej czcionce (redesign) potrzebują 31 px, a przyciski miały
+    przybite 30 → Qt ścinał dolny piksel glifu. Wołane PO nałożeniu arkusza
+    stylów, bo dopiero wtedy sizeHint() zna padding.
+    """
+    btn.setFixedSize(width, max(min_height, btn.sizeHint().height()))
+
+
 class QuickActionsDialog(QDialog):
     """Dialog do zarządzania szybkimi akcjami."""
 
@@ -5243,19 +5253,19 @@ class SkinSettingsDialog(QDialog):
 
         # Normal icon button with its color
         normal_btn = QPushButton(icon_data.get('normal', '?'))
-        normal_btn.setFixedSize(50, 30)
         normal_btn.setToolTip(tr('dlg_skin_icon_normal_tooltip'))
         normal_btn.setCursor(Qt.PointingHandCursor)
         normal_btn.setStyleSheet(self._get_icon_btn_style(normal_color))
+        _fit_icon_button(normal_btn, 50, 30)
         normal_btn.clicked.connect(lambda: self._edit_icon(icon_key, 'normal'))
         layout.addWidget(normal_btn, row, 1)
 
         # Active icon button with its color
         active_btn = QPushButton(icon_data.get('active', icon_data.get('normal', '?')))
-        active_btn.setFixedSize(50, 30)
         active_btn.setToolTip(tr('dlg_skin_icon_active_tooltip'))
         active_btn.setCursor(Qt.PointingHandCursor)
         active_btn.setStyleSheet(self._get_icon_btn_style(active_color))
+        _fit_icon_button(active_btn, 50, 30)
         active_btn.clicked.connect(lambda: self._edit_icon(icon_key, 'active'))
         layout.addWidget(active_btn, row, 2)
 
@@ -5265,10 +5275,10 @@ class SkinSettingsDialog(QDialog):
         if 'processing' in default_icon_data:
             processing_color = icon_data.get('processing_color', self.colors.get(f'icon_{icon_key}_color', f'{theme.TEXT}'))
             processing_btn = QPushButton(icon_data.get('processing', default_icon_data.get('processing', '⏳')))
-            processing_btn.setFixedSize(50, 30)
             processing_btn.setToolTip(tr('dlg_skin_icon_processing_tooltip'))
             processing_btn.setCursor(Qt.PointingHandCursor)
             processing_btn.setStyleSheet(self._get_icon_btn_style(processing_color))
+            _fit_icon_button(processing_btn, 50, 30)
             processing_btn.clicked.connect(lambda: self._edit_icon(icon_key, 'processing'))
             layout.addWidget(processing_btn, row, 3)
             self.icon_buttons[icon_key]['processing'] = processing_btn

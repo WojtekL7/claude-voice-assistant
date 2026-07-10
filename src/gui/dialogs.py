@@ -680,6 +680,77 @@ class _ClickableLabel(QLabel):
         super().mouseReleaseEvent(event)
 
 
+# Rola danych: minimalna (historyczna) wysokość wiersza listy — patrz _AutoRowList.
+_ROW_MIN_HEIGHT_ROLE = Qt.UserRole + 99
+
+
+class _AutoRowList(QListWidget):
+    """Lista, której wiersze DOPASOWUJĄ wysokość do treści.
+
+    Wiersze miały wysokość wpisaną na sztywno (`setSizeHint(QSize(0, 75))` itp.),
+    dobraną pod starą, niższą czcionkę. Po redesignie („Vibe Purple") opisy z
+    zawijaniem przestały się mieścić i były ucinane w pół zdania — bez suwaka,
+    bez wielokropka, bez żadnego sygnału.
+
+    Teraz wysokość wiersza liczy się z jego treści przy REALNEJ szerokości listy
+    (`heightForWidth`), a stara wartość zostaje wyłącznie jako dolna granica —
+    tam, gdzie wyglądało dobrze, nic się nie zmienia. Przeliczenie po pokazaniu
+    i po każdej zmianie szerokości (zawijanie zależy od szerokości!).
+    """
+
+    # Zmiana wysokości wiersza zmienia dostępną szerokość (suwak!), a ta zmienia
+    # zawijanie → jeden przebieg nie wystarcza. Powtarzamy, dopóki coś się zmienia,
+    # z twardym limitem (bezpiecznik przed pętlą przy dziwnej treści).
+    _MAX_REFIT_PASSES = 4
+
+    def refit_rows(self, _pass: int = 0):
+        # ⚠️ BEZ tego `row.height()` jest NIEAKTUALNE względem `item.sizeHint()`
+        # (Qt przelicza geometrię wierszy dopiero przy następnym obiegu pętli),
+        # a mierzona z nich oprawa skacze (-36 … +63) i wysokość zaczyna oscylować
+        # zamiast się ustalić. doItemsLayout() synchronizuje jedno z drugim.
+        self.doItemsLayout()
+        changed = False
+        for i in range(self.count()):
+            item = self.item(i)
+            row = self.itemWidget(item)
+            if row is None or row.width() <= 0:
+                continue  # jeszcze nie rozłożony — przeliczymy w showEvent/resizeEvent
+            # heightForWidth zna zawijanie; sizeHint dla zawijanej etykiety KŁAMIE
+            # (opisuje jedną linię przy innej szerokości). Pytamy o szerokość,
+            # jaką widżet REALNIE dostał — nie o szerokość portu widoku.
+            needed = row.heightForWidth(row.width())
+            if needed <= 0:
+                needed = row.sizeHint().height()
+            # Oprawa WIERSZA (QSS `QListWidget::item { padding; border }`) zjada
+            # wysokość POZA widżetem — MIERZYMY ją jako różnicę wysokości wiersza
+            # i widżetu, zamiast zgadywać. Bez tego wiersz wychodzi za niski
+            # dokładnie o padding (u nas 10+10+1 = 21 px) i opis dalej się ucina.
+            chrome = max(0, item.sizeHint().height() - row.height())
+            floor = item.data(_ROW_MIN_HEIGHT_ROLE) or 0
+            new_height = max(int(floor), int(needed) + chrome)
+            if item.sizeHint().height() != new_height:
+                item.setSizeHint(QSize(0, new_height))
+                changed = True
+
+        if changed and _pass + 1 < self._MAX_REFIT_PASSES:
+            # Kolejny przebieg PO przeliczeniu układu przez Qt (stąd timer 0 ms),
+            # bo dopiero wtedy widżety wierszy znają swoją nową szerokość.
+            QTimer.singleShot(0, lambda: self.refit_rows(_pass + 1))
+
+    def set_row_min_height(self, item: QListWidgetItem, minimum: int):
+        """Zapamiętaj dolną granicę wiersza i ustaw ją jako punkt wyjścia."""
+        item.setData(_ROW_MIN_HEIGHT_ROLE, int(minimum))
+        item.setSizeHint(QSize(0, int(minimum)))
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.refit_rows()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.refit_rows()
+
+
 class _PageScrollArea(QScrollArea):
     """QScrollArea, która przyznaje się do PEŁNEGO rozmiaru swojej treści.
 
@@ -1212,7 +1283,7 @@ class AgentConfigDialog(QDialog):
         self.global_skills_count_label.setStyleSheet(f"color: {theme.TEXT_DIM}; font-size: 11px;")
         layout.addWidget(self.global_skills_count_label)
 
-        self.global_skills_list = QListWidget()
+        self.global_skills_list = _AutoRowList()
         self.global_skills_list.setMinimumHeight(140)
         self.global_skills_list.setWordWrap(True)
         self.global_skills_list.setTextElideMode(Qt.ElideNone)
@@ -1260,7 +1331,7 @@ class AgentConfigDialog(QDialog):
         self.global_mcp_count_label.setStyleSheet(f"color: {theme.TEXT_DIM}; font-size: 11px;")
         layout.addWidget(self.global_mcp_count_label)
 
-        self.global_mcp_list = QListWidget()
+        self.global_mcp_list = _AutoRowList()
         self.global_mcp_list.setMinimumHeight(140)
         self.global_mcp_list.setWordWrap(True)
         self.global_mcp_list.setTextElideMode(Qt.ElideNone)
@@ -1760,9 +1831,9 @@ class AgentConfigDialog(QDialog):
 
         for skill in global_skills:
             item = QListWidgetItem()
-            item.setSizeHint(QSize(0, 75))
             item.setData(Qt.UserRole, skill.name)
             self.global_skills_list.addItem(item)
+            self.global_skills_list.set_row_min_height(item, 75)
 
             row = QWidget()
             row.setAttribute(Qt.WA_TranslucentBackground)
@@ -1945,9 +2016,9 @@ class AgentConfigDialog(QDialog):
 
         for srv in global_mcps:
             item = QListWidgetItem()
-            item.setSizeHint(QSize(0, 60))
             item.setData(Qt.UserRole, srv.name)
             self.global_mcp_list.addItem(item)
+            self.global_mcp_list.set_row_min_height(item, 60)
 
             row = QWidget()
             row.setAttribute(Qt.WA_TranslucentBackground)
@@ -2116,7 +2187,7 @@ class AgentsManagerDialog(QDialog):
         list_layout = QHBoxLayout()
 
         # Agents list
-        self.list_widget = QListWidget()
+        self.list_widget = _AutoRowList()
         # Enable word wrap so the per-item second line (file count + model)
         # is rendered. Without this, QListWidget collapses '\n' and elides
         # long names with "...", hiding the second line entirely.
@@ -2238,8 +2309,8 @@ class AgentsManagerDialog(QDialog):
             # Empty list item — visual content lives in the attached widget.
             item = QListWidgetItem()
             item.setData(Qt.UserRole, agent)
-            item.setSizeHint(QSize(0, 56))
             self.list_widget.addItem(item)
+            self.list_widget.set_row_min_height(item, 56)
 
             # Custom widget for this row. TŁO sygnalizuje auto-start: zielone =
             # agent uruchamiany przy starcie aplikacji, szare = nie. Kolor jest
@@ -2700,7 +2771,7 @@ class SkillsManagerDialog(QDialog):
 
         list_layout = QHBoxLayout()
 
-        self.list_widget = QListWidget()
+        self.list_widget = _AutoRowList()
         self.list_widget.setWordWrap(True)
         self.list_widget.setTextElideMode(Qt.ElideNone)
         self.list_widget.setStyleSheet(f"""
@@ -2771,8 +2842,8 @@ class SkillsManagerDialog(QDialog):
         if not self._skills:
             placeholder = QListWidgetItem()
             placeholder.setFlags(Qt.NoItemFlags)
-            placeholder.setSizeHint(QSize(0, 70))
             self.list_widget.addItem(placeholder)
+            self.list_widget.set_row_min_height(placeholder, 70)
 
             placeholder_widget = QWidget()
             placeholder_widget.setAttribute(Qt.WA_TranslucentBackground)
@@ -2792,8 +2863,8 @@ class SkillsManagerDialog(QDialog):
         for skill in self._skills:
             item = QListWidgetItem()
             item.setData(Qt.UserRole, skill)
-            item.setSizeHint(QSize(0, 64))
             self.list_widget.addItem(item)
+            self.list_widget.set_row_min_height(item, 64)
 
             row_widget = QWidget()
             row_widget.setAttribute(Qt.WA_TranslucentBackground)
@@ -3016,7 +3087,7 @@ class McpManagerDialog(QDialog):
         # Lista + panel przycisków
         list_layout = QHBoxLayout()
 
-        self.list_widget = QListWidget()
+        self.list_widget = _AutoRowList()
         self.list_widget.setWordWrap(True)
         self.list_widget.setTextElideMode(Qt.ElideNone)
         self.list_widget.setStyleSheet(f"""
@@ -3117,8 +3188,8 @@ class McpManagerDialog(QDialog):
         if not self._servers:
             placeholder = QListWidgetItem()
             placeholder.setFlags(Qt.NoItemFlags)
-            placeholder.setSizeHint(QSize(0, 70))
             self.list_widget.addItem(placeholder)
+            self.list_widget.set_row_min_height(placeholder, 70)
 
             placeholder_widget = QWidget()
             placeholder_widget.setAttribute(Qt.WA_TranslucentBackground)
@@ -3136,8 +3207,8 @@ class McpManagerDialog(QDialog):
         for srv in self._servers:
             item = QListWidgetItem()
             item.setData(Qt.UserRole, srv)
-            item.setSizeHint(QSize(0, 76))
             self.list_widget.addItem(item)
+            self.list_widget.set_row_min_height(item, 76)
 
             row_widget = QWidget()
             row_widget.setAttribute(Qt.WA_TranslucentBackground)
@@ -3408,7 +3479,7 @@ class _McpTemplatePickerDialog(QDialog):
         desc.setWordWrap(True)
         layout.addWidget(desc)
 
-        self.list_widget = QListWidget()
+        self.list_widget = _AutoRowList()
         self.list_widget.setWordWrap(True)
         self.list_widget.setTextElideMode(Qt.ElideNone)
         self.list_widget.setStyleSheet(f"""
@@ -3432,8 +3503,8 @@ class _McpTemplatePickerDialog(QDialog):
         for tpl in MCP_TEMPLATES:
             item = QListWidgetItem()
             item.setData(Qt.UserRole, tpl)
-            item.setSizeHint(QSize(0, 70))
             self.list_widget.addItem(item)
+            self.list_widget.set_row_min_height(item, 70)
 
             row = QWidget()
             row.setAttribute(Qt.WA_TranslucentBackground)
