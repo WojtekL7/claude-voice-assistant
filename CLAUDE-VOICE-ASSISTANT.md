@@ -39,6 +39,7 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
 | `src/core/text_cleaner.py` | `prose_from_markdown()` — proza dla TTS |
 | `src/core/update_manager.py` | Self-update (pobieranie, sha256, samo-podmiana per OS) |
 | `src/core/platform_utils.py` | OS/arch, env Qt, `update_platform_id()`, `macos_app_bundle()` |
+| `tools/scan-dialog-clipping.py` | Skan regresji: buduje 16 okien offscreen, zgłasza widżety ucinające tekst |
 
 ## Konfiguracja użytkownika — `~/.claude-voice-assistant/`
 `config.json` (język, głos, skin, `groq_api_key`, `auto_check_updates`) · `agents.json` (agenci + `splitter_sizes` per zakładka) · `memory_projects.json` · `quick_actions.json` · `tts.log` (błędy TTS) · `crash-logs/` (zrzuty „czarnej skrzynki" po crashu `claude` — patrz pułapka niżej).
@@ -50,6 +51,22 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
 - `pygame.mixer.init()` owinięte try/except (brak audio = TTS off, reszta działa).
 
 ---
+
+## ⏳ KOLEJKA DO TESTU PO OTWARCIU NOWEJ BETY (7 poprawek, wszystkie zacommitowane, NIEPRZETESTOWANE u usera)
+User pracuje WEWNĄTRZ działającej bety i nie może jej zamknąć ([[beta-restart-zabija-sesje]]) — stąd commity
+z dopiskiem „NIEPRZETESTOWANE". Przy najbliższym świeżym uruchomieniu przejść wszystko za jednym razem:
+1. **🔊 czyta z dziennika, nie z ekranu** (`9485c0d`) — dłuższa odpowiedź → 🔊 → zaczyna od 1. zdania, bez ramek
+   i bez „Read 2 files", czyta DO KOŃCA. Regresja: pytanie z opcjami (AskUserQuestion) → 🔊 przed odpowiedzią →
+   NAJNOWSZA wypowiedź, nie przedostatnia. → `czytaj-ostatnia-czyta-inna.md`
+2. **Brak ucinania po 500 słowach** (`9485c0d`) — wypowiedź dłuższa niż strona; też przy czytaniu zaznaczenia.
+3. **Pole „Wpisz polecenie" nie ucina ogonków liter** (`782120a`) — p, y, ż widoczne w całości; 5 linii bez
+   suwaka, suwak od 6.
+4. **Okno „Edytuj agenta"** (`782120a`) — pełne napisy, przycisk „Bez koloru" w całości; na małym ekranie suwak.
+5. **Listy w oknach** (`694251c`) — nazwa agenta z pełnym „y", pełne opisy skilli i szablonów MCP.
+6. **Auto-czytanie po auto-compact** (`1b57c60`) — po długiej rozmowie nie recytuje jej od początku.
+7. **Polskie znaki AltGr w terminalu** (`9aad8dd`) — ą/ż/ó wpisywane wprost w terminalu.
+Po potwierdzeniu 1+2: sprzątnąć diagnostyki `_flag_dbg`/`debug_state`/`_read_last_dbg` + `CVA_FLAG_DEBUG=1`
+z `run-safe.sh` (patrz „Inne otwarte TODO").
 
 ## AKTUALNY STAN (wersja 1.0.26 — WYDANA, 3 platformy)
 - **REDESIGN „Vibe Purple" (2026-07-09, NIEWYDANY — w kodzie, commity `bc81a03` + `410c9ab`):** nowy wygląd wg makiety Cloud Design (`Vibe Coding Assistant redesign.zip`), funkcje bez zmian. Paleta w `src/gui/theme.py` (jedyne źródło kolorów), migracja skórki `SKIN_VERSION=2` (bez niej zmiana palety byłaby NIEWIDOCZNA), czcionki IBM Plex Sans + JetBrains Mono w paczce, terminal przemalowany w obu silnikach, gradientowa kreska nad aktywną zakładką (`_AccentTabBar`), gradientowy przycisk Wyślij, suwak „Auto-czytaj", kreskowe ikony SVG w kolorze skórki, dialogi/pasek statusu/wskaźnik RAM na palecie. Szczegóły → pamięć `redesign-vibe-purple.md`, pułapki → `qt-pulapki-qss-redesign.md`. **Porcje A+B potwierdzone przez usera; Porcja C (dialogi) NIEPRZETESTOWANA na żywo.**
@@ -96,6 +113,12 @@ Tylko **aktywna** zakładka czyta; przełączenie ucisza poprzednią. Priming `s
 ## TRWAŁE PUŁAPKI PROJEKTU
 *(uniwersalne wersje wielu z nich są w CLAUDE-COMMON — tu skrót projektowy)*
 
+- **Sztywne wysokości w GUI + wyższe czcionki redesignu = ucięte litery (2026-07-10).** Qt nie pokazuje suwaka,
+  gdy widżet dostaje mniej miejsca niż potrzebuje — po cichu ściska rzędy i przycina glify. Objawy: ogonki p/y/ż
+  w polu poleceń i oknie agenta, opisy skilli urwane w pół zdania. Zasada: **MIERZ, nie wpisuj liczby** (oprawa
+  = `height() - viewport().height()`; wysokość linii = `blockBoundingRect`, NIE `lineSpacing`; wysokość wiersza
+  listy = `heightForWidth` + zmierzona oprawa `QListWidget::item`). Regresję łapie `tools/scan-dialog-clipping.py`
+  (16 okien). Pełny opis pułapek pomiaru → pamięć `qt-pulapki-qss-redesign.md`. Commity `782120a` + `694251c`.
 - **WebTerminal — kopiowanie ginie przez odświeżenia Claude (1.0.23).** xterm.js KASUJE zaznaczenie przy każdym zapisie do bufora, a Claude (TUI) odświeża ekran ~1×/s → zaznaczenie z Shiftem POWSTAJE, ale znika w ~1–2 s (QTermWidget trzyma je mimo odświeżeń — stąd „działa w becie, nie w pobranej"). Fix (`terminal.html`): w trakcie przeciągania PRÓBKUJ zaznaczenie (`setInterval` 80 ms) i wysyłaj OSTATNIE NIEPUSTE do `_selection`; strażnik na `onSelectionChange` (tylko niepuste), by odświeżenie nie zerowało. Kopiowanie czyta `_selection` (`WebTerminalBackend.copy_selection`) → działa mimo migającego podświetlenia. Pełne „zamrożenie" jak QTermWidget = osobna przebudowa. **1.0.24 (TEST) — porządne rozwiązanie B1+B2** (samo próbkowanie z 1.0.23 było za słabe, u usera dalej nie działało): **B1** `_stripMouse()` wycina z wyjścia DECSET raportowania myszy (`?1000/1001/1002/1003/1005/1006/1015/1016 h`; WYŁĄCZAJĄCE `l` przepuszcza, carry na styku porcji) → xterm NIE wchodzi w tryb myszy → drag zaznacza natywnie, BEZ Shift (jak czysty bash). **B2** `safeWrite()` + `_writePaused`: na czas przeciągania (mousedown→mouseup, `el`/`window` capture) KOLEJKUJE `term.write`, po puszczeniu łapie zaznaczenie i `_flushWrites()` (bezpiecznik 6 s). Kompromis: Claude traci mysz w swoim oknie (przewijanie kółkiem działa natywnie). Wyjście PTY idzie `bridge.output → safeWrite` (`web_terminal._push_to_js`).
 - **Flaga „?" — wyświetlanie samonaprawiające się (1.0.23).** `_refresh_question_flag` porównuje zamiar `show` z REALNYM stanem paska (`bar.tabButton(index, LeftSide) is not None`), NIE z notatką `_question_flag_shown` (USUNIĘTA) — rozjazd cache↔rzeczywistość trwale blokował znaczek przez early-return (objaw: armed=True w tle, a flagi brak; arming DZIAŁAŁ — potwierdził log). Teraz znaczek odtwarza się sam przy najbliższym ticku (≤0,8 s). Pokazuje się tylko na zakładce NIEaktywnej. Diagnoza: czujnik logujący + offscreen Qt (`QT_QPA_PLATFORM=offscreen`) — render OK, więc błąd był w logice cache.
 - **QTabBar — pakiet pułapek (1.0.25, dużo iteracji).** (1) **QSS `QTabBar::tab` GEOMETRIA (padding/font-size) jest IGNOROWANA**, gdy pasek ma własny `QStyle` (Fusion `_LeftAlignedTabStyle`) — KOLORY z QSS działają, ale rozmiar/odstęp nie. Czcionkę i rozmiar ikony ustawiaj API: `tabBar().setFont(QFont(pt))`, `tab_widget.setIconSize(QSize)`. (2) **Widżet LeftSide (`setTabButton`) ma NIEUSUWALNY odstęp od ikony** — `margin`, szerokość ani override `subElementRect(SE_TabBarTabLeftButton)` go nie zamykają (próbowane, nie działa na realnym pasku). Flaga „?" jest teraz **ŻÓŁTĄ IKONĄ z lewej**: badge wmalowany w róg ikony-obrazka (`_icon_with_flag`) albo samodzielna ikonka dla agentów z emoji (`_flag_only_icon`); NIE kolorujemy tytułu (źle wg usera). (3) **`setTabIcon`/`setTabText`/`setTabTextColor` RESETUJĄ przewinięcie paska** — timer flagi (~0,8 s) wołający je co tick robił, że taby wracały po kliknięciu strzałki. Fix: `_refresh_question_flag` jest NO-OP gdy sygnatura `(show, nazwa, repr(icon_spec))` bez zmian (sig ze STABILNYCH danych — nie z `QIcon`, bo ikona-plik tworzona świeżo co wywołanie). (4) **emoji-ikona = TEKST** (rośnie z czcionką, `setIconSize` jej nie rusza, renderuje się monochromatycznie/kolorem tytułu); **obrazek = `setTabIcon`** (rośnie z `setIconSize`). (5) Dzióbki przewijania (`QTabBar QToolButton`) stylowalne tłem QSS + własne strzałki przez `::left-arrow/::right-arrow { image }`. ⚠️ **Render offscreen QTabWidget NIE oddaje wiarygodnie realnego paska** (wielokrotnie mylił) — sprawdzaj ZACHOWANIE testem funkcjonalnym (klik + geometria `tabRect`), a wygląd potwierdzaj u usera; najpierw sprawdź `ps -o etimes` instancji vs czas commita, czy beta na pewno ma nowy kod.
