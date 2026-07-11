@@ -416,12 +416,6 @@ from gui.dialogs import (
 from gui.mcp_status_widget import McpStatusWidget
 from gui.resource_monitor import ResourceMonitorWidget
 
-# Diagnostyka flagi „?" — PASYWNY czujnik, domyślnie WYŁĄCZONY (zero kosztu
-# w wydanej apce). Włącz przez zmienną środowiskową CVA_FLAG_DEBUG=1. Zapisuje
-# stan każdego ogniwa flagi do ~/.vibe-coding-assistant/flag-debug.log, żeby
-# ustalić, dlaczego flaga „agent czeka" nie pokazuje się na zakładce w tle.
-_FLAG_DEBUG = bool(os.environ.get("CVA_FLAG_DEBUG"))
-
 # Domyślne kolory skórki (motyw „Vibe Purple") — interfejs + terminal.
 # Wartości pochodzą z jednej palety (gui/theme.py), nie są tu wpisywane wprost.
 DEFAULT_SKIN_COLORS = theme.skin_colors()
@@ -1429,17 +1423,6 @@ class MainWindow(QMainWindow):
         tabs = getattr(self, 'agent_tabs', None)
         if not tabs:
             return
-        # DIAG: baner startu w logu flagi — odróżnia świeży przebieg od
-        # nieaktualnego (throttle _flag_dbg loguje tylko zmiany, więc bez tego
-        # nie widać, kiedy zaczął się nowy przebieg). Raz na uruchomienie.
-        if _FLAG_DEBUG and not getattr(self, '_flag_dbg_banner', False):
-            self._flag_dbg_banner = True
-            try:
-                with open(CONFIG_DIR / "flag-debug.log", "a", encoding="utf-8") as f:
-                    f.write(f"\n===== START {datetime.now():%Y-%m-%d %H:%M:%S} "
-                            f"v{APP_VERSION} =====\n")
-            except Exception:
-                pass
         active = self.tab_widget.currentWidget()
 
         for tab in list(tabs.values()):
@@ -1447,36 +1430,14 @@ class MainWindow(QMainWindow):
                 continue
             reader = getattr(tab, '_transcript_reader', None)
             if reader is None:
-                # DIAG: rozróżnij „zakładki nie kliknięto" (leniwa aktywacja —
-                # aktyw=0) od zwykłego terminala/awarii tworzenia czytnika.
-                self._flag_dbg(
-                    tab,
-                    "reader=None aktyw={} plain={} pin={}".format(
-                        int(bool(getattr(tab, '_terminal_ready_handled', False))),
-                        int(bool(getattr(tab, 'is_plain_terminal', False))),
-                        getattr(tab, '_pinned_session_id', None) or '-',
-                    ),
-                )
                 continue
             try:
                 if not reader.has_session():
-                    # DIAG: pokaż przypięty uuid, oczekiwany plik i czy istnieje —
-                    # rozróżni „claude nie utworzył przypiętego pliku" od reszty.
-                    if _FLAG_DEBUG:
-                        st = reader.debug_state()
-                        self._flag_dbg(
-                            tab,
-                            "has_session=N pin={} dir={} plik={} istnieje={}".format(
-                                st['pinned'] or '-', st['project_dir'] or '-',
-                                st['expected'] or '-', int(st['exists']),
-                            ),
-                        )
                     continue
                 # Priming — pomiń to, co było przed startem czytania.
                 if not getattr(tab, '_transcript_primed', False):
                     reader.seek_to_end()
                     tab._transcript_primed = True
-                    self._flag_dbg(tab, "priming (pierwszy tick — pomijam)")
                     continue
                 # Flaga "?": czy agent ZATRZYMAŁ się i czeka na odpowiedź?
                 # Sprawdzane KAŻDY tick (nie zależy od nowej prozy) — stan
@@ -1500,13 +1461,6 @@ class MainWindow(QMainWindow):
                 _term_idle = time.monotonic() - getattr(tab, '_last_terminal_data_ts', 0.0)
                 terminal_quiet = _term_idle >= self.QUESTION_TERMINAL_QUIET_SECS
                 _armed = journal_quiet and terminal_quiet
-                _active = tab is self.tab_widget.currentWidget()
-                self._flag_dbg(
-                    tab,
-                    f"jq={int(journal_quiet)} term_idle={_term_idle:.1f}s "
-                    f"tq={int(terminal_quiet)} ARMED={int(_armed)} "
-                    f"active={int(_active)} SHOW={int(_armed and not _active)}",
-                )
                 self._arm_question(tab, _armed)
 
                 new_blocks = reader.poll()
@@ -2924,13 +2878,12 @@ class MainWindow(QMainWindow):
             self.tts.set_voice(_voice)
 
         if self.terminal_backend:
-            # For terminal mode - read from buffer or selected text
-            selected = self.terminal_backend.selected_text()
-
-            # Diagnostyka „czyta przedostatnią/coś innego" (pasywna, CVA_FLAG_DEBUG=1).
-            # Wołana TU (przed gałęzią zaznaczenia), by zarejestrować też przypadek
-            # „czyta stare/przypadkowe zaznaczenie zamiast ostatniej odpowiedzi".
-            self._read_last_dbg(selected)
+            # „Czytaj ostatnią": zaznaczenie honorujemy TYLKO gdy ŚWIEŻE
+            # (active_selection). Lepkie, „przyklejone" zaznaczenie WebTerminala
+            # (zostaje po kopiowaniu, przeżywa przerysowania Claude) wypierało
+            # odczyt NAJNOWSZEJ odpowiedzi — user słyszał stary tekst zamiast
+            # ostatniej wypowiedzi (zdiagnozowane z read-last-debug.log 2026-07-11).
+            selected = self.terminal_backend.active_selection()
 
             if selected:
                 # Fix Polish encoding first
@@ -4322,110 +4275,6 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         c = self._agent_tab_color(getattr(tab, 'agent_config', None))
         return QColor(c) if c else QColor(self.skin_colors.get('text_color', f'{theme.TEXT}'))
 
-    def _flag_dbg(self, tab, state: str, key: str = "poll"):
-        """Czujnik flagi „?": zapisz stan do pliku, ale TYLKO gdy się zmienił
-        (throttle per (tab, key)) — żeby nie zalać logu. Aktywny wyłącznie przy
-        CVA_FLAG_DEBUG=1. Pasywny: nie zmienia żadnego zachowania apki."""
-        if not _FLAG_DEBUG:
-            return
-        try:
-            name = (getattr(tab, 'agent_config', {}) or {}).get('name', '?')
-            cache = getattr(tab, '_flag_dbg_last', None)
-            if cache is None:
-                cache = {}
-                tab._flag_dbg_last = cache
-            line = f"[{name}] {key}: {state}"
-            if cache.get(key) == line:
-                return  # bez zmiany — nie loguj ponownie
-            cache[key] = line
-            ts = datetime.now().strftime('%H:%M:%S')
-            with open(CONFIG_DIR / "flag-debug.log", "a", encoding="utf-8") as f:
-                f.write(f"{ts} {line}\n")
-        except Exception:
-            pass
-
-    def _read_last_dbg(self, selected=None):
-        """Diagnostyka przycisku 🔊 „czytaj ostatnią": dlaczego czyta coś innego?
-
-        Loguje do read-last-debug.log stan DOKŁADNIE w chwili kliknięcia:
-          • czy w terminalu jest ZAZNACZENIE (wtedy apka czyta je, NIE ostatnią
-            odpowiedź — najczęstszy podejrzany o „czyta zupełnie coś innego");
-          • stan pliku sesji: świeżość zapisu, liczbę wypowiedzi Claude'a, treść
-            ostatniej i przedostatniej, kompletność ostatniej linii JSON;
-          • co zwróci last_response() (ścieżka poprawna).
-        Dzięki temu widać, KTÓRĄ gałęzią pójdzie odczyt. Aktywne tylko przy
-        CVA_FLAG_DEBUG=1. Pasywne — NIE zmienia zachowania."""
-        if not _FLAG_DEBUG:
-            return
-        try:
-            tab = self._get_current_agent_tab()
-            name = (getattr(tab, 'agent_config', {}) or {}).get('name', '?')
-            reader = getattr(tab, '_transcript_reader', None) if tab else None
-            ts = datetime.now().strftime('%H:%M:%S')
-            sel = selected if isinstance(selected, str) else ''
-            sel_prev = ' '.join(sel.split())[:80]
-            branch = ("ZAZNACZENIE (czyta zaznaczenie!)" if sel.strip()
-                      else "czytnik/last_response" if reader is not None
-                      else "fallback bufor terminala")
-            out = [f"{ts} [{name}] KLIK 🔊 czytaj-ostatnią  -> gałąź: {branch}"]
-            out.append(f"   selected_text: len={len(sel)} treść={sel_prev!r}")
-            if reader is None:
-                out.append("   reader=None (brak czytnika)")
-            else:
-                ds = reader.debug_state() if hasattr(reader, 'debug_state') else {}
-                sf = ds.get('session_file')
-                out.append(f"   session_file={sf}")
-                out.append(f"   exists={ds.get('exists')} pinned={ds.get('pinned')} "
-                           f"offset={ds.get('offset')} wait_stable={ds.get('wait_stable')}")
-                try:
-                    out.append(f"   waiting_for_user={reader.waiting_for_user()}")
-                except Exception as e:
-                    out.append(f"   waiting_for_user błąd: {e}")
-                texts = []
-                last_line_ok = None  # czy ostatnia niepusta linia = kompletny JSON?
-                if sf and os.path.exists(sf):
-                    age = time.time() - os.path.getmtime(sf)
-                    out.append(f"   plik: rozmiar={os.path.getsize(sf)}B  "
-                               f"ostatni_zapis={age:.1f}s temu")
-                    try:
-                        with open(sf, encoding='utf-8', errors='ignore') as f:
-                            for ln in f:
-                                ln = ln.strip()
-                                if not ln:
-                                    continue
-                                try:
-                                    o = json.loads(ln)
-                                    last_line_ok = True
-                                except Exception:
-                                    last_line_ok = False
-                                    continue
-                                if o.get('type') != 'assistant' or o.get('isSidechain'):
-                                    continue
-                                msg = o.get('message') or {}
-                                c = msg.get('content')
-                                if isinstance(c, list):
-                                    parts = [b.get('text') for b in c if isinstance(b, dict)
-                                             and b.get('type') == 'text' and b.get('text')]
-                                    if parts:
-                                        texts.append(' '.join('\n\n'.join(parts).split())[:80])
-                    except Exception as e:
-                        out.append(f"   (błąd czytania pliku: {e})")
-                out.append(f"   ostatnia_linia_kompletny_JSON={last_line_ok}")
-                out.append(f"   wypowiedzi_Claude_w_pliku={len(texts)}")
-                if texts:
-                    out.append(f"   OSTATNIA w pliku (to PRZECZYTA): {texts[-1]!r}")
-                if len(texts) >= 2:
-                    out.append(f"   PRZEDOSTATNIA w pliku:           {texts[-2]!r}")
-                try:
-                    lr = reader.last_response() or ''
-                    out.append(f"   last_response() -> {' '.join(lr.split())[:80]!r}")
-                except Exception as e:
-                    out.append(f"   last_response() błąd: {e}")
-            with open(CONFIG_DIR / "read-last-debug.log", "a", encoding="utf-8") as f:
-                f.write("\n".join(out) + "\n")
-        except Exception:
-            pass
-
     def _refresh_question_flag(self, tab):
         """Pokaż flagę „agent czeka", gdy zakładka uzbrojona I nieaktywna —
         SKRAJNIE Z LEWEJ i ŻÓŁTĄ, by była widoczna i przy ikonie:
@@ -4448,17 +4297,6 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         # ikony-pliku tworzona jest świeża instancja przy każdym wywołaniu).
         sig = (show, base_label, repr(cfg.get('icon')))
         _skipped = getattr(tab, "_flag_sig", None) == sig
-        if _FLAG_DEBUG:
-            try:
-                _icon_null = int(self.tab_widget.tabIcon(index).isNull())
-            except Exception:
-                _icon_null = -1
-            self._flag_dbg(
-                tab,
-                f"show={int(show)} skip={int(_skipped)} "
-                f"real_icon_null={_icon_null} base_icon_null={int(base_icon.isNull())}",
-                key="refresh",
-            )
         if _skipped:
             return
         tab._flag_sig = sig

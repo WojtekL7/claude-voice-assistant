@@ -15,6 +15,7 @@ import sys
 import json
 import codecs
 import threading
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -117,7 +118,20 @@ class _Bridge(QObject):
 
     @pyqtSlot(str)
     def set_selection(self, text):
+        # `_selection` jest LEPKIE (przeżywa przerysowania Claude) — potrzebne
+        # KOPIOWANIU. Ale „czytaj ostatnią" nie może czytać starego ducha, więc
+        # stemplujemy CZAS ostatniego NIEPUSTEGO zaznaczenia; active_selection()
+        # honoruje je tylko przez chwilę (patrz SELECTION_FRESH_SECS).
         self._owner._selection = text or ""
+        if text:
+            self._owner._selection_ts = time.monotonic()
+
+
+# Jak długo (s) po zaznaczeniu „czytaj ostatnią" traktuje je jako świeże i czyta
+# JE zamiast ostatniej odpowiedzi. Ludzka skala „zaznaczyłem, żeby przeczytać";
+# starsze duchy (np. sprzed minut, po kopiowaniu) są ignorowane. Patrz
+# WebTerminal.active_selection.
+SELECTION_FRESH_SECS = 30.0
 
 
 class WebTerminal(QWidget):
@@ -132,7 +146,8 @@ class WebTerminal(QWidget):
         self._proc = None
         self._reader = None
         self._stop = threading.Event()
-        self._selection = ""
+        self._selection = ""        # LEPKIE zaznaczenie (dla kopiowania)
+        self._selection_ts = 0.0    # monotonic() ostatniego NIEPUSTEGO zaznaczenia
         self._shell = default_shell()
         self._cwd = None
         self._pending_size = (80, 24)
@@ -223,6 +238,20 @@ class WebTerminal(QWidget):
 
     def selected_text(self) -> str:
         return self._selection
+
+    def active_selection(self) -> str:
+        """Zaznaczenie do CZYTANIA na głos — tylko jeśli ŚWIEŻE.
+
+        `selected_text()` zwraca lepkie `_selection`, które przeżywa przerysowania
+        Claude (dobre dla kopiowania), ale przez to zostaje „duchem" po dawnym
+        zaznaczeniu → „czytaj ostatnią" czytało stary tekst zamiast najnowszej
+        odpowiedzi (WebTerminal; QTermWidget czyści zaznaczenie sam). Tu honorujemy
+        zaznaczenie tylko przez SELECTION_FRESH_SECS od jego zrobienia — czyli gdy
+        user WŁAŚNIE je zaznaczył, by odczytać. Inaczej „" → odczyt idzie do
+        najnowszej odpowiedzi z dziennika."""
+        if self._selection and (time.monotonic() - self._selection_ts) <= SELECTION_FRESH_SECS:
+            return self._selection
+        return ""
 
     def clear(self):
         self.view.page().runJavaScript("window.__termClear && window.__termClear();")

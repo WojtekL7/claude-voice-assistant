@@ -154,6 +154,16 @@ class TerminalBackend(QObject):
     def selected_text(self) -> str:
         raise NotImplementedError
 
+    def active_selection(self) -> str:
+        """Zaznaczenie do CZYTANIA na głos — tylko jeśli AKTUALNE/świeże.
+
+        Różni się od selected_text() (używanego przez KOPIOWANIE): „czytaj
+        ostatnią" NIE może czytać starego, „przyklejonego" zaznaczenia (bug
+        WebTerminala — lepkie `_selection` zostawało duchem i wypierało odczyt
+        najnowszej odpowiedzi). Domyślnie = selected_text (bezpieczny fallback);
+        backendy nadpisują wg swojej semantyki."""
+        return self.selected_text()
+
     def copy_selection(self):
         raise NotImplementedError
 
@@ -329,6 +339,16 @@ class QTermWidgetBackend(TerminalBackend):
             live = ""
         return live or self._cached_selection
 
+    def active_selection(self) -> str:
+        """Tylko ŻYWE zaznaczenie (BEZ fallbacku na _cached_selection, którego
+        używa kopiowanie). QTermWidget czyści zaznaczenie sam po przerysowaniu,
+        więc gdy nic nie jest teraz zaznaczone → '' → „czytaj ostatnią" idzie do
+        najnowszej odpowiedzi z dziennika, nie do starego zaznaczenia."""
+        try:
+            return self._term.selectedText() or ""
+        except Exception:
+            return ""
+
     def copy_selection(self):
         """Skopiuj zaznaczenie do schowka. Pewniej niż `copyClipboard()`:
         wprost przez Qt do schowka „Clipboard" (Ctrl+V) ORAZ „Selection"
@@ -420,6 +440,10 @@ class WebTerminalBackend(TerminalBackend):
 
     def selected_text(self) -> str:
         return self._term.selected_text()
+
+    def active_selection(self) -> str:
+        # WebTerminal sam pilnuje świeżości (lepkie _selection ma znacznik czasu).
+        return self._term.active_selection()
 
     def copy_selection(self):
         # Schowek przez Qt działa wszędzie (w tym macOS/Windows).
