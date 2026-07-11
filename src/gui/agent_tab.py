@@ -242,6 +242,7 @@ class AgentTab(QWidget):
     add_quick_action_requested = pyqtSignal()  # Request to add new quick action
     splitter_changed = pyqtSignal(list)  # Emitted when splitter position changes
     terminal_ready = pyqtSignal()  # Emitted from activate() po stworzeniu QTermWidget
+    request_terminal_repair = pyqtSignal()  # Napraw „rozstrzelony" terminal: zrzut dowodu + restart z --resume
 
     def __init__(self, agent_config: dict, parent=None):
         super().__init__(parent)
@@ -593,6 +594,23 @@ class AgentTab(QWidget):
         self._update_mouse_mode_btn()
         layout.addWidget(self.mouse_mode_btn)
 
+        # „Napraw wygląd terminala" — ratunek na rzadką usterkę, gdy Claude Code
+        # zaczyna rysować tekst rozstrzelony („N a j p i l n i e j s z e", kreski
+        # ─ ─ ─). Klik: (1) zrzuca SUROWY bufor terminala do pliku dowodowego
+        # (żeby wreszcie namierzyć przyczynę — sekwencje ESC są tu kluczem),
+        # potem (2) restartuje `claude --resume <sesja>` = świeży proces kasuje
+        # usterkę, a ROZMOWA zostaje (inaczej niż zwykły restart zakładki, który
+        # startuje pustą sesję). Cała robota po stronie MainWindow (zna komendę
+        # claude i przypiętą sesję) — tu tylko zrzut + sygnał.
+        self.repair_terminal_btn = QPushButton()
+        self.repair_terminal_btn.setIcon(
+            icon_set.button_icon('repair_terminal', color=theme.TEXT_DIM))
+        self.repair_terminal_btn.setIconSize(PANEL_ICON_SIZE)
+        self.repair_terminal_btn.setFixedSize(btn_size, btn_size)
+        self.repair_terminal_btn.setToolTip(tr('repair_terminal_tooltip'))
+        self.repair_terminal_btn.clicked.connect(self._repair_terminal)
+        layout.addWidget(self.repair_terminal_btn)
+
         layout.addStretch()
 
         # Auto-read checkbox — rysowany jako PRZEŁĄCZNIK (suwak), nie kwadracik.
@@ -781,6 +799,90 @@ class AgentTab(QWidget):
                 pass
 
         self.status_changed.emit(f"Zapisano log crashu: {path.name}")
+
+    # ---- „Napraw wygląd terminala": dowód + restart z zachowaniem rozmowy ----
+
+    def _repair_terminal(self):
+        """Klik „Napraw wygląd terminala".
+
+        Kolejność JEST istotna: NAJPIERW zrzuć dowód (surowy bufor z sekwencjami
+        ESC — po restarcie zniknie), DOPIERO potem poproś MainWindow o restart
+        `claude --resume`. Dzięki temu każde użycie przycisku zostawia próbkę do
+        namierzenia przyczyny rozstrzelonego tekstu. Zrzut nigdy nie blokuje
+        samej naprawy."""
+        try:
+            path = self._dump_terminal_snapshot()
+            if path is not None:
+                self.status_changed.emit(f"Zapisano zrzut terminala: {path.name}")
+        except Exception:
+            pass
+        self.request_terminal_repair.emit()
+
+    def _dump_terminal_snapshot(self, reason="rozstrzelony terminal (napraw wygląd)"):
+        """Zrzuć SUROWY ring-bufor terminala (Z sekwencjami ANSI/ESC) do pliku.
+
+        Odwrotnie niż _dump_crash_log — tu NIE czyścimy ANSI, bo to WŁAŚNIE
+        sekwencje sterujące są dowodem: DSR-pomiar kursora `ESC[6n` albo DECDWL
+        podwójna szerokość `ESC#6` tłumaczyłyby rozstrzelony tekst. Zapis w formie
+        czytelnej (ESC→<ESC>, znaki sterujące→<0xNN>) + skan podejrzanych
+        sekwencji. Zwraca Path albo None. Całość defensywna."""
+        import re as _re
+        from datetime import datetime
+
+        raw = self._terminal_capture or ""
+        if not raw.strip():
+            return None
+
+        # Widoczna forma: \n zostaje realnym łamaniem (czytelność linia po linii),
+        # pozostałe znaki sterujące pokazujemy jako tokeny.
+        def _visible(s):
+            out = []
+            for ch in s:
+                if ch == "\n":
+                    out.append("\n")
+                elif ch == "\x1b":
+                    out.append("<ESC>")
+                else:
+                    o = ord(ch)
+                    out.append(f"<0x{o:02x}>" if (o < 0x20 or o == 0x7f) else ch)
+            return "".join(out)
+
+        scan = [
+            ("DSR pomiar kursora  ESC[6n",   len(_re.findall(r"\x1b\[6n", raw))),
+            ("DECDWL podw. szer.  ESC#6",    len(_re.findall(r"\x1b#6", raw))),
+            ("DECDHL podw. wys.   ESC#3/#4", len(_re.findall(r"\x1b#[34]", raw))),
+            ("DECSWL poj. szer.   ESC#5",    len(_re.findall(r"\x1b#5", raw))),
+        ]
+
+        safe_name = _re.sub(r"[^\w.-]", "_", str(self.agent_name))[:40] or "agent"
+        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+        CRASH_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        path = CRASH_LOG_DIR / f"terminal-glitch-{safe_name}-{ts}.log"
+
+        header = (
+            "=== CVA zrzut terminala (diagnoza rozstrzelonego tekstu) ===\n"
+            f"czas:    {datetime.now().isoformat(timespec='seconds')}\n"
+            f"agent:   {self.agent_name} (id={self.agent_id})\n"
+            f"model:   {self.model}\n"
+            f"cwd:     {self.working_directory}\n"
+            f"powód:   {reason}\n"
+            f"uwaga:   OSTATNIE ~{TERMINAL_CAPTURE_BYTES // 1024} KB wyjścia terminala,\n"
+            "         SEKWENCJE ANSI ZACHOWANE (ESC-><ESC>, sterujace-><0xNN>).\n"
+            "--- skan podejrzanych sekwencji szerokosci/pomiaru ---\n"
+            + "".join(f"  {label}: {n}\n" for label, n in scan)
+            + "=" * 60 + "\n\n"
+        )
+        path.write_text(header + _visible(raw), encoding="utf-8", errors="replace")
+
+        # Przytnij najstarsze zrzuty ponad limit (osobna pula od crash-logów).
+        logs = sorted(CRASH_LOG_DIR.glob("terminal-glitch-*.log"),
+                      key=lambda p: p.stat().st_mtime)
+        for old in logs[:-CRASH_LOG_KEEP]:
+            try:
+                old.unlink()
+            except OSError:
+                pass
+        return path
 
     def _read_terminal_buffer(self):
         """Read accumulated terminal output via TTS."""

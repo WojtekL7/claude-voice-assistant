@@ -285,6 +285,12 @@ UI_TRANSLATIONS = {
                                " (kółko/klik nie idą wtedy do Claude)."),
         "status_mouse_scroll": "Mysz: przewijanie (kółko przewija Claude, zaznaczanie z Shift)",
         "status_mouse_select": "Mysz: zaznaczanie tekstu bez Shift",
+        "repair_terminal_tooltip": ("Napraw wygląd terminala, gdy tekst robi się\n"
+                                    "„rozstrzelony” (litery z odstępami, kreski ─ ─ ─).\n"
+                                    "Zapisuje zrzut do diagnozy i restartuje Claude Code\n"
+                                    "z zachowaniem bieżącej rozmowy."),
+        "status_terminal_repair": "Naprawiam wygląd terminala — wznawiam rozmowę…",
+        "status_terminal_snapshot_only": "Zapisano zrzut terminala (brak sesji do wznowienia)",
         "clear_input_tooltip": "Wyczyść pole tekstowe",
         "add_media_tooltip": "Dodaj media (zdjęcia, dokumenty, pliki)",
         "analyze_files_prefix": "Przeanalizuj te pliki:",
@@ -1013,6 +1019,12 @@ UI_TRANSLATIONS = {
                                " (wheel/click no longer go to Claude)."),
         "status_mouse_scroll": "Mouse: scroll (wheel scrolls Claude, select with Shift)",
         "status_mouse_select": "Mouse: select text without Shift",
+        "repair_terminal_tooltip": ("Fix the terminal display when text becomes\n"
+                                    "\"spaced out\" (gaps between letters, ─ ─ ─ rules).\n"
+                                    "Saves a diagnostic snapshot and restarts Claude Code\n"
+                                    "keeping the current conversation."),
+        "status_terminal_repair": "Fixing terminal display — resuming conversation…",
+        "status_terminal_snapshot_only": "Terminal snapshot saved (no session to resume)",
         "clear_input_tooltip": "Clear input field",
         "add_media_tooltip": "Add media (images, documents, files)",
         "analyze_files_prefix": "Analyze these files:",

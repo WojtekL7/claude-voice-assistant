@@ -1059,6 +1059,8 @@ class MainWindow(QMainWindow):
         agent_tab.request_pause.connect(self._toggle_pause)
         agent_tab.request_read_last.connect(self._read_last_response)
         agent_tab.request_dictation.connect(self._handle_dictation_request)
+        agent_tab.request_terminal_repair.connect(
+            lambda tab=agent_tab: self._repair_terminal_in_tab(tab))
         agent_tab.message_sent.connect(self._on_message_sent)
         agent_tab.add_quick_action_requested.connect(self._add_quick_action)
         agent_tab.splitter_changed.connect(
@@ -2399,6 +2401,49 @@ class MainWindow(QMainWindow):
             agent_tab.terminal_backend.send_text(cmd + "\r")
             self._update_status(tr('status_claude_started_in').format(name=agent_tab.agent_name))
 
+    def _repair_terminal_in_tab(self, agent_tab):
+        """Napraw „rozstrzelony" terminal zakładki BEZ utraty rozmowy.
+
+        Rzadka usterka: Claude Code w danej sesji zaczyna rysować tekst z
+        odstępami (każdy znak jak w podwójnie szerokiej kratce). Jedyny pewny lek
+        to ŚWIEŻY proces `claude` — ale zwykły restart startuje pustą sesję. Tu
+        wychodzimy z bieżącego claude (Ctrl-C ×2/×3 — działa i gdy pisze, i gdy
+        czeka; Claude Code NIE ma komendy /exit) i wracamy przez
+        `claude --resume <ta sama sesja>` → nowy proces kasuje usterkę, a rozmowa
+        zostaje.
+
+        Wymaga przypiętej sesji (agent_tab._pinned_session_id — mamy ją od 1.0.26,
+        `claude --session-id`). Dla zwykłego terminala / braku sesji: sam zrzut
+        dowodu już się zapisał (w AgentTab), restartu nie ma po co robić.
+        """
+        backend = getattr(agent_tab, 'terminal_backend', None)
+        if backend is None:
+            return
+
+        session_id = getattr(agent_tab, '_pinned_session_id', None)
+        if (getattr(agent_tab, 'is_plain_terminal', False)
+                or not session_id or not self.claude_command):
+            self._update_status(tr('status_terminal_snapshot_only'))
+            return
+
+        # `claude --resume <id>` MUSI startować z katalogu, w którym sesja
+        # powstała (id jest skopowane do bieżącego projektu). Bash zakładki siedzi
+        # w working_directory agenta, więc warunek spełniony bez `cd`.
+        resume_cmd = f"{self.claude_command} --resume {session_id}"
+
+        # Wyjście z bieżącego claude: Ctrl-C przerywa ew. generowanie i czyści
+        # linię wejścia, kolejne wychodzą do powłoki (trzeci jest nieszkodliwy —
+        # na bashu anuluje pustą linię). Potem, z zapasem na rozruch powłoki,
+        # komenda wznowienia. Wzorzec „send_text + QTimer" jak w reszcie pliku.
+        try:
+            backend.send_text("\x03")
+            QTimer.singleShot(250, lambda: backend.send_text("\x03"))
+            QTimer.singleShot(500, lambda: backend.send_text("\x03"))
+            QTimer.singleShot(1600, lambda: backend.send_text(resume_cmd + "\r"))
+            self._update_status(tr('status_terminal_repair'))
+        except Exception:
+            self._update_status(tr('status_terminal_snapshot_only'))
+
     # ==================== Event Handlers ====================
 
     def _ensure_terminal_at_bottom(self):
@@ -2488,6 +2533,7 @@ class MainWindow(QMainWindow):
             tab.clear_input_btn.setToolTip(tr('clear_input_tooltip'))
             tab.add_media_btn.setToolTip(tr('add_media_tooltip'))
             tab.quick_actions_btn.setToolTip(tr('quick_actions'))
+            tab.repair_terminal_btn.setToolTip(tr('repair_terminal_tooltip'))
             tab.auto_read_checkbox.setText(tr('auto_read'))
         except Exception:
             pass
@@ -3399,6 +3445,7 @@ class MainWindow(QMainWindow):
                 ('clear_input_btn', 'clear_input'),
                 ('add_media_btn', 'add_media'),
                 ('quick_actions_btn', 'quick_actions'),
+                ('repair_terminal_btn', 'repair_terminal'),
             ):
                 btn = getattr(tab, attr, None)
                 if btn is not None:

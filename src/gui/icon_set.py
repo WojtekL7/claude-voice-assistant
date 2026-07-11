@@ -44,6 +44,7 @@ _STATE_TO_FILE = {
     ('clear_input', 'normal'): 'close',
     ('add_media', 'normal'): 'clip',
     ('quick_actions', 'normal'): 'bolt',
+    ('repair_terminal', 'normal'): 'refresh',
 }
 
 # Poziomy głośnika do animacji czytania (odpowiednik 🔈 🔉 🔊).
