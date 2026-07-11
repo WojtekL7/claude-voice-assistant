@@ -346,11 +346,19 @@ class WebTerminal(QWidget):
         _log("drop: filtr zdarzeń zainstalowany na render widget")
 
     def eventFilter(self, obj, event):
-        """Przechwytuje upuszczenie PLIKU na terminal, zanim zrobi to Chromium.
+        """Filtr na widgecie renderującym QtWebEngine — dwie sprawy:
 
-        Tylko dla URL-i z lokalnymi plikami: akceptujemy DragEnter/Move i na Drop
-        wpisujemy ścieżkę do PTY (jak natywny terminal). Inne zrzuty (np. tekst)
-        puszczamy dalej do strony — tam obsłuży je JS w terminal.html."""
+        1) DROP PLIKU na terminal (zanim zrobi to Chromium): dla URL-i z lokalnymi
+           plikami akceptujemy DragEnter/Move i na Drop wpisujemy ścieżkę do PTY.
+        2) POLSKIE/narodowe litery (AltGr/iBus). QtWebEngine potrafi zgubić znak
+           narodowy w drodze do xterm.js — TAK SAMO jak Konsole w QTermWidgecie
+           (fix 9aad8dd dotyczył tylko QTermWidgetu, WebTerminal go nie miał →
+           u usera na WebTerminalu 'żółć' nie wchodziło wprost w terminalu, choć
+           w polu na dole tak). Łapiemy WYŁĄCZNIE drukowalne znaki SPOZA ASCII
+           z KeyPress oraz commit metody wprowadzania i wysyłamy wprost do PTY
+           (UTF-8) — tą samą drogą co pole na dole. ASCII/Enter/strzałki/Ctrl+C/
+           skróty NIETKNIĘTE (idą normalną drogą do strony → xterm.js). Zwracamy
+           True, więc znak leci do PTY dokładnie RAZ (bez podwajania)."""
         et = event.type()
         if et in (QEvent.DragEnter, QEvent.DragMove):
             if event.mimeData().hasUrls() and self._drop_paths_to_text(event.mimeData()):
@@ -363,6 +371,22 @@ class WebTerminal(QWidget):
                 event.acceptProposedAction()
                 self.focus_terminal()
                 return True
+        elif et == QEvent.KeyPress:
+            try:
+                text = event.text()
+                if text and text.isprintable() and any(ord(c) > 127 for c in text):
+                    self._write_pty(text)
+                    return True
+            except Exception:
+                pass  # nigdy nie blokuj klawiatury z powodu tego mostu
+        elif et == QEvent.InputMethod:
+            try:
+                commit = event.commitString()
+                if commit:
+                    self._write_pty(commit)
+                    return True
+            except Exception:
+                pass
         return super().eventFilter(obj, event)
 
     def showEvent(self, event):
