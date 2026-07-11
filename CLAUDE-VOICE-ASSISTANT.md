@@ -1,5 +1,14 @@
 # CLAUDE-VOICE-ASSISTANT — Agent aplikacji desktopowej
 
+## 🟡 DO SPRAWDZENIA — XSS panel admina (audyt 2026-07-11, zlecony przez agenta CRM)
+
+Warstwa terminala (QtWebEngine, `src/assets/web/terminal.html`) jest **BEZPIECZNA** — wyjście PTY idzie przez xterm.js `term.write()`, NIE `innerHTML`; zero inline handlerów. Uwagi dotyczą TYLKO panelu admina serwowanego z FastAPI (otwierany w PRZEGLĄDARCE, nie desktop) — ryzyko OGRANICZONE (apka lokalna, dane z lokalnego procesu):
+- **`panel/index.html`** — 5× `innerHTML` z template literals; chroni ręczny `esc()` (94×, poprawny), ale ochrona jest PER-POLE → każde nowe pole renderowane bez `esc()` = stored XSS z danych serwera (email/nazwa klienta w panelu licencji). Rozważ DOMPurify jako drugą warstwę + CSP (panel w przeglądarce by z niego skorzystał, `script-src` bez `unsafe-inline` bo używa `data-action` + delegacji, nie inline onclick).
+- **`src/gui/web_terminal.py:408-416` `_show_failure_page`** — HTML sklejany f-stringiem z NIEescapowanym `reason`; dziś deweloperski/statyczny, ale przy każdej zmianie owiń escaperem, gdyby wpłynął tam tekst zewnętrzny (stderr/ścieżka).
+- Brak CSP (QtWebEngine i tak nie egzekwuje — dla terminala nieistotne; dla panelu-w-przeglądarce warto).
+
+Audyt STATYCZNY, **niski priorytet** (lokalne). Wzorzec → `CLAUDE-COMMON.md` (trzy konteksty escapowania).
+
 **Przed pracą załaduj również:**
 1. 🔴 [`docs/PRD.md`](docs/PRD.md) — Roadmap komercjalizacji 2026 (wizja, fazy, funkcje)
 2. [`../CLAUDE-COMMON.md`](../CLAUDE-COMMON.md) — wspólne procedury i pułapki (uniwersalne)
