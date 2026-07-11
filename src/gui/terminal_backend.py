@@ -476,21 +476,25 @@ class WebTerminalBackend(TerminalBackend):
 # ==================== Wybór backendu + fabryka ====================
 
 def selected_backend_kind() -> str:
-    """Który silnik zostanie użyty: 'qtermwidget' albo 'webterminal'.
+    """Który silnik terminala: 'webterminal' (domyślnie WSZĘDZIE) albo 'qtermwidget'.
 
-    Reguły:
-      * macOS / Windows                 → 'webterminal' (QTermWidget tam nie istnieje)
-      * Linux + CVA_WEBTERMINAL=1        → 'webterminal' (tryb testowy)
-      * Linux bez dostępnego QTermWidget → 'webterminal' (bezpieczna droga zapasowa)
-      * Linux (domyślnie)                → 'qtermwidget' (bez zmian w zachowaniu)
+    UJEDNOLICENIE 2026-07-11 (decyzja usera): WebTerminal to JEDYNY silnik na
+    każdej platformie i w każdym trybie uruchomienia — DOKŁADNIE ten sam, co w
+    pobieranej apce (Linux AppImage / macOS / Windows). Powód: koniec rozjazdu
+    „naprawione z kodu (QTermWidget) ≠ testowane u usera (WebTerminal)", który
+    powodował, że poprawki QTermWidgetu nie docierały do usera (polskie litery,
+    „czytaj ostatnią" i in.). „z kodu", `run-safe.sh` i pobrana apka = ten sam silnik.
+
+    QTermWidget zostaje WYŁĄCZNIE jako JAWNY opt-in do testów starego silnika:
+    `CVA_QTERMWIDGET=1` (tylko Linux i tylko gdy wheel dostępny). Bez tej flagi
+    NIGDY. Flaga `CVA_WEBTERMINAL=1` (np. w run-safe.sh) nadal działa, ale jest już
+    redundantna — WebTerminal jest domyślny.
     """
-    if is_macos() or is_windows():
-        return "webterminal"
-    if os.environ.get("CVA_WEBTERMINAL") == "1":
-        return "webterminal"
-    if not QTERMWIDGET_AVAILABLE:
-        return "webterminal"
-    return "qtermwidget"
+    if (os.environ.get("CVA_QTERMWIDGET") == "1"
+            and QTERMWIDGET_AVAILABLE
+            and not (is_macos() or is_windows())):
+        return "qtermwidget"
+    return "webterminal"
 
 
 def webengine_required() -> bool:

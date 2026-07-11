@@ -42,12 +42,11 @@ if [ -f venv/bin/activate ]; then
     source venv/bin/activate
 fi
 
-# Wymuszenie silnika WebTerminal (xterm.js+QtWebEngine), DOKŁADNIE jak w
-# pobieranej paczce (AppImage startuje z CVA_WEBTERMINAL=1, bo .spec wyklucza
-# QTermWidget). Bez tego beta z kodu używałaby QTermWidgetu = INNEGO silnika
-# terminala niż wersja, której używa user → bugi nie reprodukują się 1:1.
-# Cel: beta testowa == apka pobrana ze strony. (Do testów QTermWidgetu uruchom
-# `python3 src/main.py` bez tej flagi.)
+# WebTerminal (xterm.js+QtWebEngine) — od 2026-07-11 to JEDYNY silnik terminala
+# WSZĘDZIE (domyślny w kodzie), więc ta flaga jest już REDUNDANTNA. Zostaje dla
+# jasności i zgodności. Beta z kodu, run-safe.sh i pobrana apka = TEN SAM silnik
+# (koniec rozjazdu „naprawione u mnie ≠ działa u usera"). Stary QTermWidget tylko
+# na jawne żądanie: `CVA_QTERMWIDGET=1 python3 src/main.py`.
 export CVA_WEBTERMINAL=1
 
 # Limit pamięci. systemd-run --user --scope tworzy efemeryczny cgroup
