@@ -61,7 +61,7 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
 
 ---
 
-## ⏳ KOLEJKA DO TESTU PO OTWARCIU NOWEJ BETY (7 poprawek, wszystkie zacommitowane, NIEPRZETESTOWANE u usera)
+## ⏳ KOLEJKA DO TESTU PO OTWARCIU NOWEJ BETY (11 poprawek, wszystkie zacommitowane, NIEPRZETESTOWANE u usera)
 User pracuje WEWNĄTRZ działającej bety i nie może jej zamknąć ([[beta-restart-zabija-sesje]]) — stąd commity
 z dopiskiem „NIEPRZETESTOWANE". Przy najbliższym świeżym uruchomieniu przejść wszystko za jednym razem:
 1. **🔊 czyta z dziennika, nie z ekranu** (`9485c0d`) — dłuższa odpowiedź → 🔊 → zaczyna od 1. zdania, bez ramek
@@ -73,9 +73,19 @@ z dopiskiem „NIEPRZETESTOWANE". Przy najbliższym świeżym uruchomieniu przej
 4. **Okno „Edytuj agenta"** (`782120a`) — pełne napisy, przycisk „Bez koloru" w całości; na małym ekranie suwak.
 5. **Listy w oknach** (`694251c`) — nazwa agenta z pełnym „y", pełne opisy skilli i szablonów MCP.
 6. **Auto-czytanie po auto-compact** (`1b57c60`) — po długiej rozmowie nie recytuje jej od początku.
-7. **Polskie znaki AltGr w terminalu** (`9aad8dd`) — ą/ż/ó wpisywane wprost w terminalu.
-Po potwierdzeniu 1+2: sprzątnąć diagnostyki `_flag_dbg`/`debug_state`/`_read_last_dbg` + `CVA_FLAG_DEBUG=1`
-z `run-safe.sh` (patrz „Inne otwarte TODO").
+7. **Polskie znaki AltGr w terminalu** — QTermWidget (`9aad8dd`) ORAZ WebTerminal (`c38775f`, 2026-07-11).
+   ⚠️ `9aad8dd` był TYLKO QTermWidget → user (WebTerminal) dalej bez → dopiero `c38775f`. Test: `żółć ąę óśł`
+   WPROST w czarnym terminalu (nie w polu na dole). → `qtermwidget-polskie-znaki-altgr.md`.
+
+**NOWE 2026-07-11 (4 fixy, zacommitowane, NIEPRZETESTOWANE):**
+8. **„Czytaj ostatnią" — najnowsza, nie stare zaznaczenie** (`9ae59c3`) — bez zaznaczania klik 🔊 → najnowsza
+   odpowiedź; świeżo zaznaczysz i klikniesz → czyta zaznaczenie. (WebTerminal lepkie `_selection` → `active_selection`
+   z oknem 30 s.) → `czytaj-ostatnia-czyta-inna.md` BUG #4.
+9. **Przycisk „🔄 Napraw wygląd terminala"** (`feecbe3`) — na rozstrzelony tekst: zrzut dowodu do
+   `crash-logs/terminal-glitch-*.log` + restart `claude --resume` (rozmowa zostaje). → `tekst-rozstrzelony-w-terminalu.md`.
+10. **Diagnostyka USUNIĘTA + 99 MB logu skasowane** (`9ae59c3`) — `flag-debug.log` nie rośnie po restarcie bety.
+11. **JEDEN silnik wszędzie = WebTerminal** (`1dc983a`) — beta z kodu == run-safe.sh == pobrana apka; koniec
+    rozjazdu „naprawione na QTermWidgecie ≠ testowane u usera". Stary silnik tylko `CVA_QTERMWIDGET=1`. → `testy-uruchamianie-beta.md`.
 
 ## AKTUALNY STAN (wersja 1.0.26 — WYDANA, 3 platformy)
 - **REDESIGN „Vibe Purple" (2026-07-09, NIEWYDANY — w kodzie, commity `bc81a03` + `410c9ab`):** nowy wygląd wg makiety Cloud Design (`Vibe Coding Assistant redesign.zip`), funkcje bez zmian. Paleta w `src/gui/theme.py` (jedyne źródło kolorów), migracja skórki `SKIN_VERSION=2` (bez niej zmiana palety byłaby NIEWIDOCZNA), czcionki IBM Plex Sans + JetBrains Mono w paczce, terminal przemalowany w obu silnikach, gradientowa kreska nad aktywną zakładką (`_AccentTabBar`), gradientowy przycisk Wyślij, suwak „Auto-czytaj", kreskowe ikony SVG w kolorze skórki, dialogi/pasek statusu/wskaźnik RAM na palecie. Szczegóły → pamięć `redesign-vibe-purple.md`, pułapki → `qt-pulapki-qss-redesign.md`. **Porcje A+B potwierdzone przez usera; Porcja C (dialogi) NIEPRZETESTOWANA na żywo.**
