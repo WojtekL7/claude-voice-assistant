@@ -293,7 +293,11 @@ class TranscriptReader:
         self._ensure_session()
         if not self._session_file or not os.path.exists(self._session_file):
             return True
-        return self._last_entry_role() == "user"
+        # skip_agent_turns: wynik narzędzia / przerwanie NIE liczą się jako
+        # „użytkownik czeka" — inaczej w sesjach z dużą liczbą komend (CRM,
+        # deploy) dziennik był fałszywie uznawany za spóźniony i „czytaj
+        # ostatnią" sięgało po brudny bufor ekranu zamiast czystego dziennika.
+        return self._last_entry_role(skip_agent_turns=True) == "user"
 
     def last_response(self) -> Optional[str]:
         """Zwróć OSTATNIĄ wypowiedź tekstową Claude'a z bieżącej sesji.
@@ -364,11 +368,47 @@ class TranscriptReader:
         # z samymi wpisami technicznymi (snapshot/mode itp.).
         return self._last_entry_role() is not None
 
-    def _last_entry_role(self) -> Optional[str]:
+    @staticmethod
+    def _is_agent_turn_userentry(obj: dict) -> bool:
+        """Czy ten wpis o roli 'user' to w istocie KONTYNUACJA tury agenta, a
+        nie wypowiedź użytkownika?
+
+        W dzienniku Claude Code rolę 'user' mają NIE tylko wiadomości od
+        człowieka, ale też:
+          • `tool_result` — wynik narzędzia, które URUCHOMIŁ AGENT (Bash/Read/
+            Edit/…); to jego własna robota w środku tury,
+          • marker „[Request interrupted by user for tool use]" — sygnał
+            przerwania narzędzia, nie tekst do przeczytania.
+        Takie wpisy NIE oznaczają, że użytkownik czeka z nieodczytaną
+        odpowiedzią — ostatnia KOMPLETNA wypowiedź agenta jest już w dzienniku.
+        (Rozpoznane z realnej sesji CRM: to one fałszywie kierowały „czytaj
+        ostatnią" na brudny bufor ekranu — 38% momentów.)
+        """
+        msg = obj.get("message") if isinstance(obj.get("message"), dict) else {}
+        content = msg.get("content")
+        if not isinstance(content, list) or not content:
+            return False
+        if all(isinstance(b, dict) and b.get("type") == "tool_result"
+               for b in content):
+            return True
+        for b in content:
+            if (isinstance(b, dict) and b.get("type") == "text"
+                    and "Request interrupted" in (b.get("text") or "")):
+                return True
+        return False
+
+    def _last_entry_role(self, skip_agent_turns: bool = False) -> Optional[str]:
         """Rola ostatniego SENSOWNEGO wpisu ('assistant'/'user'/None).
 
         Pomija wpisy bez roli (np. file-history-snapshot) oraz pod-agentów
         (isSidechain). Czyta tylko ogon pliku — tanie przy dużych sesjach.
+
+        `skip_agent_turns=True` dodatkowo pomija wpisy 'user' będące
+        kontynuacją tury agenta (wynik narzędzia / przerwanie — patrz
+        `_is_agent_turn_userentry`). Używa tego `journal_lags_screen()`, by NIE
+        mylić własnej pracy agenta z „użytkownik czeka". Domyślnie False, żeby
+        `waiting_for_user()` (flaga „agent czeka") zachował dotychczasowe
+        zachowanie.
         """
         if not self._session_file:
             return None
@@ -396,6 +436,8 @@ class TranscriptReader:
                 continue
             msg = obj.get("message")
             role = msg.get("role") if isinstance(msg, dict) else None
+            if role == "user" and skip_agent_turns and self._is_agent_turn_userentry(obj):
+                continue   # wynik narzędzia / przerwanie — nie granica użytkownika
             if role in ("assistant", "user"):
                 return role
             # wpis bez roli (snapshot itp.) — szukaj dalej wstecz
