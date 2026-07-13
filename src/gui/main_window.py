@@ -388,6 +388,7 @@ from config import (
     APP_NAME, APP_VERSION, WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT,
     SUPPORTED_LANGUAGES, UI_TRANSLATIONS, DEFAULT_QUICK_ACTIONS,
     CONFIG_FILE, QUICK_ACTIONS_FILE, CLAUDE_COMMAND, GROQ_API_KEY,
+    STT_LANGUAGE_DEFAULT,
     AGENTS_FILE, MEMORY_PROJECTS_FILE, DEFAULT_AGENTS, DEFAULT_MEMORY_PROJECTS,
     CONFIG_DIR,
     ASSETS_DIR, CLAUDE_MODEL_CONTEXT_LIMITS, DEFAULT_AGENT_MODEL,
@@ -2154,9 +2155,9 @@ class MainWindow(QMainWindow):
                         if key in saved_icons:
                             self.skin_icons[key] = saved_icons[key]
 
-                    # Set STT language
-                    lang_code = self.current_language.split('-')[0]
-                    self.stt.set_language(lang_code)
+                    # Dyktowanie idzie przez bramkę AI Managera w trybie „auto"
+                    # — języka NIE wymuszamy z interfejsu (bramka sama wykrywa).
+                    self.stt.set_language(STT_LANGUAGE_DEFAULT)
 
                     # Set TTS voice
                     if self.current_language in SUPPORTED_LANGUAGES:
@@ -2423,9 +2424,9 @@ class MainWindow(QMainWindow):
             voice = SUPPORTED_LANGUAGES[self.current_language][2]
             self.tts.set_voice(voice)
 
-        # Update STT language
-        lang_prefix = self.current_language.split('-')[0]
-        self.stt.set_language(lang_prefix)
+        # Dyktowanie zostaje w trybie „auto" (bramka AI Managera sama wykrywa
+        # język) — zmiana języka interfejsu go NIE przełącza.
+        self.stt.set_language(STT_LANGUAGE_DEFAULT)
 
         # Update UI language
         self._update_ui_language()

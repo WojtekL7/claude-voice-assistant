@@ -61,31 +61,29 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
 
 ---
 
-## ⏳ KOLEJKA DO TESTU PO OTWARCIU NOWEJ BETY (11 poprawek, wszystkie zacommitowane, NIEPRZETESTOWANE u usera)
-User pracuje WEWNĄTRZ działającej bety i nie może jej zamknąć ([[beta-restart-zabija-sesje]]) — stąd commity
-z dopiskiem „NIEPRZETESTOWANE". Przy najbliższym świeżym uruchomieniu przejść wszystko za jednym razem:
-1. **🔊 czyta z dziennika, nie z ekranu** (`9485c0d`) — dłuższa odpowiedź → 🔊 → zaczyna od 1. zdania, bez ramek
-   i bez „Read 2 files", czyta DO KOŃCA. Regresja: pytanie z opcjami (AskUserQuestion) → 🔊 przed odpowiedzią →
-   NAJNOWSZA wypowiedź, nie przedostatnia. → `czytaj-ostatnia-czyta-inna.md`
-2. **Brak ucinania po 500 słowach** (`9485c0d`) — wypowiedź dłuższa niż strona; też przy czytaniu zaznaczenia.
-3. **Pole „Wpisz polecenie" nie ucina ogonków liter** (`782120a`) — p, y, ż widoczne w całości; 5 linii bez
-   suwaka, suwak od 6.
-4. **Okno „Edytuj agenta"** (`782120a`) — pełne napisy, przycisk „Bez koloru" w całości; na małym ekranie suwak.
-5. **Listy w oknach** (`694251c`) — nazwa agenta z pełnym „y", pełne opisy skilli i szablonów MCP.
-6. **Auto-czytanie po auto-compact** (`1b57c60`) — po długiej rozmowie nie recytuje jej od początku.
-7. **Polskie znaki AltGr w terminalu** — QTermWidget (`9aad8dd`) ORAZ WebTerminal (`c38775f`, 2026-07-11).
-   ⚠️ `9aad8dd` był TYLKO QTermWidget → user (WebTerminal) dalej bez → dopiero `c38775f`. Test: `żółć ąę óśł`
-   WPROST w czarnym terminalu (nie w polu na dole). → `qtermwidget-polskie-znaki-altgr.md`.
+## ✅ POTWIERDZONE PRZEZ USERA 2026-07-13 (żywa beta, WebTerminal)
+- **🔊 „czytaj ostatnią" z dziennika** (`9485c0d`+`9ae59c3`) — bez śmieci („Read 2 files"/ramek), DO KOŃCA,
+  bez limitu 500 słów. → `czytaj-ostatnia-czyta-inna.md`.
+- **Polskie znaki AltGr WPROST w terminalu** (WebTerminal `c38775f`) — `żółć ąę` w czarnym terminalu. ⚠️ liczył się
+  tylko fix WebTerminala (`9aad8dd` był tylko QTermWidget). → `qtermwidget-polskie-znaki-altgr.md`.
+- **Pole „Wpisz polecenie"** (`782120a`) — ogonki liter (p/y/ż) w całości.
 
-**NOWE 2026-07-11 (4 fixy, zacommitowane, NIEPRZETESTOWANE):**
-8. **„Czytaj ostatnią" — najnowsza, nie stare zaznaczenie** (`9ae59c3`) — bez zaznaczania klik 🔊 → najnowsza
-   odpowiedź; świeżo zaznaczysz i klikniesz → czyta zaznaczenie. (WebTerminal lepkie `_selection` → `active_selection`
-   z oknem 30 s.) → `czytaj-ostatnia-czyta-inna.md` BUG #4.
-9. **Przycisk „🔄 Napraw wygląd terminala"** (`feecbe3`) — na rozstrzelony tekst: zrzut dowodu do
-   `crash-logs/terminal-glitch-*.log` + restart `claude --resume` (rozmowa zostaje). → `tekst-rozstrzelony-w-terminalu.md`.
-10. **Diagnostyka USUNIĘTA + 99 MB logu skasowane** (`9ae59c3`) — `flag-debug.log` nie rośnie po restarcie bety.
-11. **JEDEN silnik wszędzie = WebTerminal** (`1dc983a`) — beta z kodu == run-safe.sh == pobrana apka; koniec
-    rozjazdu „naprawione na QTermWidgecie ≠ testowane u usera". Stary silnik tylko `CVA_QTERMWIDGET=1`. → `testy-uruchamianie-beta.md`.
+**Zweryfikowane Z KODU (nie wymaga bety):**
+- **JEDEN silnik = WebTerminal domyślny wszędzie** (`1dc983a`) — fabryka `selected_backend_kind()` zwraca
+  `webterminal`, chyba że `CVA_QTERMWIDGET=1`. ⚠️ **nagłówek `terminal_backend.py:7-9` NIEAKTUALNY** (mówi
+  „QTermWidget domyślny na Linuksie") — do poprawy przy okazji. → `testy-uruchamianie-beta.md`.
+- **Diagnostyka flagi usunięta** (`9ae59c3`) — grep pusto w `src/` i `run-safe.sh`, log przestał rosnąć.
+  ⚠️ na dysku ZOSTAŁY martwe `*-debug.log` (~4,8 MB) + **2,5 GB starych AppImage w `updates/`** (nikt nie kasuje;
+  sprzątnięte RĘCZNIE 2026-07-13). → `todo-sprzatanie-starych-plikow.md`.
+
+## ⏳ WCIĄŻ DO TESTU NA ŻYWO
+- **Okna dialogowe** (Edytuj agenta, listy skilli/MCP, `782120a`+`694251c`) — pełne napisy, ogonki.
+- **Auto-czytanie po auto-compact** (`1b57c60`) — po długiej rozmowie nie recytuje od początku.
+- **Przycisk „🔄 Napraw wygląd terminala"** (`feecbe3`) — czeka aż wystąpi rozstrzelony tekst (może się nie pojawić).
+  → `tekst-rozstrzelony-w-terminalu.md`.
+- **Redesign Porcja C** (dialogi, `410c9ab`).
+- **STT przez bramkę AI Managera** (dziś, NIEPRZETESTOWANE) — patrz sekcja „PODŁĄCZENIE DO AI MANAGERA" +
+  `stt-bramka-ai-manager.md`.
 
 ## AKTUALNY STAN (wersja 1.0.26 — WYDANA, 3 platformy)
 - **REDESIGN „Vibe Purple" (2026-07-09, NIEWYDANY — w kodzie, commity `bc81a03` + `410c9ab`):** nowy wygląd wg makiety Cloud Design (`Vibe Coding Assistant redesign.zip`), funkcje bez zmian. Paleta w `src/gui/theme.py` (jedyne źródło kolorów), migracja skórki `SKIN_VERSION=2` (bez niej zmiana palety byłaby NIEWIDOCZNA), czcionki IBM Plex Sans + JetBrains Mono w paczce, terminal przemalowany w obu silnikach, gradientowa kreska nad aktywną zakładką (`_AccentTabBar`), gradientowy przycisk Wyślij, suwak „Auto-czytaj", kreskowe ikony SVG w kolorze skórki, dialogi/pasek statusu/wskaźnik RAM na palecie. Szczegóły → pamięć `redesign-vibe-purple.md`, pułapki → `qt-pulapki-qss-redesign.md`. **Porcje A+B potwierdzone przez usera; Porcja C (dialogi) NIEPRZETESTOWANA na żywo.**
@@ -259,3 +257,22 @@ PL + `-en`. Instalacja 3 systemów **SCALONA** w `instrukcja-instalacja.html` (g
 | `claude.exe` „niezgodny z Windows"/16-bit | Zła binarka z npm (bug Claude Code 2.1.113–114) — `npm uninstall -g @anthropic-ai/claude-code` + natywny instalator `irm https://claude.ai/install.ps1\|iex`; w apce komenda=`claude` (patrz pułapka „`claude` zepsuty/niezgodny na Windows") |
 | Apka nie startuje | `python3 -m py_compile src/main.py` |
 | Zawieszanie przy 2+ zakładkach | RAM — patrz „Pamięć/RAM" wyżej |
+
+---
+
+## PODŁĄCZENIE DO AI MANAGERA (monitor zużycia tokenów) — DO ZROBIENIA po naszej stronie
+
+> Notatka od agenta AI Managera (2026-07-11). Bramka działa i jest otwarta.
+
+**WAŻNE — większość jest JUŻ zrobiona:** rozmowa z Claude idzie przez **CLI w terminalu (nie HTTP)**, więc
+bramka jej NIE złapie i **nie musi** — zużycie Claude jest **już monitorowane osobno** przez kolektor Claude Code
+AI Managera (czyta lokalne dzienniki `~/.claude/projects/**/*.jsonl`, timer co godzinę). Widać je w panelu
+AI Managera → zakładka **„Claude Code"**.
+
+**Dyktowanie (Groq Whisper) — ZROBIONE W KODZIE 2026-07-13, NIEPRZETESTOWANE na żywo** (→ `stt-bramka-ai-manager.md`):
+- Przepnij STT na bramkę: `POST https://ai.srv1251441.hstgr.cloud/v1/audio/transcriptions`,
+  nagłówek `Authorization: Bearer aim-…` (klucz aplikacji „Voice Assistant" z panelu AI Managera; widoczny raz),
+  model z prefiksem `groq/…` (np. `groq/whisper-large-v3`).
+- Auto-detekcja języka = nie wysyłaj pola `language` (jak dotąd).
+- Kody: `401` zły klucz · `429` limit (+`Retry-After`) · `503` brak wolnego konta.
+- Reszta bez zmian.

@@ -150,8 +150,18 @@ CLAUDE_MODEL_CONTEXT_LIMITS = {
 }
 
 # Groq API (for Speech-to-Text)
+# GROQ_API_URL — dawna ścieżka WPROST do Groq (zostawiona jako odniesienie).
+# Dyktowanie idzie teraz przez bramkę AI Managera (patrz STT_API_URL niżej).
 GROQ_API_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+
+# STT przez bramkę AI Managera (monitorowanie zużycia). Dyktowanie leci przez tę
+# „rogatkę" zamiast wprost do Groq — bramka liczy zużycie i rozdziela konta.
+# Klucz = klucz aplikacji „Voice Assistant" z panelu AI Managera (zaczyna się od
+# „aim-…"), wpisywany w Ustawieniach (przechowywany jak dotąd pod groq_api_key).
+STT_API_URL = "https://ai.srv1251441.hstgr.cloud/v1/audio/transcriptions"
+STT_MODEL = "groq/whisper-large-v3"          # bramka wymaga przedrostka „groq/"
+STT_LANGUAGE_DEFAULT = "auto"                # „auto" = nie wysyłaj pola language (bramka sama wykrywa)
 
 # TTS Settings
 TTS_DEFAULT_VOICE = "pl-PL-ZofiaNeural"
@@ -307,7 +317,7 @@ UI_TRANSLATIONS = {
         "menu_skills": "Umiejętności (Skills)...",
         "menu_mcp": "Serwery MCP...",
         "menu_skin_colors": "Zmień kolory skórki...",
-        "menu_groq_api": "Klucz API Groq...",
+        "menu_groq_api": "Klucz AI Managera (dyktowanie)...",
         "menu_anthropic_api": "Klucz API Anthropic...",
         "menu_claude_command": "Komenda Claude Code...",
         "menu_manage_actions": "Zarządzaj szybkimi akcjami...",
@@ -850,10 +860,13 @@ UI_TRANSLATIONS = {
         "dlg_media_archives": "Archiwa",
         "dlg_media_all_files": "Wszystkie pliki",
         "dlg_media_add_title": "Dodaj media",
-        "dlg_groq_key_title": "Klucz API Groq",
-        "dlg_groq_key_prompt": "Klucz API Groq jest potrzebny do dyktowania (zamiana mowy na tekst).\nCzytanie na głos działa bez klucza.\n\nJak zdobyć DARMOWY klucz — krok po kroku:\n1. Wejdź na stronę:  https://console.groq.com/keys\n2. Zaloguj się lub załóż konto (najszybciej kontem Google) — jest darmowe.\n3. Kliknij 'Create API Key' i nadaj dowolną nazwę (np. voice-assistant).\n4. Skopiuj klucz (zaczyna się od 'gsk_...') - UWAGA: pokazany jest tylko RAZ!\n5. Wklej go w pole poniżej i kliknij OK.\n\nAktualny klucz: {key}",
+        "dlg_groq_key_title": "Klucz AI Managera (dyktowanie)",
+        "dlg_groq_key_prompt": "Klucz jest potrzebny do dyktowania (zamiana mowy na tekst).\nCzytanie na głos działa bez klucza.\n\nDyktowanie idzie teraz przez bramkę AI Managera. Skąd wziąć klucz:\n1. Wejdź do panelu AI Managera.\n2. Otwórz aplikację 'Voice Assistant'.\n3. Skopiuj jej klucz (zaczyna się od 'aim-...') - UWAGA: pokazany jest tylko RAZ!\n4. Wklej go w pole poniżej i kliknij OK.\n\nAktualny klucz: {key}",
         "dlg_key_none": "brak",
-        "dlg_groq_key_saved": "Klucz API Groq został zapisany.",
+        "dlg_groq_key_saved": "Klucz do dyktowania został zapisany.",
+        "stt_err_bad_key": "Zły klucz AI Managera — wpisz klucz aplikacji „Voice Assistant\" w Ustawieniach.",
+        "stt_err_rate_limit": "Za dużo dyktowania naraz — spróbuj ponownie za chwilę.",
+        "stt_err_busy": "Bramka dyktowania jest chwilowo zajęta — spróbuj za moment.",
         "dlg_anthropic_key_title": "Klucz API Anthropic",
         "dlg_anthropic_key_prompt": "Podaj klucz API Anthropic (Claude):\n\nAktualny: {key}",
         "dlg_anthropic_key_saved": "Klucz API Anthropic został zapisany.",
@@ -1041,7 +1054,7 @@ UI_TRANSLATIONS = {
         "menu_skills": "Skills...",
         "menu_mcp": "MCP servers...",
         "menu_skin_colors": "Change skin colors...",
-        "menu_groq_api": "Groq API key...",
+        "menu_groq_api": "AI Manager key (dictation)...",
         "menu_anthropic_api": "Anthropic API key...",
         "menu_claude_command": "Claude Code command...",
         "menu_manage_actions": "Manage quick actions...",
@@ -1584,10 +1597,13 @@ UI_TRANSLATIONS = {
         "dlg_media_archives": "Archives",
         "dlg_media_all_files": "All files",
         "dlg_media_add_title": "Add media",
-        "dlg_groq_key_title": "Groq API key",
-        "dlg_groq_key_prompt": "A Groq API key is needed for dictation (converting speech to text).\nReading aloud works without a key.\n\nHow to get a FREE key — step by step:\n1. Go to:  https://console.groq.com/keys\n2. Sign in or create an account (fastest with a Google account) — it's free.\n3. Click 'Create API Key' and give it any name (e.g. voice-assistant).\n4. Copy the key (starts with 'gsk_...') - NOTE: it is shown only ONCE!\n5. Paste it in the field below and click OK.\n\nCurrent key: {key}",
+        "dlg_groq_key_title": "AI Manager key (dictation)",
+        "dlg_groq_key_prompt": "A key is needed for dictation (converting speech to text).\nReading aloud works without a key.\n\nDictation now goes through the AI Manager gateway. How to get the key:\n1. Open the AI Manager panel.\n2. Open the 'Voice Assistant' application.\n3. Copy its key (starts with 'aim-...') - NOTE: it is shown only ONCE!\n4. Paste it in the field below and click OK.\n\nCurrent key: {key}",
         "dlg_key_none": "none",
-        "dlg_groq_key_saved": "The Groq API key has been saved.",
+        "dlg_groq_key_saved": "The dictation key has been saved.",
+        "stt_err_bad_key": "Invalid AI Manager key — enter the 'Voice Assistant' app key in Settings.",
+        "stt_err_rate_limit": "Too much dictation at once — please try again in a moment.",
+        "stt_err_busy": "The dictation gateway is momentarily busy — please try again shortly.",
         "dlg_anthropic_key_title": "Anthropic API key",
         "dlg_anthropic_key_prompt": "Enter your Anthropic (Claude) API key:\n\nCurrent: {key}",
         "dlg_anthropic_key_saved": "The Anthropic API key has been saved.",

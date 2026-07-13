@@ -14,6 +14,11 @@ import numpy as np
 import sounddevice as sd
 import requests
 
+from config import (
+    STT_API_URL, STT_MODEL, STT_LANGUAGE_DEFAULT,
+    t as tr,
+)
+
 
 class STTState(Enum):
     IDLE = "idle"
@@ -29,7 +34,10 @@ class STTEngine:
 
     def __init__(self, api_key: str = ""):
         self.api_key = api_key
-        self.api_url = "https://api.groq.com/openai/v1/audio/transcriptions"
+        # Dyktowanie idzie przez bramkę AI Managera (monitorowanie zużycia),
+        # nie wprost do Groq. Adres i model = jedno źródło prawdy w config.py.
+        self.api_url = STT_API_URL
+        self.model = STT_MODEL
 
         # Audio settings
         self.sample_rate = 16000
@@ -42,8 +50,9 @@ class STTEngine:
         self._recording_thread: Optional[threading.Thread] = None
         self._stop_recording = threading.Event()
 
-        # Language (for Whisper)
-        self.language = "pl"  # Default Polish
+        # Język: „auto" = nie wysyłamy pola language, bramka sama wykrywa
+        # (radzi sobie z PL/EN i mieszanką). Kod ISO wymusza konkretny język.
+        self.language = STT_LANGUAGE_DEFAULT
 
         # Callbacks
         self.on_state_changed: Optional[Callable[[STTState], None]] = None
@@ -196,7 +205,7 @@ class STTEngine:
         return temp_path
 
     def _send_to_groq(self, audio_path: str) -> str:
-        """Send audio file to Groq API for transcription."""
+        """Wyślij nagranie do bramki AI Managera i odbierz transkrypcję."""
         headers = {
             "Authorization": f"Bearer {self.api_key}"
         }
@@ -206,10 +215,13 @@ class STTEngine:
                 'file': ('audio.wav', audio_file, 'audio/wav')
             }
             data = {
-                'model': 'whisper-large-v3',
-                'language': self.language,
+                'model': self.model,
                 'response_format': 'text'
             }
+            # „auto" (lub brak) → NIE wysyłamy pola language; bramka sama
+            # wykrywa. Pusty/„auto" w polu potrafi wywalić walidację dostawcy.
+            if self.language and self.language != "auto":
+                data['language'] = self.language
 
             response = requests.post(
                 self.api_url,
@@ -221,8 +233,19 @@ class STTEngine:
 
             if response.status_code == 200:
                 return response.text.strip()
-            else:
-                raise Exception(f"API error {response.status_code}: {response.text}")
+
+            # Czytelne komunikaty dla usera zamiast surowego kodu HTTP.
+            if response.status_code == 401:
+                raise Exception(tr('stt_err_bad_key'))
+            if response.status_code == 429:
+                retry_after = response.headers.get('Retry-After')
+                msg = tr('stt_err_rate_limit')
+                if retry_after:
+                    msg = f"{msg} ({retry_after}s)"
+                raise Exception(msg)
+            if response.status_code == 503:
+                raise Exception(tr('stt_err_busy'))
+            raise Exception(f"API error {response.status_code}: {response.text}")
 
     def get_available_devices(self) -> list:
         """Get list of available audio input devices."""
