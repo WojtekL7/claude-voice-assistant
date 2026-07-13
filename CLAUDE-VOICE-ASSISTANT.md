@@ -67,6 +67,8 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
 - **Polskie znaki AltGr WPROST w terminalu** (WebTerminal `c38775f`) — `żółć ąę` w czarnym terminalu. ⚠️ liczył się
   tylko fix WebTerminala (`9aad8dd` był tylko QTermWidget). → `qtermwidget-polskie-znaki-altgr.md`.
 - **Pole „Wpisz polecenie"** (`782120a`) — ogonki liter (p/y/ż) w całości.
+- **Dyktowanie (STT) przez bramkę AI Managera** (`eab76b3`) — PL i EN wchodzą w pole; klucz `aim-…`
+  w Ustawieniach → „Klucz AI Managera (dyktowanie)". → `stt-bramka-ai-manager.md`.
 
 **Zweryfikowane Z KODU (nie wymaga bety):**
 - **JEDEN silnik = WebTerminal domyślny wszędzie** (`1dc983a`) — fabryka `selected_backend_kind()` zwraca
@@ -82,8 +84,6 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
 - **Przycisk „🔄 Napraw wygląd terminala"** (`feecbe3`) — czeka aż wystąpi rozstrzelony tekst (może się nie pojawić).
   → `tekst-rozstrzelony-w-terminalu.md`.
 - **Redesign Porcja C** (dialogi, `410c9ab`).
-- **STT przez bramkę AI Managera** (dziś, NIEPRZETESTOWANE) — patrz sekcja „PODŁĄCZENIE DO AI MANAGERA" +
-  `stt-bramka-ai-manager.md`.
 
 ## AKTUALNY STAN (wersja 1.0.26 — WYDANA, 3 platformy)
 - **REDESIGN „Vibe Purple" (2026-07-09, NIEWYDANY — w kodzie, commity `bc81a03` + `410c9ab`):** nowy wygląd wg makiety Cloud Design (`Vibe Coding Assistant redesign.zip`), funkcje bez zmian. Paleta w `src/gui/theme.py` (jedyne źródło kolorów), migracja skórki `SKIN_VERSION=2` (bez niej zmiana palety byłaby NIEWIDOCZNA), czcionki IBM Plex Sans + JetBrains Mono w paczce, terminal przemalowany w obu silnikach, gradientowa kreska nad aktywną zakładką (`_AccentTabBar`), gradientowy przycisk Wyślij, suwak „Auto-czytaj", kreskowe ikony SVG w kolorze skórki, dialogi/pasek statusu/wskaźnik RAM na palecie. Szczegóły → pamięć `redesign-vibe-purple.md`, pułapki → `qt-pulapki-qss-redesign.md`. **Porcje A+B potwierdzone przez usera; Porcja C (dialogi) NIEPRZETESTOWANA na żywo.**
@@ -269,7 +269,7 @@ bramka jej NIE złapie i **nie musi** — zużycie Claude jest **już monitorowa
 AI Managera (czyta lokalne dzienniki `~/.claude/projects/**/*.jsonl`, timer co godzinę). Widać je w panelu
 AI Managera → zakładka **„Claude Code"**.
 
-**Dyktowanie (Groq Whisper) — ZROBIONE W KODZIE 2026-07-13, NIEPRZETESTOWANE na żywo** (→ `stt-bramka-ai-manager.md`):
+**Dyktowanie (Groq Whisper) — ZROBIONE + POTWIERDZONE PRZEZ USERA 2026-07-13 (PL i EN działają na żywo)** (→ `stt-bramka-ai-manager.md`):
 - Przepnij STT na bramkę: `POST https://ai.srv1251441.hstgr.cloud/v1/audio/transcriptions`,
   nagłówek `Authorization: Bearer aim-…` (klucz aplikacji „Voice Assistant" z panelu AI Managera; widoczny raz),
   model z prefiksem `groq/…` (np. `groq/whisper-large-v3`).
