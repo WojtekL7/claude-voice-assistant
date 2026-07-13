@@ -1,28 +1,30 @@
 """
-Vibe Coding Assistant - Wspólny interfejs terminala + fabryka backendów (Etap M2.2)
+Vibe Coding Assistant - Wspólny interfejs terminala + fabryka backendów
 
 Cel: dać reszcie aplikacji JEDNĄ „deskę rozdzielczą" terminala, niezależną od
 tego, który silnik pracuje pod spodem:
 
-  * QTermWidgetBackend  — linuksowy QTermWidget (dotychczasowy, domyślny na Linuksie)
-  * WebTerminalBackend  — xterm.js + QtWebEngine + PTY (wieloplatformowy; macOS/Windows
-                          wymuszony, na Linuksie opcjonalny pod flagą CVA_WEBTERMINAL=1)
+  * WebTerminalBackend  — xterm.js + QtWebEngine + PTY (wieloplatformowy).
+                          DOMYŚLNY NA WSZYSTKICH SYSTEMACH.
+  * QTermWidgetBackend  — linuksowy QTermWidget (starszy silnik). Używany TYLKO
+                          gdy ustawisz zmienną CVA_QTERMWIDGET=1 (i tylko na
+                          Linuksie, gdy dostępny wheel QTermWidget). Bez tej
+                          flagi — nigdy.
 
-Fabryka `create_terminal_backend(...)` sama wybiera właściwy silnik wg systemu.
+Fabryka `create_terminal_backend(...)` / `selected_backend_kind()` wybierają silnik:
+domyślnie 'webterminal', 'qtermwidget' wyłącznie pod flagą CVA_QTERMWIDGET=1.
+(Historyczna flaga CVA_WEBTERMINAL=1 nadal działa, ale jest już zbędna — WebTerminal
+i tak jest domyślny.)
 
-⚠️ M2.2 jest CZYSTO DOKŁADAJĄCY: ten moduł nie jest jeszcze importowany przez
-`agent_tab.py` ani `main_window.py`. Wpięcie do zakładek to M2.3, pełne mapowanie
-kolorów/skórek i czcionek do xterm.js to M2.4 (oznaczone TODO(M2.4)).
-
-Kontrakt `TerminalBackend` pokrywa WSZYSTKIE operacje na terminalu używane dziś
-przez AgentTab i MainWindow (sprawdzone w obu plikach):
+Kontrakt `TerminalBackend` pokrywa WSZYSTKIE operacje na terminalu używane przez
+AgentTab i MainWindow:
   set_shell_program / set_working_directory / start_shell_program / send_text /
   selected_text / copy_selection / clear / set_font / set_color_scheme /
   focus_terminal / shutdown  + sygnały output_received(str) i finished().
 
 Backend jest QObject-em, który OWIJA właściwy QWidget terminala. Widget do
-wstawienia w splitter zwraca właściwość `.widget`. Dzięki temu AgentTab w M2.3
-będzie wołał metody backendu, a do layoutu dorzuci `backend.widget`.
+wstawienia w splitter zwraca właściwość `.widget`: AgentTab woła metody backendu,
+a do layoutu dorzuca `backend.widget`.
 """
 import os
 import sys

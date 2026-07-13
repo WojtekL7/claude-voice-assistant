@@ -304,6 +304,8 @@ class UpdateManager(QObject):
         # macOS: zdejmij kwarantannę, by instalacja była „gładka".
         self._remove_quarantine(dest)
         self.download_finished.emit(str(dest))
+        # Mamy świeżą, zweryfikowaną paczkę → skasuj poprzednie (zbierały GB).
+        self._prune_old_downloads(keep=1)
 
     # ==================== Instalacja pobranej paczki (Etap 2) ====================
 
@@ -483,6 +485,83 @@ class UpdateManager(QObject):
             ["/bin/bash", str(script)],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             start_new_session=True)
+
+    # ==================== Sprzątanie starych plików ====================
+
+    # Rozszerzenia paczek instalacyjnych, które WOLNO kasować w folderze updates/.
+    _PACKAGE_SUFFIXES = (".appimage", ".dmg", ".zip", ".exe")
+    # Martwe logi diagnostyczne (kod ich już NIE pisze) — do skasowania przy starcie.
+    # UWAGA: „debug.log" NIE jest tu wymieniony CELOWO — claude_bridge.py wciąż do
+    # niego pisze (żywy plik). Nie dopisuj go bez sprawdzenia.
+    _STALE_LOG_NAMES = ("flag-debug.log", "read-last-debug.log", "debug_buffer.txt")
+
+    def _updates_dirs(self):
+        """Foldery z pobranymi paczkami: bieżący (config nowy) + zmigrowany stary."""
+        return {
+            self.download_dir,
+            Path.home() / ".claude-voice-assistant" / "updates",
+        }
+
+    def _prune_old_downloads(self, keep=1):
+        """Zostaw najnowsze `keep` paczek w folderach updates/, resztę skasuj.
+
+        Bezpieczniki: kasujemy WYŁĄCZNIE pliki paczek (`_PACKAGE_SUFFIXES`) oraz
+        niedokończone pobrania (`.part`) i TYLKO w folderach aktualizacji — niczego
+        innego nie dotykamy. Wszystko miękko: błąd na jednym pliku nie przerywa
+        reszty ani nie wywala aplikacji."""
+        for d in self._updates_dirs():
+            try:
+                if not d.is_dir():
+                    continue
+                packages, parts = [], []
+                for p in d.iterdir():
+                    if not p.is_file():
+                        continue
+                    suffix = p.suffix.lower()
+                    if suffix == ".part":
+                        parts.append(p)
+                    elif suffix in self._PACKAGE_SUFFIXES:
+                        packages.append(p)
+                # Niedokończone pobrania (.part) — zawsze do kosza (bezużyteczne).
+                for part in parts:
+                    self._safe_unlink(part)
+                # Z kompletnych paczek zostaw najnowsze `keep` (wg czasu modyfikacji).
+                packages.sort(key=lambda p: self._safe_mtime(p), reverse=True)
+                for old in packages[keep:]:
+                    self._safe_unlink(old)
+            except Exception:
+                pass
+
+    def cleanup_stale_files_async(self):
+        """Sprzątanie przy starcie w wątku tła (nie blokuje otwierania okna)."""
+        threading.Thread(target=self._cleanup_worker, daemon=True).start()
+
+    def _cleanup_worker(self):
+        try:
+            self.cleanup_stale_files()
+        except Exception:
+            pass
+
+    def cleanup_stale_files(self):
+        """Jednorazowe sprzątanie przy starcie: stare paczki + martwe logi.
+
+        Woływane raz przy uruchomieniu apki (w wątku tła). Idempotentne i miękkie
+        — gdy nie ma czego kasować, po prostu nic nie robi."""
+        self._prune_old_downloads(keep=1)
+        config_dirs = {
+            Path.home() / ".vibe-coding-assistant",
+            Path.home() / ".claude-voice-assistant",
+        }
+        for base in config_dirs:
+            for name in self._STALE_LOG_NAMES:
+                self._safe_unlink(base / name)
+
+    @staticmethod
+    def _safe_mtime(path):
+        try:
+            return Path(path).stat().st_mtime
+        except Exception:
+            return 0.0
 
     # ==================== Weryfikacja / system ====================
 

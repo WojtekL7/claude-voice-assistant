@@ -554,6 +554,9 @@ class MainWindow(QMainWindow):
         self.update_manager = UpdateManager(
             UPDATE_APPCAST_URL, APP_VERSION, update_platform_id(),
             public_key=UPDATE_PUBLIC_KEY, download_dir=UPDATE_DOWNLOAD_DIR)
+        # Posprzątaj po sobie: stare paczki aktualizacji (zbierały GB) + martwe
+        # logi diagnostyczne. W wątku tła — nie opóźnia otwierania okna.
+        self.update_manager.cleanup_stale_files_async()
         # True = sprawdzanie wywołane ręcznie z menu (wtedy pokazujemy też wynik
         # „masz najnowszą"/błąd); False = ciche sprawdzanie przy starcie.
         # Aktualizacje sprawdzamy WYŁĄCZNIE przy starcie (i ręcznie z menu) —
