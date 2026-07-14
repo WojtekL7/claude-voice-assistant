@@ -1,13 +1,18 @@
 # CLAUDE-VOICE-ASSISTANT — Agent aplikacji desktopowej
 
-## 🟡 DO SPRAWDZENIA — XSS panel admina (audyt 2026-07-11, zlecony przez agenta CRM)
+## ✅ XSS panel admina — DOMKNIĘTE 2026-07-14 (commit `6b70b5a`)
 
-Warstwa terminala (QtWebEngine, `src/assets/web/terminal.html`) jest **BEZPIECZNA** — wyjście PTY idzie przez xterm.js `term.write()`, NIE `innerHTML`; zero inline handlerów. Uwagi dotyczą TYLKO panelu admina serwowanego z FastAPI (otwierany w PRZEGLĄDARCE, nie desktop) — ryzyko OGRANICZONE (apka lokalna, dane z lokalnego procesu):
-- **`panel/index.html`** — 5× `innerHTML` z template literals; chroni ręczny `esc()` (94×, poprawny), ale ochrona jest PER-POLE → każde nowe pole renderowane bez `esc()` = stored XSS z danych serwera (email/nazwa klienta w panelu licencji). Rozważ DOMPurify jako drugą warstwę + CSP (panel w przeglądarce by z niego skorzystał, `script-src` bez `unsafe-inline` bo używa `data-action` + delegacji, nie inline onclick).
-- **`src/gui/web_terminal.py:408-416` `_show_failure_page`** — HTML sklejany f-stringiem z NIEescapowanym `reason`; dziś deweloperski/statyczny, ale przy każdej zmianie owiń escaperem, gdyby wpłynął tam tekst zewnętrzny (stderr/ścieżka).
-- Brak CSP (QtWebEngine i tak nie egzekwuje — dla terminala nieistotne; dla panelu-w-przeglądarce warto).
-
-Audyt STATYCZNY, **niski priorytet** (lokalne). Wzorzec → `CLAUDE-COMMON.md` (trzy konteksty escapowania).
+Panel `panel/index.html` (serwowany OSOBNO, otwierany w PRZEGLĄDARCE — nie desktop): domknięte 3 luki
+`esc()` (surowa platforma z serwera w `osName(v.platform)`, `l.max_devices`, `data-id="${l.id}"`) +
+**CSP w `<meta>`** jako druga warstwa: `script-src` tylko po odcisku `sha256-…` inline skryptu (helper
+`panel/_csp_hash.py` przelicza hash po KAŻDEJ zmianie skryptu — inaczej panel wczyta się pusty),
+`style-src 'unsafe-inline'`, `connect-src http:/https:` (konfigurowalne API), `default-src 'none'`.
+Nagłówki `nosniff`+`Referrer-Policy` na API (`server/app/main.py`). Test Playwright 9/9 + kontrola
+negatywna (bez ochrony payload się wykonuje → test realnie wykrywa XSS). Warstwa terminala
+(xterm.js `term.write()`, NIE `innerHTML`) była i jest BEZPIECZNA. Wzorzec → `CLAUDE-COMMON.md`.
+- ⚠️ **Zostało (niski prio, statyczny):** `src/gui/web_terminal.py:408-416` `_show_failure_page` skleja HTML
+  f-stringiem z NIEescapowanym `reason` — dziś deweloperski, ale owiń escaperem, gdyby wpłynął tam tekst
+  zewnętrzny (stderr/ścieżka).
 
 **Przed pracą załaduj również:**
 1. 🔴 [`docs/PRD.md`](docs/PRD.md) — Roadmap komercjalizacji 2026 (wizja, fazy, funkcje)
@@ -72,11 +77,11 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
 
 **Zweryfikowane Z KODU (nie wymaga bety):**
 - **JEDEN silnik = WebTerminal domyślny wszędzie** (`1dc983a`) — fabryka `selected_backend_kind()` zwraca
-  `webterminal`, chyba że `CVA_QTERMWIDGET=1`. ⚠️ **nagłówek `terminal_backend.py:7-9` NIEAKTUALNY** (mówi
-  „QTermWidget domyślny na Linuksie") — do poprawy przy okazji. → `testy-uruchamianie-beta.md`.
+  `webterminal`, chyba że `CVA_QTERMWIDGET=1`. Nagłówek `terminal_backend.py` zgodny z kodem (naprawiony
+  w `dd9b5e6`). → `testy-uruchamianie-beta.md`.
 - **Diagnostyka flagi usunięta** (`9ae59c3`) — grep pusto w `src/` i `run-safe.sh`, log przestał rosnąć.
-  ⚠️ na dysku ZOSTAŁY martwe `*-debug.log` (~4,8 MB) + **2,5 GB starych AppImage w `updates/`** (nikt nie kasuje;
-  sprzątnięte RĘCZNIE 2026-07-13). → `todo-sprzatanie-starych-plikow.md`.
+  Auto-kasowanie starych paczek (zostawia 1) + martwych `*-debug.log` przy starcie dodane w `dd9b5e6`
+  (⏳ do testu na żywej becie po restarcie). → `todo-sprzatanie-starych-plikow.md`.
 
 ## ⏳ WCIĄŻ DO TESTU NA ŻYWO
 - **Okna dialogowe** (Edytuj agenta, listy skilli/MCP, `782120a`+`694251c`) — pełne napisy, ogonki.
