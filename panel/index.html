@@ -2,6 +2,12 @@
 <html lang="pl">
 <head>
 <meta charset="utf-8">
+<!-- Bezpieczeństwo (druga warstwa obrony XSS, poza esc()): CSP każe przeglądarce
+     wykonać TYLKO nasz własny inline skrypt (dopasowany po odcisku 'sha256-…')
+     i blokuje każdy wstrzyknięty skrypt / handler onerror / javascript:.
+     ⚠️ PO KAŻDEJ ZMIANIE skryptu przelicz hash i podmień go poniżej (inaczej panel
+     wczyta się PUSTY):  python3 panel/_csp_hash.py -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-KGmb/yatOQorHABC81uD51qTA5r5BnlPUfOaPw13Rdw='; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src http: https:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Vibe Coding Assistant — Panel administracyjny</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -335,7 +341,7 @@ function viewDownloads(){
   </div>`; }).join('');
   const rows = V.length ? V.map(v=>`<div style="display:grid;grid-template-columns:0.8fr 1.2fr 0.8fr 1fr 1fr;padding:13px 22px;font-size:13.5px;align-items:center;border-bottom:1px solid var(--row);">
     <span class="mono" style="font-weight:600;">v${esc(v.version)}</span>
-    <span style="color:var(--text2);">${osName(v.platform)}</span>
+    <span style="color:var(--text2);">${esc(osName(v.platform))}</span>
     <span class="mono" style="color:var(--text2);font-size:12.5px;">${fmtSize(v.size)}</span>
     <span class="mono" style="text-align:right;font-weight:600;">${fmtNum(byVer[v.version]||0)}</span>
     <span class="mono" style="text-align:right;color:var(--text2);font-size:12.5px;">${fmtDate(v.published_at)}</span>
@@ -362,10 +368,10 @@ function viewClients(){
     <div style="display:flex;align-items:center;gap:11px;min-width:0;"><div style="width:34px;height:34px;border-radius:50%;background:var(--accent-tint);color:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12.5px;flex:none;">${esc(initials(l.email))}</div><div style="min-width:0;"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(l.email)}</div></div></div>
     <span><span class="${pro?'pillPro':'pillFree'}">${pro?esc(x.pro):(l.plan==='trial'?esc(x.trial):esc(x.free))}</span></span>
     <span>${statusBadge(l.status)}</span>
-    <span class="mono" style="color:var(--text2);font-size:12.5px;">${(l.devices||[]).length}/${l.max_devices}</span>
+    <span class="mono" style="color:var(--text2);font-size:12.5px;">${(l.devices||[]).length}/${esc(l.max_devices)}</span>
     <span class="mono" style="color:var(--text2);font-size:11.5px;">${esc((l.license_key||'').slice(0,13))}…</span>
     <span class="mono" style="color:var(--text2);font-size:12.5px;">${fmtDate(l.created_at)}</span>
-    <span style="text-align:right;">${l.status!=='revoked'?`<span data-action="revoke" data-id="${l.id}" style="cursor:pointer;color:var(--err-fg);font-size:12.5px;font-weight:600;">${esc(x.revoke)}</span>`:''}</span>
+    <span style="text-align:right;">${l.status!=='revoked'?`<span data-action="revoke" data-id="${esc(l.id)}" style="cursor:pointer;color:var(--err-fg);font-size:12.5px;font-weight:600;">${esc(x.revoke)}</span>`:''}</span>
   </div>`; }).join('') : `<div class="empty">${esc(x.noData)}</div>`;
   return `${head(x.nav.clients, x.clientsSub, `<button class="btnP" data-action="newLicense">${esc(x.addClient)}</button>`)}
     <div style="display:flex;gap:8px;margin-bottom:16px;">${chip('all',x.filterAll)}${chip('pro',x.filterPro)}${chip('free',x.filterFree)}${chip('trial',x.filterTrial)}</div>

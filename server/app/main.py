@@ -33,6 +33,16 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def security_headers(request, call_next):
+    """Drobne nagłówki obronne na odpowiedziach API (JSON). Panel serwowany jest
+    osobno (własny plik + CSP w <meta>), więc te nagłówki dotyczą tylko API."""
+    resp = await call_next(request)
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("Referrer-Policy", "no-referrer")
+    return resp
+
+
 @app.get("/api/health")
 def health():
     return {"status": "ok", "service": "vca-api", "version": app.version}
