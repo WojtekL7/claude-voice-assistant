@@ -14,6 +14,7 @@ import os
 import sys
 import json
 import codecs
+import html
 import threading
 import time
 from datetime import datetime
@@ -429,15 +430,21 @@ class WebTerminal(QWidget):
             return
         self._failure_shown = True
         _log(f"FAILURE: {reason}")
-        html = (
+        # Escapujemy reason + ścieżkę logu: dziś wołający przekazują teksty
+        # statyczne/liczby, ale setHtml WYKONUJE JS w QtWebEngine → gdyby kiedyś
+        # wpłynął tu tekst zewnętrzny (stderr/ścieżka), nie może wstrzyknąć kodu.
+        # (Uwaga: lokalna zmienna NIE może nazywać się `html` — przesłoniłaby moduł.)
+        safe_reason = html.escape(str(reason))
+        safe_log = html.escape(str(WEBTERMINAL_LOG))
+        page = (
             f"<html><body style='background:{theme.BG_CANVAS};color:{theme.TEXT};"
             "font-family:sans-serif;padding:18px'>"
             "<h3 style='color:#ef8080'>Terminal nie wystartował</h3>"
-            f"<p>{reason}</p>"
+            f"<p>{safe_reason}</p>"
             "<p style='color:#999'>Szczegóły w pliku:<br>"
-            f"<code>{WEBTERMINAL_LOG}</code></p>"
+            f"<code>{safe_log}</code></p>"
             "</body></html>")
-        self.view.setHtml(html)
+        self.view.setHtml(page)
 
     def _on_frontend_ready(self, cols, rows):
         _log(f"frontend_ready cols={cols} rows={rows}")
