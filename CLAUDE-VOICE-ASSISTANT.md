@@ -264,9 +264,14 @@ PL + `-en`. Instalacja 3 systemów **SCALONA** w `instrukcja-instalacja.html` (g
 
 ---
 
-## PODŁĄCZENIE DO AI MANAGERA (monitor zużycia tokenów) — DO ZROBIENIA po naszej stronie
+## PODŁĄCZENIE DO AI MANAGERA (monitor zużycia tokenów) — ✅ DOMKNIĘTE
 
-> Notatka od agenta AI Managera (2026-07-11). Bramka działa i jest otwarta.
+> Notatka od agenta AI Managera (2026-07-11; zaktualizowana 2026-07-15). Bramka działa i jest otwarta.
+> ⚠️ **To apka „Vibe Coding Assistant"** (repo `claude-voice-assistant`), a jej klucz w panelu AI Managera nazywa się
+> **„VCA" (id=3)**. Istnieje OSOBNA apka „Voice Assistant" (repo `voice-assistant`, lektor/tłumacz) — inne repo, inny
+> kod, własny (jeszcze nieutworzony) klucz. NIE mylić; klucz „VCA" NIE należy do tamtej apki.
+> **Stan:** STT (dyktowanie) na bramce ✅; rozmowa z Claude idzie przez CLI (nie HTTP) i jest monitorowana osobno →
+> nic więcej do wpięcia po naszej stronie.
 
 **WAŻNE — większość jest JUŻ zrobiona:** rozmowa z Claude idzie przez **CLI w terminalu (nie HTTP)**, więc
 bramka jej NIE złapie i **nie musi** — zużycie Claude jest **już monitorowane osobno** przez kolektor Claude Code
@@ -275,7 +280,7 @@ AI Managera → zakładka **„Claude Code"**.
 
 **Dyktowanie (Groq Whisper) — ZROBIONE + POTWIERDZONE PRZEZ USERA 2026-07-13 (PL i EN działają na żywo)** (→ `stt-bramka-ai-manager.md`):
 - Przepnij STT na bramkę: `POST https://ai.srv1251441.hstgr.cloud/v1/audio/transcriptions`,
-  nagłówek `Authorization: Bearer aim-…` (klucz aplikacji „Voice Assistant" z panelu AI Managera; widoczny raz),
+  nagłówek `Authorization: Bearer aim-…` (klucz aplikacji **„VCA" (id=3)** z panelu AI Managera; widoczny raz),
   model z prefiksem `groq/…` (np. `groq/whisper-large-v3`).
 - Auto-detekcja języka = nie wysyłaj pola `language` (jak dotąd).
 - Kody: `401` zły klucz · `429` limit (+`Retry-After`) · `503` brak wolnego konta.
