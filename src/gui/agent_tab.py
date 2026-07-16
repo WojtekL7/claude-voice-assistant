@@ -16,7 +16,7 @@ from PyQt5.QtWidgets import (
     QMessageBox
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QSize, QEvent
-from PyQt5.QtGui import QFont, QFontMetrics, QIcon
+from PyQt5.QtGui import QFont, QFontMetrics, QIcon, QColor
 
 # QTermWidget for real terminal emulation
 try:
@@ -609,6 +609,14 @@ class AgentTab(QWidget):
         self.repair_terminal_btn.setFixedSize(btn_size, btn_size)
         self.repair_terminal_btn.setToolTip(tr('repair_terminal_tooltip'))
         self.repair_terminal_btn.clicked.connect(self._repair_terminal)
+        # UKRYTY na życzenie usera (2026-07-16): rozstrzelony tekst nie wystąpił od
+        # kilku dni. ⚠️ Usterka NIE jest naprawiona — tylko uśpiona; dlatego cały
+        # mechanizm (zrzut dowodowy + `claude --resume`) ZOSTAJE. Powrót = skasuj
+        # linijkę niżej. ⚠️ Odsłaniając: DOPISZ przycisk do
+        # `MainWindow._apply_button_icon_styles` — bez tego zostaje domyślnym
+        # BIAŁYM kwadratem (ten sam błąd co kiedyś przy mouse_mode_btn); to był
+        # powód, dla którego user go zauważył.
+        self.repair_terminal_btn.setVisible(False)
         layout.addWidget(self.repair_terminal_btn)
 
         layout.addStretch()
@@ -1143,6 +1151,60 @@ class AgentTab(QWidget):
 
     # ==================== Styling ====================
 
+    def _input_border_colors(self):
+        """Kolory obwódki pola poleceń: (normalny, po kliknięciu).
+
+        Obwódka niesie KOLOR AGENTA — ten sam, którym `_AccentFrame` maluje ramkę
+        całego okna (Funkcja #2 z 1.0.21). Agent bez własnego koloru (`tab_color`
+        pusty) dostaje kolor skórki, czyli zachowanie sprzed tej zmiany — nie
+        zostaje bez obwódki.
+
+        Po kliknięciu w pole obwódka JAŚNIEJE (zamiast skakać na obcy kolor skórki),
+        więc sygnał „tu teraz piszesz" zostaje. ⚠️ Różnicujemy WYŁĄCZNIE kolorem —
+        grubość musi zostać 2 px, bo `AutoResizeTextEdit` liczy wysokość pola z
+        oprawy; zmiana grubości na focusie skakałaby wysokością i ucinała ogonki.
+        """
+        skin = self.skin_colors or {}
+        base = skin.get('border_color', '#4a1a3a')
+        focus = skin.get('hover_color', '#6a2a5a')
+        cfg = self.agent_config if isinstance(self.agent_config, dict) else {}
+        raw = cfg.get('tab_color')
+        if isinstance(raw, str) and raw:
+            col = QColor(raw)
+            if col.isValid():
+                base = col.name()
+                focus = col.lighter(135).name()
+        return base, focus
+
+    def _apply_input_border(self):
+        """Nałóż arkusz pola poleceń (kolor obwódki = kolor agenta).
+
+        Wydzielone z `apply_styles`, bo wołamy to także z `update_config` — bez tego
+        zmiana koloru agenta w konfiguracji byłaby widoczna dopiero po zmianie skórki.
+        """
+        skin = self.skin_colors or {}
+        input_bg = skin.get('input_bg', '#300A24')
+        text_color = skin.get('text_color', '#ffffff')
+        hover_color = skin.get('hover_color', '#6a2a5a')
+        border_color, focus_color = self._input_border_colors()
+
+        self.input_field.setStyleSheet(f"""
+            QTextEdit {{
+                background-color: {input_bg};
+                color: {text_color};
+                border: 2px solid {border_color};
+                border-radius: 12px;
+                padding: 12px;
+                selection-background-color: {hover_color};
+            }}
+            QTextEdit:focus {{
+                border: 2px solid {focus_color};
+            }}
+        """)
+        # Nowy arkusz = potencjalnie inna ramka/padding, czyli inna oprawa pola.
+        # Przelicz wysokość, żeby zmiana skórki nie ucięła ogonków liter.
+        self.input_field._adjust_height()
+
     def apply_styles(self, skin_colors: dict, skin_icons: dict):
         """Apply skin colors and icons."""
         self.skin_colors = skin_colors
@@ -1180,25 +1242,8 @@ class AgentTab(QWidget):
         # Input field
         input_bg = skin_colors.get('input_bg', '#300A24')
         text_color = skin_colors.get('text_color', '#ffffff')
-        border_color = skin_colors.get('border_color', '#4a1a3a')
-        hover_color = skin_colors.get('hover_color', '#6a2a5a')
 
-        self.input_field.setStyleSheet(f"""
-            QTextEdit {{
-                background-color: {input_bg};
-                color: {text_color};
-                border: 2px solid {border_color};
-                border-radius: 12px;
-                padding: 12px;
-                selection-background-color: {hover_color};
-            }}
-            QTextEdit:focus {{
-                border: 2px solid {hover_color};
-            }}
-        """)
-        # Nowy arkusz = potencjalnie inna ramka/padding, czyli inna oprawa pola.
-        # Przelicz wysokość, żeby zmiana skórki nie ucięła ogonków liter.
-        self.input_field._adjust_height()
+        self._apply_input_border()
 
         # Anti-flash: ten sam ciemny kolor także w PALECIE pola (rola Base), nie
         # tylko w stylesheet. Bez tego po wyczyszczeniu pola (Enter) Qt na ~1 klatkę
@@ -1229,6 +1274,10 @@ class AgentTab(QWidget):
     def update_config(self, config: dict):
         """Update agent configuration."""
         self.agent_config = config
+        # Kolor agenta mógł się zmienić → przemaluj obwódkę pola poleceń NA ŻYWO.
+        # (Bez tego czekałaby na najbliższą zmianę skórki.) Bezpieczne przed
+        # apply_styles: skin_colors startuje jako {} → wpadną wartości domyślne.
+        self._apply_input_border()
         self.agent_id = config.get('id', self.agent_id)
         self.agent_name = config.get('name', self.agent_name)
         self.auto_start = config.get('auto_start', self.auto_start)
