@@ -117,12 +117,17 @@ class _LeftAlignedTabStyle(QProxyStyle):
 
 
 class _AccentTabBar(QTabBar):
-    """Pasek zakładek z gradientową kreską nad aktywną zakładką.
+    """Pasek zakładek z gradientową kreską POD aktywną zakładką (podkreślenie).
 
-    QSS nie umie gradientu w `border-top` (tylko jednolity kolor), a przez
-    `background` nie da się namalować samej kreski. Dlatego dokładamy ją ręcznie
-    po tym, jak styl narysuje zakładki. Kreska jest wcięta po bokach — jak w
-    makiecie — i nie zasłania ikony ani flagi „?" (rysowana w górnych 2 px).
+    QSS nie umie gradientu w ramce (tylko jednolity kolor), a przez `background`
+    nie da się namalować samej kreski. Dlatego dokładamy ją ręcznie po tym, jak
+    styl narysuje zakładki. Kreska jest wcięta po bokach i nie zasłania ikony ani
+    flagi „?" (rysowana w dolnych 2 px zakładki).
+
+    ⚠️ ŚWIADOME ODEJŚCIE OD MAKIETY (decyzja usera 2026-07-16): makieta Cloud
+    Design ma tę kreskę NA GÓRZE (`top:0`), my rysujemy ją NA DOLE — podkreślenie
+    „przykleja" aktywną zakładkę do jej zawartości poniżej (wzorzec z Chrome/VS
+    Code). To NIE jest bug do „naprawienia" z powrotem na górę.
 
     Kolor jest STAŁY (akcent aplikacji), niezależny od koloru agenta: kreska ma
     mówić „ta zakładka jest aktywna", a nie dublować informację, którą już niesie
@@ -143,7 +148,10 @@ class _AccentTabBar(QTabBar):
 
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
-        stripe = QRect(rect.left() + self._STRIPE_INSET, rect.top(),
+        # Dolna krawędź: `bottom()` to OSTATNI piksel zakładki (top+height-1),
+        # więc żeby kreska zmieściła się W zakładce, zaczynamy _STRIPE_H-1 wyżej.
+        stripe = QRect(rect.left() + self._STRIPE_INSET,
+                       rect.bottom() - self._STRIPE_H + 1,
                        rect.width() - 2 * self._STRIPE_INSET, self._STRIPE_H)
         grad = QLinearGradient(stripe.left(), 0, stripe.right(), 0)
         grad.setColorAt(0.0, QColor(theme.ACCENT))
@@ -681,7 +689,7 @@ class MainWindow(QMainWindow):
 
         # Tab widget for agents
         self.tab_widget = QTabWidget()
-        # Własny pasek — dokłada gradientową kreskę nad aktywną zakładką.
+        # Własny pasek — dokłada gradientową kreskę pod aktywną zakładką.
         # Musi trafić przed dodaniem zakładek (QTabWidget.setTabBar).
         self.tab_widget.setTabBar(_AccentTabBar())
         # Wyrównaj zakładki do lewej także na macOS. Centrowanie liczy styl
@@ -3713,7 +3721,7 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
 
         Wcześniej ten sam QSS istniał w dwóch kopiach (budowa UI i
         `apply_skin_colors`), które potrafiły się rozjechać. Gradientowej kreski
-        nad aktywną zakładką tu NIE ma — QSS nie zna gradientu w ramce, rysuje ją
+        pod aktywną zakładką tu NIE ma — QSS nie zna gradientu w ramce, rysuje ją
         `_AccentTabBar.paintEvent`.
 
         Uwaga: `padding`/`font-size` w `QTabBar::tab` są IGNOROWANE, bo pasek ma
