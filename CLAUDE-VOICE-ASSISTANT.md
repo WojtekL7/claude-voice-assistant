@@ -86,10 +86,32 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
 ## ⏳ WCIĄŻ DO TESTU NA ŻYWO
 - **Auto-czytanie po auto-compact** (`1b57c60`) — po długiej rozmowie nie recytuje od początku. ⏳ user testuje na NOWEJ becie ~2026-07-15.
 - **„czytaj ostatnią" BUG #5** (`f38dc7a`) — pomijanie tur `user` (tool_result/przerwanie) w CRM. ⏳ user testuje na NOWEJ becie ~2026-07-15. → `czytaj-ostatnia-czyta-inna.md`.
-- **Przycisk „🔄 Napraw wygląd terminala"** (`feecbe3`) — czeka aż wystąpi rozstrzelony tekst (może się nie pojawić).
-  → `tekst-rozstrzelony-w-terminalu.md`.
+- ~~**Przycisk „🔄 Napraw wygląd terminala"**~~ **UKRYTY 2026-07-16** (`cc9bccf`, `setVisible(False)`) — user
+  schował, bo usterka nie wystąpiła od kilku dni, a przycisk świecił białym kwadratem. ⚠️ **Usterka NIE jest
+  naprawiona, tylko uśpiona** — mechanizm (zrzut dowodowy + `claude --resume`) ZOSTAJE w kodzie i da się go
+  wywołać bez przycisku. Powrót = skasuj `setVisible(False)` **I dopisz przycisk do
+  `_apply_button_icon_styles`** (inaczej znów biały). → `tekst-rozstrzelony-w-terminalu.md`.
 
 ## AKTUALNY STAN (wersja 1.0.26 — WYDANA, 3 platformy)
+- **REDESIGN — DOKAŃCZANIE 2026-07-16 (NIEWYDANE, 4 commity):** poprawki wyglądu zgłaszane przez usera,
+  każda potwierdzona przez niego na żywo w izolowanym drugim oknie. **`SKIN_VERSION` = 2 → 3** (`64840e2`).
+  - `01afb7e` — **biała kreska nad paskiem zakładek** usunięta. Styl rysował „półkę" (`PE_FrameTabBarBase`)
+    kolorami z PALETY, której nie przemalowaliśmy → 1 px czystej bieli; QSS tam NIE sięga. Fix:
+    `_LeftAlignedTabStyle.drawPrimitive()` pomija ten prymityw. ⚠️ `setDocumentMode(True)` POGARSZA.
+  - `3b75223` — kreska aktywnej zakładki **NA DOLE** (podkreślenie). ⚠️ **ŚWIADOME ODEJŚCIE OD MAKIETY**
+    (makieta ma `top:0`) — decyzja usera, NIE „naprawiać" z powrotem.
+  - `cc9bccf` — **obwódka pola poleceń w kolorze agenta** (ten sam, co ramka okna); agent bez `tab_color` →
+    kolor skórki; focus = jaśniejszy wariant. ⚠️ grubość musi zostać 2 px (`AutoResizeTextEdit` liczy
+    wysokość z oprawy → zmiana na focusie ucinałaby ogonki). Odświeżanie na żywo przez `update_config`.
+    Ukryty też przycisk naprawy terminala (wyżej).
+  - `64840e2` — **białe ikony** (mikrofon / „wyczyść pole" / błyskawica), **kolor niesie STAN**: nagrywanie =
+    pulsująca czerwona IKONA (tło jak w sąsiednich przyciskach), przetwarzanie = biała klepsydra, czytanie =
+    zielony głośnik, pauza = migający zielony trójkąt. Stop zostaje czerwony.
+- **KONWENCJA KOLORU (ustalona z userem 2026-07-16): skórka rządzi SPOCZYNKIEM, kod niesie STAN.** Kolory
+  znaczeniowe (`DANGER` nagrywanie/stop, `SUCCESS` czytanie/wznów) siedzą w kodzie — w skórce dałoby się
+  ustawić zielone nagrywanie i sygnał przestałby znaczyć. Nie dokładaj kluczy skórki „per stan" (39 kluczy =
+  dialog skórki i config działają bez zmian). „Biel" = `theme.TEXT` `#eae6f2`, NIE `#ffffff` (czysta biel
+  tylko na Wyślij, bo leży na gradiencie).
 - **REDESIGN „Vibe Purple" (2026-07-09, NIEWYDANY — w kodzie, commity `bc81a03` + `410c9ab`):** nowy wygląd wg makiety Cloud Design (`Vibe Coding Assistant redesign.zip`), funkcje bez zmian. Paleta w `src/gui/theme.py` (jedyne źródło kolorów), migracja skórki `SKIN_VERSION=2` (bez niej zmiana palety byłaby NIEWIDOCZNA), czcionki IBM Plex Sans + JetBrains Mono w paczce, terminal przemalowany w obu silnikach, gradientowa kreska nad aktywną zakładką (`_AccentTabBar`), gradientowy przycisk Wyślij, suwak „Auto-czytaj", kreskowe ikony SVG w kolorze skórki, dialogi/pasek statusu/wskaźnik RAM na palecie. Szczegóły → pamięć `redesign-vibe-purple.md`, pułapki → `qt-pulapki-qss-redesign.md`. **Porcje A+B+C potwierdzone przez usera na żywo** (C = 2026-07-14, izolowane drugie okno `test-druga-instancja-izolowana`: ogonki w dialogach, listy Skills/MCP z pełnymi opisami, podgląd skórki + „Anuluj" przywraca kolory, kolory zakładek, wskaźnik RAM).
 - **1.0.26 (WYDANE 2026-06-29, 3 platformy, appcast 1.0.26, pipeline e2e OK):** naprawa flagi „agent czeka", która nie pokazywała się na zakładkach w tle. **Przyczyna (zdiagnozowana czujnikiem `CVA_FLAG_DEBUG=1`):** wykrywanie „agent czeka" zależało od ZGADYWANIA pliku sesji w `~/.claude/projects` (reguła „plik zapisany po starcie zakładki") — zawodziło dla sesji wznowionych/cichych (agent czeka = nic nie pisze → `has_session=N` → flaga się nie uzbraja) i myliło sesje między oknami. **Fix u źródła:** apka uruchamia `claude --session-id <uuid>` i PRZYPINA czytnik do dokładnego `<uuid>.jsonl` (`transcript_reader.pin_session` + tryb przypięty w `_ensure_session`; `main_window._build_claude_command`/`_pin_tab_session`). Koniec zgadywania → flaga działa od razu, deterministycznie, bez kolizji okien; stary tryb zgadywania zostaje jako zapas (ręczny `--resume` po crashu). **Bonus:** pasywny czujnik flagi (`CVA_FLAG_DEBUG=1`, domyślnie OFF) → log `~/.vibe-coding-assistant/flag-debug.log`. Weryfikacja: `claude --session-id` tworzy `<uuid>.jsonl` (test bezpośredni), przypięty czytnik wykrywa sesję+ciszę, rysowanie ikony przy SHOW=1, potwierdzone przez usera. sha256 serwer==feed ×3, HTTP 200 ×3. Commity `d567975`(fix)+`87cbb44`(bump)+`f2a670d`(appcast), tag `v1.0.26`.
 - **1.0.25 (WYDANE 2026-06-26, 3 platformy, appcast 1.0.25, self-update zweryfikowany):** wielki **rebranding** + cała seria poprawek UI (potwierdzane na żywo w becie). Weryfikacja: sha256 serwer==lokalne ×3, HTTP 200 ×3, `.exe` 644, appcast `version=1.0.25`. Tag `v1.0.25`→`243efff`.
@@ -134,6 +156,25 @@ Tylko **aktywna** zakładka czyta; przełączenie ucisza poprzednią. Priming `s
 ## TRWAŁE PUŁAPKI PROJEKTU
 *(uniwersalne wersje wielu z nich są w CLAUDE-COMMON — tu skrót projektowy)*
 
+- **QSS NIE SIĘGA DO TEGO, CO MALUJE SAM STYL Z PALETY → jasne artefakty w ciemnym motywie (2026-07-16).**
+  Biała kreska nad zakładkami = „półka" paska (`PE_FrameTabBarBase`) rysowana kolorami PALETY, której nigdy
+  nie przemalowaliśmy; `QTabBar { background }` maluje TŁO, nie ten prymityw → „stylujemy, a i tak świeci".
+  Ta sama rodzina co biały błysk pola input (paleta `Base`) i domyślny biały kwadrat przycisku bez stylu.
+  **Reguła: objaw „stylowane, a jasne" → podejrzewaj PALETĘ/prymityw stylu, nie QSS.** Fix przez
+  `QProxyStyle.drawPrimitive()` (pomiń prymityw), nie przez `setDocumentMode` (POGARSZA — kreska szersza).
+  Diagnoza: **mierz piksele** (PIL `getpixel`, skan pionowy) — ujawniło DWIE różne linie brane za jedną
+  (3 px `#E2E8F0` = ramka koloru agenta, czyli FUNKCJA; 1 px `#FFFFFF` = bug). Bisekcja na replice z
+  PRAWDZIWYCH klas (`_AccentTabBar`/`_LeftAlignedTabStyle`/`_AccentFrame` + realny QSS + `QMainWindow` z tłem),
+  zwalidowanej zgodnością z realnym zrzutem — goły offscreen `QTabWidget` myli (patrz pułapka QTabBar niżej).
+- **KOLOR PRZYCISKU MA WIĘCEJ NIŻ JEDNO ŹRÓDŁO — popraw animację I sprawdź pseudostany QSS (2026-07-16).**
+  Mikrofon zalewała czerwień z DWÓCH miejsc naraz: `_animate_mic_pulse` ORAZ reguły
+  `QPushButton:checked { background: DANGER }` we WSPÓLNYM `_apply_button_icon_style` (`dictate_btn` = jedyny
+  `setCheckable(True)` na tym arkuszu). Naprawa samej animacji NIE wystarczyła — user słusznie zgłosił „tło
+  dalej czerwone". Reguła USUNIĘTA, nie przywracać. Pytając „skąd ten kolor?" sprawdź `setIcon` **oraz**
+  `:checked`/`:hover`/`:pressed`/`:disabled`. Weryfikacja bez GUI: wyrenderuj
+  `icon_set.button_icon(k, state, color).pixmap()` i policz dominujący nieprzezroczysty piksel; kształt per
+  stan = porównanie bajtów z `icon_by_name(...)` + KONTROLA NEGATYWNA (mic != hourglass), inaczej test
+  „przechodzi", nie rozróżniając niczego.
 - **Sztywne wysokości w GUI + wyższe czcionki redesignu = ucięte litery (2026-07-10).** Qt nie pokazuje suwaka,
   gdy widżet dostaje mniej miejsca niż potrzebuje — po cichu ściska rzędy i przycina glify. Objawy: ogonki p/y/ż
   w polu poleceń i oknie agenta, opisy skilli urwane w pół zdania. Zasada: **MIERZ, nie wpisuj liczby** (oprawa
