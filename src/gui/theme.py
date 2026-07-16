@@ -131,17 +131,20 @@ def skin_colors() -> dict:
         'inactive_panel_bg': SURFACE_INACTIVE,
 
         # --- Ikony przycisków ---
-        # W makiecie pasek narzędzi jest stonowany: wyróżnione są tylko
-        # mikrofon (akcent), akcje błyskawiczne (bursztyn) i stop (czerwień).
-        'icon_dictate_color': ACCENT_LIGHT,
+        # Decyzja usera (2026-07-16): pasek ma być SPOKOJNY — kolor niesie STAN
+        # (nagrywanie=czerwień, czytanie=zieleń), a nie sam spoczynek. Dlatego
+        # mikrofon / „wyczyść pole" / akcje błyskawiczne są BIAŁE, nie kolorowe.
+        # ⚠️ To wartości DOMYŚLNE skórki — zmiana jest niewidoczna bez podbicia
+        # SKIN_VERSION (config.json usera je przykrywa). Patrz main_window.
+        'icon_dictate_color': TEXT,
         'icon_read_color': TEXT_DIM,
         'icon_pause_color': ACCENT_LIGHT,
         'icon_stop_color': DANGER,
         'icon_copy_color': TEXT_DIM,
-        'icon_clear_input_color': DANGER,
+        'icon_clear_input_color': TEXT,
         'icon_add_media_color': TEXT_DIM,
         'icon_send_color': '#ffffff',   # na gradiencie akcentu
-        'icon_quick_actions_color': WARNING,
+        'icon_quick_actions_color': TEXT,
 
         # --- Terminal (16 kolorów ANSI + tło/tekst) ---
         # Dobrane pod składnię, jaką rysuje Claude Code: zielony = dodane linie,

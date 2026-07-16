@@ -449,7 +449,10 @@ DEFAULT_SKIN_COLORS = theme.skin_colors()
 # PORZUCANA na rzecz nowych domyślnych (z kopią zapasową configu). Bez tego
 # redesign byłby niewidoczny: `_load_settings` nadpisuje defaulty wartościami
 # z config.json, więc kto raz uruchomił starą wersję, ten oglądałby ją dalej.
-SKIN_VERSION = 2
+#   v2 → v3 (2026-07-16): białe ikony mikrofonu / „wyczyść pole" / akcji
+#   błyskawicznych (kolor niesie STAN, nie spoczynek). `skin_icons` (własne
+#   napisy/emoji usera) wczytują się NIEZALEŻNIE od tej wersji → bump ich NIE rusza.
+SKIN_VERSION = 3
 
 # Nazwy kolorów do wyświetlenia w UI (po polsku)
 SKIN_COLOR_NAMES = {
@@ -2636,7 +2639,9 @@ class MainWindow(QMainWindow):
             # Keep buttons visible during pause
             tab.pause_btn.setVisible(True)
             tab.stop_btn.setVisible(True)
-            tab.pause_btn.setIcon(self._icon('pause', 'active'))
+            # Od razu ZIELONY trójkąt (nie kolor skórki) — inaczej mignąłby fiolet,
+            # zanim `_animate_pause_blink` przemaluje go w pierwszym ticku (500 ms).
+            tab.pause_btn.setIcon(icon_set.button_icon('pause', 'active', theme.SUCCESS))
             # Stop speaker animation
             self._speaker_anim_timer.stop()
             tab.read_btn.setIcon(self._icon('read', 'normal'))
@@ -2706,19 +2711,13 @@ class MainWindow(QMainWindow):
             return
 
         self._mic_pulse_state = not self._mic_pulse_state
-        # Nagrywanie = czerwone WYPEŁNIENIE przycisku (jak w makiecie), więc ikona
-        # musi być biała — w kolorze skórki (fiolet) zlałaby się z czerwienią.
-        tab.dictate_btn.setIcon(icon_set.button_icon('dictate', 'active', f'{theme.TEXT}'))
-        # Puls: jaśniejsza/ciemniejsza czerwień + rosnąca poświata.
-        bg, glow = ((theme.DANGER, '3px') if self._mic_pulse_state
-                    else (theme.DANGER_LIGHT, '1px'))
-        tab.dictate_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {bg};
-                border: {glow} solid {theme.DANGER_LIGHT};
-                border-radius: {theme.RADIUS}px;
-            }}
-        """)
+        # Nagrywanie sygnalizuje SAMA IKONA pulsująca czerwienią (decyzja usera
+        # 2026-07-16). Przycisku CELOWO nie dotykamy — dawniej zalewaliśmy go na
+        # czerwono, co krzyczało na cały pasek. ⚠️ Nie ustawiaj tu stylesheetu:
+        # nadpisałby zwykły styl przycisku, a `_reset_mic_style` musiałby go
+        # naprawiać; teraz przycisk po prostu przez cały czas wygląda tak samo.
+        color = theme.DANGER if self._mic_pulse_state else theme.DANGER_LIGHT
+        tab.dictate_btn.setIcon(icon_set.button_icon('dictate', 'active', color))
 
     def _reset_mic_style(self):
         """Reset microphone button to default style."""
@@ -2735,9 +2734,12 @@ class MainWindow(QMainWindow):
             return
 
         self._speaker_anim_state = (self._speaker_anim_state + 1) % 3
+        # Czytanie = ZIELONA ikona (decyzja usera 2026-07-16). Zieleń jest kolorem
+        # ZNACZENIOWYM (stan „gra"), jak czerwień przy nagrywaniu — dlatego siedzi
+        # w kodzie, a nie w skórce: nie zaśmiecamy palety kluczem per stan.
+        # Powrót do koloru skórki robi `_on_tts_state_changed` (PAUSED/IDLE).
         tab.read_btn.setIcon(icon_set.icon_by_name(
-            self._speaker_icons[self._speaker_anim_state],
-            self.skin_colors.get('icon_read_color', theme.TEXT_DIM)))
+            self._speaker_icons[self._speaker_anim_state], theme.SUCCESS))
 
     def _animate_pause_blink(self):
         """Animate pause button blinking - icon only, button stays in place."""
@@ -2747,8 +2749,11 @@ class MainWindow(QMainWindow):
 
         self._pause_blink_state = not self._pause_blink_state
         if self._pause_blink_state:
-            # Ikona „play" widoczna (wznów)
-            tab.pause_btn.setIcon(self._icon('pause', 'active'))
+            # Trójkąt „play" (wznów) na ZIELONO — kolor znaczeniowy „kliknij, by
+            # grało dalej" (decyzja usera 2026-07-16), spójny z zieloną ikoną
+            # czytania. Kolor podajemy WPROST, nie przez skórkę (`_icon`), bo to
+            # stan, nie preferencja wyglądu.
+            tab.pause_btn.setIcon(icon_set.button_icon('pause', 'active', theme.SUCCESS))
         else:
             # Mrugnięcie — chwilowo pusta ikona, by przyciągnąć wzrok
             tab.pause_btn.setIcon(QIcon())
@@ -3492,13 +3497,17 @@ class MainWindow(QMainWindow):
             }}
             QPushButton:pressed {{
                 background-color: {theme.BG_INPUT};
-            }}
-            QPushButton:checked {{
-                color: {theme.TEXT};
-                background-color: {theme.DANGER};
-                border: 1px solid {theme.DANGER};
             }}{disabled_style}
         """)
+        # ⚠️ CELOWO BRAK reguły `QPushButton:checked` (usunięta 2026-07-16).
+        # Jedynym „wciskanym" przyciskiem na tym arkuszu jest MIKROFON
+        # (`dictate_btn.setCheckable(True)` + `setChecked(True)` na czas nagrywania).
+        # Dawniej `:checked` zalewało go czerwienią — user chce, żeby tło było
+        # ZAWSZE takie jak w sąsiednich przyciskach („Czytaj…"), a nagrywanie
+        # niosła WYŁĄCZNIE pulsująca czerwona ikona (`_animate_mic_pulse`).
+        # Nie przywracaj tej reguły „dla sygnalizacji stanu" — to był ten czerwony
+        # kwadrat. Gdyby kiedyś doszedł inny checkable przycisk i potrzebował
+        # własnego stanu — dodaj mu OSOBNY arkusz, nie tę wspólną regułę.
 
     def _apply_send_button_style(self, button):
         """Przycisk „Wyślij" — akcent aplikacji: gradient fioletowy + biały napis.
