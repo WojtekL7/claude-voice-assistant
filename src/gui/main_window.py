@@ -84,12 +84,28 @@ class _LeftAlignedTabStyle(QProxyStyle):
 
     Podpinana do *QTabWidget* (decyduje o położeniu paska) i do jego paska.
     Kolory/kształt/ikona X z QSS działają dalej. Na Linuksie i tak lewo → zero regresji.
+
+    Robi też TRZECIĄ rzecz: gasi „półkę" paska zakładek (`PE_FrameTabBarBase`) —
+    patrz `drawPrimitive` niżej.
     """
 
     def styleHint(self, hint, option=None, widget=None, returnData=None):
         if hint == QStyle.SH_TabBar_Alignment:
             return Qt.AlignLeft
         return super().styleHint(hint, option, widget, returnData)
+
+    def drawPrimitive(self, element, option, painter, widget=None):
+        # BIAŁA KRESKA nad zakładkami: styl rysuje „półkę" paska (PE_FrameTabBarBase)
+        # kolorami z PALETY, a palety nigdy nie przemalowaliśmy na ciemną — QSS tu nie
+        # sięga (`QTabBar { background }` maluje tło, nie ten prymityw). Efekt: 1 px
+        # czystej bieli przez cały pasek, przerwany tylko pod aktywną zakładką (zasłania
+        # go gradientowa kreska _AccentTabBar). Ta sama rodzina błędu co biały błysk
+        # pola input (styl ciemny, paleta pod spodem została jasna).
+        # W redesignie ta półka nie jest do niczego potrzebna — zakładki niosą własne
+        # tło i ramkę — więc jej nie rysujemy.
+        if element == QStyle.PE_FrameTabBarBase:
+            return
+        super().drawPrimitive(element, option, painter, widget)
 
     def subElementRect(self, element, option, widget=None):
         rect = super().subElementRect(element, option, widget)
