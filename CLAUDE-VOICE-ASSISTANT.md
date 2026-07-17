@@ -93,7 +93,14 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
   7 auto-startujących zakładek wczytuje pamięć (zwł. AI Manager i ReShip) + regresja: zwykłe pisanie,
   ręczny „Uruchom" dla agenta z `auto_start=False`. → `pty-tekst-enter-sklejenie.md`.
 - **Auto-czytanie po auto-compact** (`1b57c60`) — po długiej rozmowie nie recytuje od początku. ⏳ user testuje na NOWEJ becie ~2026-07-15.
-- **„czytaj ostatnią" BUG #5** (`f38dc7a`) — pomijanie tur `user` (tool_result/przerwanie) w CRM. ⏳ user testuje na NOWEJ becie ~2026-07-15. → `czytaj-ostatnia-czyta-inna.md`.
+- **„czytaj ostatnią" BUG #6 — rozwiązanie STRUKTURALNE** (`0ce9609`, 2026-07-17) — „raz ostatnia, raz
+  przedostatnia". Odkrycie: Claude Code **2.1.212** NIE odracza już zapisu wypowiedzi (przesłanka BUG #1
+  nieaktualna), zapisuje przyrostowo → bramka `journal_lags_screen()` losowo słała na kruchy ekran, który
+  przy długiej wypowiedzi wyłuskiwał OPCJE PYTANIA zamiast wypowiedzi. Fix: **dziennik ZAWSZE pierwszy**,
+  ekran tylko gdy dziennik pusty; bramka wypada z toru decyzyjnego (zastępuje też BUG #5). Sonda PTY na
+  żywym claude 2.1.212: 4/4 (okno odroczenia) + 2/2 (zwykła tura). ⏳ **test na becie 2026-07-18**: 🔊
+  czyta najnowszą po (a) zwykłej długiej odpowiedzi, (b) moim pytaniu z przyciskami — klik PRZED
+  odpowiedzią, (c) zaznaczenie Shift = czyta zaznaczone. → `czytaj-ostatnia-czyta-inna.md` (BUG #6).
 - ~~**Przycisk „🔄 Napraw wygląd terminala"**~~ **UKRYTY 2026-07-16** (`cc9bccf`, `setVisible(False)`) — user
   schował, bo usterka nie wystąpiła od kilku dni, a przycisk świecił białym kwadratem. ⚠️ **Usterka NIE jest
   naprawiona, tylko uśpiona** — mechanizm (zrzut dowodowy + `claude --resume`) ZOSTAJE w kodzie i da się go
