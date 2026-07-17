@@ -2948,56 +2948,25 @@ class MainWindow(QMainWindow):
 
             reader = getattr(tab, '_transcript_reader', None) if tab else None
 
-            def _speak_from_terminal_buffer(clear_after: bool) -> bool:
-                """Odczytaj ostatnią odpowiedź z bufora EKRANU (terminala).
-
-                Zwraca True gdy udało się coś odczytać. Używane dwutorowo:
-                jako obejście pułapki „agent czeka" (poniżej) oraz jako końcowy
-                fallback, gdy dziennik nic nie zwróci.
-                """
-                # Notes TEJ zakładki (zasilany wyłącznie przez jej własny
-                # terminal), a NIE wspólny bufor MainWindow — tamten miesza
-                # wyjście WSZYSTKICH zakładek naraz, więc „ostatnia odpowiedź"
-                # bywała treścią agenta z tła (np. Strona F-P), a nie bieżącego.
-                buf = getattr(tab, '_terminal_output_buffer', '') if tab else ''
-                if not buf.strip():
-                    return False
-                resp = extract_last_claude_response(buf)
-                if not resp:
-                    return False
-                resp = fix_polish_encoding(resp)
-                cleaned = text_cleaner.clean(resp, use_dictionary=False)
-                if not cleaned:
-                    return False
-                # Stop auto-read timer to prevent double reading
-                if hasattr(self, '_tts_timer') and self._tts_timer is not None:
-                    self._tts_timer.stop()
-                self.tts.speak(cleaned)
-                self._update_status(tr('status_reading_last'))
-                if clear_after and tab is not None:
-                    tab._terminal_output_buffer = ""
-                return True
-
-            # PUŁAPKA Claude Code (potwierdzona diagnostyką 2026-07-03): gdy tura
-            # kończy się pytaniem AskUserQuestion, Claude Code zapisuje swoją
-            # OSTATNIĄ wypowiedź do dziennika DOPIERO po odpowiedzi użytkownika.
-            # W tym oknie dziennik ma jeszcze PRZEDOSTATNIĄ wypowiedź → czytamy
-            # wtedy z EKRANU (bufor terminala), gdzie najnowsza odpowiedź już JEST.
+            # DZIENNIK NAJPIERW — źródłem prawdy jest zawsze dziennik sesji
+            # (czysta proza, kompletna wypowiedź). Do EKRANU (brudny bufor TUI)
+            # schodzimy DOPIERO gdy dziennik nic nie zwróci (świeża zakładka,
+            # sesja odpięta), niżej jako ostateczność.
             #
-            # ⚠️ Bramką NIE może być `waiting_for_user()` (= „dziennik stoi ≥1,6 s"):
-            # w chwili kliknięcia 🔊 agent PRAWIE ZAWSZE czeka, więc brudny bufor
-            # ekranu (ramki TUI, wywołania narzędzi, ucięty początek — cap 5000 zn.)
-            # wypierał czysty dziennik przy KAŻDYM odczycie. Pytamy więc wprost, czy
-            # dziennik jest o tę wypowiedź w tyle. Bufora NIE czyścimy (rozmowa trwa).
-            journal_stale = True
-            if reader is not None:
-                try:
-                    journal_stale = reader.journal_lags_screen()
-                except Exception:
-                    journal_stale = False
-            if journal_stale and _speak_from_terminal_buffer(clear_after=False):
-                return
-
+            # ⚠️ Historia (2026-07-17): wcześniej gdy `journal_lags_screen()`
+            # uznał dziennik za spóźniony, apka NAJPIERW sięgała po ekran. Miało
+            # to sens, gdy stary Claude Code ODRACZAŁ zapis wypowiedzi kończącej
+            # turę pytaniem `AskUserQuestion` do odpowiedzi użytkownika. Nowszy
+            # Claude Code (2.1.212) zapisuje wypowiedź OD RAZU, ale przyrostowo →
+            # w oknie oczekiwania `journal_lags_screen()` losowo raz widział
+            # ostatni wpis jako `assistant` (→ dziennik), raz jako `user`
+            # (→ ekran) → „raz czyta ostatnią, raz przedostatnią". Do tego przy
+            # DŁUGIEJ wypowiedzi bufor ekranu (cap 5000) miał już tylko końcówkę
+            # + widget pytania → `extract_last_claude_response` wyłuskiwał OPCJE
+            # pytania zamiast wypowiedzi. Oba objawy = zależność od ekranu; lek:
+            # dziennik zawsze pierwszy. `journal_lags_screen()` zostaje w czytniku
+            # (nieużywane), gdyby kiedyś wrócić do wariantu z krótką pauzą.
+            # Zweryfikowane sondą PTY na żywym claude 2.1.212.
             if reader is not None:
                 try:
                     last = reader.last_response()
@@ -3010,9 +2979,11 @@ class MainWindow(QMainWindow):
                         self._update_status(tr('status_reading_last'))
                         return
 
-            # Fallback (stary tor) — ekstrakcja z bufora terminala TEJ zakładki
+            # OSTATECZNOŚĆ — dziennik nic nie zwrócił (świeża zakładka, sesja
+            # odpięta). Dopiero teraz ekstrakcja z bufora EKRANU TEJ zakładki
             # (nie ze wspólnego MainWindow, który miesza wyjście wszystkich
-            # zakładek → czytał treść agenta z tła).
+            # zakładek → czytał treść agenta z tła). Tor brudny i kruchy przy
+            # długich wypowiedziach — dlatego wyłącznie jako zabezpieczenie.
             tab_buf = getattr(tab, '_terminal_output_buffer', '') if tab else ''
             if tab_buf.strip():
                 # Extract only the last response (strips UI frames, spinners, user prompts)
