@@ -1530,10 +1530,13 @@ class MainWindow(QMainWindow):
         Wykonuje to, co dawniej robił deferred lambda w _create_agent_tab:
         1. zaaplikuj kolory terminala (CustomSkin),
         2. uruchom komendę `claude` (jeśli auto_start lub _force_start),
-        3. po 8s wyślij pliki pamięci (jeśli send_memory_on_start).
+        3. uruchom czekanie na gotowość Claude Code i wyślij pliki pamięci,
+           gdy realnie wstanie (jeśli send_memory_on_start).
 
-        Bash potrzebuje chwili na rozruch — komenda claude leci po 500ms,
-        pliki pamięci po 8500ms (8 s od claude, jak w starej logice).
+        Bash potrzebuje chwili na rozruch — komenda claude leci po 500 ms.
+        Plików pamięci NIE wysyłamy „po czasie": zakładka czeka na baner
+        Claude Code + ciszę terminala (AgentTab.start_memory_files_watch),
+        bo wpisanie ich do wstającego procesu gubi wiadomość.
         """
         # Guard idempotencji: terminal_ready bywa emitowany >1× w pewnych
         # ścieżkach (reentrancy z QSplitter.replaceWidget + deleteLater wewnątrz
@@ -1565,7 +1568,10 @@ class MainWindow(QMainWindow):
             claude_started = True
 
         if claude_started and agent_config.get('send_memory_on_start', True):
-            QTimer.singleShot(8500, agent_tab.send_memory_files)
+            # Nie na sztywno po 8,5 s (wyścig — patrz start_memory_files_watch):
+            # zakładka sama pilnuje, aż Claude Code wstanie, i dopiero wtedy
+            # wysyła. Watch startuje PO komendzie claude (ta leci po 500 ms).
+            QTimer.singleShot(1000, agent_tab.start_memory_files_watch)
 
         # Etap 3: utwórz czytnik dziennika dla tej zakładki (poza zwykłym
         # terminalem, który nie ma sesji claude). Priming (przeskok na koniec,

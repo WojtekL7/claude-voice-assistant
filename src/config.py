@@ -69,6 +69,29 @@ CRASH_LOG_KEEP = 20
 # by powtarzające się przerysowania ekranu ratunkowego nie tworzyły serii plików.
 CRASH_LOG_DEBOUNCE_SECS = 30
 
+# --- Wysyłka plików pamięci przy starcie zakładki ----------------------------
+# Wiadomość „Przeczytaj pliki pamięci…" wolno wpisywać WYŁĄCZNIE do gotowego
+# Claude Code. Gdy tekst i Enter trafią do procesu, który jeszcze wstaje i nie
+# czyta wejścia, bufor PTY sklei oba zapisy w JEDEN odczyt → Claude bierze
+# całość za WKLEJKĘ, a Enter staje się zwykłą nową linią: tekst wisi w polu
+# i nic się nie wysyła (objaw: „zakładka nie wczytała plików pamięci”).
+# Odtworzone sondą PTY 2026-07-17: pisanie w trakcie rozruchu = 2/2 porażki,
+# pisanie do gotowego Claude = OK. Dotykało zakładek startujących jako OSTATNIE
+# (najdłużej wstają, bo konkurują o procesor z resztą).
+# Gotowość = baner Claude Code w wyjściu ORAZ cisza terminala (koniec rysowania
+# ekranu startowego). Cisza liczona czujnikiem, który ignoruje migającą kropkę
+# bezczynności — ten sam, co przy fladze „agent czeka”.
+MEMORY_READY_MARKER = "Claude Code"
+MEMORY_READY_QUIET_SECS = 1.5
+MEMORY_READY_POLL_MS = 500
+# Bezpiecznik: gdyby baner nigdy nie przyszedł (np. przyszła wersja Claude Code
+# zmieni ekran startowy), po tym czasie wysyłamy po staremu. Najgorszy możliwy
+# skutek = dzisiejsze zachowanie, nigdy „nie wysyła wcale”.
+MEMORY_READY_TIMEOUT_SECS = 60.0
+# Enter musi być OSOBNYM zapisem, wyraźnie oddzielonym od tekstu (50 ms było za
+# mało — patrz wyżej). Do gotowego Claude wystarcza mniej, pół sekundy to zapas.
+MEMORY_ENTER_DELAY_MS = 500
+
 # Ensure config directory exists
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 

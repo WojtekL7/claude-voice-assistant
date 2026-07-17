@@ -34,6 +34,8 @@ from config import (
     DEFAULT_QUICK_ACTIONS, QUICK_ACTIONS_FILE, DEFAULT_SPLITTER_SIZES,
     CRASH_LOG_DIR, TERMINAL_CAPTURE_BYTES, CRASH_LOG_KEEP, CRASH_LOG_DEBOUNCE_SECS,
     ASSETS_DIR,
+    MEMORY_READY_MARKER, MEMORY_READY_QUIET_SECS, MEMORY_READY_POLL_MS,
+    MEMORY_READY_TIMEOUT_SECS, MEMORY_ENTER_DELAY_MS,
     t as tr,
 )
 from core.platform_utils import default_shell
@@ -288,6 +290,10 @@ class AgentTab(QWidget):
         self._last_terminal_data_ts = time.monotonic()
         self._tts_timer = None
         self._memory_sent = False
+        # Czekanie na gotowość Claude Code przed wysłaniem plików pamięci
+        # (patrz start_memory_files_watch + stałe MEMORY_READY_* w config).
+        self._memory_wait_timer = None
+        self._memory_wait_deadline = 0.0
         # Lazy activation: zakładka tworzy tylko UI shell w __init__; ciężki
         # QTermWidget + bash + claude CLI startują dopiero przy pierwszym
         # pokazaniu (MainWindow woła activate() z _on_tab_changed). Bez tego
@@ -942,12 +948,64 @@ class AgentTab(QWidget):
         return "\n".join(parts) if parts else text
 
     def send_text_to_terminal(self, text: str):
-        """Send text directly to terminal (for memory files)."""
+        """Send text directly to terminal (for memory files).
+
+        Enter leci OSOBNYM zapisem po MEMORY_ENTER_DELAY_MS — nie sklejony
+        z tekstem, inaczej Claude Code bierze całość za wklejkę i Enter staje
+        się nową linią zamiast „wyślij" (patrz komentarz przy MEMORY_* w config).
+        """
         if self.terminal_backend:
             self.terminal_backend.send_text(text)
-            QTimer.singleShot(50, lambda: self.terminal_backend.send_text("\r"))
+            QTimer.singleShot(MEMORY_ENTER_DELAY_MS, self._send_enter_to_terminal)
+
+    def _send_enter_to_terminal(self):
+        """Osobny Enter (backend mógł zniknąć, np. przy zamykaniu zakładki)."""
+        if self.terminal_backend:
+            self.terminal_backend.send_text("\r")
 
     # ==================== Memory Files ====================
+
+    def start_memory_files_watch(self):
+        """Czeka aż Claude Code REALNIE wstanie i dopiero wtedy wysyła pamięć.
+
+        Zastępuje dawne „wyślij na sztywno po 8,5 s”, które było wyścigiem:
+        zakładki startujące jako ostatnie nie zdążały wstać przed terminem,
+        więc wiadomość trafiała do procesu, który jeszcze nie czytał wejścia
+        i przepadała (tekst wisiał w polu). Patrz stałe MEMORY_READY_* w config.
+        """
+        if self._memory_sent or not self.memory_files:
+            return
+        self._memory_wait_deadline = time.monotonic() + MEMORY_READY_TIMEOUT_SECS
+        if self._memory_wait_timer is None:
+            self._memory_wait_timer = QTimer(self)
+            self._memory_wait_timer.timeout.connect(self._check_ready_for_memory)
+        self._memory_wait_timer.start(MEMORY_READY_POLL_MS)
+
+    def _stop_memory_watch(self):
+        if self._memory_wait_timer is not None:
+            self._memory_wait_timer.stop()
+
+    def _claude_tui_ready(self) -> bool:
+        """Czy Claude Code skończył się rysować i czeka na polecenie?
+
+        Dwa warunki naraz: (1) baner Claude Code pojawił się w wyjściu — sam
+        proces już żyje; (2) terminal ucichł — koniec rysowania ekranu
+        startowego (MCP, ostrzeżenia). Ciszę liczy czujnik ignorujący migającą
+        kropkę bezczynności (_is_terminal_activity), więc gotowy-a-bezczynny
+        Claude poprawnie uchodzi za cichego.
+        """
+        if MEMORY_READY_MARKER not in self._terminal_capture:
+            return False
+        return (time.monotonic() - self._last_terminal_data_ts) >= MEMORY_READY_QUIET_SECS
+
+    def _check_ready_for_memory(self):
+        if self._memory_sent:
+            self._stop_memory_watch()
+            return
+        timed_out = time.monotonic() >= self._memory_wait_deadline
+        if self._claude_tui_ready() or timed_out:
+            self._stop_memory_watch()
+            self.send_memory_files()
 
     def send_memory_files(self):
         """Send memory file paths to Claude Code (not full content)."""
