@@ -84,6 +84,14 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
   (⏳ do testu na żywej becie po restarcie). → `todo-sprzatanie-starych-plikow.md`.
 
 ## ⏳ WCIĄŻ DO TESTU NA ŻYWO
+- **Pliki pamięci nie wchodziły w OSTATNICH zakładkach** (`0361565`, 2026-07-17) — AI Manager/ReShip
+  startują jako ostatnie → claude nie zdążył wstać przed sztywnym terminem 8,5 s → tekst + Enter (50 ms)
+  sklejały się w JEDEN odczyt PTY → Claude brał to za wklejkę, Enter = nowa linia, wiadomość WISIAŁA
+  niewysłana w polu. Fix: `AgentTab.start_memory_files_watch` czeka na baner + ciszę, Enter osobno po
+  500 ms, bezpiecznik 60 s. Zweryfikowane sondą PTY vs prawdziwy claude (stara 2/2 porażki, nowa 2/2 OK
+  także pod obciążeniem) + bramka 9/9. ⏳ **user testuje na NOWEJ becie 2026-07-18**: czy wszystkie
+  7 auto-startujących zakładek wczytuje pamięć (zwł. AI Manager i ReShip) + regresja: zwykłe pisanie,
+  ręczny „Uruchom" dla agenta z `auto_start=False`. → `pty-tekst-enter-sklejenie.md`.
 - **Auto-czytanie po auto-compact** (`1b57c60`) — po długiej rozmowie nie recytuje od początku. ⏳ user testuje na NOWEJ becie ~2026-07-15.
 - **„czytaj ostatnią" BUG #5** (`f38dc7a`) — pomijanie tur `user` (tool_result/przerwanie) w CRM. ⏳ user testuje na NOWEJ becie ~2026-07-15. → `czytaj-ostatnia-czyta-inna.md`.
 - ~~**Przycisk „🔄 Napraw wygląd terminala"**~~ **UKRYTY 2026-07-16** (`cc9bccf`, `setVisible(False)`) — user
