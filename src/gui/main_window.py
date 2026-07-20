@@ -452,7 +452,11 @@ DEFAULT_SKIN_COLORS = theme.skin_colors()
 #   v2 → v3 (2026-07-16): białe ikony mikrofonu / „wyczyść pole" / akcji
 #   błyskawicznych (kolor niesie STAN, nie spoczynek). `skin_icons` (własne
 #   napisy/emoji usera) wczytują się NIEZALEŻNIE od tej wersji → bump ich NIE rusza.
-SKIN_VERSION = 3
+#   v3 → v4 (2026-07-20): czytelniejszy sygnał „gdzie jestem / czy okno jest
+#   aktywne" — jaśniejsza AKTYWNA zakładka (nowy token `theme.TAB_ACTIVE`) oraz
+#   jaśniejszy `inactive_panel_bg`. Redesign zbliżył oba do tła (różnica 4%),
+#   przez co przestały cokolwiek sygnalizować; wróciły do ~12% jak przed nim.
+SKIN_VERSION = 4
 
 # Nazwy kolorów do wyświetlenia w UI (po polsku)
 SKIN_COLOR_NAMES = {
@@ -3718,7 +3722,11 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         chevron_left_url = (Path(__file__).parent / "chevron-left.svg").as_posix()
         chevron_right_url = (Path(__file__).parent / "chevron-right.svg").as_posix()
         panel = colors.get('menu_bar_bg', theme.BG_PANEL)
-        surface = colors.get('button_bg', theme.SURFACE)
+        # Wypełnienie AKTYWNEJ zakładki NIE idzie ze skórki (`button_bg`), tylko
+        # z palety: to SYGNAŁ („tu jesteś"), a nie zwykła powierzchnia. Ze skórki
+        # dałoby się ustawić aktywną zakładkę ciemniejszą od pozostałych i sygnał
+        # zniknąłby — ta sama zasada, co przy kolorach stanu (nagrywanie/czytanie).
+        tab_active = theme.TAB_ACTIVE
         return f"""
             QTabWidget::pane {{
                 border: none;
@@ -3742,7 +3750,7 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
                 border-top-right-radius: 9px;
             }}
             QTabBar::tab:selected {{
-                background-color: {surface};
+                background-color: {tab_active};
                 border: 1px solid {colors.get('border_color', theme.BORDER)};
                 border-bottom: none;
             }}
@@ -4501,6 +4509,13 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
     def changeEvent(self, event):
         """Handle window activation/deactivation - change bottom panel color."""
         if event.type() == QEvent.ActivationChange:
+            # `self.bottom_panel` startuje jako None i dostaje panel BIEŻĄCEJ
+            # zakładki dopiero w `_on_tab_changed`. Utrata fokusu ZANIM to
+            # nastąpi (np. user klika w inne okno w trakcie rozruchu) trafiłaby
+            # w None → AttributeError w środku obsługi zdarzenia Qt.
+            if self.bottom_panel is None:
+                super().changeEvent(event)
+                return
             if self.isActiveWindow():
                 # Window is active - use custom bottom panel color
                 self.bottom_panel.setStyleSheet(f"""

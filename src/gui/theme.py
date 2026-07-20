@@ -23,7 +23,17 @@ BG_INPUT = '#120e1a'     # pole wpisywania polecenia
 SURFACE = '#171221'
 SURFACE_ALT = '#141020'  # karty w dialogach
 SURFACE_HOVER = '#1d1729'
-SURFACE_INACTIVE = '#17141c'  # panel, gdy okno straciło fokus
+
+# --- Dwa odcienie NIOSĄCE SYGNAŁ (nie zwykłe powierzchnie) ---------------------
+# Oba muszą być WYRAŹNIE jaśniejsze od BG_PANEL (#0d0a13), bo ich jedynym
+# zadaniem jest odróżnić się od sąsiedztwa. Redesign „Vibe Purple" ustawił je
+# zbyt blisko tła (różnica ~10/255 = 4%) i sygnał przestał być czytelny —
+# user zgłosił „praktycznie nie ma różnicy" dla OBU naraz (2026-07-20).
+# Przywrócona różnica ~30/255 (12%), czyli poziom sprzed redesignu (było 39),
+# tyle że w fiolecie zamiast dawnej szarości. Zmiana wymagała podbicia
+# SKIN_VERSION → 4 (config.json usera przykrywa paletę).
+TAB_ACTIVE = '#251c37'        # wypełnienie AKTYWNEJ zakładki (kontra reszta paska)
+SURFACE_INACTIVE = '#2b2438'  # panel dolny, gdy okno straciło fokus
 
 # === Akcent ===
 ACCENT = '#a855f7'         # fiolet wiodący
