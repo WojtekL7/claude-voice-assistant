@@ -84,6 +84,20 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
   (⏳ do testu na żywej becie po restarcie). → `todo-sprzatanie-starych-plikow.md`.
 
 ## ⏳ WCIĄŻ DO TESTU NA ŻYWO
+- **Auto-czytanie po auto-compact** (`1b57c60`) — po długiej rozmowie nie recytuje od początku. **JEDYNA
+  rzecz czekająca na test** (2026-07-20) — compact zdarza się dopiero po długiej rozmowie, więc czekamy na okazję.
+
+## ✅ POTWIERDZONE PRZEZ USERA 2026-07-20 (żywa beta)
+- **Pliki pamięci w OSTATNICH zakładkach** (`0361565`) — wszystkie auto-startujące zakładki wczytują pamięć.
+- **🔊 „czytaj ostatnią" BUG #6 — dziennik ZAWSZE pierwszy** (`0ce9609`) — czyta właściwą wypowiedź.
+  ⚠️ User OBSERWUJE dalej (bug był przerywany: „raz ostatnia, raz przedostatnia") — nie zamykać tematu
+  na twardo, dopóki nie przeżyje kilku dni użytkowania. → `czytaj-ostatnia-czyta-inna.md`.
+- **Sprzątanie starych paczek** — potwierdzone: `updates/` trzyma tylko 1 paczkę. Doczyszczone RĘCZNIE
+  ~3 GB (2026-07-20): martwy `~/.claude-voice-assistant` (po rebrandingu, migracja dawno wykonana),
+  pobrana kopia 1.0.26, backup zepsutej 1.0.19, `dist-release/`, `dist/`, `build/`.
+
+<details><summary>Historia (rozwiązane) — pliki pamięci, opis przyczyny</summary>
+
 - **Pliki pamięci nie wchodziły w OSTATNICH zakładkach** (`0361565`, 2026-07-17) — AI Manager/ReShip
   startują jako ostatnie → claude nie zdążył wstać przed sztywnym terminem 8,5 s → tekst + Enter (50 ms)
   sklejały się w JEDEN odczyt PTY → Claude brał to za wklejkę, Enter = nowa linia, wiadomość WISIAŁA
@@ -92,7 +106,6 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
   także pod obciążeniem) + bramka 9/9. ⏳ **user testuje na NOWEJ becie 2026-07-18**: czy wszystkie
   7 auto-startujących zakładek wczytuje pamięć (zwł. AI Manager i ReShip) + regresja: zwykłe pisanie,
   ręczny „Uruchom" dla agenta z `auto_start=False`. → `pty-tekst-enter-sklejenie.md`.
-- **Auto-czytanie po auto-compact** (`1b57c60`) — po długiej rozmowie nie recytuje od początku. ⏳ user testuje na NOWEJ becie ~2026-07-15.
 - **„czytaj ostatnią" BUG #6 — rozwiązanie STRUKTURALNE** (`0ce9609`, 2026-07-17) — „raz ostatnia, raz
   przedostatnia". Odkrycie: Claude Code **2.1.212** NIE odracza już zapisu wypowiedzi (przesłanka BUG #1
   nieaktualna), zapisuje przyrostowo → bramka `journal_lags_screen()` losowo słała na kruchy ekran, który
@@ -101,6 +114,8 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
   żywym claude 2.1.212: 4/4 (okno odroczenia) + 2/2 (zwykła tura). ⏳ **test na becie 2026-07-18**: 🔊
   czyta najnowszą po (a) zwykłej długiej odpowiedzi, (b) moim pytaniu z przyciskami — klik PRZED
   odpowiedzią, (c) zaznaczenie Shift = czyta zaznaczone. → `czytaj-ostatnia-czyta-inna.md` (BUG #6).
+</details>
+
 - ~~**Przycisk „🔄 Napraw wygląd terminala"**~~ **UKRYTY 2026-07-16** (`cc9bccf`, `setVisible(False)`) — user
   schował, bo usterka nie wystąpiła od kilku dni, a przycisk świecił białym kwadratem. ⚠️ **Usterka NIE jest
   naprawiona, tylko uśpiona** — mechanizm (zrzut dowodowy + `claude --resume`) ZOSTAJE w kodzie i da się go
