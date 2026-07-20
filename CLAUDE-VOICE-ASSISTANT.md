@@ -335,24 +335,23 @@ Działa jak na Macu, prościej (AppImage = JEDEN plik, nie katalog ze symlinkami
 PL + `-en`. Instalacja 3 systemów **SCALONA** w `instrukcja-instalacja.html` (górne menu macOS·Linux·Windows·Dyktowanie·Agenci; OS-y przełączane zakładkami JS — kotwica `#os`). Stare `instrukcja-{macos,linux,windows}{,-en}` = przekierowania na scaloną → **stare apki dalej działają**. Generatory (uruchamiać z `packaging/web/`): `build-instalacja.py` scala sekcje stron OS — **MUSI prefiksować `id`/anchory/`copyCmd('id')` per panel** (3 strony używały tych samych `id` cz1..cz5/npmcmd → kolizja `getElementById`; `copyCmd` siedzi PO `<footer>`, więc dołączany osobno); `inject-menu.py` wstrzykuje górne menu + sekcję „jak uruchomić dyktowanie" (idempotentny, pomija gdy `topnav` jest). ⚠️ `build-instalacja.py` nadpisuje strony OS przekierowaniami — przed ponownym uruchomieniem `git checkout` oryginałów. Aplikacja linkuje przez `config.install_guide_url`. Test układu: headless Chromium (Playwright) na `file://`.
 
 ## Inne otwarte TODO
-- [ ] 🔴 **AUTO-SPRZĄTANIE KANAŁU AKTUALIZACJI NA VPS — do zrobienia (wpis od agenta SEO Managera, 2026-07-20).**
-      **Kontekst:** `/opt/cva-web` urósł do **11 GB** i był GŁÓWNYM powodem, przez który VPS miał **93% zajętego dysku**
-      (3,7 GB wolnego = ryzyko dla WSZYSTKICH apek na tej maszynie: bazy, poczta, WordPress). Sprzątnięte ręcznie
-      (za zgodą właściciela): 41 plików / **5,25 GB** — kopie `.bak`, `.bak-broken` i wersje starsze niż 3 najnowsze
-      per aplikacja+platforma. Efekt: `/opt/cva-web` 11 → ~5,8 GB, VPS **93% → 78%**. Zweryfikowane po sprzątaniu:
-      appcast `200`, instalator 1.0.27 pobiera się (198 MB). **Automatu NADAL NIE MA → za kilka wydań urośnie znowu.**
-      **Do zrobienia:** retencja w skrypcie wydawniczym LUB cron na VPS (np. co tydzień) — kasuj `*.bak*`/`*broken*`
-      i zostawiaj **N najnowszych (3) w KAŻDEJ grupie aplikacja+platforma**.
-      ⚠️ **Trzy pułapki (kosztowały dziś osobną rundę analizy):**
-      1. **Nigdy nie kasuj po samej dacie.** Zawsze wyklucz pliki wskazywane przez `appcast.json` ORAZ przez strony
-         pobierania (`/opt/cva-web/html/*.html`) — to lista nietykalnych.
-      2. **„3 najnowsze" licz W GRUPIE aplikacja+platforma, nie globalnie.** Globalnie skasowałoby JEDYNY instalator
-         Windows (`.exe` bywa starszy niż kilka `.AppImage`) → użytkownicy Windows bez pobrania.
-      3. **Weryfikuj pod WŁAŚCIWYM adresem: `https://pobierz.srv1251441.hstgr.cloud/cva/…`.** Adres
-         `https://srv1251441.hstgr.cloud/cva/` (widnieje w `../CLAUDE.md`) jest **NIEAKTUALNY** — daje certyfikat
-         zastępczy + `404` (brak trasy w Traefiku), co przy diagnozie wygląda jak „skasowałem za dużo". Trasa realna:
-         router `cva-pub` = `Host(pobierz.…) && PathPrefix(/cva)`; strona pobierania jest za basic-auth (user `pobierz`).
-      → Przy okazji **popraw ten adres w `~/Projekty/CLAUDE.md`** (sekcja Claude Voice Assistant, „feed na VPS").
+- [x] ~~**AUTO-SPRZĄTANIE KANAŁU AKTUALIZACJI NA VPS**~~ **ZROBIONE 2026-07-20** (zgłoszenie: agent
+      SEO Managera). Automat: `packaging/prune-release-channel.py` (w repo) → na VPS jako
+      `/usr/local/bin/cva-prune-releases.py` + cron `/etc/cron.d/cva-prune-releases`
+      (**poniedziałki 4:30** — celowo NIE w niedzielę, wtedy leci czyszczenie Dockera).
+      Domyślnie PRÓBA NA SUCHO, kasuje z `--apply`; `--drop-app NAZWA` kasuje całą porzuconą markę.
+      Jednorazowo odzyskane **2,96 GB** (13 starych paczek Maca + 10 paczek sprzed rebrandingu):
+      VPS **78% → 72%** (14 GB wolnego), `/opt/cva-web` 5,1 → **2,3 GB**. Kanał zweryfikowany po
+      skasowaniu: appcast 200, wszystkie 3 instalatory 1.0.27 pobierają się. Ponowna próba na sucho
+      = „nic do sprzątania" (skrypt idempotentny).
+      **Trwałe zasady wbudowane w skrypt** (każda okupiona osobną rundą analizy):
+      1. Lista NIETYKALNYCH z `appcast.json` + `*.html` — nigdy nie kasuj po dacie. Brak/uszkodzony
+         appcast = skrypt PRZERYWA (nie zgaduje, co jest w użyciu).
+      2. „N najnowszych" liczone w GRUPIE aplikacja+platforma (globalnie skasowałoby jedyny `.exe`).
+         `.dmg` i `.zip` Maca to OSOBNE grupy — `.zip` niesie self-update, `.dmg` jest do ręcznej instalacji.
+      3. Weryfikuj pod `https://pobierz.srv1251441.hstgr.cloud/cva/` — adres bez `pobierz.` nie ma trasy
+         w Traefiku (404 + certyfikat zastępczy, wygląda jak „skasowałem za dużo"). Poprawione też
+         w `~/Projekty/CLAUDE.md` ⚠️ (ten plik NIE jest wersjonowany — whitelist łapie tylko `CLAUDE-*.md`).
 - [ ] **Redesign — do rozważenia po testach:** własna belka tytułowa (świadomie pominięta — ryzyko Wayland/macOS); okno ustawień jako jeden modal z bocznym menu (makieta) zamiast menu górnego + osobnych dialogów — to zmiana UKŁADU, nie wyglądu, więc poza zakresem redesignu.
 - [ ] ⏳ **Auto-czytanie ZAPĘTLA całą rozmowę po auto-compact — FIX ZAAPLIKOWANY + test automatyczny OK; czeka na TEST NA ŻYWO** (2026-07-06). `transcript_reader.poll()`: gdy Claude Code skompaktuje dziennik (przepisuje `<uuid>.jsonl` na krótszy → plik MNIEJSZY niż offset), stary kod robił `self._offset = 0` → `poll()` oddawał CAŁY plik → lektor recytował rozmowę od początku (powtarzało się przy każdym compact w długich zakładkach). **Zastosowany fix:** na skurczeniu `self._offset = size; return []` (skok na koniec jak priming — czytaj tylko nowe). `py_compile` OK + test na prawdziwym kodzie (rośnięcie→compact→nowa) przeszedł 3/3. Bez wpływu na flagę „?" (`waiting_for_user` ma osobny `_wait_last_size`). **ZOSTAŁO:** ZACOMMITOWANE 2026-07-06 (razem z zestawem 🔊/emoji/polskie-znaki) — czeka tylko na TEST NA ŻYWO po restarcie bety (compact zdarza się po długiej rozmowie). Szczegóły: pamięć `auto-czytanie-loop-po-kompaktowaniu.md`. Kandydat do COMMON (tailing pliku bywającego przepisanym krócej → seek-to-end, nie 0).
 - [ ] **Strona/branding (po stronie usera/decyzji):** uzupełnić dane firmy `[forma prawna/adres/NIP]` w polityce+licencji (PL+EN naraz); kupić domenę; dopisać geolokalizację (GeoJS) do polityki prywatności; podpiąć link „Instrukcje" na stronie (teraz `#`) do `instrukcja-instalacja.html`; przegląd prawny przed publikacją; potem przepiąć stronę ze stagingu na docelową domenę.
