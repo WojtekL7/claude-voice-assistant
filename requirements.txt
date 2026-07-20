@@ -49,5 +49,10 @@ aiohttp>=3.9.0          # używane przez edge-tts (TTS)
 #   macOS:  brew install enchant && pip install pyenchant
 # pyenchant>=3.2.0
 
+# Szyfrowanie paczki agentow w chmurze (AES-256-GCM). Stdlib ma scrypt (KDF),
+# ale NIE ma AES. Zweryfikowane z PyInstallerem 2026-07-20 (Rust _rust.abi3.so
+# wchodzi do paczki automatycznie, bez wlasnego hooka).
+cryptography>=42.0.0
+
 # Packaging
 pyinstaller>=6.0.0
