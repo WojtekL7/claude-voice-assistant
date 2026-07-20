@@ -84,10 +84,15 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
   (⏳ do testu na żywej becie po restarcie). → `todo-sprzatanie-starych-plikow.md`.
 
 ## ⏳ WCIĄŻ DO TESTU NA ŻYWO
-- **Auto-czytanie po auto-compact** (`1b57c60`) — po długiej rozmowie nie recytuje od początku. **JEDYNA
-  rzecz czekająca na test** (2026-07-20) — compact zdarza się dopiero po długiej rozmowie, więc czekamy na okazję.
+- **Auto-czytanie po auto-compact** (`1b57c60`) — JEDYNA niepotwierdzona rzecz. ⚠️ **NIE mylić z „auto-czytanie
+  działa"** (to user potwierdził 2026-07-20 — patrz niżej): tu chodzi WYŁĄCZNIE o zachowanie po tym, jak Claude
+  Code sam skróci długi dziennik. Wtedy plik ROBI SIĘ MNIEJSZY niż zapamiętany offset i stary kod ustawiał
+  `offset=0` → lektor recytował rozmowę od początku. Test wymaga realnego compactu (długa rozmowa), więc nie da
+  się go „zrobić na życzenie" — łapiemy przy okazji. → `auto-czytanie-loop-po-kompaktowaniu.md`.
 
 ## ✅ POTWIERDZONE PRZEZ USERA 2026-07-20 (żywa beta)
+- **Auto-czytanie (zwykłe)** — lektor sam czyta nowe wypowiedzi z dziennika, do końca, bez śmieci.
+  Potwierdzone na żywo. ⚠️ To NIE domyka przypadku po auto-compact (wyżej) — inny tor kodu.
 - **Pliki pamięci w OSTATNICH zakładkach** (`0361565`) — wszystkie auto-startujące zakładki wczytują pamięć.
 - **🔊 „czytaj ostatnią" BUG #6 — dziennik ZAWSZE pierwszy** (`0ce9609`) — czyta właściwą wypowiedź.
   ⚠️ User OBSERWUJE dalej (bug był przerywany: „raz ostatnia, raz przedostatnia") — nie zamykać tematu
