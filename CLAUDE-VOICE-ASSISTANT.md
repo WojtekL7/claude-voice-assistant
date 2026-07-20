@@ -306,6 +306,57 @@ Aplikacja w Pythonie jest lekka (~80 MB). **Pamięć zżera Claude Code CLI: 3�
 
 ---
 
+## 🔴 DO NAPRAWY: „Please run /login" w zakładkach = WYŚCIG O ODŚWIEŻENIE TOKENU (diagnoza od agenta AI Managera, 2026-07-20)
+
+> Zgłoszenie usera: „coś mnie wylogowało z Claude Code". **User NIE był wylogowany** — plik poświadczeń był
+> cały i świeży. To zakładki VCA przewracają się nawzajem. Diagnoza gotowa, naprawa po Twojej stronie.
+
+**Objaw:** jedna lub kilka zakładek nagle pokazuje `Please run /login` / `Unauthorized`, choć logowanie jest ważne.
+Proces `claude` NIE ginie — wisi dalej z martwą sesją, więc wygląda to na zawieszenie, nie na problem z logowaniem.
+
+**Zmierzone dowody (2026-07-20, laptop usera):** 8 procesów `claude` naraz (wszystkie z VCA, start 08:51), jeden
+wspólny `~/.claude/.credentials.json`. Token wygasał **16:51**; w dziennikach sesji: `16:47:44` (79ed45af),
+`16:50:32` (e7f7fb7f), `16:50:47` (c4e0146e), `16:51:40` i `16:52:45` (6e69f262) — **5 błędów w 4 zakładkach
+w 5 minut**, a o `16:55:15` plik poświadczeń został ODŚWIEŻONY i był ważny kolejne 8 h. Zjawisko powtarzalne
+(tego samego dnia też ~08:52, ~10:38, ~14:03, ~14:08).
+
+**Przyczyna:** każda zakładka odświeża token SAMODZIELNIE. Bilet do odnowienia (`refreshToken`) jest jednorazowy
+— pierwsza zakładka go zużywa i zapisuje nowy komplet, a pozostałe trzymają w pamięci bilet, który właśnie
+przestał być ważny → dostają odmowę. Klasyczny wyścig wielu pisarzy o jeden rotujący sekret.
+⚠️ **To NIE jest wina kolektora AI Managera** — on ten plik wyłącznie CZYTA, nigdy nie zapisuje i nigdy nie używa
+`refreshToken` (sprawdzone; błędy występowały też przed jego dzisiejszymi zmianami).
+
+**Naprawa: pozbieranie się po przegranym wyścigu — NIE własne odświeżanie tokenu.**
+⛔ Nie dokładaj w VCA logiki odnawiania tokenu: to dołożyłoby DZIEWIĄTEGO uczestnika wyścigu i pogorszyło sprawę.
+Naprawą jest wykrycie odmowy i restart tej jednej zakładki — plik na dysku jest już wtedy poprawny.
+
+Kroki (masz gotowe wszystkie klocki):
+1. **Wykryj** w `main_window._poll_transcripts` (`main_window.py:1450`, tyka co 800 ms; `TranscriptReader.poll()`
+   oddaje nowe linie) wzorce `Please run /login` oraz `Unauthorized` w treści dziennika zakładki.
+2. **Odróżnij wyścig od PRAWDZIWEGO wylogowania** — to najważniejszy warunek, bez niego zrobisz pętlę restartów:
+   - poświadczenia zapisane **PO** momencie błędu → ktoś wygrał wyścig i odnowił token → **restartuj zakładkę**;
+   - poświadczenia **nie** odświeżone (albo znikły) → to realne wylogowanie → **żadnego restartu**, pokaż
+     czytelny komunikat „zaloguj się ponownie" (masz `platform_utils.claude_logged_in()`).
+   ⚠️ **Pułapka wieloplatformowa:** na macOS poświadczeń NIE MA w pliku — siedzą w Pęku kluczy (`security
+   find-generic-password -s "Claude Code-credentials"`, patrz `platform_utils.py:286`), więc test „mtime pliku"
+   tam nie zadziała. Na macOS użyj zamiennika: pojedyncza próba restartu i sprawdzenie, czy pomogło.
+3. **Restart zakładki** — proces startuje z `claude --session-id <uuid>` (`main_window.py:2344`), a czytnik jest
+   przypięty do tego pliku (`TranscriptReader.pin_session`). Restart z TYM SAMYM `--session-id` zachowuje wątek
+   rozmowy; świeży proces czyta odnowione poświadczenia i wraca do pracy. User nie powinien niczego zauważyć
+   poza krótką przerwą (rozważ dyskretny komunikat na pasku, bez modala).
+4. **Bezpieczniki:** maks. 1 restart na zdarzenie wygaśnięcia (np. cooldown ~2 min per zakładka) + licznik prób;
+   po drugiej nieudanej próbie przestań i powiedz userowi wprost. Restart NIE może wejść w środek pisania odpowiedzi
+   — sprawdź `waiting_for_user()` albo odczekaj do końca tury.
+5. **Testy (oba kierunki, jak przy innych naprawach):** (a) wyścig → podstaw dziennik z `Please run /login`
+   + świeży plik poświadczeń → zakładka ma się zrestartować raz; (b) prawdziwe wylogowanie → ten sam błąd, ale plik
+   NIE odświeżony → zero restartów i komunikat. Bez (b) grozi pętla restartów przy realnym wylogowaniu.
+
+**Łagodzenie dla usera do czasu naprawy (bez kodu):** mniej jednoczesnych zakładek — każda to kolejny uczestnik
+wyścigu (przy jednej problem nie występuje, przy ośmiu jest niemal pewny co kilka godzin). Zbieżne z notatką
+„Pamięć/RAM — każda zakładka = osobny proces `claude`" wyżej: mniej zakładek pomaga na oba problemy naraz.
+
+---
+
 ## DYSTRYBUCJA / WYDANIA — runbook (sprawdzony 1.0.13→1.0.17; 1.0.17 = pierwsze pełne 3-platformowe z Linuksem)
 1. Bump `APP_VERSION` w `src/config.py` → commit/push.
 2. `git tag vX.Y.Z && git push origin vX.Y.Z` → GitHub Actions buduje **mac+win naraz** (`build-macos.yml` runner `macos-14`, `build-windows.yml` `windows-latest`) i publikuje Release. (Iteracja bez wydania: `gh workflow run build-*.yml --ref main`.)
