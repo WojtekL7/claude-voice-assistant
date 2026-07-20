@@ -145,3 +145,57 @@ Jak przy GSC w SEO Managerze, ale typ = **Aplikacja desktopowa**:
 | Konflikty dwukierunkowe | Faza 1 = ręczne Wyślij/Pobierz (bez auto); dwukierunkowość z wykrywaniem konfliktów dopiero Faza 3 |
 | Ścieżki bezwzględne między urządzeniami | przemapowanie na imporcie (pytanie o katalog projektów) |
 | Uwiązanie do Google | interfejs `CloudProvider` od początku |
+
+---
+
+## 9. REWIZJA 2026-07-20 — szyfrowanie end-to-end (decyzje usera, WIĄŻĄCE)
+
+Wymaganie usera: **chmura ma być wyłącznie magazynem zaszyfrowanych bajtów.** Paczka niesie
+KOMPLET „agenta" (ustawienia, pliki pamięci, skille, MCP, ikony, kolory, głosy) i jest szyfrowana
+NA URZĄDZENIU przed wysłaniem. Google nigdy nie widzi treści.
+
+### 9.1 Decyzje (zamykają pytania z sekcji 7)
+| Pytanie | Decyzja usera (2026-07-20) |
+|---|---|
+| Klucze API w paczce | **TAK — wszystko łącznie z kluczami.** Uzasadnienie usera: nowy komputer ma działać bez wpisywania czegokolwiek. |
+| Hasło szyfrujące | **Zapamiętane na każdym urządzeniu** (podajesz raz per urządzenie). |
+| Skille w paczce | **Definicje TEŻ** (rewizja rekomendacji z sekcji 7 pkt 4 — user chce „to wszystko"). |
+| Kod projektów | Bez zmian: `git clone`, NIE do chmury. |
+| Kolejność | Bez zmian: Faza 1 → 2 → 3. |
+
+### 9.2 ⛔ INWARIANT BEZPIECZEŃSTWA (nie do obejścia)
+**Sekrety wolno umieścić w paczce WYŁĄCZNIE, gdy szyfrowanie realnie się powiodło.**
+- Dotychczasowy `_assert_no_secrets` NIE znika — staje się WARUNKOWY: przy `encrypt=False`
+  działa jak dziś (twardo blokuje), przy `encrypt=True` przepuszcza sekrety.
+- Eksport z sekretami MUSI zweryfikować, że wynik jest zaszyfrowany (nagłówek + próba
+  odszyfrowania), ZANIM cokolwiek poleci do chmury. Brak hasła / błąd biblioteki / awaria
+  → **ODMOWA WYSYŁKI**, nigdy cicha wysyłka otwartym tekstem.
+- Test regresji MUSI zawierać kontrolę negatywną: paczka nieszyfrowana z żądaniem sekretów
+  = wyjątek, a w bajtach paczki szyfrowanej nie ma szukanego klucza otwartym tekstem.
+
+### 9.3 Kryptografia (propozycja techniczna)
+- **Szyfr:** AES-256-GCM (szyfrowanie + wykrywanie manipulacji w jednym; podmieniony plik
+  w Drive zostanie ODRZUCONY, nie odszyfrowany po cichu).
+- **Klucz z hasła:** scrypt o wysokim koszcie (sól losowa per paczka, zapisana w nagłówku).
+  ⚠️ `hashlib.scrypt` jest w stdlib, ale AES **nie ma** → dochodzi zależność `cryptography`
+  (wheels na wszystkie 3 platformy). **Do sprawdzenia PRZED wdrożeniem: czy PyInstaller
+  poprawnie pakuje ją na macOS i Windows** (patrz pułapka „PyInstaller NIE dociągnął wtyczek Qt”).
+- **Format pliku:** jawny nagłówek (wersja formatu, parametry KDF, sól, nonce) + szyfrogram.
+  Nagłówek jawny CELOWO — bez niego nie da się odszyfrować paczki po zmianie parametrów KDF.
+- **Hasło:** nigdy nie opuszcza urządzenia, nigdy do chmury. Lokalnie w configu (tam, gdzie
+  i tak leżą klucze API — ten sam poziom zaufania; przechowywanie hasła NIE pogarsza sytuacji
+  na skompromitowanym urządzeniu, bo klucze i tak są tam jawnie).
+- **Kod ratunkowy:** przy pierwszym ustawieniu apka pokazuje kod do zapisania OFFLINE.
+  Zapomniane hasło = dane bezpowrotnie stracone (brak furtki — cena prawdziwego szyfrowania).
+
+### 9.4 Google — zweryfikowane 2026-07-20 (NIE z pamięci)
+- **Zakres `drive.file` jest NIEWRAŻLIWY** → aplikacja używająca tylko takich zakresów
+  **nie musi** przechodzić weryfikacji Google. NIE brać `drive`/`drive.readonly`/`drive.metadata`
+  (zakresy OGRANICZONE = coroczny audyt bezpieczeństwa).
+- **Tryb „Testowanie" + typ „Zewnętrzny" ⇒ tokeny odświeżania kasowane po 7 DNIACH.**
+  Dla produktu zabójcze. Lek: przełączyć aplikację na „Produkcja” — przy zakresach
+  niewrażliwych to jedno kliknięcie, BEZ przeglądu.
+- Nazwa + logo na ekranie zgody wymagają lekkiej „weryfikacji marki" (osobno, opcjonalnie).
+- Alternatywa rozważona i ODRZUCONA: `drive.appdata` (ukryty folder aplikacji) — też
+  niewrażliwy, ale user nie widzi swoich paczek i nie zrobi ręcznej kopii. `drive.file`
+  daje widoczny folder = user panuje nad swoimi danymi.
