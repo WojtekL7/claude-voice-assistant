@@ -1,18 +1,10 @@
 # CLAUDE-VOICE-ASSISTANT — Agent aplikacji desktopowej
 
-## ✅ XSS panel admina — DOMKNIĘTE 2026-07-14 (commit `6b70b5a`)
-
-Panel `panel/index.html` (serwowany OSOBNO, otwierany w PRZEGLĄDARCE — nie desktop): domknięte 3 luki
-`esc()` (surowa platforma z serwera w `osName(v.platform)`, `l.max_devices`, `data-id="${l.id}"`) +
-**CSP w `<meta>`** jako druga warstwa: `script-src` tylko po odcisku `sha256-…` inline skryptu (helper
-`panel/_csp_hash.py` przelicza hash po KAŻDEJ zmianie skryptu — inaczej panel wczyta się pusty),
-`style-src 'unsafe-inline'`, `connect-src http:/https:` (konfigurowalne API), `default-src 'none'`.
-Nagłówki `nosniff`+`Referrer-Policy` na API (`server/app/main.py`). Test Playwright 9/9 + kontrola
-negatywna (bez ochrony payload się wykonuje → test realnie wykrywa XSS). Warstwa terminala
-(xterm.js `term.write()`, NIE `innerHTML`) była i jest BEZPIECZNA. Wzorzec → `CLAUDE-COMMON.md`.
-- ⚠️ **Zostało (niski prio, statyczny):** `src/gui/web_terminal.py:408-416` `_show_failure_page` skleja HTML
-  f-stringiem z NIEescapowanym `reason` — dziś deweloperski, ale owiń escaperem, gdyby wpłynął tam tekst
-  zewnętrzny (stderr/ścieżka).
+## ✅ XSS panel admina — DOMKNIĘTE 2026-07-14 (`6b70b5a`)
+Panel `panel/index.html`: 3 luki `esc()` + CSP w `<meta>` po odcisku `sha256` inline skryptu
+(helper `panel/_csp_hash.py` — **przelicz po KAŻDEJ zmianie skryptu**, inaczej panel wczyta się pusty).
+Test Playwright 9/9 + kontrola negatywna. Szczegóły → archiwum. Wzorzec → `CLAUDE-COMMON.md`.
+- ⚠️ **Zostało (niski prio):** `src/gui/web_terminal.py` `_show_failure_page` — surowy f-string z `reason`.
 
 **Przed pracą załaduj również:**
 1. 🔴 [`docs/PRD.md`](docs/PRD.md) — Roadmap komercjalizacji 2026 (wizja, fazy, funkcje)
@@ -65,23 +57,6 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
 - `pygame.mixer.init()` owinięte try/except (brak audio = TTS off, reszta działa).
 
 ---
-
-## ✅ POTWIERDZONE PRZEZ USERA 2026-07-13 (żywa beta, WebTerminal)
-- **🔊 „czytaj ostatnią" z dziennika** (`9485c0d`+`9ae59c3`) — bez śmieci („Read 2 files"/ramek), DO KOŃCA,
-  bez limitu 500 słów. → `czytaj-ostatnia-czyta-inna.md`.
-- **Polskie znaki AltGr WPROST w terminalu** (WebTerminal `c38775f`) — `żółć ąę` w czarnym terminalu. ⚠️ liczył się
-  tylko fix WebTerminala (`9aad8dd` był tylko QTermWidget). → `qtermwidget-polskie-znaki-altgr.md`.
-- **Pole „Wpisz polecenie"** (`782120a`) — ogonki liter (p/y/ż) w całości.
-- **Dyktowanie (STT) przez bramkę AI Managera** (`eab76b3`) — PL i EN wchodzą w pole; klucz `aim-…`
-  w Ustawieniach → „Klucz AI Managera (dyktowanie)". → `stt-bramka-ai-manager.md`.
-
-**Zweryfikowane Z KODU (nie wymaga bety):**
-- **JEDEN silnik = WebTerminal domyślny wszędzie** (`1dc983a`) — fabryka `selected_backend_kind()` zwraca
-  `webterminal`, chyba że `CVA_QTERMWIDGET=1`. Nagłówek `terminal_backend.py` zgodny z kodem (naprawiony
-  w `dd9b5e6`). → `testy-uruchamianie-beta.md`.
-- **Diagnostyka flagi usunięta** (`9ae59c3`) — grep pusto w `src/` i `run-safe.sh`, log przestał rosnąć.
-  Auto-kasowanie starych paczek (zostawia 1) + martwych `*-debug.log` przy starcie dodane w `dd9b5e6`
-  (⏳ do testu na żywej becie po restarcie). → `todo-sprzatanie-starych-plikow.md`.
 
 ## ⏳ WCIĄŻ DO TESTU NA ŻYWO
 - **Auto-czytanie po auto-compact** (`1b57c60`) — JEDYNA niepotwierdzona rzecz. ⚠️ **NIE mylić z „auto-czytanie
@@ -183,12 +158,15 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
     nieczytelne, choć kod działał bez zarzutu. Przy zmianie palety **zmierz różnicę wobec SĄSIADA**
     (średnia RGB wystarcza), nie oceniaj na oko w edytorze — próg roboczy: **≥20/255 (~8%)**.
 - **REDESIGN „Vibe Purple" (2026-07-09, wydany w 1.0.27; commity `bc81a03` + `410c9ab`):** nowy wygląd wg makiety Cloud Design (`Vibe Coding Assistant redesign.zip`), funkcje bez zmian. Paleta w `src/gui/theme.py` (jedyne źródło kolorów), migracja skórki `SKIN_VERSION=2` (bez niej zmiana palety byłaby NIEWIDOCZNA), czcionki IBM Plex Sans + JetBrains Mono w paczce, terminal przemalowany w obu silnikach, gradientowa kreska nad aktywną zakładką (`_AccentTabBar`), gradientowy przycisk Wyślij, suwak „Auto-czytaj", kreskowe ikony SVG w kolorze skórki, dialogi/pasek statusu/wskaźnik RAM na palecie. Szczegóły → pamięć `redesign-vibe-purple.md`, pułapki → `qt-pulapki-qss-redesign.md`. **Porcje A+B+C potwierdzone przez usera na żywo** (C = 2026-07-14, izolowane drugie okno `test-druga-instancja-izolowana`: ogonki w dialogach, listy Skills/MCP z pełnymi opisami, podgląd skórki + „Anuluj" przywraca kolory, kolory zakładek, wskaźnik RAM).
-- **1.0.26 (WYDANE 2026-06-29, 3 platformy, appcast 1.0.26, pipeline e2e OK):** naprawa flagi „agent czeka", która nie pokazywała się na zakładkach w tle. **Przyczyna (zdiagnozowana czujnikiem `CVA_FLAG_DEBUG=1`):** wykrywanie „agent czeka" zależało od ZGADYWANIA pliku sesji w `~/.claude/projects` (reguła „plik zapisany po starcie zakładki") — zawodziło dla sesji wznowionych/cichych (agent czeka = nic nie pisze → `has_session=N` → flaga się nie uzbraja) i myliło sesje między oknami. **Fix u źródła:** apka uruchamia `claude --session-id <uuid>` i PRZYPINA czytnik do dokładnego `<uuid>.jsonl` (`transcript_reader.pin_session` + tryb przypięty w `_ensure_session`; `main_window._build_claude_command`/`_pin_tab_session`). Koniec zgadywania → flaga działa od razu, deterministycznie, bez kolizji okien; stary tryb zgadywania zostaje jako zapas (ręczny `--resume` po crashu). **Bonus:** pasywny czujnik flagi (`CVA_FLAG_DEBUG=1`, domyślnie OFF) → log `~/.vibe-coding-assistant/flag-debug.log`. Weryfikacja: `claude --session-id` tworzy `<uuid>.jsonl` (test bezpośredni), przypięty czytnik wykrywa sesję+ciszę, rysowanie ikony przy SHOW=1, potwierdzone przez usera. sha256 serwer==feed ×3, HTTP 200 ×3. Commity `d567975`(fix)+`87cbb44`(bump)+`f2a670d`(appcast), tag `v1.0.26`.
-- **1.0.25 (WYDANE 2026-06-26, 3 platformy, appcast 1.0.25, self-update zweryfikowany):** wielki **rebranding** + cała seria poprawek UI (potwierdzane na żywo w becie). Weryfikacja: sha256 serwer==lokalne ×3, HTTP 200 ×3, `.exe` 644, appcast `version=1.0.25`. Tag `v1.0.25`→`243efff`.
-  - ⚠️ **Trwałe z rebrandingu:** infrastruktura ZOSTAJE stara (`/cva/` URL, appcast, repo GitHub
-    `claude-voice-assistant`, wewn. binarka) — zmiana zerwałaby self-update. Migracja ustawień
-    `~/.claude-voice-assistant`→`~/.vibe-coding-assistant` w `config.py` (stary katalog skasowany
-    2026-07-20). Rebrand MUSI obejmować też `.ps1/.yml/.command` (pominięcie = padł build Windows).
+- **1.0.26 (WYDANE 2026-06-29):** naprawa flagi „agent czeka" u ŹRÓDŁA — apka uruchamia
+  `claude --session-id <uuid>` i PRZYPINA czytnik do dokładnego pliku sesji (koniec zgadywania).
+  ⚠️ Bez `--session-id` (ręczny `--resume` po crashu) czytnik jest odpięty → 🔊 czyta złą wypowiedź.
+- **1.0.25 (WYDANE 2026-06-26):** rebranding na „Vibe Coding Assistant" + seria poprawek UI.
+  ⚠️ **Trwałe z rebrandingu:** infrastruktura ZOSTAJE stara (`/cva/` URL, appcast, repo GitHub
+  `claude-voice-assistant`, wewn. binarka) — zmiana zerwałaby self-update. Migracja ustawień
+  `~/.claude-voice-assistant`→`~/.vibe-coding-assistant` w `config.py` (stary katalog skasowany
+  2026-07-20). Rebrand MUSI obejmować też `.ps1/.yml/.command` (pominięcie = padł build Windows).
+  Szczegóły obu wydań → archiwum.
 - **Wieloplatformowość:** Linux (z kodu + AppImage), macOS (.dmg/.zip), Windows (.exe Inno). Pełna wersja PL/EN (domyślnie EN; PL gdy system polski).
 - **Self-update:** macOS ✅ (od 1.0.8) · Windows ✅ (od 1.0.14) · **Linux ✅** (kod od 1.0.16, w feedzie od 1.0.17). **Pipeline WYDANIA potwierdzony e2e 2× (1.0.18, 1.0.19)** — tag→Actions(mac/win)+lokalny AppImage→rsync paczek (sha256!)→appcast→downloads. **URUCHOMIENIE spakowanego AppImage POTWIERDZONE 2026-06-20** (okno + terminal działają — PO naprawie braku wtyczek Qt/xcb; paczka 1.0.19 przebudowana, sha `325378b4…`, wydana). Wciąż DO POTWIERDZENIA: pełny **kliencki cykl self-update** (feed→pobierz→podmień→wstań) — uruchomienie i samo-podmiana niepotwierdzone razem. Mac/Win: spakowane paczki **URUCHAMIAJĄ się** (obserwacja usera: Mac pokazuje kreator przy starcie, Windows startuje) → podejrzenie crashu z braku wtyczek Qt na Mac/Win **ODRZUCONE** (PyInstaller na mac/win dociąga `cocoa`/`qwindows` sam). Do potwierdzenia zostaje tylko pełny kliencki cykl self-update.
 - **Języki:** PL + jeden angielski (`en-US`); wariant brytyjski `en-GB` usunięty w 1.0.17 (scalony do en-US, migracja wsteczna w `set_ui_language`).
@@ -412,6 +390,27 @@ PL + `-en`. Instalacja 3 systemów **SCALONA** w `instrukcja-instalacja.html` (g
 - [ ] Test zadania „nodecli" instalatora na świeżym Windows (auto-instalacja Node+Claude Code).
 - [ ] Kolejne języki: dopisać słownik w `UI_TRANSLATIONS` (parytet!) + `SUPPORTED_LANGUAGES` + `detect_system_language` + pliki `-xx.html` + dropdown.
 - [ ] **Wykrywanie ZEPSUTEGO `claude` (nietech. user, Windows):** `claude_runnable()` testuje tylko obecność, nie uruchamialność → przy zepsutej binarce npm apka utyka i pokazuje surowy błąd Windows („16-bit"/„niezgodny"). Dodać wykrycie tego stanu + czytelną podpowiedź natywnej reinstalacji (`irm https://claude.ai/install.ps1|iex` + `npm uninstall -g @anthropic-ai/claude-code`). Patrz pułapka „`claude` zepsuty/niezgodny na Windows" (2026-06-30).
+
+## CHMURA — stan prac (Faza 1)
+Plan: `docs/PLAN-CHMURA-SYNC.md` (sekcja 9 = szyfrowanie). Pamięć: `chmura-sync-agentow.md`.
+- **GOTOWE:** silnik paczki (`src/core/cloud/agent_bundle.py`) + szyfrowanie end-to-end
+  (`bundle_crypto.py`, AES-256-GCM + scrypt). Testy `tools/test-cloud-crypto.py` (26/26)
+  + `tools/test-cloud-bundle.py`. Na żywych danych: 10 agentów, 23 skille (273 pliki),
+  15 plików pamięci, szybkie akcje → **1081 KB** zaszyfrowanej paczki.
+- **Paczka niesie:** agentów (ikony/kolory/głosy), pliki pamięci, definicje skilli, gating
+  MCP, szybkie akcje, projekty pamięci, skórkę, język **oraz klucze API** (decyzja usera).
+  NIE niesie: kodu projektów (idzie przez `git clone`) ani `claude_command` (ścieżka lokalna).
+- **ZOSTAŁO:** klient OAuth w Google Cloud (ręka usera) → `google_drive.py` → ekran „Chmura"
+  (prosty, w stylu apki — user odrzucił makietę Cloud Design) → test „nowego komputera"
+  izolowanym HOME. Funkcja idzie do **wersji Pro** (miejsce na sprawdzenie licencji oznaczyć,
+  ale NIE udawać działającej blokady — `license_manager` to wciąż zaślepka).
+- ⚠️ **Znane ograniczenie: KASOWANIE NIE PROPAGUJE SIĘ.** Usunięta szybka akcja / plik pamięci
+  zostaje na drugim urządzeniu (import tylko dodaje i nadpisuje). Bez znaczenia przy ręcznym
+  „wyślij/pobierz", do rozwiązania przy automatycznej synchronizacji (Faza 2/3).
+- ⚠️ **`cryptography` + PyInstaller:** działa BEZ własnego hooka (rozszerzenie Rust
+  `_rust.abi3.so` wchodzi samo) — **zweryfikowane tylko na Linuksie 2026-07-20**.
+  Mac/Windows do potwierdzenia przy najbliższym buildzie CI (wcześniej paczki nie importowały
+  tej biblioteki, więc 1.0.27 niczego tu nie dowodzi).
 
 ## Sygnały PyQt (AgentTab)
 `message_sent(str)` · `terminal_output(object)` · `status_changed(str)` · `request_tts(str)` · `request_dictation(bool)` · `request_pause` · `splitter_changed(list)`.

@@ -951,3 +951,51 @@ bump→tag `v1.0.16`→Actions mac+win→`gh release download`→`.zip`+`.exe` d
   - **Zakładki:** ikona agenta 30px (`setIconSize`), czcionka 12pt (`tabBar().setFont`), flaga „?" jako ŻÓŁTA ikona z lewej (badge w rogu ikony-obrazka / samodzielna ikonka dla emoji), dzióbki przewijania w kolorze zakładek + białe SVG.
   - **Inne:** przełącznik trybu myszy (kółko przewija Claude/zaznaczanie bez Shift), auto-update okno przy starcie + co 30 min, „odczytaj ostatnią" czyta ostatnią wypowiedź, okno Pomocy ciemne tło, suwaki (terminal: pojawia się gdy jest co przewijać; pole poleceń: >5 linii), WebTerminal off-the-record profil (koniec „database is locked").
 
+## PRZENIESIONE Z ŻYWEGO PLIKU 2026-07-20 (konsolidacja)
+
+### XSS panelu admina (domkniete 2026-07-14)
+
+## ✅ XSS panel admina — DOMKNIĘTE 2026-07-14 (commit `6b70b5a`)
+
+Panel `panel/index.html` (serwowany OSOBNO, otwierany w PRZEGLĄDARCE — nie desktop): domknięte 3 luki
+`esc()` (surowa platforma z serwera w `osName(v.platform)`, `l.max_devices`, `data-id="${l.id}"`) +
+**CSP w `<meta>`** jako druga warstwa: `script-src` tylko po odcisku `sha256-…` inline skryptu (helper
+`panel/_csp_hash.py` przelicza hash po KAŻDEJ zmianie skryptu — inaczej panel wczyta się pusty),
+`style-src 'unsafe-inline'`, `connect-src http:/https:` (konfigurowalne API), `default-src 'none'`.
+Nagłówki `nosniff`+`Referrer-Policy` na API (`server/app/main.py`). Test Playwright 9/9 + kontrola
+negatywna (bez ochrony payload się wykonuje → test realnie wykrywa XSS). Warstwa terminala
+(xterm.js `term.write()`, NIE `innerHTML`) była i jest BEZPIECZNA. Wzorzec → `CLAUDE-COMMON.md`.
+- ⚠️ **Zostało (niski prio, statyczny):** `src/gui/web_terminal.py:408-416` `_show_failure_page` skleja HTML
+  f-stringiem z NIEescapowanym `reason` — dziś deweloperski, ale owiń escaperem, gdyby wpłynął tam tekst
+  zewnętrzny (stderr/ścieżka).
+
+
+### Potwierdzenia usera 2026-07-13
+
+## ✅ POTWIERDZONE PRZEZ USERA 2026-07-13 (żywa beta, WebTerminal)
+- **🔊 „czytaj ostatnią" z dziennika** (`9485c0d`+`9ae59c3`) — bez śmieci („Read 2 files"/ramek), DO KOŃCA,
+  bez limitu 500 słów. → `czytaj-ostatnia-czyta-inna.md`.
+- **Polskie znaki AltGr WPROST w terminalu** (WebTerminal `c38775f`) — `żółć ąę` w czarnym terminalu. ⚠️ liczył się
+  tylko fix WebTerminala (`9aad8dd` był tylko QTermWidget). → `qtermwidget-polskie-znaki-altgr.md`.
+- **Pole „Wpisz polecenie"** (`782120a`) — ogonki liter (p/y/ż) w całości.
+- **Dyktowanie (STT) przez bramkę AI Managera** (`eab76b3`) — PL i EN wchodzą w pole; klucz `aim-…`
+  w Ustawieniach → „Klucz AI Managera (dyktowanie)". → `stt-bramka-ai-manager.md`.
+
+**Zweryfikowane Z KODU (nie wymaga bety):**
+- **JEDEN silnik = WebTerminal domyślny wszędzie** (`1dc983a`) — fabryka `selected_backend_kind()` zwraca
+  `webterminal`, chyba że `CVA_QTERMWIDGET=1`. Nagłówek `terminal_backend.py` zgodny z kodem (naprawiony
+  w `dd9b5e6`). → `testy-uruchamianie-beta.md`.
+- **Diagnostyka flagi usunięta** (`9ae59c3`) — grep pusto w `src/` i `run-safe.sh`, log przestał rosnąć.
+  Auto-kasowanie starych paczek (zostawia 1) + martwych `*-debug.log` przy starcie dodane w `dd9b5e6`
+  (⏳ do testu na żywej becie po restarcie). → `todo-sprzatanie-starych-plikow.md`.
+
+
+### Wydania 1.0.25 i 1.0.26 - szczegoly
+
+- **1.0.26 (WYDANE 2026-06-29, 3 platformy, appcast 1.0.26, pipeline e2e OK):** naprawa flagi „agent czeka", która nie pokazywała się na zakładkach w tle. **Przyczyna (zdiagnozowana czujnikiem `CVA_FLAG_DEBUG=1`):** wykrywanie „agent czeka" zależało od ZGADYWANIA pliku sesji w `~/.claude/projects` (reguła „plik zapisany po starcie zakładki") — zawodziło dla sesji wznowionych/cichych (agent czeka = nic nie pisze → `has_session=N` → flaga się nie uzbraja) i myliło sesje między oknami. **Fix u źródła:** apka uruchamia `claude --session-id <uuid>` i PRZYPINA czytnik do dokładnego `<uuid>.jsonl` (`transcript_reader.pin_session` + tryb przypięty w `_ensure_session`; `main_window._build_claude_command`/`_pin_tab_session`). Koniec zgadywania → flaga działa od razu, deterministycznie, bez kolizji okien; stary tryb zgadywania zostaje jako zapas (ręczny `--resume` po crashu). **Bonus:** pasywny czujnik flagi (`CVA_FLAG_DEBUG=1`, domyślnie OFF) → log `~/.vibe-coding-assistant/flag-debug.log`. Weryfikacja: `claude --session-id` tworzy `<uuid>.jsonl` (test bezpośredni), przypięty czytnik wykrywa sesję+ciszę, rysowanie ikony przy SHOW=1, potwierdzone przez usera. sha256 serwer==feed ×3, HTTP 200 ×3. Commity `d567975`(fix)+`87cbb44`(bump)+`f2a670d`(appcast), tag `v1.0.26`.
+- **1.0.25 (WYDANE 2026-06-26, 3 platformy, appcast 1.0.25, self-update zweryfikowany):** wielki **rebranding** + cała seria poprawek UI (potwierdzane na żywo w becie). Weryfikacja: sha256 serwer==lokalne ×3, HTTP 200 ×3, `.exe` 644, appcast `version=1.0.25`. Tag `v1.0.25`→`243efff`.
+  - ⚠️ **Trwałe z rebrandingu:** infrastruktura ZOSTAJE stara (`/cva/` URL, appcast, repo GitHub
+    `claude-voice-assistant`, wewn. binarka) — zmiana zerwałaby self-update. Migracja ustawień
+    `~/.claude-voice-assistant`→`~/.vibe-coding-assistant` w `config.py` (stary katalog skasowany
+    2026-07-20). Rebrand MUSI obejmować też `.ps1/.yml/.command` (pominięcie = padł build Windows).
+
