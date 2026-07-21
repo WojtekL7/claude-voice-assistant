@@ -167,6 +167,15 @@ def main():
         check("NIEZNANE pole configu pominiete (biala lista chroni przed wyciekiem)",
               cfg_json.get("wymyslone_nowe_pole"), None)
         check("skill odtworzony", (skills_b / "raport" / "SKILL.md").exists(), True)
+        # Szybkie akcje i projekty pamieci tez sa czescia "mozgu" — bez tej
+        # asercji gwarancja byla tylko deklaracja (pytanie usera 2026-07-21).
+        qa_path, mp_path = cfg_b / "quick_actions.json", cfg_b / "memory_projects.json"
+        check("szybkie akcje przeniesione",
+              json.loads(qa_path.read_text(encoding="utf-8")) if qa_path.exists() else None,
+              {"a1": "Zrob podsumowanie"})
+        check("projekty pamieci przeniesione",
+              json.loads(mp_path.read_text(encoding="utf-8")) if mp_path.exists() else None,
+              {"crm": ["PAMIEC.md"]})
 
         print("\n6. Przypadki brzegowe (bez nich zielone nic nie znaczy)")
         try:
