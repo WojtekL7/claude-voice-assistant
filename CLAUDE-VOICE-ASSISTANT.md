@@ -59,7 +59,17 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
 ---
 
 ## ⏳ WCIĄŻ DO TESTU NA ŻYWO
-- **Auto-czytanie po auto-compact** (`1b57c60`) — JEDYNA niepotwierdzona rzecz. ⚠️ **NIE mylić z „auto-czytanie
+- **Nadganianie lektora** (`2156fe8`, 2026-07-21) — user zgłaszał „czyta przedostatnią wypowiedź" (2 zakładki
+  niezależnie). **Czytnik był NIEWINNY**: wybór wypowiedzi był prawidłowy, spóźniała się kolejka lektora
+  (4 wypowiedzi ≈ 3200 zn. ≈ 3,5 min mowy w ciągu 2 min). Powyżej ~minuty zaległości apka przeskakuje do
+  najnowszej. Test: dłuższe zadanie agenta → ma dogonić ekran + komunikat na pasku; regresja: spokojna
+  rozmowa czyta wszystko po kolei, 🔊 i przełączanie zakładek bez zmian. → `auto-czytanie-spoznione-kolejka.md`.
+  ⚠️ **Przestroga z tej samej sesji:** pomiar „7/7 żywych dzienników nie kończy się znakiem nowej linii"
+  (i wyciągnięty z niego wniosek „czytnik gubi najnowszy wpis") był **artefaktem złapania zapisu w locie** —
+  8/8 plików USTABILIZOWANYCH kończy się `\n`. Zielony test jednostkowy dowodził tylko, że mechanizm *zadziała*,
+  nie że w ogóle *występuje*. Nie idźcie tą drogą drugi raz. → `diagnoza-czytnika-dziennika-jsonl.md`.
+- **Wykrywanie wyścigu „/login"** (`e6af2c3`) — patrz sekcja niżej; dowodem będą wpisy w `login-events.log`.
+- **Auto-czytanie po auto-compact** (`1b57c60`) — najstarsza niepotwierdzona rzecz. ⚠️ **NIE mylić z „auto-czytanie
   działa"** (to user potwierdził 2026-07-20 — patrz niżej): tu chodzi WYŁĄCZNIE o zachowanie po tym, jak Claude
   Code sam skróci długi dziennik. Wtedy plik ROBI SIĘ MNIEJSZY niż zapamiętany offset i stary kod ustawiał
   `offset=0` → lektor recytował rozmowę od początku. Test wymaga realnego compactu (długa rozmowa), więc nie da
@@ -284,10 +294,13 @@ Aplikacja w Pythonie jest lekka (~80 MB). **Pamięć zżera Claude Code CLI: 3�
 
 ---
 
-## 🔴 DO NAPRAWY: „Please run /login" w zakładkach = WYŚCIG O ODŚWIEŻENIE TOKENU (diagnoza od agenta AI Managera, 2026-07-20)
+## 🟡 „Please run /login" = WYŚCIG O ODŚWIEŻENIE TOKENU — ETAP 1 (OBSERWACJA) ZROBIONY (`e6af2c3`, 2026-07-21)
 
 > Zgłoszenie usera: „coś mnie wylogowało z Claude Code". **User NIE był wylogowany** — plik poświadczeń był
-> cały i świeży. To zakładki VCA przewracają się nawzajem. Diagnoza gotowa, naprawa po Twojej stronie.
+> cały i świeży. To zakładki VCA przewracają się nawzajem (diagnoza od agenta AI Managera, 2026-07-20).
+> **Stan:** apka WYKRYWA odmowę, po opóźnieniu orzeka „wyścig vs prawdziwe wylogowanie" i zapisuje zdarzenie
+> do `~/.vibe-coding-assistant/login-events.log` + komunikat na pasku. **Automatycznego restartu jeszcze NIE MA**
+> — świadomie, do czasu potwierdzenia rozpoznania na żywych danych. ⏳ niesprawdzone u usera na żywo.
 
 **Objaw:** jedna lub kilka zakładek nagle pokazuje `Please run /login` / `Unauthorized`, choć logowanie jest ważne.
 Proces `claude` NIE ginie — wisi dalej z martwą sesją, więc wygląda to na zawieszenie, nie na problem z logowaniem.
@@ -309,15 +322,25 @@ przestał być ważny → dostają odmowę. Klasyczny wyścig wielu pisarzy o je
 Naprawą jest wykrycie odmowy i restart tej jednej zakładki — plik na dysku jest już wtedy poprawny.
 
 Kroki (masz gotowe wszystkie klocki):
-1. **Wykryj** w `main_window._poll_transcripts` (`main_window.py:1450`, tyka co 800 ms; `TranscriptReader.poll()`
-   oddaje nowe linie) wzorce `Please run /login` oraz `Unauthorized` w treści dziennika zakładki.
-2. **Odróżnij wyścig od PRAWDZIWEGO wylogowania** — to najważniejszy warunek, bez niego zrobisz pętlę restartów:
-   - poświadczenia zapisane **PO** momencie błędu → ktoś wygrał wyścig i odnowił token → **restartuj zakładkę**;
-   - poświadczenia **nie** odświeżone (albo znikły) → to realne wylogowanie → **żadnego restartu**, pokaż
-     czytelny komunikat „zaloguj się ponownie" (masz `platform_utils.claude_logged_in()`).
+1. ✅ **ZROBIONE — Wykryj.** `TranscriptReader._is_api_error` + `take_api_errors()` → `_on_claude_api_error`.
+   ⚠️ Rozpoznanie idzie po **PIECZĄTCE `isApiErrorMessage`** (Claude Code stawia ją sam; taki wpis ma też
+   `message.model=="<synthetic>"`), **NIGDY po treści** — fraza „Please run /login" występuje w NORMALNEJ
+   rozmowie (te pliki pamięci, opis tej usterki), więc dopasowanie po tekście restartowałoby zakładkę za
+   każdym razem, gdy ktoś o tej usterce *napisze*. Kontrola negatywna w `tools/test-login-race.py`.
+   Przy okazji: komunikaty błędów przestały iść do lektora (nie czyta już „Login expired" na głos).
+2. ✅ **ZROBIONE — Odróżnij wyścig od PRAWDZIWEGO wylogowania** (bez tego pętla restartów):
+   `platform_utils.claude_credentials_state()` (data zapisu + `expiresAt`, BEZ czytania samych tokenów)
+   + `credentials_refreshed_since()` (czysta reguła, testowalna bez okna).
+   ⚠️ **WERDYKT MUSI ZAPADAĆ Z OPÓŹNIENIEM** — zwycięzca odnawia plik dopiero po kilku minutach (zmierzone
+   2026-07-20: **8 min** po pierwszej odmowie), więc ocena natychmiastowa orzekłaby „wylogowanie" dla KAŻDEGO
+   wyścigu. Dopytujemy co minutę przez 12 min (`LOGIN_VERDICT_INTERVAL_SECS`/`_MAX_CHECKS`).
    ⚠️ **Pułapka wieloplatformowa:** na macOS poświadczeń NIE MA w pliku — siedzą w Pęku kluczy (`security
-   find-generic-password -s "Claude Code-credentials"`, patrz `platform_utils.py:286`), więc test „mtime pliku"
-   tam nie zadziała. Na macOS użyj zamiennika: pojedyncza próba restartu i sprawdzenie, czy pomogło.
+   find-generic-password -s "Claude Code-credentials"`), więc test „mtime pliku" tam nie zadziała →
+   `available=False` = werdykt „nierozstrzygnięty" + bezpieczna rada „wpisz /login".
+
+**Do ETAPU 2 (automatyczny restart) zostało — włączyć DOPIERO gdy `login-events.log` pokaże, że werdykty
+trafiają bezbłędnie (dowód z żywych danych, nie z testów syntetycznych):**
+
 3. **Restart zakładki** — proces startuje z `claude --session-id <uuid>` (`main_window.py:2344`), a czytnik jest
    przypięty do tego pliku (`TranscriptReader.pin_session`). Restart z TYM SAMYM `--session-id` zachowuje wątek
    rozmowy; świeży proces czyta odnowione poświadczenia i wraca do pracy. User nie powinien niczego zauważyć
