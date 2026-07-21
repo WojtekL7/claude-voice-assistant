@@ -211,6 +211,24 @@ class TTSEngine:
         """Wyczyść kolejkę i zatrzymaj czytanie (np. przy zmianie zakładki)."""
         self.stop()
 
+    def pending_chars(self) -> int:
+        """Ile ZNAKÓW czeka jeszcze w kolejce = jak bardzo lektor jest w tyle.
+
+        Mowa idzie ~15 znaków/s, więc 900 znaków ≈ minuta zaległości. Używane
+        przez nadganianie (MainWindow._catch_up_if_behind): agent potrafi pisać
+        szybciej, niż lektor mówi, i bez tego kolejka rośnie w nieskończoność
+        (zgłoszenie 2026-07-21: „czyta przedostatnią wypowiedź" — w istocie
+        czytał właściwą, tylko sprzed dwóch minut).
+
+        Zdanie AKTUALNIE czytane jest już poza kolejką, a kilka zdań siedzi
+        w buforze wyprzedzającym — to miara zgrubna i taka wystarcza.
+        """
+        try:
+            with self._pending.mutex:
+                return sum(len(s) for s in self._pending.queue if isinstance(s, str))
+        except Exception:
+            return 0
+
     def pause(self):
         """Pause playback."""
         if self.state == TTSState.PLAYING:

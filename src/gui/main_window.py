@@ -419,6 +419,7 @@ from config import (
     APP_TITLE_SUFFIX,
     UPDATE_APPCAST_URL, UPDATE_PUBLIC_KEY, UPDATE_DOWNLOAD_DIR,
     MAX_ACTIVE_AGENTS, RAM_PER_AGENT_GB, RAM_SYSTEM_RESERVE_GB,
+    tts_should_catch_up,
     t as tr, set_ui_language, detect_system_language,
 )
 from core.claude_bridge import ClaudeBridgeAsync
@@ -1518,7 +1519,7 @@ class MainWindow(QMainWindow):
                     v = self._agent_voice(tab)
                     if v:
                         self.tts.set_voice(v)
-                    for p in proses:
+                    for p in self._catch_up_if_behind(proses):
                         self.tts.enqueue(p)
                 # aktywna, ale auto-read wyłączone → nie czytamy, nie zbieramy
             else:
@@ -1527,6 +1528,31 @@ class MainWindow(QMainWindow):
                     # Ogranicz rozrost (trzymamy ostatnie 50 wypowiedzi).
                     if len(tab.pending_backlog) > 50:
                         tab.pending_backlog = tab.pending_backlog[-50:]
+
+    def _catch_up_if_behind(self, proses):
+        """Nadganianie: gdy lektor został DALEKO w tyle — przeskocz do najnowszej.
+
+        Agent pisze szybciej, niż lektor mówi (~15 znaków/s), a kolejka jest
+        FIFO i nic nie pomija. Przy pracowitym agencie lektor czyta więc
+        wypowiedź sprzed kilku minut, choć na ekranie jest już następna —
+        user zgłosił to 2026-07-21 jako „czyta przedostatnią wypowiedź"
+        (zmierzone: 4 wypowiedzi ≈ 3200 znaków ≈ 3,5 min mowy w ciągu 2 minut).
+        Wybór wypowiedzi był PRAWIDŁOWY — spóźniało się samo czytanie.
+
+        Powyżej progu (≈ minuta zaległości) kasujemy kolejkę i czytamy
+        WYŁĄCZNIE najnowszą wypowiedź. Poniżej progu — bez zmian, czytamy
+        wszystko po kolei, żeby w spokojnej rozmowie nic nie umknęło.
+        """
+        if not proses:
+            return proses
+        try:
+            if not tts_should_catch_up(self.tts.pending_chars()):
+                return proses
+            self.tts.clear_queue()          # przerwij zaległości…
+        except Exception:
+            return proses                   # awaria miary → zachowaj się jak dotąd
+        self._update_status(tr('status_tts_catchup'))
+        return proses[-1:]                  # …i mów to, co user ma na ekranie
 
     def _on_terminal_ready(self, agent_tab):
         """Slot wywoływany po AgentTab.activate() — terminal właśnie powstał.

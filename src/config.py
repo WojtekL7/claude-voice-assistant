@@ -69,6 +69,25 @@ CRASH_LOG_KEEP = 20
 # by powtarzające się przerysowania ekranu ratunkowego nie tworzyły serii plików.
 CRASH_LOG_DEBOUNCE_SECS = 30
 
+# --- Nadganianie lektora (auto-czytanie) -------------------------------------
+# Agent potrafi pisać SZYBCIEJ, niż lektor mówi (mowa ~15 znaków/s). Kolejka
+# jest FIFO i nic nie pomija, więc przy pracowitym agencie rośnie bez końca:
+# zmierzone 2026-07-21 — 4 wypowiedzi (~3200 znaków ≈ 3,5 min mowy) w ciągu
+# 2 minut → lektor czytał wypowiedź sprzed dwóch minut, choć na ekranie była
+# już następna. User zgłaszał to jako „czyta przedostatnią wypowiedź", choć
+# wybór wypowiedzi był prawidłowy — spóźniało się samo czytanie.
+# Gdy zaległość przekroczy ten próg, przeskakujemy do NAJNOWSZEJ wypowiedzi.
+TTS_CATCHUP_CHARS = 900          # ≈ 1 minuta mowy
+
+
+def tts_should_catch_up(pending_chars: int) -> bool:
+    """Czy lektor jest na tyle w tyle, że warto przeskoczyć do najnowszej?
+
+    Wydzielone z GUI, żeby dało się przetestować bez uruchamiania okna.
+    """
+    return pending_chars > TTS_CATCHUP_CHARS
+
+
 # --- Wysyłka plików pamięci przy starcie zakładki ----------------------------
 # Wiadomość „Przeczytaj pliki pamięci…" wolno wpisywać WYŁĄCZNIE do gotowego
 # Claude Code. Gdy tekst i Enter trafią do procesu, który jeszcze wstaje i nie
@@ -323,6 +342,7 @@ UI_TRANSLATIONS = {
                                     "Zapisuje zrzut do diagnozy i restartuje Claude Code\n"
                                     "z zachowaniem bieżącej rozmowy."),
         "status_terminal_repair": "Naprawiam wygląd terminala — wznawiam rozmowę…",
+        "status_tts_catchup": "Lektor był w tyle — przeskakuję do najnowszej wypowiedzi",
         "status_terminal_snapshot_only": "Zapisano zrzut terminala (brak sesji do wznowienia)",
         "clear_input_tooltip": "Wyczyść pole tekstowe",
         "add_media_tooltip": "Dodaj media (zdjęcia, dokumenty, pliki)",
@@ -1060,6 +1080,7 @@ UI_TRANSLATIONS = {
                                     "Saves a diagnostic snapshot and restarts Claude Code\n"
                                     "keeping the current conversation."),
         "status_terminal_repair": "Fixing terminal display — resuming conversation…",
+        "status_tts_catchup": "Narrator fell behind — skipping to the newest response",
         "status_terminal_snapshot_only": "Terminal snapshot saved (no session to resume)",
         "clear_input_tooltip": "Clear input field",
         "add_media_tooltip": "Add media (images, documents, files)",

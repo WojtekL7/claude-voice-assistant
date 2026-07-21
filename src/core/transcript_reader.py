@@ -40,6 +40,20 @@ def _encode_project_dir(working_directory: str) -> str:
 class TranscriptReader:
     """Czyta nowe wypowiedzi tekstowe Claude'a z dziennika sesji."""
 
+    # Rozpoznanie komunikatu o WYGASŁYM LOGOWANIU wśród błędów API.
+    # ⚠️ Wzorzec stosujemy WYŁĄCZNIE do wpisów z pieczątką `isApiErrorMessage`
+    # (patrz _is_api_error). Samo szukanie tych słów w treści byłoby BŁĘDEM:
+    # fraza „Please run /login" pojawia się w NORMALNEJ rozmowie (pliki pamięci,
+    # opis tej właśnie usterki), więc dopasowanie po tekście uznawałoby rozmowę
+    # o problemie za sam problem.
+    _AUTH_ERROR_RE = re.compile(
+        r"login expired|please run\s*/login|invalid authentication|"
+        r"authentication_error|unauthorized|\b401\b",
+        re.I,
+    )
+    # Ile komunikatów błędu trzymamy, zanim GUI je odbierze (anty-rozrost).
+    _API_ERRORS_CAP = 20
+
     def __init__(self, working_directory: str):
         self._projects_base = Path.home() / ".claude" / "projects"
         self.working_directory = ""
@@ -56,6 +70,10 @@ class TranscriptReader:
         # plik <uuid>.jsonl — bez zgadywania z katalogu. None = tryb zgadywania
         # (np. sesja wznowiona ręcznie po crashu, spoza kontroli apki).
         self._pinned_session_id: Optional[str] = None
+        # Komunikaty BŁĘDÓW Claude Code wyłuskane w poll() (wygasłe logowanie,
+        # przeciążenie API). To NIE są wypowiedzi agenta — nie idą do lektora;
+        # odbiera je GUI przez take_api_errors().
+        self._api_errors: List[dict] = []
         self.set_working_directory(working_directory)
 
     # ---------- konfiguracja ----------
@@ -175,6 +193,7 @@ class TranscriptReader:
         self._offset = 0
         self._wait_last_size = -1
         self._wait_stable = 0
+        self._api_errors = []
 
     def _ensure_session(self):
         """Upewnij się, że śledzimy właściwy plik sesji.
@@ -256,6 +275,11 @@ class TranscriptReader:
             return []
 
         # Przetwarzamy tylko kompletne linie (do ostatniego '\n').
+        # Ostatnia linia bez '\n' = zapis W TOKU → czeka na kolejne wywołanie.
+        # (Sprawdzone 2026-07-21: Claude Code kończy wpis znakiem nowej linii —
+        # 8/8 ustabilizowanych dzienników — więc ogon czeka ułamek sekundy, a nie
+        # w nieskończoność. Objaw „czyta przedostatnią" ma inną przyczynę:
+        # kolejkę lektora, patrz MainWindow._poll_transcripts.)
         last_nl = raw.rfind(b"\n")
         if last_nl == -1:
             return []  # nic kompletnego jeszcze nie ma
@@ -271,10 +295,58 @@ class TranscriptReader:
                 obj = json.loads(bline.decode("utf-8", "ignore"))
             except Exception:
                 continue
-            text = self._extract_text(obj)
-            if text:
-                results.append(text)
+            self._consume_entry(obj, results)
         return results
+
+    def _consume_entry(self, obj: dict, results: List[str]):
+        """Przetwórz JEDEN wpis dziennika.
+
+        Błąd Claude Code → kolejka dla GUI (nie dla lektora).
+        Zwykła wypowiedź tekstowa → do listy wyników.
+        """
+        if not isinstance(obj, dict):
+            return
+        if self._is_api_error(obj):
+            self._record_api_error(obj)
+            return
+        text = self._extract_text(obj)
+        if text:
+            results.append(text)
+
+    # ---------- błędy Claude Code (wygasłe logowanie, przeciążenie) ----------
+
+    @staticmethod
+    def _is_api_error(obj: dict) -> bool:
+        """Czy wpis to KOMUNIKAT BŁĘDU Claude Code, a nie wypowiedź agenta?
+
+        Rozpoznajemy po PIECZĄTCE `isApiErrorMessage` (Claude Code stawia ją
+        sam; takie wpisy mają też `message.model == "<synthetic>"`), NIGDY po
+        treści — patrz komentarz przy _AUTH_ERROR_RE.
+        """
+        return obj.get("type") == "assistant" and bool(obj.get("isApiErrorMessage"))
+
+    def _record_api_error(self, obj: dict):
+        """Odłóż komunikat błędu dla GUI (z oceną, czy dotyczy logowania)."""
+        parts = []
+        for block in (obj.get("message") or {}).get("content") or []:
+            if isinstance(block, dict) and block.get("type") == "text" and block.get("text"):
+                parts.append(block["text"])
+        text = " ".join(parts).strip()
+        if not text:
+            return
+        self._api_errors.append({
+            "text": text,
+            "timestamp": obj.get("timestamp"),
+            "is_auth": bool(self._AUTH_ERROR_RE.search(text)),
+            "session_file": self._session_file,
+        })
+        if len(self._api_errors) > self._API_ERRORS_CAP:
+            self._api_errors = self._api_errors[-self._API_ERRORS_CAP:]
+
+    def take_api_errors(self) -> List[dict]:
+        """Odbierz (i wyczyść) komunikaty błędów zebrane przez poll()."""
+        errors, self._api_errors = self._api_errors, []
+        return errors
 
     def journal_lags_screen(self) -> bool:
         """Czy dziennik NIE ma jeszcze ostatniej wypowiedzi (jest o nią w tyle)?
@@ -449,6 +521,11 @@ class TranscriptReader:
         if obj.get("type") != "assistant":
             return None
         if obj.get("isSidechain"):
+            return None
+        if obj.get("isApiErrorMessage"):
+            # Komunikat techniczny Claude Code („Login expired · Please run
+            # /login", „API Error: 529 Overloaded") — nie czytamy go na głos
+            # ANI w auto-czytaniu (poll), ANI przyciskiem 🔊 (last_response).
             return None
         msg = obj.get("message") or {}
         content = msg.get("content")
