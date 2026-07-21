@@ -2036,6 +2036,12 @@ class MainWindow(QMainWindow):
 
         settings_menu.addSeparator()
 
+        cloud_action = QAction(tr('menu_cloud'), self)
+        cloud_action.triggered.connect(self._open_cloud_dialog)
+        settings_menu.addAction(cloud_action)
+
+        settings_menu.addSeparator()
+
         # Szybkie akcje na samym dole — to ergonomia użytkowania, oddzielona
         # od konfiguracji systemowej (klucze API, komenda Claude Code).
         manage_actions = QAction(tr('menu_manage_actions'), self)
@@ -2199,6 +2205,15 @@ class MainWindow(QMainWindow):
         """Zapamiętaj wybór „nie przypominaj o dyktowaniu" (trwale w configu)."""
         self.dictation_reminder_dismissed = bool(dismissed)
         self._save_settings()
+
+    def _open_cloud_dialog(self):
+        """Okno „Chmura" — przeniesienie agentów na inny komputer.
+
+        Import LOKALNY (nie na górze pliku): moduły chmury ciągną `requests`
+        i bibliotekę szyfrującą, a przy starcie aplikacji nie są potrzebne.
+        """
+        from gui.cloud_dialog import CloudDialog
+        CloudDialog(self).exec_()
 
     def _open_agents_guide(self):
         """Instrukcja online „Zarządzaj agentami" (publiczna podstrona /cva)."""
