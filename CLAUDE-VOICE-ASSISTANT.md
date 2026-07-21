@@ -1,11 +1,5 @@
 # CLAUDE-VOICE-ASSISTANT — Agent aplikacji desktopowej
 
-## ✅ XSS panel admina — DOMKNIĘTE 2026-07-14 (`6b70b5a`)
-Panel `panel/index.html`: 3 luki `esc()` + CSP w `<meta>` po odcisku `sha256` inline skryptu
-(helper `panel/_csp_hash.py` — **przelicz po KAŻDEJ zmianie skryptu**, inaczej panel wczyta się pusty).
-Test Playwright 9/9 + kontrola negatywna. Szczegóły → archiwum. Wzorzec → `CLAUDE-COMMON.md`.
-- ⚠️ **Zostało (niski prio):** `src/gui/web_terminal.py` `_show_failure_page` — surowy f-string z `reason`.
-
 **Przed pracą załaduj również:**
 1. 🔴 [`docs/PRD.md`](docs/PRD.md) — Roadmap komercjalizacji 2026 (wizja, fazy, funkcje)
 2. [`../CLAUDE-COMMON.md`](../CLAUDE-COMMON.md) — wspólne procedury i pułapki (uniwersalne)
@@ -75,36 +69,12 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
   `offset=0` → lektor recytował rozmowę od początku. Test wymaga realnego compactu (długa rozmowa), więc nie da
   się go „zrobić na życzenie" — łapiemy przy okazji. → `auto-czytanie-loop-po-kompaktowaniu.md`.
 
-## ✅ POTWIERDZONE PRZEZ USERA 2026-07-20 (żywa beta)
-- **Auto-czytanie (zwykłe)** — lektor sam czyta nowe wypowiedzi z dziennika, do końca, bez śmieci.
-  Potwierdzone na żywo. ⚠️ To NIE domyka przypadku po auto-compact (wyżej) — inny tor kodu.
-- **Pliki pamięci w OSTATNICH zakładkach** (`0361565`) — wszystkie auto-startujące zakładki wczytują pamięć.
-- **🔊 „czytaj ostatnią" BUG #6 — dziennik ZAWSZE pierwszy** (`0ce9609`) — czyta właściwą wypowiedź.
-  ⚠️ User OBSERWUJE dalej (bug był przerywany: „raz ostatnia, raz przedostatnia") — nie zamykać tematu
-  na twardo, dopóki nie przeżyje kilku dni użytkowania. → `czytaj-ostatnia-czyta-inna.md`.
-- **Sprzątanie starych paczek** — potwierdzone: `updates/` trzyma tylko 1 paczkę. Doczyszczone RĘCZNIE
-  ~3 GB (2026-07-20): martwy `~/.claude-voice-assistant` (po rebrandingu, migracja dawno wykonana),
-  pobrana kopia 1.0.26, backup zepsutej 1.0.19, `dist-release/`, `dist/`, `build/`.
-
-<details><summary>Historia (rozwiązane) — pliki pamięci, opis przyczyny</summary>
-
-- **Pliki pamięci nie wchodziły w OSTATNICH zakładkach** (`0361565`, 2026-07-17) — AI Manager/ReShip
-  startują jako ostatnie → claude nie zdążył wstać przed sztywnym terminem 8,5 s → tekst + Enter (50 ms)
-  sklejały się w JEDEN odczyt PTY → Claude brał to za wklejkę, Enter = nowa linia, wiadomość WISIAŁA
-  niewysłana w polu. Fix: `AgentTab.start_memory_files_watch` czeka na baner + ciszę, Enter osobno po
-  500 ms, bezpiecznik 60 s. Zweryfikowane sondą PTY vs prawdziwy claude (stara 2/2 porażki, nowa 2/2 OK
-  także pod obciążeniem) + bramka 9/9. ⏳ **user testuje na NOWEJ becie 2026-07-18**: czy wszystkie
-  7 auto-startujących zakładek wczytuje pamięć (zwł. AI Manager i ReShip) + regresja: zwykłe pisanie,
-  ręczny „Uruchom" dla agenta z `auto_start=False`. → `pty-tekst-enter-sklejenie.md`.
-- **„czytaj ostatnią" BUG #6 — rozwiązanie STRUKTURALNE** (`0ce9609`, 2026-07-17) — „raz ostatnia, raz
-  przedostatnia". Odkrycie: Claude Code **2.1.212** NIE odracza już zapisu wypowiedzi (przesłanka BUG #1
-  nieaktualna), zapisuje przyrostowo → bramka `journal_lags_screen()` losowo słała na kruchy ekran, który
-  przy długiej wypowiedzi wyłuskiwał OPCJE PYTANIA zamiast wypowiedzi. Fix: **dziennik ZAWSZE pierwszy**,
-  ekran tylko gdy dziennik pusty; bramka wypada z toru decyzyjnego (zastępuje też BUG #5). Sonda PTY na
-  żywym claude 2.1.212: 4/4 (okno odroczenia) + 2/2 (zwykła tura). ⏳ **test na becie 2026-07-18**: 🔊
-  czyta najnowszą po (a) zwykłej długiej odpowiedzi, (b) moim pytaniu z przyciskami — klik PRZED
-  odpowiedzią, (c) zaznaczenie Shift = czyta zaznaczone. → `czytaj-ostatnia-czyta-inna.md` (BUG #6).
-</details>
+## ✅ POTWIERDZONE PRZEZ USERA NA ŻYWO (2026-07-20)
+Działają: auto-czytanie (zwykłe), pliki pamięci w OSTATNICH zakładkach (`0361565`), 🔊 „czytaj ostatnią"
+po naprawie BUG #6 (`0ce9609`), sprzątanie starych paczek (`updates/` trzyma 1 paczkę).
+⚠️ „Auto-czytanie działa" NIE domyka przypadku po auto-compact — to inny tor kodu (patrz ⏳ wyżej).
+⚠️ 🔊 był bugiem PRZERYWANYM — user obserwuje dalej. Przyczyny i dowody → archiwum,
+`czytaj-ostatnia-czyta-inna.md`, `pty-tekst-enter-sklejenie.md`.
 
 - ~~**Przycisk „🔄 Napraw wygląd terminala"**~~ **UKRYTY 2026-07-16** (`cc9bccf`, `setVisible(False)`) — user
   schował, bo usterka nie wystąpiła od kilku dni, a przycisk świecił białym kwadratem. ⚠️ **Usterka NIE jest
@@ -114,47 +84,12 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
 
 ## AKTUALNY STAN (wersja 1.0.27 — WYDANA 2026-07-20, 3 platformy)
 
-- **1.0.27 (WYDANE 2026-07-20, appcast 1.0.27, pipeline e2e OK):** DUŻE wydanie — po raz pierwszy trafia
-  do userów **CAŁY redesign „Vibe Purple"** (leżał niewydany od 2026-07-09) + naprawy z ostatnich dwóch
-  tygodni: pliki pamięci w ostatnich zakładkach (`0361565`), „czytaj ostatnią" BUG #6 (`0ce9609`), polskie
-  znaki w WebTerminalu (`c38775f`), STT przez bramkę AI Managera (`eab76b3`), jeden silnik terminala
-  wszędzie (`1dc983a`). Tag `v1.0.27`, commity `65f0e25`(kolory)+`bump`+`appcast`.
-  - **Dwie poprawki czytelności sygnałów** (`65f0e25`, `SKIN_VERSION` 3 → 4): redesign zbliżył AKTYWNĄ
-    zakładkę i tło NIEAKTYWNEGO okna do tła (różnica ~10/255 = 4%) i oba przestały cokolwiek znaczyć —
-    user zgłosił „praktycznie nie ma różnicy" dla OBU naraz. Mechanizmy działały, za blisko były same
-    kolory. Nowy token `theme.TAB_ACTIVE` `#251c37` (aktywna zakładka) + `SURFACE_INACTIVE`
-    `#17141c`→`#2b2438`. Różnice wróciły do 10,2% i 12,2% (przed redesignem było 15%).
-    ⚠️ Kolor aktywnej zakładki **celowo NIE idzie ze skórki** (`button_bg`) — patrz KONWENCJA KOLORU niżej.
-  - ⚠️ **Mac i Windows dostały redesign PIERWSZY RAZ tym wydaniem** — paczki na tych systemach nie były
-    z nim nigdy uruchomione przed publikacją (user świadomie wybrał publikację od razu, zamiast poczekalni).
-    Przy zgłoszeniach „dziwny wygląd na Macu/Windows" zaczynaj od tej informacji.
-  - **Weryfikacja przed publikacją (wzorzec do powtórzenia):** sha256 lokalne == serwer == feed (×4 paczki),
-    HTTP 200 ×3, `.exe` 644, wpisy dla wszystkich 3 platform w feedzie, AppImage rozpakowany (wtyczki Qt
-    obecne, `APP_VERSION` zgodna, zero sekretów) **oraz DOWÓD, że poprawka jest w środku paczki** — stałe
-    `#251c37`/`#2b2438` w `gui.theme` i nazwa `tab_active` w `gui.main_window`, czytane z archiwum PYZ.
-    ⚠️ Nazw zmiennych szukaj w `co_names`/`co_varnames`, NIE w stałych: `f"…{tab_active}…"` kompiluje się
-    na kawałki tekstu + odczyt zmiennej, więc dosłownego `{tab_active}` w stałych NIE MA (mój pierwszy
-    przebieg dał z tego powodu fałszywy `[FAIL]` — patrz „każdy [FAIL] najpierw WYJAŚNIJ").
-
-<details><summary>Redesign „Vibe Purple" — szczegóły (wydany w 1.0.27)</summary>
-
-- **DOKAŃCZANIE 2026-07-16 (4 commity):** poprawki wyglądu zgłaszane przez usera,
-  każda potwierdzona przez niego na żywo w izolowanym drugim oknie. **`SKIN_VERSION` = 2 → 3** (`64840e2`).
-  - `01afb7e` — **biała kreska nad paskiem zakładek** usunięta. Styl rysował „półkę" (`PE_FrameTabBarBase`)
-    kolorami z PALETY, której nie przemalowaliśmy → 1 px czystej bieli; QSS tam NIE sięga. Fix:
-    `_LeftAlignedTabStyle.drawPrimitive()` pomija ten prymityw. ⚠️ `setDocumentMode(True)` POGARSZA.
-  - `3b75223` — kreska aktywnej zakładki **NA DOLE** (podkreślenie). ⚠️ **ŚWIADOME ODEJŚCIE OD MAKIETY**
-    (makieta ma `top:0`) — decyzja usera, NIE „naprawiać" z powrotem.
-  - `cc9bccf` — **obwódka pola poleceń w kolorze agenta** (ten sam, co ramka okna); agent bez `tab_color` →
-    kolor skórki; focus = jaśniejszy wariant. ⚠️ grubość musi zostać 2 px (`AutoResizeTextEdit` liczy
-    wysokość z oprawy → zmiana na focusie ucinałaby ogonki). Odświeżanie na żywo przez `update_config`.
-    Ukryty też przycisk naprawy terminala (wyżej).
-  - `64840e2` — **białe ikony** (mikrofon / „wyczyść pole" / błyskawica), **kolor niesie STAN**: nagrywanie =
-    pulsująca czerwona IKONA (tło jak w sąsiednich przyciskach), przetwarzanie = biała klepsydra, czytanie =
-    zielony głośnik, pauza = migający zielony trójkąt. Stop zostaje czerwony.
-
-</details>
-
+- **1.0.27** — pierwsze wydanie z CAŁYM redesignem „Vibe Purple" + naprawy: pliki pamięci w ostatnich
+  zakładkach (`0361565`), 🔊 BUG #6 (`0ce9609`), polskie znaki w WebTerminalu (`c38775f`), STT przez
+  bramkę AI Managera (`eab76b3`), jeden silnik terminala wszędzie (`1dc983a`). `SKIN_VERSION` = 4.
+  ⚠️ **Mac i Windows dostały redesign PIERWSZY RAZ tym wydaniem** — paczki na tych systemach nie były
+  z nim uruchomione przed publikacją. Przy zgłoszeniach „dziwny wygląd na Macu/Windows" zacznij od tego.
+  Szczegóły wydania i weryfikacji przed publikacją → archiwum + runbook „DYSTRYBUCJA / WYDANIA" niżej.
 - **KONWENCJA KOLORU (ustalona z userem 2026-07-16, rozszerzona 2026-07-20): skórka rządzi SPOCZYNKIEM,
   kod niesie STAN.** Kolory znaczeniowe (`DANGER` nagrywanie/stop, `SUCCESS` czytanie/wznów) siedzą w kodzie —
   w skórce dałoby się ustawić zielone nagrywanie i sygnał przestałby znaczyć. Nie dokładaj kluczy skórki
@@ -167,16 +102,14 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
     z 15% do 4% różnicy wobec tła i dwa sygnały naraz („aktywna zakładka", „okno nieaktywne") stały się
     nieczytelne, choć kod działał bez zarzutu. Przy zmianie palety **zmierz różnicę wobec SĄSIADA**
     (średnia RGB wystarcza), nie oceniaj na oko w edytorze — próg roboczy: **≥20/255 (~8%)**.
-- **REDESIGN „Vibe Purple" (2026-07-09, wydany w 1.0.27; commity `bc81a03` + `410c9ab`):** nowy wygląd wg makiety Cloud Design (`Vibe Coding Assistant redesign.zip`), funkcje bez zmian. Paleta w `src/gui/theme.py` (jedyne źródło kolorów), migracja skórki `SKIN_VERSION=2` (bez niej zmiana palety byłaby NIEWIDOCZNA), czcionki IBM Plex Sans + JetBrains Mono w paczce, terminal przemalowany w obu silnikach, gradientowa kreska nad aktywną zakładką (`_AccentTabBar`), gradientowy przycisk Wyślij, suwak „Auto-czytaj", kreskowe ikony SVG w kolorze skórki, dialogi/pasek statusu/wskaźnik RAM na palecie. Szczegóły → pamięć `redesign-vibe-purple.md`, pułapki → `qt-pulapki-qss-redesign.md`. **Porcje A+B+C potwierdzone przez usera na żywo** (C = 2026-07-14, izolowane drugie okno `test-druga-instancja-izolowana`: ogonki w dialogach, listy Skills/MCP z pełnymi opisami, podgląd skórki + „Anuluj" przywraca kolory, kolory zakładek, wskaźnik RAM).
-- **1.0.26 (WYDANE 2026-06-29):** naprawa flagi „agent czeka" u ŹRÓDŁA — apka uruchamia
-  `claude --session-id <uuid>` i PRZYPINA czytnik do dokładnego pliku sesji (koniec zgadywania).
+- **REDESIGN „Vibe Purple"** (`bc81a03`+`410c9ab`, wydany w 1.0.27): paleta w `src/gui/theme.py` =
+  JEDYNE źródło kolorów; zmiana palety wymaga podbicia `SKIN_VERSION` (inaczej NIEWIDOCZNA — config
+  nadpisuje). Szczegóły → `redesign-vibe-purple.md`, pułapki → `qt-pulapki-qss-redesign.md`, historia → archiwum.
+- **1.0.26:** `claude --session-id <uuid>` przypina czytnik do dokładnego pliku sesji.
   ⚠️ Bez `--session-id` (ręczny `--resume` po crashu) czytnik jest odpięty → 🔊 czyta złą wypowiedź.
-- **1.0.25 (WYDANE 2026-06-26):** rebranding na „Vibe Coding Assistant" + seria poprawek UI.
-  ⚠️ **Trwałe z rebrandingu:** infrastruktura ZOSTAJE stara (`/cva/` URL, appcast, repo GitHub
-  `claude-voice-assistant`, wewn. binarka) — zmiana zerwałaby self-update. Migracja ustawień
-  `~/.claude-voice-assistant`→`~/.vibe-coding-assistant` w `config.py` (stary katalog skasowany
-  2026-07-20). Rebrand MUSI obejmować też `.ps1/.yml/.command` (pominięcie = padł build Windows).
-  Szczegóły obu wydań → archiwum.
+- **1.0.25 (rebranding na „Vibe Coding Assistant"):** ⚠️ infrastruktura ZOSTAJE stara (`/cva/` URL, appcast,
+  repo `claude-voice-assistant`, wewn. binarka) — zmiana zerwałaby self-update. Rebrand MUSI obejmować też
+  `.ps1/.yml/.command` (pominięcie = padł build Windows). Ustawienia: `~/.vibe-coding-assistant`.
 - **Wieloplatformowość:** Linux (z kodu + AppImage), macOS (.dmg/.zip), Windows (.exe Inno). Pełna wersja PL/EN (domyślnie EN; PL gdy system polski).
 - **Self-update:** macOS ✅ (od 1.0.8) · Windows ✅ (od 1.0.14) · **Linux ✅** (kod od 1.0.16, w feedzie od 1.0.17). **Pipeline WYDANIA potwierdzony e2e 2× (1.0.18, 1.0.19)** — tag→Actions(mac/win)+lokalny AppImage→rsync paczek (sha256!)→appcast→downloads. **URUCHOMIENIE spakowanego AppImage POTWIERDZONE 2026-06-20** (okno + terminal działają — PO naprawie braku wtyczek Qt/xcb; paczka 1.0.19 przebudowana, sha `325378b4…`, wydana). Wciąż DO POTWIERDZENIA: pełny **kliencki cykl self-update** (feed→pobierz→podmień→wstań) — uruchomienie i samo-podmiana niepotwierdzone razem. Mac/Win: spakowane paczki **URUCHAMIAJĄ się** (obserwacja usera: Mac pokazuje kreator przy starcie, Windows startuje) → podejrzenie crashu z braku wtyczek Qt na Mac/Win **ODRZUCONE** (PyInstaller na mac/win dociąga `cocoa`/`qwindows` sam). Do potwierdzenia zostaje tylko pełny kliencki cykl self-update.
 - **Języki:** PL + jeden angielski (`en-US`); wariant brytyjski `en-GB` usunięty w 1.0.17 (scalony do en-US, migracja wsteczna w `set_ui_language`).
@@ -242,8 +175,9 @@ Tylko **aktywna** zakładka czyta; przełączenie ucisza poprzednią. Priming `s
 - **WebTerminal — bufor wejścia do PTY.** Powłoka startuje dopiero po `frontend_ready` (~2 s w AppImage); `claude`/wiadomość wysłane wcześniej `_write_pty` gubił po cichu. Fix: `_pending_input` w `__init__`, buforuj gdy `_proc is None`, opróżnij w `_spawn()`.
 - **WebTerminal — czcionka pt vs px.** `set_font(size)` przekazuje PUNKTY; QTermWidget=`QFont(pt)`, xterm.js liczy w PIKSELACH. Konwersja `px=round(size*96/72)` TYLKO na styku `web_terminal._push_font` + `fontSize` startowy w `terminal.html`.
 - **WebTerminal (QtWebEngine) — drag&drop pliku: ścieżki NIE ma w JS.** Chromium ukrywa ścieżkę upuszczonego pliku → JS w `terminal.html` jej nie dostanie (sam `preventDefault` na `dragover`/`drop` likwiduje tylko pułapkę „otwarcia pliku na całe okno", bez wklejenia). Ścieżkę bierz PO STRONIE Qt: `eventFilter` na `view.focusProxy()` (to ON dostaje `QDropEvent`), `mimeData().urls()`→`toLocalFile()`→`_write_pty`. **Reinstaluj filtr w `showEvent`** — Qt PODMIENIA focusProxy przy ukryciu/przenoszeniu między zakładkami/splitterami (stary filtr przepada). Pole input (QTextEdit) obsłuż osobno: `insertFromMimeData` z `hasUrls()` (inaczej wkleja surowy obrazek). Objaw zgłaszany przez usera: „upuściłem obrazek i apka się zacięła, nie dało się wyjść" (commit `a123504`).
-- **Biały błysk pola input (QTextEdit) po Enter.** Samo `background-color` w stylesheet zostawia paletę `Base`=biała; przy `clear()`+zmianie wysokości (po wysłaniu) Qt na ~1 klatkę maluje biały Base ZANIM nałoży styl → migający biały prostokąt (intermittentnie, „tylko czasem" — zależnie od trafienia między klatkami). Fix: ustaw też `QPalette.Base/Text` (kolor skórki) na polu **i jego `viewport()`**, nie tylko w stylesheet (commit `fccd618`). Uniwersalna pułapka PyQt — gdyby powstał 2. projekt PyQt, kandydat do COMMON.
-- **Biały błysk całego terminala (WebTerminal) ~1 s przy starcie.** `QWebEngineView`/`QWebEnginePage` maluje stronę na BIAŁO, dopóki `terminal.html` się nie wczyta (xterm.js + czcionka). Mimo że html ma ciemne tło, przez sekundę widać białą „pustą kartkę" silnika. Fix (1.0.20): `self._page.setBackgroundColor(QColor(0x1b,0x1b,0x1d))` PRZED `view.load(...)` w `web_terminal.__init__`. Dotyczy tylko WebTerminala (AppImage/Mac/Win), nie QTermWidgetu. Uniwersalna pułapka QtWebEngine → kandydat do COMMON.
+- **Białe błyski (pole input po Enter, start WebTerminala)** — przyczyna leży w PALECIE Qt / tle
+  `QWebEnginePage`, nie w stylach. Obie pułapki są uniwersalne dla apek Qt → przeniesione do
+  `CLAUDE-COMMON.md` (sekcje „PUŁAPKI QT" i „PUŁAPKI QtWebEngine").
 - **Emoji w `QPushButton` bywa NIEWIDOCZNE przy ściśniętym layoucie; paleta emoji = klikalny `QLabel` w POPUPIE.** Inline siatka emoji w `QFormLayout` (zakładka „Podstawowe") wcisnęła się — etykiety nachodziły na rzędy, glify zniknęły. Fix: paleta w osobnym `QDialog` (własna przestrzeń, `QScrollArea`), a komórki to `_ClickableLabel(QLabel)` z sygnałem `clicked` (QLabel renderuje KOLOROWE emoji; przycisk przy ciasnym layoucie gubi glif). ⚠️ ciemne tło popupu trzeba ustawić jawnie na `QScrollArea` + jego `viewport()` + widget treści (`setStyleSheet` na samym `QDialog` nie wystarcza — viewport świeci na biało). Konwencja ikony zakładki (`_agent_label_icon`): **emoji = prefiks w TEKŚCIE** zakładki (renderuje się jak '🤖 '), **własny plik = `setTabIcon(QIcon)`** + sama nazwa, brak = '🤖 Nazwa'; flaga „?" po zniknięciu przywraca ikonę pliku (nie pustą). Edycja istniejącego agenta odświeża zakładkę na żywo (`_refresh_open_agent_tabs`).
 - **Wykrywanie `claude` MUSI iść przez powłokę logowania, nie przez PATH aplikacji.** GUI z Findera/Docka (macOS) dostaje OKROJONY PATH (bez Homebrew/nvm/npm) → `shutil.which("claude")` zawodzi mimo że CLI jest, a terminal go uruchamia (login shell `-l`). Skutek przed 1.0.20: kreator ustawień wyskakiwał na Macu PRZY KAŻDYM starcie. Fix: `platform_utils.claude_runnable()` pyta `zsh -lc 'command -v claude'` (mac/linux) / `where` (win) na wzbogaconym PATH — zgodnie z tym, co zobaczy terminal. Logowanie: `claude_logged_in()` = plik `~/.claude/.credentials.json` LUB wpis Keychain `␣Claude Code-credentials` (mac; `security find-generic-password -s`, returncode 44=brak). Gotowość liczona w wątku tła (powłoka logowania bywa wolna) → sygnał `_readiness_ready` do GUI.
 - **„Pobrana apka działa inaczej niż z kodu" (Linux) = inny backend terminala.** AppImage celowo wyklucza QTermWidget (`excludes=["QTermWidget"]` w `.spec`) i odpala z `CVA_WEBTERMINAL=1` → pobrana wersja = **WebTerminal (Chromium)**, beta z kodu = **QTermWidget**. Bug „tylko w pobranej apce" reprodukuj z kodu: `CVA_WEBTERMINAL=1 python3 src/main.py`.
@@ -305,17 +239,10 @@ Aplikacja w Pythonie jest lekka (~80 MB). **Pamięć zżera Claude Code CLI: 3�
 **Objaw:** jedna lub kilka zakładek nagle pokazuje `Please run /login` / `Unauthorized`, choć logowanie jest ważne.
 Proces `claude` NIE ginie — wisi dalej z martwą sesją, więc wygląda to na zawieszenie, nie na problem z logowaniem.
 
-**Zmierzone dowody (2026-07-20, laptop usera):** 8 procesów `claude` naraz (wszystkie z VCA, start 08:51), jeden
-wspólny `~/.claude/.credentials.json`. Token wygasał **16:51**; w dziennikach sesji: `16:47:44` (79ed45af),
-`16:50:32` (e7f7fb7f), `16:50:47` (c4e0146e), `16:51:40` i `16:52:45` (6e69f262) — **5 błędów w 4 zakładkach
-w 5 minut**, a o `16:55:15` plik poświadczeń został ODŚWIEŻONY i był ważny kolejne 8 h. Zjawisko powtarzalne
-(tego samego dnia też ~08:52, ~10:38, ~14:03, ~14:08).
-
-**Przyczyna:** każda zakładka odświeża token SAMODZIELNIE. Bilet do odnowienia (`refreshToken`) jest jednorazowy
-— pierwsza zakładka go zużywa i zapisuje nowy komplet, a pozostałe trzymają w pamięci bilet, który właśnie
-przestał być ważny → dostają odmowę. Klasyczny wyścig wielu pisarzy o jeden rotujący sekret.
-⚠️ **To NIE jest wina kolektora AI Managera** — on ten plik wyłącznie CZYTA, nigdy nie zapisuje i nigdy nie używa
-`refreshToken` (sprawdzone; błędy występowały też przed jego dzisiejszymi zmianami).
+**Zmierzone dowody (2026-07-20, laptop usera):** 8 procesów `claude` na jednym
+`~/.claude/.credentials.json`; 5 odmów w 4 zakładkach w ciągu 5 minut wokół wygaśnięcia tokenu (16:51),
+plik odnowiony 16:55 i ważny kolejne 8 h. Zjawisko powtarzalne kilka razy dziennie. Pełna oś czasu → archiwum.
+⚠️ **To NIE jest wina kolektora AI Managera** — on ten plik wyłącznie CZYTA i nigdy nie używa `refreshToken`.
 
 **Naprawa: pozbieranie się po przegranym wyścigu — NIE własne odświeżanie tokenu.**
 ⛔ Nie dokładaj w VCA logiki odnawiania tokenu: to dołożyłoby DZIEWIĄTEGO uczestnika wyścigu i pogorszyło sprawę.
@@ -367,6 +294,11 @@ wyścigu (przy jednej problem nie występuje, przy ośmiu jest niemal pewny co k
 6. Wpis do feedu: `python3 packaging/make-appcast-entry.py PACZKA --version X --platform <macos-arm64|windows-x64|linux-x64> --base-url https://pobierz.srv1251441.hstgr.cloud/cva/ --appcast packaging/appcast.json --merge` → `scp appcast.json`.
 7. **Weryfikacja publicznym URL:** `curl …/cva/appcast.json` (version + wpis dla platformy!) + `curl -I …PACZKA` (HTTP 200, `content-length`==`size`, sha256 serwer==feed).
 
+**Retencja paczek na VPS:** cotygodniowy cron `/etc/cron.d/cva-prune-releases` (poniedziałki 4:30; źródło
+w repo: `packaging/prune-release-channel.py`, domyślnie PRÓBA NA SUCHO, kasuje z `--apply`). Chroni pliki
+wskazane przez `appcast.json` i strony; „N najnowszych" liczy w grupie aplikacja+platforma (`.dmg` i `.zip`
+Maca to OSOBNE grupy). Uruchomienie i wyniki z 2026-07-20 → archiwum.
+
 Uwagi: appcast ma **jedną** globalną `version` dla wszystkich platform (musi mieć wpis dla `update_platform_id()` bieżącej platformy, inaczej cicho „no_update"). `gh` zalogowany w keyring (po rotacji PAT). Aktualizacje pełnopaczkowe → przeskok wielu wersji bezpieczny (wyjątki: Mac ≤1.0.7 bootstrap, Win 1.0.12–1.0.13 kruchy downloader). Onboarding na świeżej maszynie: user musi doinstalować Node.js + `npm i -g @anthropic-ai/claude-code` + login (kreator `ClaudeSetupDialog` prowadzi).
 
 ---
@@ -387,25 +319,9 @@ Działa jak na Macu, prościej (AppImage = JEDEN plik, nie katalog ze symlinkami
 PL + `-en`. Instalacja 3 systemów **SCALONA** w `instrukcja-instalacja.html` (górne menu macOS·Linux·Windows·Dyktowanie·Agenci; OS-y przełączane zakładkami JS — kotwica `#os`). Stare `instrukcja-{macos,linux,windows}{,-en}` = przekierowania na scaloną → **stare apki dalej działają**. Generatory (uruchamiać z `packaging/web/`): `build-instalacja.py` scala sekcje stron OS — **MUSI prefiksować `id`/anchory/`copyCmd('id')` per panel** (3 strony używały tych samych `id` cz1..cz5/npmcmd → kolizja `getElementById`; `copyCmd` siedzi PO `<footer>`, więc dołączany osobno); `inject-menu.py` wstrzykuje górne menu + sekcję „jak uruchomić dyktowanie" (idempotentny, pomija gdy `topnav` jest). ⚠️ `build-instalacja.py` nadpisuje strony OS przekierowaniami — przed ponownym uruchomieniem `git checkout` oryginałów. Aplikacja linkuje przez `config.install_guide_url`. Test układu: headless Chromium (Playwright) na `file://`.
 
 ## Inne otwarte TODO
-- [x] ~~**AUTO-SPRZĄTANIE KANAŁU AKTUALIZACJI NA VPS**~~ **ZROBIONE 2026-07-20** (zgłoszenie: agent
-      SEO Managera). Automat: `packaging/prune-release-channel.py` (w repo) → na VPS jako
-      `/usr/local/bin/cva-prune-releases.py` + cron `/etc/cron.d/cva-prune-releases`
-      (**poniedziałki 4:30** — celowo NIE w niedzielę, wtedy leci czyszczenie Dockera).
-      Domyślnie PRÓBA NA SUCHO, kasuje z `--apply`; `--drop-app NAZWA` kasuje całą porzuconą markę.
-      Jednorazowo odzyskane **2,96 GB** (13 starych paczek Maca + 10 paczek sprzed rebrandingu):
-      VPS **78% → 72%** (14 GB wolnego), `/opt/cva-web` 5,1 → **2,3 GB**. Kanał zweryfikowany po
-      skasowaniu: appcast 200, wszystkie 3 instalatory 1.0.27 pobierają się. Ponowna próba na sucho
-      = „nic do sprzątania" (skrypt idempotentny).
-      **Trwałe zasady wbudowane w skrypt** (każda okupiona osobną rundą analizy):
-      1. Lista NIETYKALNYCH z `appcast.json` + `*.html` — nigdy nie kasuj po dacie. Brak/uszkodzony
-         appcast = skrypt PRZERYWA (nie zgaduje, co jest w użyciu).
-      2. „N najnowszych" liczone w GRUPIE aplikacja+platforma (globalnie skasowałoby jedyny `.exe`).
-         `.dmg` i `.zip` Maca to OSOBNE grupy — `.zip` niesie self-update, `.dmg` jest do ręcznej instalacji.
-      3. Weryfikuj pod `https://pobierz.srv1251441.hstgr.cloud/cva/` — adres bez `pobierz.` nie ma trasy
-         w Traefiku (404 + certyfikat zastępczy, wygląda jak „skasowałem za dużo"). Poprawione też
-         w `~/Projekty/CLAUDE.md` ⚠️ (ten plik NIE jest wersjonowany — whitelist łapie tylko `CLAUDE-*.md`).
+- [ ] **XSS (niski prio):** `src/gui/web_terminal.py` `_show_failure_page` — surowy f-string z `reason`
+      (reszta panelu admina domknięta 2026-07-14, `6b70b5a`; opis → archiwum).
 - [ ] **Redesign — do rozważenia po testach:** własna belka tytułowa (świadomie pominięta — ryzyko Wayland/macOS); okno ustawień jako jeden modal z bocznym menu (makieta) zamiast menu górnego + osobnych dialogów — to zmiana UKŁADU, nie wyglądu, więc poza zakresem redesignu.
-- [ ] ⏳ **Auto-czytanie ZAPĘTLA całą rozmowę po auto-compact — FIX ZAAPLIKOWANY + test automatyczny OK; czeka na TEST NA ŻYWO** (2026-07-06). `transcript_reader.poll()`: gdy Claude Code skompaktuje dziennik (przepisuje `<uuid>.jsonl` na krótszy → plik MNIEJSZY niż offset), stary kod robił `self._offset = 0` → `poll()` oddawał CAŁY plik → lektor recytował rozmowę od początku (powtarzało się przy każdym compact w długich zakładkach). **Zastosowany fix:** na skurczeniu `self._offset = size; return []` (skok na koniec jak priming — czytaj tylko nowe). `py_compile` OK + test na prawdziwym kodzie (rośnięcie→compact→nowa) przeszedł 3/3. Bez wpływu na flagę „?" (`waiting_for_user` ma osobny `_wait_last_size`). **ZOSTAŁO:** ZACOMMITOWANE 2026-07-06 (razem z zestawem 🔊/emoji/polskie-znaki) — czeka tylko na TEST NA ŻYWO po restarcie bety (compact zdarza się po długiej rozmowie). Szczegóły: pamięć `auto-czytanie-loop-po-kompaktowaniu.md`. Kandydat do COMMON (tailing pliku bywającego przepisanym krócej → seek-to-end, nie 0).
 - [ ] **Strona/branding (po stronie usera/decyzji):** uzupełnić dane firmy `[forma prawna/adres/NIP]` w polityce+licencji (PL+EN naraz); kupić domenę; dopisać geolokalizację (GeoJS) do polityki prywatności; podpiąć link „Instrukcje" na stronie (teraz `#`) do `instrukcja-instalacja.html`; przegląd prawny przed publikacją; potem przepiąć stronę ze stagingu na docelową domenę.
 - [ ] Potwierdzić **kliencki** self-update spakowanego AppImage: uruchomić zainstalowany AppImage i sprawdzić aktualizację do 1.0.19 (patrz sekcja LINUX SELF-UPDATE).
 - [ ] **BUG Mac — CRASH QtWebEngine po wybudzeniu (nie „ostrzeżenie"!):** zrzut od usera (26.06, wersja **1.0.25**) = macOS „Raport problemu / Aplikacja nieoczekiwanie zakończyła pracę" (OK / Otwórz ponownie) → user bierze to za cykliczne ostrzeżenie, bo „Otwórz ponownie" → znów crash. Sygnatura: `Crashed Thread 0 CrBrowserMain` (QtWebEngine/Chromium), `EXC_BAD_ACCESS (SIGSEGV)`, **Time Since Wake: 88 s** = crash krótko po śnie. To DOKŁADNIE pamięć `mac-qtwebengine-crash-po-snie.md` (crash w CrBrowserMain po wybudzeniu, nie błąd wersji, raport leci do Apple; nasz `crash-logs/` łapie tylko crash `claude`, NIE QtWebEngine). Na **1.0.26** wystąpił RAZ (user niepewny czy po wybudzeniu), po zamknięciu+otwarciu apki NIE wraca → rzadki, niereprodukowalny przy normalnym starcie = niski priorytet. Kierunek naprawy (do analizy, NIE wdrażać, tylko gdyby się nasilił): flagi QtWebEngine na macOS (np. wyłączenie GPU/sandbox po wzorze `QTWEBENGINE_DISABLE_SANDBOX` z Windows) LUB reinicjalizacja WebTerminala na sygnał wybudzenia.
@@ -451,24 +367,10 @@ Plan: `docs/PLAN-CHMURA-SYNC.md` (sekcja 9 = szyfrowanie). Pamięć: `chmura-syn
 
 ---
 
-## PODŁĄCZENIE DO AI MANAGERA (monitor zużycia tokenów) — ✅ DOMKNIĘTE
-
-> Notatka od agenta AI Managera (2026-07-11; zaktualizowana 2026-07-15). Bramka działa i jest otwarta.
-> ⚠️ **To apka „Vibe Coding Assistant"** (repo `claude-voice-assistant`), a jej klucz w panelu AI Managera nazywa się
-> **„VCA" (id=3)**. Istnieje OSOBNA apka „Voice Assistant" (repo `voice-assistant`, lektor/tłumacz) — inne repo, inny
-> kod, własny (jeszcze nieutworzony) klucz. NIE mylić; klucz „VCA" NIE należy do tamtej apki.
-> **Stan:** STT (dyktowanie) na bramce ✅; rozmowa z Claude idzie przez CLI (nie HTTP) i jest monitorowana osobno →
-> nic więcej do wpięcia po naszej stronie.
-
-**WAŻNE — większość jest JUŻ zrobiona:** rozmowa z Claude idzie przez **CLI w terminalu (nie HTTP)**, więc
-bramka jej NIE złapie i **nie musi** — zużycie Claude jest **już monitorowane osobno** przez kolektor Claude Code
-AI Managera (czyta lokalne dzienniki `~/.claude/projects/**/*.jsonl`, timer co godzinę). Widać je w panelu
-AI Managera → zakładka **„Claude Code"**.
-
-**Dyktowanie (Groq Whisper) — ZROBIONE + POTWIERDZONE PRZEZ USERA 2026-07-13 (PL i EN działają na żywo)** (→ `stt-bramka-ai-manager.md`):
-- Przepnij STT na bramkę: `POST https://ai.srv1251441.hstgr.cloud/v1/audio/transcriptions`,
-  nagłówek `Authorization: Bearer aim-…` (klucz aplikacji **„VCA" (id=3)** z panelu AI Managera; widoczny raz),
-  model z prefiksem `groq/…` (np. `groq/whisper-large-v3`).
-- Auto-detekcja języka = nie wysyłaj pola `language` (jak dotąd).
-- Kody: `401` zły klucz · `429` limit (+`Retry-After`) · `503` brak wolnego konta.
-- Reszta bez zmian.
+## PODŁĄCZENIE DO AI MANAGERA — ✅ DOMKNIĘTE
+Rozmowa z Claude idzie przez CLI (nie HTTP) → bramka jej nie łapie i nie musi; zużycie liczy osobno
+kolektor Claude Code AI Managera z lokalnych `.jsonl`. Po naszej stronie nic więcej do wpięcia.
+**STT (dyktowanie) na bramce** (potwierdzone na żywo 2026-07-13): `POST https://ai.srv1251441.hstgr.cloud/v1/audio/transcriptions`,
+`Authorization: Bearer aim-…` (klucz aplikacji **„VCA" (id=3)**), model z prefiksem `groq/…`; język auto = NIE wysyłaj
+pola `language`; kody: `401` zły klucz · `429` limit · `503` brak wolnego konta. → `stt-bramka-ai-manager.md`.
+⚠️ NIE mylić z osobną apką „Voice Assistant" (repo `voice-assistant`) — inny projekt, inny klucz.
