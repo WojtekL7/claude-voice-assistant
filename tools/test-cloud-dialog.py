@@ -47,7 +47,7 @@ def main():
     check(f"kluczy okna Chmura: {len(klucze)} — komplet w EN",
           [k for k in klucze if k not in en], [])
     check("slowniki nadal maja komplet tych samych kluczy", set(pl) ^ set(en), set())
-    for k in ("cloud_scope_note", "cloud_sent_ok", "cloud_err"):
+    for k in ("cloud_scope_note", "cloud_sent_ok", "cloud_err", "cloud_got_ok"):
         check(f"{k}: zgodne pola do podstawienia",
               set(re.findall(r"\{(\w+)\}", pl[k])),
               set(re.findall(r"\{(\w+)\}", en[k])))

@@ -301,7 +301,13 @@ class CloudDialog(QDialog):
 
         def zadanie():
             paczka = provider.download(CLOUD_BUNDLE_NAME)
-            import_sealed(paczka, haslo, katalog)
-            return tr('cloud_got_ok')
+            wynik = import_sealed(paczka, haslo, katalog)
+            # Pliki pamięci projektów śledzonych gitem świadomie NIE są kopiowane
+            # z paczki (przyjdą z `git clone` — inaczej klon do niepustego katalogu
+            # by się wywalił). User MUSI o tym wiedzieć, inaczej na nowym komputerze
+            # zobaczy agentów bez kodu i uzna to za usterkę.
+            return tr('cloud_got_ok').format(
+                agents=wynik.get('agents_imported', 0),
+                clone=len(wynik.get('clone', [])))
 
         self._run(zadanie, tr('cloud_get_working'))
