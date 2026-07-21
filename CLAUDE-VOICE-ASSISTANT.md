@@ -339,7 +339,16 @@ Plan: `docs/PLAN-CHMURA-SYNC.md` (sekcja 9 = szyfrowanie). Pamięć: `chmura-syn
 - **Paczka niesie:** agentów (ikony/kolory/głosy), pliki pamięci, definicje skilli, gating
   MCP, szybkie akcje, projekty pamięci, skórkę, język **oraz klucze API** (decyzja usera).
   NIE niesie: kodu projektów (idzie przez `git clone`) ani `claude_command` (ścieżka lokalna).
-- **ZOSTAŁO:** klient OAuth w Google Cloud (ręka usera) → `google_drive.py` → ekran „Chmura"
+- **✅ POŁĄCZENIE Z DYSKIEM GOOGLE DZIAŁA NA ŻYWO (2026-07-21, `a7663f5`+`a6c5ddc`).**
+  `google_drive.py`: OAuth desktop + PKCE, loopback `127.0.0.1`, zakres `drive.file`
+  (apka widzi TYLKO własne pliki → Google nie wymaga audytu), token lokalnie z prawami 600.
+  Testy: 22 na atrapie serwera + 22 e2e („przeprowadzka na nowy komputer") + **przebieg
+  na PRAWDZIWYM Google** (logowanie → folder → wysyłka → pobranie bajt w bajt → sprzątnięcie).
+  Projekt Google usera: `impressive-bay-503111-d1` („VCA Google"), klient typu `installed`;
+  dane klienta i token w `~/.vibe-coding-assistant/cloud-google-{client,token}.json` (600).
+  ⚠️ Aplikacja MUSI być w trybie **Produkcja** (nie „Testowanie") — inaczej Google kasuje
+  bilet odnowienia po 7 dniach i user loguje się co tydzień.
+- **ZOSTAŁO:** ekran „Chmura"
   (prosty, w stylu apki — user odrzucił makietę Cloud Design) → test „nowego komputera"
   izolowanym HOME. Funkcja idzie do **wersji Pro** (miejsce na sprawdzenie licencji oznaczyć,
   ale NIE udawać działającej blokady — `license_manager` to wciąż zaślepka).
