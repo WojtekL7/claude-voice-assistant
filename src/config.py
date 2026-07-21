@@ -90,6 +90,16 @@ TTS_CATCHUP_CHARS = 900          # ≈ 1 minuta mowy
 # Automatycznego restartu zakładki świadomie NIE robimy, dopóki nie potwierdzimy
 # na żywych danych, że rozpoznanie „wyścig vs prawdziwe wylogowanie" jest pewne
 # (błąd w tę stronę = pętla restartów przy realnym wylogowaniu).
+# --- Chmura (Faza 1: „mózg" agenta na Dysku Google) -------------------------
+# Dane klienta OAuth (z konsoli Google, wgrywane RAZ przez usera) i token
+# dostępu trzymamy WYŁĄCZNIE lokalnie, z prawami 600 — nigdy w paczce „mózgu",
+# nigdy w repo. Zakres uprawnień: `drive.file` = apka widzi TYLKO pliki, które
+# sama utworzyła (żadnego dostępu do reszty Dysku usera).
+CLOUD_CLIENT_FILE = CONFIG_DIR / "cloud-google-client.json"
+CLOUD_TOKEN_FILE = CONFIG_DIR / "cloud-google-token.json"
+CLOUD_FOLDER_NAME = "Vibe Coding Assistant"
+CLOUD_BUNDLE_NAME = "brain.vcabundle"
+
 LOGIN_EVENT_LOG = CONFIG_DIR / "login-events.log"
 LOGIN_EVENT_LOG_MAX_BYTES = 64 * 1024     # twardy limit — log ma nie puchnąć
 LOGIN_VERDICT_INTERVAL_SECS = 60          # co ile sprawdzać, czy ktoś odnowił
