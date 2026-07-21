@@ -348,10 +348,28 @@ Plan: `docs/PLAN-CHMURA-SYNC.md` (sekcja 9 = szyfrowanie). Pamięć: `chmura-syn
   dane klienta i token w `~/.vibe-coding-assistant/cloud-google-{client,token}.json` (600).
   ⚠️ Aplikacja MUSI być w trybie **Produkcja** (nie „Testowanie") — inaczej Google kasuje
   bilet odnowienia po 7 dniach i user loguje się co tydzień.
-- **ZOSTAŁO:** ekran „Chmura"
-  (prosty, w stylu apki — user odrzucił makietę Cloud Design) → test „nowego komputera"
-  izolowanym HOME. Funkcja idzie do **wersji Pro** (miejsce na sprawdzenie licencji oznaczyć,
-  ale NIE udawać działającej blokady — `license_manager` to wciąż zaślepka).
+- **✅ FAZA 1 KOMPLETNA W KODZIE (2026-07-21).** Ekran „Chmura" (`src/gui/cloud_dialog.py`,
+  menu Ustawienia, prosty — user odrzucił makietę Cloud Design): konto, hasło paczki,
+  wyślij/pobierz. Praca z siecią w wątku roboczym (logowanie czeka minuty na zgodę
+  w przeglądarce → w wątku okna zamroziłoby apkę). Testy: `tools/test-cloud-dialog.py` (22).
+  **Hasło:** apka proponuje kod z `generate_passphrase()`, ale user może wpisać własne
+  (jego decyzja); kod zapamiętany w `cloud-passphrase.txt` (600), na nowym komputerze
+  przepisywany z kartki. Funkcja docelowo **Pro** (`license_manager` to wciąż zaślepka —
+  miejsce na sprawdzenie licencji oznaczyć, ale NIE udawać działającej blokady).
+- **✅ PRZEPROWADZKA POTWIERDZONA NA PRAWDZIWYCH DANYCH + PRAWDZIWYM DYSKU (2026-07-21):**
+  10 agentów, 1098 KB zaszyfrowanej paczki, 12 zapisanych plików pamięci, 273 pliki skilli,
+  **8 projektów do `git clone`**, 0 ostrzeżeń; ścieżki przemapowane, klucze API dojechały,
+  `claude_command` NIE. Import szedł do katalogu tymczasowego → konfiguracja usera nietknięta.
+  ⚠️ **Pliki pamięci leżące w repo gitowym są ŚWIADOMIE pomijane przy imporcie** (przyjdą
+  z `git clone`; kopiowanie wywaliłoby klon do niepustego katalogu) → okno MUSI mówić, ile
+  projektów czeka na sklonowanie, inaczej user widzi agentów bez kodu i zgłasza to jako błąd
+  (`7daddb4`). Pułapka pomiaru: „tylko 4 pliki .md w katalogu" było artefaktem liczenia —
+  ten sam `CLAUDE-COMMON.md` zapisywany dla 10 agentów to JEDEN plik na dysku.
+- ⚠️ **Etykieta bez jawnego `color:` = czarny tekst na czarnym tle** (zgłoszone przez usera,
+  `24eb386`). Qt bierze wtedy barwę z palety, nie ze skórki. W `cloud_dialog` pilnuje tego
+  reguła strukturalna w teście (każdy `QLabel` musi mieć `color:`), sprawdzona kontrolą
+  negatywną. ⚠️ Podgląd okna renderowany z WŁASNYM, doraźnym stylem tego NIE pokazał —
+  zrzut offscreen z ad-hoc QSS nie odtwarza warunków aplikacji.
 - ⚠️ **Znane ograniczenie: KASOWANIE NIE PROPAGUJE SIĘ.** Usunięta szybka akcja / plik pamięci
   zostaje na drugim urządzeniu (import tylko dodaje i nadpisuje). Bez znaczenia przy ręcznym
   „wyślij/pobierz", do rozwiązania przy automatycznej synchronizacji (Faza 2/3).
