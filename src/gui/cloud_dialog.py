@@ -111,6 +111,12 @@ class CloudDialog(QDialog):
         row = QHBoxLayout()
         self.status_lbl = QLabel("")
         self.status_lbl.setWordWrap(True)
+        # ⚠️ Kolor MUSI być jawny. Bez tego etykieta bierze barwę z palety Qt,
+        # która w ciemnym motywie daje czarny tekst na czarnym tle (zgłoszone
+        # przez usera 2026-07-21 — jedyna etykieta w tym oknie bez `color`).
+        # Sam kolor niesie STAN (konwencja projektu: skórka rządzi spoczynkiem,
+        # kod niesie stan), więc ustawiamy go w `_set_status`, nie w skórce.
+        self._set_status(tr('cloud_not_connected'), theme.TEXT)
         row.addWidget(self.status_lbl, 1)
         self.connect_btn = QPushButton(tr('cloud_connect'))
         self.connect_btn.clicked.connect(self._on_connect)
@@ -187,18 +193,23 @@ class CloudDialog(QDialog):
         )
         return self._provider
 
+    def _set_status(self, tekst: str, kolor: str):
+        """Napis stanu konta ZAWSZE z jawnym kolorem (patrz komentarz w `_build_ui`)."""
+        self.status_lbl.setText(tekst)
+        self.status_lbl.setStyleSheet(f"color: {kolor}; font-size: 12px;")
+
     def _refresh_state(self):
         provider = self._get_provider()
         if provider is None:
-            self.status_lbl.setText(tr('cloud_no_client'))
+            self._set_status(tr('cloud_no_client'), theme.WARNING)
             self.connect_btn.setEnabled(False)
             self.disconnect_btn.setEnabled(False)
             self.send_btn.setEnabled(False)
             self.get_btn.setEnabled(False)
             return
         polaczony = provider.is_connected()
-        self.status_lbl.setText(
-            tr('cloud_connected') if polaczony else tr('cloud_not_connected'))
+        self._set_status(tr('cloud_connected') if polaczony else tr('cloud_not_connected'),
+                         theme.SUCCESS if polaczony else theme.TEXT)
         self.connect_btn.setEnabled(not polaczony)
         self.disconnect_btn.setEnabled(polaczony)
         self.send_btn.setEnabled(polaczony)

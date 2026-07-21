@@ -64,6 +64,15 @@ def main():
         puste = [w.objectName() for w in dlg.findChildren(QPushButton) if not w.text()]
         check(f"[{lang}] kazdy przycisk ma napis", puste, [])
 
+        # ⚠️ KAZDA etykieta musi miec JAWNY kolor. Bez tego bierze barwe z palety
+        # Qt, co w ciemnym motywie daje CZARNY TEKST NA CZARNYM TLE — realny blad
+        # zgloszony przez usera 2026-07-21 ("Polaczono z Dyskiem Google" bylo
+        # niewidoczne). Podglad renderowany z WLASNYM stylem tego nie pokazal,
+        # bo nie odtwarzal warunkow aplikacji — dlatego regula strukturalna.
+        bez_koloru = [(w.text() or "(pusta)")[:34] for w in dlg.findChildren(QLabel)
+                      if "color:" not in (w.styleSheet() or "")]
+        check(f"[{lang}] kazda etykieta ma jawny kolor", bez_koloru, [])
+
         # Ucinanie tekstu — miara jak w tools/scan-dialog-clipping.py: porownujemy
         # REALNA geometrie po pokazaniu okna z tym, ile widzet sam deklaruje, ze
         # potrzebuje. ⚠️ Nie zgaduj marginesow (pierwsza wersja tego testu dodawala
