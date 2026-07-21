@@ -12,6 +12,7 @@ obecny jako pełnoprawny obywatel; miejsca wymagające osobnej implementacji
 """
 import os
 import sys
+import json
 import shutil
 import platform
 import subprocess
@@ -305,6 +306,57 @@ def claude_logged_in() -> bool:
         except Exception:
             return True
     return False
+
+
+def claude_credentials_state() -> dict:
+    """Stan poświadczeń Claude Code — BEZ czytania samych sekretów.
+
+    Zwraca `{'available': bool, 'mtime': float|None, 'expires_at': float|None}`:
+    - `available` — czy potrafimy ten stan zmierzyć (Linux/Windows: plik
+      `~/.claude/.credentials.json`). Na macOS poświadczenia siedzą w Pęku
+      kluczy i pliku NIE MA → `available=False`, a wołający musi mieć
+      zamiennik (nie da się tam porównać daty zapisu).
+    - `mtime` — kiedy plik ostatnio ZAPISANO = kiedy ktoś odnowił token.
+    - `expires_at` — kiedy bieżący token wygasa (czas uniksowy w sekundach).
+
+    Służy do odróżnienia WYŚCIGU o odświeżenie tokenu (kilka zakładek naraz;
+    plik zostaje odnowiony chwilę po błędzie) od PRAWDZIWEGO wylogowania
+    (nikt go nie odnawia). Nigdy nie zwracamy ani nie logujemy wartości
+    tokenów — wyłącznie znaczniki czasu.
+    """
+    state = {"available": False, "mtime": None, "expires_at": None}
+    path = Path.home() / ".claude" / ".credentials.json"
+    try:
+        if not path.exists():
+            return state
+        state["available"] = True
+        state["mtime"] = path.stat().st_mtime
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+        expires = (data.get("claudeAiOauth") or {}).get("expiresAt")
+        if isinstance(expires, (int, float)):
+            state["expires_at"] = expires / 1000.0     # Claude Code trzyma ms
+    except Exception:
+        pass
+    return state
+
+
+def credentials_refreshed_since(mtime_at_error, state_now: dict) -> bool:
+    """Czy poświadczenia zapisano PONOWNIE już po podanym momencie?
+
+    To jedyny pewny sygnał, że ktoś WYGRAŁ wyścig i odnowił token — a więc że
+    user wcale nie jest wylogowany. `False` gdy nic się nie zmieniło ALBO gdy
+    nie da się tego zmierzyć (macOS: poświadczenia w Pęku kluczy, brak pliku)
+    — wołający musi traktować te dwa przypadki osobno.
+
+    Wydzielone z GUI, żeby regułę dało się przetestować bez okna aplikacji.
+    """
+    if not state_now.get("available"):
+        return False
+    now_mtime = state_now.get("mtime")
+    if mtime_at_error is None or now_mtime is None:
+        return False
+    return now_mtime > mtime_at_error
 
 
 # ==================== Ścieżki danych ====================

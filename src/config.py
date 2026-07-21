@@ -79,6 +79,22 @@ CRASH_LOG_DEBOUNCE_SECS = 30
 # Gdy zaległość przekroczy ten próg, przeskakujemy do NAJNOWSZEJ wypowiedzi.
 TTS_CATCHUP_CHARS = 900          # ≈ 1 minuta mowy
 
+# --- Wyścig o odświeżenie tokenu („Please run /login") -----------------------
+# Wszystkie zakładki dzielą JEDEN plik poświadczeń, a bilet do odnowienia
+# (refreshToken) jest jednorazowy: pierwsza zakładka go zużywa i zapisuje nowy
+# komplet, pozostałe trzymają bilet, który właśnie stracił ważność → dostają
+# „Please run /login", choć user NIE jest wylogowany. Zmierzone 2026-07-20:
+# 5 odmów w 4 zakładkach w ciągu 5 minut wokół wygaśnięcia, plik poświadczeń
+# odnowiony 8 minut po pierwszej odmowie i ważny kolejne 8 godzin.
+# ETAP 1 (teraz): tylko OBSERWACJA — zapis zdarzenia + komunikat na pasku.
+# Automatycznego restartu zakładki świadomie NIE robimy, dopóki nie potwierdzimy
+# na żywych danych, że rozpoznanie „wyścig vs prawdziwe wylogowanie" jest pewne
+# (błąd w tę stronę = pętla restartów przy realnym wylogowaniu).
+LOGIN_EVENT_LOG = CONFIG_DIR / "login-events.log"
+LOGIN_EVENT_LOG_MAX_BYTES = 64 * 1024     # twardy limit — log ma nie puchnąć
+LOGIN_VERDICT_INTERVAL_SECS = 60          # co ile sprawdzać, czy ktoś odnowił
+LOGIN_VERDICT_MAX_CHECKS = 12             # ~12 min (zmierzony przypadek: 8 min)
+
 
 def tts_should_catch_up(pending_chars: int) -> bool:
     """Czy lektor jest na tyle w tyle, że warto przeskoczyć do najnowszej?
@@ -343,6 +359,9 @@ UI_TRANSLATIONS = {
                                     "z zachowaniem bieżącej rozmowy."),
         "status_terminal_repair": "Naprawiam wygląd terminala — wznawiam rozmowę…",
         "status_tts_catchup": "Lektor był w tyle — przeskakuję do najnowszej wypowiedzi",
+        "status_login_checking": "Zakładka {name}: błąd logowania — sprawdzam, czy to wyścig zakładek…",
+        "status_login_race": "Zakładka {name}: to NIE wylogowanie — zakładki ścigały się o token. Wystarczy ją zrestartować (Stop → Uruchom)",
+        "status_login_real": "Claude Code jest wylogowany — wpisz /login w terminalu zakładki {name}",
         "status_terminal_snapshot_only": "Zapisano zrzut terminala (brak sesji do wznowienia)",
         "clear_input_tooltip": "Wyczyść pole tekstowe",
         "add_media_tooltip": "Dodaj media (zdjęcia, dokumenty, pliki)",
@@ -1081,6 +1100,9 @@ UI_TRANSLATIONS = {
                                     "keeping the current conversation."),
         "status_terminal_repair": "Fixing terminal display — resuming conversation…",
         "status_tts_catchup": "Narrator fell behind — skipping to the newest response",
+        "status_login_checking": "Tab {name}: login error — checking whether tabs raced…",
+        "status_login_race": "Tab {name}: not a logout — tabs raced for the token. Just restart it (Stop → Run)",
+        "status_login_real": "Claude Code is logged out — type /login in the {name} tab terminal",
         "status_terminal_snapshot_only": "Terminal snapshot saved (no session to resume)",
         "clear_input_tooltip": "Clear input field",
         "add_media_tooltip": "Add media (images, documents, files)",

@@ -420,6 +420,8 @@ from config import (
     UPDATE_APPCAST_URL, UPDATE_PUBLIC_KEY, UPDATE_DOWNLOAD_DIR,
     MAX_ACTIVE_AGENTS, RAM_PER_AGENT_GB, RAM_SYSTEM_RESERVE_GB,
     tts_should_catch_up,
+    LOGIN_EVENT_LOG, LOGIN_EVENT_LOG_MAX_BYTES,
+    LOGIN_VERDICT_INTERVAL_SECS, LOGIN_VERDICT_MAX_CHECKS,
     t as tr, set_ui_language, detect_system_language,
 )
 from core.claude_bridge import ClaudeBridgeAsync
@@ -429,7 +431,10 @@ from core.license_manager import LicenseManager, LicenseStatus
 from core.text_cleaner import TextCleanerForTTS, extract_last_claude_response, fix_polish_encoding, prose_from_markdown
 from core.transcript_reader import TranscriptReader
 from core.update_manager import UpdateManager
-from core.platform_utils import update_platform_id, total_ram_gb, recommended_max_agents
+from core.platform_utils import (
+    update_platform_id, total_ram_gb, recommended_max_agents,
+    claude_credentials_state, credentials_refreshed_since,
+)
 from gui.agent_tab import AgentTab
 from gui import icon_set
 from gui import theme
@@ -1500,8 +1505,14 @@ class MainWindow(QMainWindow):
                 self._arm_question(tab, _armed)
 
                 new_blocks = reader.poll()
+                # Komunikaty błędów Claude Code (wygasłe logowanie, przeciążenie
+                # API) wyłuskane przy okazji tego samego odczytu — poll() ich NIE
+                # oddaje lektorowi, odbieramy je tutaj.
+                api_errors = reader.take_api_errors()
             except Exception:
                 continue
+            for err in api_errors:
+                self._on_claude_api_error(tab, err)
             if not new_blocks:
                 continue
 
@@ -1553,6 +1564,97 @@ class MainWindow(QMainWindow):
             return proses                   # awaria miary → zachowaj się jak dotąd
         self._update_status(tr('status_tts_catchup'))
         return proses[-1:]                  # …i mów to, co user ma na ekranie
+
+    # ---------- „Please run /login" = wyścig zakładek o odświeżenie tokenu ----
+
+    def _on_claude_api_error(self, tab, err: dict):
+        """Zareaguj na komunikat błędu Claude Code wyłuskany z dziennika.
+
+        ETAP 1 — WYŁĄCZNIE OBSERWACJA: zapisujemy zdarzenie i mówimy userowi,
+        co się dzieje. Zakładek celowo NIE restartujemy automatycznie, dopóki
+        rozpoznanie „wyścig vs prawdziwe wylogowanie" nie potwierdzi się na
+        żywych danych — pomyłka w tę stronę oznacza pętlę restartów w chwili,
+        gdy user faktycznie jest wylogowany.
+        """
+        if not err.get('is_auth'):
+            # Inny błąd API (np. 529 Overloaded) — tylko ślad w dzienniku.
+            self._log_login_event(tab, 'blad-api', err.get('text', ''))
+            return
+        name = self._safe_tab_name(tab)
+        cred = claude_credentials_state()
+        self._log_login_event(tab, 'odmowa-logowania', err.get('text', ''), cred)
+        self._update_status(tr('status_login_checking').format(name=name))
+        # Werdykt NIE może zapaść od razu: zwycięzca wyścigu odnawia plik
+        # poświadczeń z opóźnieniem (zmierzone 2026-07-20: 8 minut po pierwszej
+        # odmowie). Natychmiastowa ocena orzekłaby „wylogowanie" dla każdego
+        # wyścigu — dlatego dopytujemy co minutę przez kilkanaście minut.
+        self._schedule_login_verdict(tab, cred, attempt=1)
+
+    def _schedule_login_verdict(self, tab, cred_at_error: dict, attempt: int):
+        QTimer.singleShot(
+            LOGIN_VERDICT_INTERVAL_SECS * 1000,
+            lambda: self._login_verdict_tick(tab, cred_at_error, attempt),
+        )
+
+    def _login_verdict_tick(self, tab, cred_at_error: dict, attempt: int):
+        """Czy ktoś odnowił poświadczenia PO błędzie? To rozstrzyga sprawę."""
+        name = self._safe_tab_name(tab)
+        now = claude_credentials_state()
+        if credentials_refreshed_since(cred_at_error.get('mtime'), now):
+            # Poświadczenia są świeże → user NIE był wylogowany; ta zakładka
+            # po prostu przegrała wyścig o jednorazowy bilet odnowienia.
+            self._log_login_event(
+                tab, 'werdykt-wyscig',
+                f'poswiadczenia odnowione ok. {attempt} min po odmowie', now)
+            self._update_status(tr('status_login_race').format(name=name))
+            return
+
+        if attempt >= LOGIN_VERDICT_MAX_CHECKS:
+            # Nikt nie odnowił przez całe okno obserwacji (albo nie umiemy tego
+            # zmierzyć — macOS trzyma poświadczenia w Pęku kluczy). Bezpieczna
+            # rada w obu przypadkach jest ta sama: zaloguj się ponownie.
+            self._log_login_event(
+                tab, 'werdykt-wylogowanie' if now.get('available')
+                else 'werdykt-nierozstrzygniety-macos',
+                'nikt nie odnowil poswiadczen w oknie obserwacji', now)
+            self._update_status(tr('status_login_real').format(name=name))
+            return
+
+        self._schedule_login_verdict(tab, cred_at_error, attempt + 1)
+
+    @staticmethod
+    def _safe_tab_name(tab) -> str:
+        """Nazwa zakładki odporna na to, że user zamknął ją w międzyczasie."""
+        try:
+            return getattr(tab, 'agent_name', '?') or '?'
+        except Exception:          # widget Qt mógł już zostać usunięty
+            return '?'
+
+    def _log_login_event(self, tab, kind: str, detail: str, cred: dict = None):
+        """Dopisz zdarzenie do `login-events.log` (z TWARDYM limitem rozmiaru).
+
+        Log jest materiałem dowodowym do etapu 2 (automatyczny restart): pokaże,
+        czy rozpoznanie wyścigu trafia bezbłędnie. Sekretów nie zapisujemy —
+        wyłącznie znaczniki czasu i treść komunikatu Claude Code.
+        """
+        try:
+            line = (f"{time.strftime('%Y-%m-%d %H:%M:%S')}  {kind:30} "
+                    f"zakladka={self._safe_tab_name(tab)}  "
+                    f"{' '.join(str(detail).split())[:200]}")
+            if cred and cred.get('expires_at'):
+                line += ("  token_wygasal_o="
+                         + time.strftime('%H:%M:%S',
+                                         time.localtime(cred['expires_at'])))
+            if (LOGIN_EVENT_LOG.exists()
+                    and LOGIN_EVENT_LOG.stat().st_size > LOGIN_EVENT_LOG_MAX_BYTES):
+                # Cap: zostaw ostatnią połowę zamiast kasować całość.
+                keep = LOGIN_EVENT_LOG.read_text(encoding='utf-8', errors='ignore')
+                LOGIN_EVENT_LOG.write_text(
+                    keep[-LOGIN_EVENT_LOG_MAX_BYTES // 2:], encoding='utf-8')
+            with open(LOGIN_EVENT_LOG, 'a', encoding='utf-8') as fh:
+                fh.write(line + "\n")
+        except Exception:
+            pass
 
     def _on_terminal_ready(self, agent_tab):
         """Slot wywoływany po AgentTab.activate() — terminal właśnie powstał.
