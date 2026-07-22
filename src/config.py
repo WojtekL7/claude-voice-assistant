@@ -142,6 +142,19 @@ MEMORY_READY_TIMEOUT_SECS = 60.0
 # mało — patrz wyżej). Do gotowego Claude wystarcza mniej, pół sekundy to zapas.
 MEMORY_ENTER_DELAY_MS = 500
 
+# 🔊 „czytaj ostatnią” — okno, w którym EKRAN WYPRZEDZA DZIENNIK.
+# Claude Code dopisuje wypowiedź do pliku sesji dopiero, gdy skończy ją pisać
+# w całości (zmierzone 2026-07-22 na żywej rozmowie: 13,9 / 14,8 / 16,2 s dla
+# odpowiedzi 1,7–2,4 tys. znaków; wpis pojawia się 1–3 s po jej dokończeniu).
+# Na ekranie widać ją od pierwszego zdania, więc klik w tym oknie czytał
+# POPRZEDNIĄ wypowiedź (zgłoszenie usera: „czyta przedostatnią, w ~50%”).
+# Lek: gdy terminal właśnie pracuje, CZEKAMY na nowy wpis zamiast czytać stary.
+READ_LAST_BUSY_SECS = 2.0          # ruch w terminalu świeższy niż to = agent pisze
+READ_LAST_WAIT_POLL_MS = 500       # co ile sprawdzać, czy wypowiedź już doszła
+# Bezpiecznik: po tym czasie czytamy to, co jest w dzienniku (dawne zachowanie)
+# i mówimy o tym na pasku — nigdy cisza bez wyjaśnienia.
+READ_LAST_WAIT_TIMEOUT_SECS = 30.0
+
 # Ensure config directory exists
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -504,6 +517,8 @@ UI_TRANSLATIONS = {
         "status_copy_no_selection": "Brak zaznaczenia — zaznacz tekst w terminalu (przytrzymaj Shift, gdy Claude używa myszy)",
         "status_copied_clipboard": "Skopiowano do schowka",
         "status_reading_last": "Czytam ostatnią odpowiedź...",
+        "status_reading_wait": "⏳ Agent jeszcze pisze — czekam na koniec wypowiedzi...",
+        "status_reading_wait_timeout": "Agent wciąż pisze — czytam ostatnią zapisaną wypowiedź.",
         "status_response_no_content": "Odpowiedź nie zawiera treści do odczytania",
         "status_no_response_found": "Nie znaleziono odpowiedzi do odczytania",
         "status_no_text": "Brak tekstu do odczytania",
@@ -1277,6 +1292,8 @@ UI_TRANSLATIONS = {
         "status_copy_no_selection": "Nothing selected — select text in the terminal (hold Shift if Claude uses the mouse)",
         "status_copied_clipboard": "Copied to clipboard",
         "status_reading_last": "Reading the last response...",
+        "status_reading_wait": "⏳ The agent is still writing — waiting for the answer to finish...",
+        "status_reading_wait_timeout": "The agent is still writing — reading the last saved answer.",
         "status_response_no_content": "The response has no content to read",
         "status_no_response_found": "No response found to read",
         "status_no_text": "No text to read",

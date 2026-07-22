@@ -422,6 +422,7 @@ from config import (
     tts_should_catch_up,
     LOGIN_EVENT_LOG, LOGIN_EVENT_LOG_MAX_BYTES,
     LOGIN_VERDICT_INTERVAL_SECS, LOGIN_VERDICT_MAX_CHECKS,
+    READ_LAST_BUSY_SECS, READ_LAST_WAIT_POLL_MS, READ_LAST_WAIT_TIMEOUT_SECS,
     t as tr, set_ui_language, detect_system_language,
 )
 from core.claude_bridge import ClaudeBridgeAsync
@@ -806,6 +807,14 @@ class MainWindow(QMainWindow):
         self._transcript_timer = QTimer()
         self._transcript_timer.timeout.connect(self._poll_transcripts)
         self._transcript_timer.start(800)
+
+        # 🔊 „czytaj ostatnią” kliknięte, gdy agent jeszcze pisze: czekamy na
+        # dokończenie wypowiedzi zamiast czytać poprzednią (patrz READ_LAST_*).
+        self._read_wait_timer = None
+        self._read_wait_tab = None
+        self._read_wait_reader = None
+        self._read_wait_before = None
+        self._read_wait_deadline = 0.0
 
         # Update references to current tab
         self._update_current_tab_references()
@@ -3052,8 +3061,98 @@ class MainWindow(QMainWindow):
                 return
             self.stt.start_recording()
 
+    def _agent_is_writing(self, tab) -> bool:
+        """Czy agent WŁAŚNIE pisze odpowiedź (ekran wyprzedza dziennik)?
+
+        Dziennik sesji dostaje wypowiedź dopiero po jej dokończeniu, a na
+        ekranie widać ją od pierwszego zdania — patrz READ_LAST_* w config.
+        Świeży ruch w terminalu = wypowiedź w toku. Czujnik
+        `_last_terminal_data_ts` odświeża TYLKO realna treść (migająca kropka
+        bezczynności go nie rusza), więc bezczynny agent poprawnie uchodzi
+        za „nie pisze" i odczyt leci natychmiast, jak dawniej.
+        """
+        if tab is None:
+            return False
+        ts = getattr(tab, '_last_terminal_data_ts', None)
+        if ts is None:
+            return False
+        return (time.monotonic() - ts) < READ_LAST_BUSY_SECS
+
+    def _speak_journal_text(self, reader, text: str) -> bool:
+        """Przeczytaj prozę z dziennika i oznacz ją jako skonsumowaną.
+
+        `seek_to_end()` przesuwa czytnik na koniec pliku, żeby auto-czytanie
+        nie powtórzyło za chwilę tej samej wypowiedzi (podwójne czytanie —
+        ręczny 🔊 i pętla _poll_transcripts ścigają się o ten sam wpis).
+        """
+        cleaned_text = prose_from_markdown(text)
+        if not cleaned_text:
+            return False
+        if reader is not None:
+            try:
+                reader.seek_to_end()
+            except Exception:
+                pass
+        self.tts.speak(cleaned_text)
+        return True
+
+    def _cancel_read_last_wait(self):
+        """Przerwij oczekiwanie na dokończenie wypowiedzi (jeśli trwa)."""
+        timer = getattr(self, '_read_wait_timer', None)
+        if timer is not None:
+            timer.stop()
+        self._read_wait_timer = None
+        self._read_wait_tab = None
+        self._read_wait_reader = None
+        self._read_wait_before = None
+
+    def _start_read_last_wait(self, tab, reader, before):
+        """Czekaj, aż NOWA wypowiedź dojdzie do dziennika, i dopiero ją czytaj."""
+        self._cancel_read_last_wait()
+        self._read_wait_tab = tab
+        self._read_wait_reader = reader
+        self._read_wait_before = before
+        self._read_wait_deadline = time.monotonic() + READ_LAST_WAIT_TIMEOUT_SECS
+        self._read_wait_timer = QTimer(self)
+        self._read_wait_timer.timeout.connect(self._check_read_last_wait)
+        self._read_wait_timer.start(READ_LAST_WAIT_POLL_MS)
+        self._update_status(tr('status_reading_wait'))
+
+    def _check_read_last_wait(self):
+        tab = getattr(self, '_read_wait_tab', None)
+        reader = getattr(self, '_read_wait_reader', None)
+        # Zakładka zamknięta albo user przeszedł gdzie indziej → przerwij po cichu
+        # (czytanie i tak dotyczy zakładki aktywnej).
+        if tab is None or reader is None or tab is not self._get_current_agent_tab():
+            self._cancel_read_last_wait()
+            return
+        try:
+            last = reader.last_response()
+        except Exception:
+            last = None
+
+        if last and last != self._read_wait_before:
+            self._cancel_read_last_wait()
+            if self._speak_journal_text(reader, last):
+                self._update_status(tr('status_reading_last'))
+            else:
+                self._update_status(tr('status_response_no_content'))
+            return
+
+        if time.monotonic() >= self._read_wait_deadline:
+            # Bezpiecznik: czytamy to, co jest (dawne zachowanie) i mówimy o tym.
+            self._cancel_read_last_wait()
+            if last and self._speak_journal_text(reader, last):
+                self._update_status(tr('status_reading_wait_timeout'))
+            else:
+                self._update_status(tr('status_no_response_found'))
+
     def _read_last_response(self):
         """Read the last Claude Code response aloud (cleaned for TTS)."""
+        # Kolejne kliknięcie unieważnia poprzednie oczekiwanie (żeby nie zostały
+        # dwa czekające timery czytające po sobie).
+        self._cancel_read_last_wait()
+
         # Initialize text cleaner with current language
         text_cleaner = TextCleanerForTTS(self.current_language)
 
@@ -3119,12 +3218,19 @@ class MainWindow(QMainWindow):
                     last = reader.last_response()
                 except Exception:
                     last = None
-                if last:
-                    cleaned_text = prose_from_markdown(last)
-                    if cleaned_text:
-                        self.tts.speak(cleaned_text)
-                        self._update_status(tr('status_reading_last'))
-                        return
+
+                # ⚠️ EKRAN WYPRZEDZA DZIENNIK (zmierzone 2026-07-22: 14–16 s dla
+                # odpowiedzi ~2 tys. znaków). Gdy agent WŁAŚNIE pisze, `last` to
+                # jeszcze POPRZEDNIA wypowiedź — czytanie jej teraz to dokładnie
+                # objaw zgłoszony przez usera („czyta przedostatnią, w ~50%”).
+                # Zamiast tego czekamy na nowy wpis (z bezpiecznikiem czasowym).
+                if self._agent_is_writing(tab):
+                    self._start_read_last_wait(tab, reader, last)
+                    return
+
+                if last and self._speak_journal_text(reader, last):
+                    self._update_status(tr('status_reading_last'))
+                    return
 
             # OSTATECZNOŚĆ — dziennik nic nie zwrócił (świeża zakładka, sesja
             # odpięta). Dopiero teraz ekstrakcja z bufora EKRANU TEJ zakładki
@@ -3366,6 +3472,10 @@ class MainWindow(QMainWindow):
         Each sub-stop is isolated — a pygame/SDL segfault in TTS must not prevent
         STT/timer cleanup and must not bubble up to kill the GUI process.
         """
+        # „Stop” musi też odwołać CZEKAJĄCY odczyt (🔊 kliknięte w trakcie pisania
+        # agenta) — inaczej apka odezwałaby się sama kilkanaście sekund po tym,
+        # jak user ją uciszył.
+        self._cancel_read_last_wait()
         try:
             self.tts.stop()
         except Exception as e:
