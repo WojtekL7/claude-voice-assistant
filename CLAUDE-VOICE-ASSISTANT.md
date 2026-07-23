@@ -53,16 +53,22 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
 ---
 
 ## ⏳ WCIĄŻ DO TESTU NA ŻYWO
-- **🔊 czeka na dokończenie wypowiedzi** (`e365307`, 2026-07-22) — **TEST UMÓWIONY NA 2026-07-23,
-  NOWA SESJA.** BUG #7: „czyta przedostatnią, w ~50%". Przyczyna ZMIERZONA: ekran wyprzedza dziennik
-  o CAŁY czas pisania wypowiedzi (13,9 / 14,8 / 16,2 s dla odpowiedzi 1,7–2,4 tys. znaków; wpis ląduje
-  w pliku 1–3 s po dokończeniu). To NIE była kolejna zła bramka — po BUG #6 problemem był CZAS, nie
-  WYBÓR. Fix: gdy terminal ma świeży ruch, 🔊 czeka na nowy wpis (bezpiecznik 30 s), a `seek_to_end()`
-  po odczycie kończy dublowanie z auto-czytaniem. Test: (1) klik 🔊 W TRAKCIE pisania długiej odpowiedzi
-  → „⏳ czekam…" → czyta NOWĄ; (2) klik przy bezczynnym agencie → natychmiast, bez zwłoki; (3) auto-czytanie
-  włączone → brak dublowania. Bramki przeszły (`tools/test-read-last-wait.py` 17/0 + mutacja kontrolna),
-  ale u usera NIEPRZETESTOWANE — wymaga restartu apki → `beta-restart-zabija-sesje`.
-  → `czytaj-ostatnia-czyta-inna.md` (BUG #7).
+- **🔊 BUG #7 — RUNDA 2** (`d825e6d`, 2026-07-23). Runda 1 (`e365307`) była **przetestowana przez usera
+  i NIE WYSTARCZYŁA** (CRM dalej czytał przedostatnią). Diagnoza rundy 1 była TRAFNA (ekran wyprzedza
+  dziennik: wpis ląduje 1–3 s po dokończeniu tekstu), ale **próg strażnika `READ_LAST_BUSY_SECS` = 2,0 s
+  był WĘŻSZY niż zasłaniana luka 1–3 s** → klik 2–3 s po odpowiedzi (czyli tak, jak testuje człowiek)
+  wpadał w resztę szczeliny. Runda 2: próg 4,0 s + **czujnik STRUMIENIA** (`agent_tab.recent_output_chars`
+  — ile ZNAKÓW treści przyszło w oknie 2 s; strumień=setki, animacja paska=kilkadziesiąt) + dwa terminy:
+  karencja 4 s przesuwana dopóki leci strumień, twardy bezpiecznik 20 s. Bramki: 34/0 + mutacja kontrolna.
+  ⚠️ Próg 200 znaków dobrany ANALIZĄ, nie pomiarem żywego strumienia — przy „przycisk czeka za długo
+  podczas pracy narzędzi" podnieść ten JEDEN próg (log: `CVA_READ_LAST_DEBUG=1`).
+  Test: (1) klik 2–3 s po dokończeniu odpowiedzi w CRM → czyta TĘ odpowiedź; (2) klik w trakcie długiej
+  → ⏳ i czyta nową; (3) klik podczas pracy narzędzi → odpowiedź w kilka sekund; (4) bezczynny agent →
+  natychmiast; (5) zaznaczenie bez zmian. → `czytaj-ostatnia-czyta-inna.md`.
+  - ⚠️ **PROFIL ZAKŁADKI CRM wywraca założenia projektowane pod „jedna długa odpowiedź na turę"**
+    (zmierzone: 58 wypowiedzi, mediana **134 znaki**, mediana odstępu **40 s**, narzędzia 10 s–4 min).
+    Bezpiecznik 30 s z rundy 1 zamieniał tam przycisk w pół minuty ciszy. Każdą zmianę w 🔊 / auto-czytaniu
+    / fladze sprawdzaj na CRM, nie tylko na zakładce z rozmową.
 - **Nadganianie lektora** (`2156fe8`, 2026-07-21) — user zgłaszał „czyta przedostatnią wypowiedź" (2 zakładki
   niezależnie). **Czytnik był NIEWINNY**: wybór wypowiedzi był prawidłowy, spóźniała się kolejka lektora
   (4 wypowiedzi ≈ 3200 zn. ≈ 3,5 min mowy w ciągu 2 min). Powyżej ~minuty zaległości apka przeskakuje do
