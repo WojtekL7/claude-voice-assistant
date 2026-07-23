@@ -6,6 +6,7 @@ import json
 import math
 import re
 import time
+from collections import deque
 from pathlib import Path
 from typing import Optional, Dict, List, Callable
 
@@ -36,6 +37,7 @@ from config import (
     ASSETS_DIR,
     MEMORY_READY_MARKER, MEMORY_READY_QUIET_SECS, MEMORY_READY_POLL_MS,
     MEMORY_READY_TIMEOUT_SECS, MEMORY_ENTER_DELAY_MS,
+    READ_LAST_STREAM_WINDOW_SECS,
     t as tr,
 )
 from core.platform_utils import default_shell
@@ -71,6 +73,23 @@ _ANSI_STRIP_RE = re.compile(
 _IDLE_MARKER_CHARS = '●'                   # ● — migający wskaźnik „czekam"
 
 
+def _activity_residual(data) -> str:
+    """Treść porcji z terminala po zdjęciu kodów sterujących i ozdób bezczynności.
+
+    Jedno miejsce liczenia dla DWÓCH czujników (regex leci raz, bo to gorąca
+    ścieżka): „czy w ogóle był ruch" (flaga „agent czeka") oraz „ILE tekstu
+    przyszło" (🔊 — odróżnienie strumienia odpowiedzi od animacji paska stanu).
+    """
+    if not data:
+        return ''
+    text = data if isinstance(data, str) else str(data)
+    residual = _ANSI_STRIP_RE.sub('', text)
+    # zdejmij znaki-ozdoby; jeśli coś zostaje → realna treść
+    for ch in _IDLE_MARKER_CHARS:
+        residual = residual.replace(ch, '')
+    return residual.strip()
+
+
 def _is_terminal_activity(data: str) -> bool:
     """Czy porcja z terminala to REALNY ruch, czy tylko migająca kropka idle?
 
@@ -79,14 +98,7 @@ def _is_terminal_activity(data: str) -> bool:
     dzięki czemu cisza terminala może narosnąć i flaga „agent czeka" się uzbroi.
     Każda inna (choćby jednoznakowa realna) treść → True.
     """
-    if not data:
-        return False
-    text = data if isinstance(data, str) else str(data)
-    residual = _ANSI_STRIP_RE.sub('', text)
-    # zdejmij białe znaki i znaki-ozdoby; jeśli coś zostaje → realna treść
-    for ch in _IDLE_MARKER_CHARS:
-        residual = residual.replace(ch, '')
-    return residual.strip() != ''
+    return _activity_residual(data) != ''
 
 
 class AutoResizeTextEdit(QTextEdit):
@@ -288,6 +300,11 @@ class AgentTab(QWidget):
         # ukończeniu bloku). Start = teraz, żeby świeża zakładka nie była
         # od razu „cicha".
         self._last_terminal_data_ts = time.monotonic()
+        # Ile ZNAKÓW treści przyszło z terminala w ostatnich sekundach — czujnik
+        # „agent sypie tekstem" dla 🔊 (patrz recent_output_chars). Krótka kolejka
+        # (ts, liczba znaków), przycinana przy każdym dopisie: pamięta tylko
+        # okno READ_LAST_STREAM_WINDOW_SECS, więc nie rośnie w nieskończoność.
+        self._output_volume = deque()
         self._tts_timer = None
         self._memory_sent = False
         # Czekanie na gotowość Claude Code przed wysłaniem plików pamięci
@@ -679,6 +696,27 @@ class AgentTab(QWidget):
 
     # ==================== Terminal Handling ====================
 
+    def _note_output_volume(self, n_chars: int):
+        """Zapamiętaj, ile znaków treści przyszło — i wyrzuć to, co wypadło z okna."""
+        now = time.monotonic()
+        self._output_volume.append((now, n_chars))
+        cutoff = now - READ_LAST_STREAM_WINDOW_SECS
+        while self._output_volume and self._output_volume[0][0] < cutoff:
+            self._output_volume.popleft()
+
+    def recent_output_chars(self, window_secs: float = None) -> int:
+        """Ile znaków treści przyszło z terminala w ostatnim oknie czasu.
+
+        Rozróżnia dwa stany, których sam „był ruch / nie było" nie odróżnia:
+        strumień odpowiedzi (setki znaków na sekundę) od animacji paska stanu
+        i odświeżeń ramki narzędzia (kilkadziesiąt). Używane przez 🔊, żeby
+        czekać na DOKOŃCZENIE długiej wypowiedzi, ale nie blokować przycisku
+        na czas pracy narzędzi.
+        """
+        window = READ_LAST_STREAM_WINDOW_SECS if window_secs is None else window_secs
+        cutoff = time.monotonic() - window
+        return sum(n for ts, n in self._output_volume if ts >= cutoff)
+
     def _on_terminal_output(self, data):
         """Handle terminal output (już zdekodowany str z backendu).
 
@@ -691,9 +729,11 @@ class AgentTab(QWidget):
 
         # Puls aktywności terminala — ale POMIŃ migającą kropkę bezczynności,
         # bo inaczej „czekający" agent wygląda na wiecznie aktywny i flaga
-        # „agent czeka" nigdy się nie uzbraja (patrz _is_terminal_activity).
-        if _is_terminal_activity(data):
+        # „agent czeka" nigdy się nie uzbraja (patrz _activity_residual).
+        residual = _activity_residual(data)
+        if residual:
             self._last_terminal_data_ts = time.monotonic()
+            self._note_output_volume(len(residual))
         # Emit signal for MainWindow
         self.terminal_output.emit(data)
 

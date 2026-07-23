@@ -36,8 +36,13 @@ def check(name, cond, detail=""):
 
 
 class FakeTab:
-    def __init__(self, idle_secs):
+    def __init__(self, idle_secs, stream_chars=0):
         self._last_terminal_data_ts = time.monotonic() - idle_secs
+        self._stream_chars = stream_chars
+
+    def recent_output_chars(self, window_secs=None):
+        """Ile znaków treści przyszło w ostatnim oknie (czujnik strumienia)."""
+        return self._stream_chars
 
 
 class FakeReader:
@@ -82,8 +87,11 @@ class FakeWindow:
         self._read_wait_reader = reader
         self._read_wait_before = before
         self._read_wait_deadline = time.monotonic() + deadline_in
-        for meth in ('_agent_is_writing', '_speak_journal_text',
-                     '_cancel_read_last_wait', '_check_read_last_wait'):
+        self._read_wait_hard_deadline = time.monotonic() + 20.0
+        self._read_wait_started = time.monotonic()
+        for meth in ('_agent_is_writing', '_agent_is_streaming', '_speak_journal_text',
+                     '_cancel_read_last_wait', '_check_read_last_wait',
+                     '_read_last_debug'):
             setattr(self, meth, getattr(MainWindow, meth).__get__(self))
 
     def _get_current_agent_tab(self):
@@ -171,9 +179,11 @@ class FakeQWindow(QObject):
         self._read_wait_reader = reader
         self._read_wait_before = None
         self._read_wait_deadline = 0.0
-        for meth in ('_agent_is_writing', '_speak_journal_text',
+        self._read_wait_hard_deadline = 0.0
+        self._read_wait_started = 0.0
+        for meth in ('_agent_is_writing', '_agent_is_streaming', '_speak_journal_text',
                      '_cancel_read_last_wait', '_check_read_last_wait',
-                     '_start_read_last_wait'):
+                     '_start_read_last_wait', '_read_last_debug'):
             setattr(self, meth, getattr(MainWindow, meth).__get__(self))
 
     def _get_current_agent_tab(self):
@@ -193,6 +203,94 @@ check("i od razu informuje na pasku, że czeka",
       f"statusy: {qw.statuses}")
 qw._cancel_read_last_wait()
 check("odwołanie czekania czyści stan", qw._read_wait_timer is None)
+
+# ============================================================================
+# NAPRAWA 2026-07-23 — zgłoszenie usera: „w CRM DALEJ czyta przedostatnią"
+# ============================================================================
+# 7. Okno strażnika musi być SZERSZE niż zmierzone opóźnienie zapisu (1–3 s).
+#    Przy dawnym progu 2,0 s klik 2,5 s po dokończeniu odpowiedzi trafiał
+#    w szczelinę: terminal już milczał, a wpis jeszcze nie doszedł → apka
+#    czytała przedostatnią. To jest test regresyjny DOKŁADNIE na ten objaw.
+w = FakeWindow(None, None, None)
+check("2,5 s po ostatnim ruchu wciąż CZEKAMY (wpis bywa w drodze do 3 s)",
+      w._agent_is_writing(FakeTab(idle_secs=2.5)) is True,
+      "to jest szczelina, w którą wpadał user")
+check("3,0 s po ostatnim ruchu też czekamy (górna granica pomiaru)",
+      w._agent_is_writing(FakeTab(idle_secs=3.0)) is True)
+check("ale po 5 s ciszy czytamy od razu (kontrola negatywna — brak zwłoki)",
+      w._agent_is_writing(FakeTab(idle_secs=5.0)) is False)
+
+# 8. Czujnik strumienia: odróżnia „sypie tekstem" od „miga paskiem stanu".
+check("dużo znaków w oknie = agent sypie tekstem",
+      w._agent_is_streaming(FakeTab(0.1, stream_chars=600)) is True)
+check("kilkadziesiąt znaków = tylko animacja paska (kontrola negatywna)",
+      w._agent_is_streaming(FakeTab(0.1, stream_chars=60)) is False)
+check("brak zakładki = brak strumienia", w._agent_is_streaming(None) is False)
+
+# 9. Dopóki leci strumień, karencja jest PRZESUWANA — długa wypowiedź
+#    (14–16 s pisania) ma być doczekana w całości, nie ucięta bezpiecznikiem.
+tab = FakeTab(0.1, stream_chars=600)               # agent w trakcie pisania
+reader = FakeReader(["STARA odpowiedź"])           # dziennik jeszcze się nie zmienił
+w = FakeWindow(tab, reader, before="STARA odpowiedź", deadline_in=0.05)
+w._check_read_last_wait()
+check("strumień przesuwa karencję — nic nie czytamy przedwcześnie",
+      w.tts.spoken == [], f"powiedziano: {w.tts.spoken}")
+check("i czekanie trwa dalej", w._read_wait_timer is not None)
+check("karencja realnie przesunięta w przyszłość",
+      w._read_wait_deadline > time.monotonic() + 1.0)
+
+# 10. Gdy strumienia NIE MA (pracuje narzędzie), karencja mija i czytamy to,
+#     co jest — bez zawieszania przycisku na cały bezpiecznik.
+tab = FakeTab(0.1, stream_chars=0)                 # terminal żyje, ale to nie tekst
+reader = FakeReader(["OSTATNIA notka"])
+w = FakeWindow(tab, reader, before="OSTATNIA notka", deadline_in=-0.1)
+w._check_read_last_wait()
+check("bez strumienia karencja mija i czytamy najnowszą z dziennika",
+      len(w.tts.spoken) == 1 and "OSTATNIA" in w.tts.spoken[0],
+      f"powiedziano: {w.tts.spoken}")
+check("czekanie zakończone (przycisk nie wisi do bezpiecznika)",
+      w._read_wait_timer is None)
+
+# 11. Twardy bezpiecznik ogranicza przesuwanie — nawet ciągły strumień
+#     nie może czekać w nieskończoność.
+tab = FakeTab(0.1, stream_chars=600)
+reader = FakeReader(["STARA"])
+w = FakeWindow(tab, reader, before="STARA", deadline_in=0.05)
+w._read_wait_hard_deadline = time.monotonic() + 0.5   # bezpiecznik tuż-tuż
+w._check_read_last_wait()
+check("karencja nie przeskakuje twardego bezpiecznika",
+      w._read_wait_deadline <= w._read_wait_hard_deadline + 0.01,
+      f"karencja={w._read_wait_deadline:.2f} bezpiecznik={w._read_wait_hard_deadline:.2f}")
+
+# 12. Czujnik po stronie ZAKŁADKI (liczenie znaków) — bez budowania widżetu.
+from collections import deque  # noqa: E402
+
+from gui.agent_tab import AgentTab, _activity_residual  # noqa: E402
+
+check("animacja bezczynności nie jest treścią",
+      _activity_residual("\x1b[2K\r  ●  ") == "")
+check("tekst odpowiedzi JEST treścią (kontrola negatywna)",
+      len(_activity_residual("\x1b[32mSprawdzam plik konfiguracyjny\x1b[0m")) > 20)
+
+
+class FakeVolTab:
+    def __init__(self):
+        self._output_volume = deque()
+        for meth in ('_note_output_volume', 'recent_output_chars'):
+            setattr(self, meth, getattr(AgentTab, meth).__get__(self))
+
+
+vt = FakeVolTab()
+for _ in range(10):
+    vt._note_output_volume(80)                 # 800 znaków w oknie
+check("licznik sumuje znaki z okna", vt.recent_output_chars() == 800,
+      f"policzono {vt.recent_output_chars()}")
+check("kolejka nie rośnie w nieskończoność (przycinana do okna)",
+      len(vt._output_volume) == 10)
+vt2 = FakeVolTab()
+vt2._note_output_volume(40)
+check("pojedyncza ramka paska stanu daje mało (kontrola negatywna)",
+      vt2.recent_output_chars() == 40)
 
 print(f"\nWynik: {PASS} OK / {FAIL} FAIL")
 sys.exit(1 if FAIL else 0)

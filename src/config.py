@@ -149,11 +149,34 @@ MEMORY_ENTER_DELAY_MS = 500
 # Na ekranie widać ją od pierwszego zdania, więc klik w tym oknie czytał
 # POPRZEDNIĄ wypowiedź (zgłoszenie usera: „czyta przedostatnią, w ~50%”).
 # Lek: gdy terminal właśnie pracuje, CZEKAMY na nowy wpis zamiast czytać stary.
-READ_LAST_BUSY_SECS = 2.0          # ruch w terminalu świeższy niż to = agent pisze
+#
+# ⚠️ POPRAWKA 2026-07-23 (user: „w CRM dalej czyta przedostatnią"). Próg 2,0 s był
+# MNIEJSZY niż opóźnienie, które miał zasłaniać (1–3 s) → po dokończeniu odpowiedzi
+# terminal milkł, strażnik po 2 s orzekał „agent nie pisze" i apka czytała dziennik,
+# do którego wpis JESZCZE nie doszedł = przedostatnia wypowiedź. Okno poszerzone,
+# żeby cała zmierzona luka mieściła się w środku.
+READ_LAST_BUSY_SECS = 4.0          # ruch w terminalu świeższy niż to = czekamy
 READ_LAST_WAIT_POLL_MS = 500       # co ile sprawdzać, czy wypowiedź już doszła
+# Odróżnienie „agent SYPIE TEKSTEM" od „kręci się kółko / pracuje narzędzie":
+# strumień odpowiedzi to setki znaków na sekundę, animacja paska stanu — kilkadziesiąt.
+# Dopóki leci strumień, przesuwamy termin (długa odpowiedź, 14–16 s, ma być doczekana
+# w całości); gdy strumień ustaje, zostaje krótka karencja na sam zapis do dziennika.
+# Próg celowo NISKI: pomyłka „to jeszcze strumień" kosztuje sekundy czekania,
+# pomyłka w drugą stronę przywraca błąd czytania przedostatniej.
+READ_LAST_STREAM_WINDOW_SECS = 2.0
+READ_LAST_STREAM_CHARS = 200
+READ_LAST_GRACE_SECS = 4.0         # po ustaniu strumienia tyle czekamy na wpis
 # Bezpiecznik: po tym czasie czytamy to, co jest w dzienniku (dawne zachowanie)
-# i mówimy o tym na pasku — nigdy cisza bez wyjaśnienia.
-READ_LAST_WAIT_TIMEOUT_SECS = 30.0
+# i mówimy o tym na pasku — nigdy cisza bez wyjaśnienia. 20 s z zapasem pokrywa
+# najdłuższą zmierzoną wypowiedź (16,2 s); dawne 30 s w zakładce pełnej narzędzi
+# (CRM: mediana 40 s między wypowiedziami) zamieniało przycisk w pół minuty ciszy.
+READ_LAST_WAIT_TIMEOUT_SECS = 20.0
+# Pasywny log diagnostyczny 🔊 (włącz: CVA_READ_LAST_DEBUG=1). Pisze wyłącznie przy
+# kliknięciu i w trakcie czekania — nie w gorącej pętli — ale i tak z twardym limitem
+# (poprzedni taki log urósł kiedyś do 99 MB, patrz pamięć „diagnostyka tymczasowa").
+READ_LAST_DEBUG = os.getenv('CVA_READ_LAST_DEBUG', '') == '1'
+READ_LAST_DEBUG_LOG = CONFIG_DIR / 'read-last-debug.log'
+READ_LAST_DEBUG_MAX_BYTES = 512 * 1024
 
 # Ensure config directory exists
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)

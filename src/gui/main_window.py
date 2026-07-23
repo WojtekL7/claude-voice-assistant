@@ -423,6 +423,8 @@ from config import (
     LOGIN_EVENT_LOG, LOGIN_EVENT_LOG_MAX_BYTES,
     LOGIN_VERDICT_INTERVAL_SECS, LOGIN_VERDICT_MAX_CHECKS,
     READ_LAST_BUSY_SECS, READ_LAST_WAIT_POLL_MS, READ_LAST_WAIT_TIMEOUT_SECS,
+    READ_LAST_STREAM_CHARS, READ_LAST_GRACE_SECS,
+    READ_LAST_DEBUG, READ_LAST_DEBUG_LOG, READ_LAST_DEBUG_MAX_BYTES,
     t as tr, set_ui_language, detect_system_language,
 )
 from core.claude_bridge import ClaudeBridgeAsync
@@ -814,7 +816,9 @@ class MainWindow(QMainWindow):
         self._read_wait_tab = None
         self._read_wait_reader = None
         self._read_wait_before = None
-        self._read_wait_deadline = 0.0
+        self._read_wait_deadline = 0.0        # karencja — przesuwana, gdy leci strumień
+        self._read_wait_hard_deadline = 0.0   # twardy bezpiecznik
+        self._read_wait_started = 0.0
 
         # Update references to current tab
         self._update_current_tab_references()
@@ -3061,15 +3065,39 @@ class MainWindow(QMainWindow):
                 return
             self.stt.start_recording()
 
-    def _agent_is_writing(self, tab) -> bool:
-        """Czy agent WŁAŚNIE pisze odpowiedź (ekran wyprzedza dziennik)?
+    def _read_last_debug(self, message: str):
+        """Pasywny ślad diagnostyczny 🔊 (tylko przy CVA_READ_LAST_DEBUG=1).
 
-        Dziennik sesji dostaje wypowiedź dopiero po jej dokończeniu, a na
-        ekranie widać ją od pierwszego zdania — patrz READ_LAST_* w config.
-        Świeży ruch w terminalu = wypowiedź w toku. Czujnik
-        `_last_terminal_data_ts` odświeża TYLKO realna treść (migająca kropka
-        bezczynności go nie rusza), więc bezczynny agent poprawnie uchodzi
-        za „nie pisze" i odczyt leci natychmiast, jak dawniej.
+        Pisze WYŁĄCZNIE przy kliknięciu i w trakcie czekania (kilkadziesiąt
+        linii na klik), nigdy w gorącej pętli — plus twardy limit rozmiaru,
+        bo poprzedni taki log urósł kiedyś do 99 MB.
+        """
+        if not READ_LAST_DEBUG:
+            return
+        try:
+            if (READ_LAST_DEBUG_LOG.exists()
+                    and READ_LAST_DEBUG_LOG.stat().st_size > READ_LAST_DEBUG_MAX_BYTES):
+                keep = READ_LAST_DEBUG_LOG.read_text(encoding='utf-8', errors='ignore')
+                READ_LAST_DEBUG_LOG.write_text(keep[-READ_LAST_DEBUG_MAX_BYTES // 2:],
+                                               encoding='utf-8')
+            with open(READ_LAST_DEBUG_LOG, 'a', encoding='utf-8') as f:
+                f.write(f"{datetime.now().strftime('%H:%M:%S.%f')[:-3]} {message}\n")
+        except Exception:
+            pass
+
+    def _agent_is_writing(self, tab) -> bool:
+        """Czy trzeba POCZEKAĆ, bo dziennik może być w tyle za ekranem?
+
+        Dziennik sesji dostaje wypowiedź dopiero po jej dokończeniu (1–3 s
+        po tym, jak tekst przestał się pojawiać na ekranie) — patrz READ_LAST_*
+        w config. Świeży ruch w terminalu oznacza, że wpis może być jeszcze
+        w drodze. Czujnik `_last_terminal_data_ts` odświeża TYLKO realna treść
+        (migająca kropka bezczynności go nie rusza), więc bezczynny agent
+        poprawnie uchodzi za „nie pisze" i odczyt leci natychmiast, jak dawniej.
+
+        ⚠️ Okno MUSI być szersze niż zmierzone opóźnienie zapisu — przy 2,0 s
+        strażnik zamykał się w środku luki i apka czytała przedostatnią
+        wypowiedź (zgłoszenie usera z 2026-07-23, zakładka CRM).
         """
         if tab is None:
             return False
@@ -3077,6 +3105,22 @@ class MainWindow(QMainWindow):
         if ts is None:
             return False
         return (time.monotonic() - ts) < READ_LAST_BUSY_SECS
+
+    def _agent_is_streaming(self, tab) -> bool:
+        """Czy agent WŁAŚNIE sypie tekstem (a nie tylko miga paskiem stanu)?
+
+        Strumień odpowiedzi to setki znaków na sekundę; animacja paska i
+        odświeżenia ramki narzędzia — kilkadziesiąt. Dopóki leci strumień,
+        przesuwamy termin czekania (długa wypowiedź, 14–16 s, ma być doczekana
+        w całości). Gdy ustaje, zostaje krótka karencja na sam zapis do pliku,
+        dzięki czemu klik w trakcie pracy NARZĘDZI nie blokuje przycisku.
+        """
+        if tab is None:
+            return False
+        try:
+            return tab.recent_output_chars() >= READ_LAST_STREAM_CHARS
+        except Exception:
+            return False
 
     def _speak_journal_text(self, reader, text: str) -> bool:
         """Przeczytaj prozę z dziennika i oznacz ją jako skonsumowaną.
@@ -3107,12 +3151,25 @@ class MainWindow(QMainWindow):
         self._read_wait_before = None
 
     def _start_read_last_wait(self, tab, reader, before):
-        """Czekaj, aż NOWA wypowiedź dojdzie do dziennika, i dopiero ją czytaj."""
+        """Czekaj, aż NOWA wypowiedź dojdzie do dziennika, i dopiero ją czytaj.
+
+        DWA terminy zamiast jednego: krótka karencja (przesuwana, dopóki agent
+        realnie sypie tekstem) i twardy bezpiecznik. Dzięki temu długa wypowiedź
+        jest doczekana w całości, a klik w trakcie pracy narzędzi kończy się po
+        kilku sekundach zamiast po pół minuty ciszy.
+        """
         self._cancel_read_last_wait()
+        now = time.monotonic()
         self._read_wait_tab = tab
         self._read_wait_reader = reader
         self._read_wait_before = before
-        self._read_wait_deadline = time.monotonic() + READ_LAST_WAIT_TIMEOUT_SECS
+        self._read_wait_started = now
+        self._read_wait_hard_deadline = now + READ_LAST_WAIT_TIMEOUT_SECS
+        self._read_wait_deadline = now + READ_LAST_GRACE_SECS
+        self._read_last_debug(
+            f"WAIT start: strumien={self._agent_is_streaming(tab)} "
+            f"znakow/okno={getattr(tab, 'recent_output_chars', lambda: -1)()} "
+            f"przed={(before or '')[:40]!r}")
         self._read_wait_timer = QTimer(self)
         self._read_wait_timer.timeout.connect(self._check_read_last_wait)
         self._read_wait_timer.start(READ_LAST_WAIT_POLL_MS)
@@ -3126,22 +3183,37 @@ class MainWindow(QMainWindow):
         if tab is None or reader is None or tab is not self._get_current_agent_tab():
             self._cancel_read_last_wait()
             return
+
+        now = time.monotonic()
+        # Agent wciąż sypie tekstem → przesuń karencję (ale nigdy poza bezpiecznik).
+        if self._agent_is_streaming(tab):
+            self._read_wait_deadline = min(now + READ_LAST_GRACE_SECS,
+                                           self._read_wait_hard_deadline)
+
         try:
             last = reader.last_response()
         except Exception:
             last = None
 
         if last and last != self._read_wait_before:
+            # `last_response()` skanuje plik od nowa, więc to zawsze NAJNOWSZA
+            # wypowiedź w tej chwili — nie „ta pierwsza, która wpadła".
             self._cancel_read_last_wait()
+            self._read_last_debug(f"WAIT -> nowa wypowiedz po {now - self._read_wait_started:.1f}s "
+                                  f"({len(last)} zn.)")
             if self._speak_journal_text(reader, last):
                 self._update_status(tr('status_reading_last'))
             else:
                 self._update_status(tr('status_response_no_content'))
             return
 
-        if time.monotonic() >= self._read_wait_deadline:
-            # Bezpiecznik: czytamy to, co jest (dawne zachowanie) i mówimy o tym.
+        if now >= self._read_wait_deadline:
+            # Karencja minęła bez nowego wpisu: strumień ustał (albo w ogóle go
+            # nie było — pracowało narzędzie), więc to, co jest w dzienniku, JEST
+            # najnowszą wypowiedzią. Czytamy ją i mówimy o tym na pasku.
             self._cancel_read_last_wait()
+            self._read_last_debug(f"WAIT -> koniec czekania po {now - self._read_wait_started:.1f}s "
+                                  f"(bez nowego wpisu), czytam {len(last or '')} zn.")
             if last and self._speak_journal_text(reader, last):
                 self._update_status(tr('status_reading_wait_timeout'))
             else:
@@ -3228,6 +3300,10 @@ class MainWindow(QMainWindow):
                     self._start_read_last_wait(tab, reader, last)
                     return
 
+                self._read_last_debug(
+                    f"NATYCHMIAST: cisza w terminalu "
+                    f"({time.monotonic() - getattr(tab, '_last_terminal_data_ts', 0):.1f}s), "
+                    f"czytam {len(last or '')} zn.: {(last or '')[:40]!r}")
                 if last and self._speak_journal_text(reader, last):
                     self._update_status(tr('status_reading_last'))
                     return
