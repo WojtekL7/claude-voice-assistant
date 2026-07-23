@@ -78,7 +78,11 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
   (i wyciągnięty z niego wniosek „czytnik gubi najnowszy wpis") był **artefaktem złapania zapisu w locie** —
   8/8 plików USTABILIZOWANYCH kończy się `\n`. Zielony test jednostkowy dowodził tylko, że mechanizm *zadziała*,
   nie że w ogóle *występuje*. Nie idźcie tą drogą drugi raz. → `diagnoza-czytnika-dziennika-jsonl.md`.
-- **Wykrywanie wyścigu „/login"** (`e6af2c3`) — patrz sekcja niżej; dowodem będą wpisy w `login-events.log`.
+- **Wykrywanie wyścigu „/login"** (`e6af2c3`) — patrz sekcja niżej. ✅ **Mechanizm ŻYJE** (2026-07-23:
+  pierwszy wpis w `login-events.log` — `blad-api … zakladka=AI Manager … ENOTIMP`), ale to był błąd SIECI,
+  nie wyścig o token → najważniejsza część (werdykt „wyścig vs prawdziwe wylogowanie") wciąż niewywołana.
+- **Wszystkie powyższe (poza 🔊 rundą 2) SĄ w becie z 2026-07-23** — sprawdzone przez porównanie dat commitów
+  (2–21 lipca) ze startem procesu apki. Czyli zaległe testy nie wymagają nowej bety, tylko chwili usera.
 - **Auto-czytanie po auto-compact** (`1b57c60`) — najstarsza niepotwierdzona rzecz. ⚠️ **NIE mylić z „auto-czytanie
   działa"** (to user potwierdził 2026-07-20 — patrz niżej): tu chodzi WYŁĄCZNIE o zachowanie po tym, jak Claude
   Code sam skróci długi dziennik. Wtedy plik ROBI SIĘ MNIEJSZY niż zapamiętany offset i stary kod ustawiał
@@ -335,6 +339,11 @@ Działa jak na Macu, prościej (AppImage = JEDEN plik, nie katalog ze symlinkami
 PL + `-en`. Instalacja 3 systemów **SCALONA** w `instrukcja-instalacja.html` (górne menu macOS·Linux·Windows·Dyktowanie·Agenci; OS-y przełączane zakładkami JS — kotwica `#os`). Stare `instrukcja-{macos,linux,windows}{,-en}` = przekierowania na scaloną → **stare apki dalej działają**. Generatory (uruchamiać z `packaging/web/`): `build-instalacja.py` scala sekcje stron OS — **MUSI prefiksować `id`/anchory/`copyCmd('id')` per panel** (3 strony używały tych samych `id` cz1..cz5/npmcmd → kolizja `getElementById`; `copyCmd` siedzi PO `<footer>`, więc dołączany osobno); `inject-menu.py` wstrzykuje górne menu + sekcję „jak uruchomić dyktowanie" (idempotentny, pomija gdy `topnav` jest). ⚠️ `build-instalacja.py` nadpisuje strony OS przekierowaniami — przed ponownym uruchomieniem `git checkout` oryginałów. Aplikacja linkuje przez `config.install_guide_url`. Test układu: headless Chromium (Playwright) na `file://`.
 
 ## Inne otwarte TODO
+- [ ] 🔴 **DYKTOWANIE ucina litery po `ł`/`ó`** (zgłoszone 2026-07-23, zakładka Strona F-P) — OTWARTE.
+      Zawężone pomiarem do OSTATNIEGO odcinka (`sendText` → PTY → pole wpisywania Claude Code); bramka STT,
+      wstawianie do pola, odczyt pola i wysyłka są CZYSTE (dowody + przepis na test bez mikrofonu →
+      `qtermwidget-polskie-znaki-altgr.md`, `stt-bramka-ai-manager.md`). Prawdopodobnie TEN SAM kanał, co
+      niepotwierdzony fix „polskie znaki wpisywane wprost w terminalu" — czekają 2 testy rozstrzygające u usera.
 - [ ] **XSS (niski prio):** `src/gui/web_terminal.py` `_show_failure_page` — surowy f-string z `reason`
       (reszta panelu admina domknięta 2026-07-14, `6b70b5a`; opis → archiwum).
 - [ ] **Redesign — do rozważenia po testach:** własna belka tytułowa (świadomie pominięta — ryzyko Wayland/macOS); okno ustawień jako jeden modal z bocznym menu (makieta) zamiast menu górnego + osobnych dialogów — to zmiana UKŁADU, nie wyglądu, więc poza zakresem redesignu.
