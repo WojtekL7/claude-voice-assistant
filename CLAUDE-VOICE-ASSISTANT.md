@@ -71,12 +71,8 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
     (zmierzone: 58 wypowiedzi, mediana **134 znaki**, mediana odstępu **40 s**, narzędzia 10 s–4 min).
     Bezpiecznik 30 s z rundy 1 zamieniał tam przycisk w pół minuty ciszy. Każdą zmianę w 🔊 / auto-czytaniu
     / fladze sprawdzaj na CRM, nie tylko na zakładce z rozmową.
-- **Nadganianie lektora** (`2156fe8`, 2026-07-21) — user zgłaszał „czyta przedostatnią wypowiedź" (2 zakładki
-  niezależnie). **Czytnik był NIEWINNY**: wybór wypowiedzi był prawidłowy, spóźniała się kolejka lektora
-  (4 wypowiedzi ≈ 3200 zn. ≈ 3,5 min mowy w ciągu 2 min). Powyżej ~minuty zaległości apka przeskakuje do
-  najnowszej. Test: dłuższe zadanie agenta → ma dogonić ekran + komunikat na pasku; regresja: spokojna
-  rozmowa czyta wszystko po kolei, 🔊 i przełączanie zakładek bez zmian. → `auto-czytanie-spoznione-kolejka.md`.
-  ⚠️ **Przestroga z tej samej sesji:** pomiar „7/7 żywych dzienników nie kończy się znakiem nowej linii"
+- ~~**Nadganianie lektora**~~ ✅ **POTWIERDZONE 2026-07-25** — przeniesione do sekcji „POTWIERDZONE" niżej.
+  ⚠️ **Przestroga z tamtej sesji zostaje aktualna:** pomiar „7/7 żywych dzienników nie kończy się znakiem nowej linii"
   (i wyciągnięty z niego wniosek „czytnik gubi najnowszy wpis") był **artefaktem złapania zapisu w locie** —
   8/8 plików USTABILIZOWANYCH kończy się `\n`. Zielony test jednostkowy dowodził tylko, że mechanizm *zadziała*,
   nie że w ogóle *występuje*. Nie idźcie tą drogą drugi raz. → `diagnoza-czytnika-dziennika-jsonl.md`.
@@ -84,8 +80,8 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
   pierwszy wpis w `login-events.log` — `blad-api … zakladka=AI Manager … ENOTIMP`), ale to był błąd SIECI,
   nie wyścig o token → najważniejsza część (werdykt „wyścig vs prawdziwe wylogowanie") wciąż niewywołana.
 - **Co JEST w uruchomionej becie (stan 2026-07-25):** wszystko powyższe **poza 🔊 rundą 3** (`d1ec938`) —
-  beta wstała 10:47, commit powstał później. Reszta zaległych testów (nadganianie lektora, polskie znaki,
-  wyścig /login) nie wymaga nowej bety, tylko chwili usera. ⚠️ Sprawdzaj to ZAWSZE przed diagnozą „fix nie
+  beta wstała 10:47, commit powstał później. Po odhaczeniu 2026-07-25 zostają już tylko rzeczy, których
+  NIE DA SIĘ wywołać na życzenie (wyścig /login, auto-compact) — nie czekają na chwilę usera, tylko na okazję. ⚠️ Sprawdzaj to ZAWSZE przed diagnozą „fix nie
   działa": `ps -o lstart= -p $(pgrep -f '[s]rc/main.py')` vs `git log -1 --format=%ad <commit>` — dwa razy
   uratowało to przed szukaniem błędu w kodzie, którego apka w ogóle nie miała.
 - **Auto-czytanie po auto-compact** (`1b57c60`) — najstarsza niepotwierdzona rzecz. ⚠️ **NIE mylić z „auto-czytanie
@@ -94,9 +90,16 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
   `offset=0` → lektor recytował rozmowę od początku. Test wymaga realnego compactu (długa rozmowa), więc nie da
   się go „zrobić na życzenie" — łapiemy przy okazji. → `auto-czytanie-loop-po-kompaktowaniu.md`.
 
-## ✅ POTWIERDZONE PRZEZ USERA NA ŻYWO (2026-07-20)
+## ✅ POTWIERDZONE PRZEZ USERA NA ŻYWO (2026-07-20, uzupełnione 2026-07-25)
 Działają: auto-czytanie (zwykłe), pliki pamięci w OSTATNICH zakładkach (`0361565`), 🔊 „czytaj ostatnią"
 po naprawie BUG #6 (`0ce9609`), sprzątanie starych paczek (`updates/` trzyma 1 paczkę).
+**2026-07-25 — user potwierdził DWIE zaległe rzeczy naraz:**
+- **Polskie znaki w terminalu + DYKTOWANIE** (`9aad8dd` wpisywanie wprost, `c38775f` WebTerminal) — bug
+  „dyktowanie ucina litery po `ł`/`ó`" (otwarty od 2026-07-23) **ZAMKNIĘTY**. Potwierdza też diagnozę:
+  to był JEDEN kanał (`sendText` → PTY → pole Claude Code), nie dwie osobne usterki, więc STT i bramka
+  AI Managera były niewinne — jak pokazywał pomiar. → `qtermwidget-polskie-znaki-altgr.md`
+- **Nadganianie lektora** (`2156fe8`) — kolejka TTS dogania ekran przy dłuższych zadaniach.
+  → `auto-czytanie-spoznione-kolejka.md`
 ⚠️ „Auto-czytanie działa" NIE domyka przypadku po auto-compact — to inny tor kodu (patrz ⏳ wyżej).
 ⚠️ 🔊 był bugiem PRZERYWANYM — user obserwuje dalej. Przyczyny i dowody → archiwum,
 `czytaj-ostatnia-czyta-inna.md`, `pty-tekst-enter-sklejenie.md`.
@@ -344,11 +347,9 @@ Działa jak na Macu, prościej (AppImage = JEDEN plik, nie katalog ze symlinkami
 PL + `-en`. Instalacja 3 systemów **SCALONA** w `instrukcja-instalacja.html` (górne menu macOS·Linux·Windows·Dyktowanie·Agenci; OS-y przełączane zakładkami JS — kotwica `#os`). Stare `instrukcja-{macos,linux,windows}{,-en}` = przekierowania na scaloną → **stare apki dalej działają**. Generatory (uruchamiać z `packaging/web/`): `build-instalacja.py` scala sekcje stron OS — **MUSI prefiksować `id`/anchory/`copyCmd('id')` per panel** (3 strony używały tych samych `id` cz1..cz5/npmcmd → kolizja `getElementById`; `copyCmd` siedzi PO `<footer>`, więc dołączany osobno); `inject-menu.py` wstrzykuje górne menu + sekcję „jak uruchomić dyktowanie" (idempotentny, pomija gdy `topnav` jest). ⚠️ `build-instalacja.py` nadpisuje strony OS przekierowaniami — przed ponownym uruchomieniem `git checkout` oryginałów. Aplikacja linkuje przez `config.install_guide_url`. Test układu: headless Chromium (Playwright) na `file://`.
 
 ## Inne otwarte TODO
-- [ ] 🔴 **DYKTOWANIE ucina litery po `ł`/`ó`** (zgłoszone 2026-07-23, zakładka Strona F-P) — OTWARTE.
-      Zawężone pomiarem do OSTATNIEGO odcinka (`sendText` → PTY → pole wpisywania Claude Code); bramka STT,
-      wstawianie do pola, odczyt pola i wysyłka są CZYSTE (dowody + przepis na test bez mikrofonu →
-      `qtermwidget-polskie-znaki-altgr.md`, `stt-bramka-ai-manager.md`). Prawdopodobnie TEN SAM kanał, co
-      niepotwierdzony fix „polskie znaki wpisywane wprost w terminalu" — czekają 2 testy rozstrzygające u usera.
+- [x] ~~🔴 **DYKTOWANIE ucina litery po `ł`/`ó`**~~ ✅ **ZAMKNIĘTE 2026-07-25** (user potwierdził na żywo).
+      Hipoteza „ten sam kanał co wpisywanie wprost" okazała się trafna — naprawił to `9aad8dd`
+      (eventFilter → `sendText`), bez ruszania STT. → sekcja „POTWIERDZONE" wyżej.
 - [ ] **XSS (niski prio):** `src/gui/web_terminal.py` `_show_failure_page` — surowy f-string z `reason`
       (reszta panelu admina domknięta 2026-07-14, `6b70b5a`; opis → archiwum).
 - [ ] **Redesign — do rozważenia po testach:** własna belka tytułowa (świadomie pominięta — ryzyko Wayland/macOS); okno ustawień jako jeden modal z bocznym menu zamiast menu górnego + osobnych dialogów — to zmiana UKŁADU, nie wyglądu, więc poza zakresem redesignu.
