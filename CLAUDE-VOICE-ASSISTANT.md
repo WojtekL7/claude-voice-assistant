@@ -53,6 +53,24 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
 ---
 
 ## ⏳ WCIĄŻ DO TESTU NA ŻYWO
+- **🔍 SZUKANIE W ROZMOWIE — NOWA FUNKCJA** (2026-07-25). Lupa w dolnym pasku zakładki + `Ctrl+F`.
+  Szuka w **dzienniku sesji** (`transcript_reader.conversation_entries()` — cała rozmowa: Twoje
+  wiadomości i wypowiedzi agenta, bez myślenia/narzędzi/pod-agentów), NIE w buforze ekranu — bo bufor
+  ma cap 5000 zn., niesie znaki sterujące i RÓŻNI SIĘ między silnikami. Dopasowanie bez ogonków
+  i wielkości liter (`conversation_search.fold` — ⚠️ musi zachowywać DŁUGOŚĆ, inaczej pozycje trafień
+  wskazują nie to miejsce). Klik w wynik: pełny fragment + Kopiuj/Przeczytaj **oraz** próba przewinięcia
+  terminala (`TerminalBackend.scroll_to_text`, wynik asynchroniczny; WebTerminal = po buforze xterma
+  BEZ dodatkowej biblioteki, QTermWidget zwraca `None` = „nie umiem", i wtedy apka NIC nie twierdzi).
+  Bramki: `tools/test-conversation-search.py` **46/0** (z fixture z prawdziwego dziennika + kontrole
+  negatywne + budowa okna i przycisku). Test u usera: (1) lupa i Ctrl+F otwierają okno; (2) fraza bez
+  ogonków znajduje słowo z ogonkami; (3) klik w wynik przewija terminal, gdy fragment jest jeszcze
+  w oknie; (4) Przeczytaj czyta fragment; (5) dwie zakładki = dwa niezależne okna szukania.
+- **Serwery MCP** — sprawdzić na żywo (dodawanie/usuwanie, gating per agent, czy licznik i status w pasku
+  pokazują prawdę). Zgłoszone przez usera 2026-07-25 jako zaległość.
+- **Ładowanie agenta z CHMURY** — pobranie paczki na drugim komputerze i sprawdzenie, czy agent staje się
+  używalny (agenci, pamięć, skille, klucze API, komunikat o projektach do `git clone`). Kod Fazy 1 gotowy
+  i sprawdzony na atrapie oraz na prawdziwym Dysku Google, ale **klienckiego „pobierz i pracuj" user
+  jeszcze nie przeszedł**. → `chmura-sync-agentow.md`
 - **🔊 BUG #7 — RUNDA 3** (`d1ec938`, 2026-07-25). Rundy 1 (`e365307`) i 2 (`d825e6d`) były **przetestowane
   przez usera i OBIE zawiodły** — obie pytały terminal „czy leci tekst" (progi 2,0 s → 4,0 s + 200 zn./2 s).
   **Zmierzone na kliknięciu usera:** po jego odpowiedzi na pytanie agenta (11:20:13) agent **MYŚLAŁ 30 s**

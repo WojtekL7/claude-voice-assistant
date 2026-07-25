@@ -20,7 +20,8 @@ from PyQt5.QtWidgets import (
     QToolButton, QSizePolicy, QApplication, QInputDialog,
     QColorDialog, QGridLayout, QGroupBox, QScrollArea, QFileDialog,
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
-    QTabWidget, QTabBar, QProgressBar, QProxyStyle, QStyle, QStyleFactory
+    QTabWidget, QTabBar, QProgressBar, QProxyStyle, QStyle, QStyleFactory,
+    QShortcut
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QObject, QEvent, QPoint, QRect
 from PyQt5.QtGui import QFont, QTextCursor, QIcon, QKeySequence, QPalette, QColor, QTextCharFormat, QPainter, QPen, QPixmap, QLinearGradient
@@ -432,6 +433,7 @@ from core.tts_engine import TTSEngine, TTSState
 from core.stt_engine import STTEngine, STTState
 from core.license_manager import LicenseManager, LicenseStatus
 from core.text_cleaner import TextCleanerForTTS, extract_last_claude_response, fix_polish_encoding, prose_from_markdown
+from gui.search_dialog import SearchDialog
 from core.transcript_reader import (
     TranscriptReader,
     TURN_OWES_TEXT, TURN_TOOL_PENDING, TURN_UNKNOWN,
@@ -825,6 +827,12 @@ class MainWindow(QMainWindow):
         self._read_wait_size_changed = 0.0    # kiedy dziennik ostatnio urósł
         self._read_wait_tool_since = None     # odkąd pracuje narzędzie bez wyniku
 
+        # 🔍 Ctrl+F otwiera szukanie w rozmowie AKTYWNEJ zakładki. Skrót działa
+        # na poziomie okna, więc łapiemy go zanim klawisz trafi do terminala.
+        self._search_shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
+        self._search_shortcut.setContext(Qt.ApplicationShortcut)
+        self._search_shortcut.activated.connect(self._open_search_in_tab)
+
         # Update references to current tab
         self._update_current_tab_references()
 
@@ -1114,6 +1122,8 @@ class MainWindow(QMainWindow):
         agent_tab.request_dictation.connect(self._handle_dictation_request)
         agent_tab.request_terminal_repair.connect(
             lambda tab=agent_tab: self._repair_terminal_in_tab(tab))
+        agent_tab.request_search.connect(
+            lambda tab=agent_tab: self._open_search_in_tab(tab))
         agent_tab.message_sent.connect(self._on_message_sent)
         agent_tab.add_quick_action_requested.connect(self._add_quick_action)
         agent_tab.splitter_changed.connect(
@@ -3069,6 +3079,66 @@ class MainWindow(QMainWindow):
                     self._show_groq_api_dialog()
                 return
             self.stt.start_recording()
+
+    def _open_search_in_tab(self, tab=None):
+        """🔍 Otwórz „Szukaj w rozmowie" dla zakładki (lupa albo Ctrl+F).
+
+        Okno jest JEDNO NA ZAKŁADKĘ i niemodalne — user ma widzieć terminal,
+        bo klik w wynik próbuje go też przewinąć. Ponowne wywołanie podnosi
+        istniejące okno zamiast otwierać drugie.
+        """
+        tab = tab or self._get_current_agent_tab()
+        if tab is None:
+            return
+        dialog = getattr(tab, '_search_dialog', None)
+        if dialog is None:
+            reader = getattr(tab, '_transcript_reader', None)
+            name = (tab.agent_config or {}).get('name', tr('search_title'))
+            dialog = SearchDialog(name, reader, self)
+            dialog.request_speak.connect(self._speak_search_result)
+            dialog.request_scroll.connect(
+                lambda text, t=tab: self._scroll_terminal_to(t, text))
+            dialog.finished.connect(lambda _r, t=tab: setattr(t, '_search_dialog', None))
+            tab._search_dialog = dialog
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
+        dialog.focus_field()
+
+    def _speak_search_result(self, text: str):
+        """Przeczytaj znaleziony fragment tym samym lektorem co reszta apki."""
+        cleaned = prose_from_markdown(text)
+        if not cleaned:
+            self._update_status(tr('status_response_no_content'))
+            return
+        self.tts.speak(cleaned)
+        self._update_status(tr('status_reading_last'))
+
+    def _scroll_terminal_to(self, tab, text: str):
+        """Poproś terminal ZAKŁADKI o przewinięcie do znalezionego fragmentu.
+
+        Odpowiedź bywa asynchroniczna (WebTerminal pyta JS), więc wynik wraca
+        callbackiem i dopiero wtedy okno szukania pisze, co się udało.
+        `None` = ten silnik nie umie szukać → nie twierdzimy niczego.
+        """
+        backend = getattr(tab, 'terminal_backend', None)
+        dialog = getattr(tab, '_search_dialog', None)
+        if backend is None or dialog is None:
+            return
+
+        def report(value):
+            live = getattr(tab, '_search_dialog', None)
+            if live is None:
+                return
+            if value is None:
+                live.hint.setText("")
+            else:
+                live.report_scroll(bool(value))
+
+        try:
+            backend.scroll_to_text(text, report)
+        except Exception:
+            report(None)
 
     def _read_last_debug(self, message: str):
         """Pasywny ślad diagnostyczny 🔊 (tylko przy CVA_READ_LAST_DEBUG=1).

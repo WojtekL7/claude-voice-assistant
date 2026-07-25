@@ -30,9 +30,17 @@ import gui.theme as theme
 app.setFont(QFont(theme.ui_family(), 10))
 
 import gui.dialogs as D
+import gui.search_dialog as SD
 import gui.main_window as MW
 
-TYPES = (QLineEdit, QLabel, QPushButton, QComboBox, QCheckBox, QRadioButton, QTextEdit)
+# Widżety, w których tekst REALNIE ginie, gdy zabraknie miejsca.
+# ⚠️ QTextEdit świadomie POMINIĘTY (2026-07-25): jego `sizeHint()` to stała
+# 256x192 NIEZALEŻNIE od treści (zmierzone dla 0, 1 i 50 linii), więc porównanie
+# z nią nie mówi nic o ucinaniu — a pole tekstowe i tak się PRZEWIJA, zamiast
+# gubić tekst. Zostawienie go dawało fałszywy alarm w każdym oknie z podglądem
+# treści (wyszło przy oknie „Szukaj w rozmowie"). Kryterium ma pilnować rzeczy
+# BEZ suwaka: etykiet, pól jednoliniowych, przycisków, list rozwijanych.
+TYPES = (QLineEdit, QLabel, QPushButton, QComboBox, QCheckBox, QRadioButton)
 
 def needed_height(w):
     """Ile pikseli widżet NAPRAWDĘ potrzebuje przy swojej obecnej szerokości.
@@ -82,6 +90,7 @@ def build_all():
         ("QuickActionsDialog",     lambda: MW.QuickActionsDialog(None, [{'label':'Test','text':'echo hi'}])),
         ("SkinSettingsDialog",     lambda: MW.SkinSettingsDialog(None, dict(theme.DEFAULT_SKIN) if hasattr(theme,'DEFAULT_SKIN') else {}, {})),
         ("SettingsDialog",         lambda: MW.SettingsDialog(None, "")),
+        ("SearchDialog",           lambda: SD.SearchDialog("Agent Testowy", None)),
     ]
     return cases
 

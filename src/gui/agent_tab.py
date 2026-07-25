@@ -257,6 +257,7 @@ class AgentTab(QWidget):
     splitter_changed = pyqtSignal(list)  # Emitted when splitter position changes
     terminal_ready = pyqtSignal()  # Emitted from activate() po stworzeniu QTermWidget
     request_terminal_repair = pyqtSignal()  # Napraw „rozstrzelony" terminal: zrzut dowodu + restart z --resume
+    request_search = pyqtSignal()  # 🔍 Otwórz szukanie w rozmowie TEJ zakładki (lupa / Ctrl+F)
 
     def __init__(self, agent_config: dict, parent=None):
         super().__init__(parent)
@@ -591,6 +592,17 @@ class AgentTab(QWidget):
         self.add_media_btn.setToolTip(tr('add_media_tooltip'))
         self.add_media_btn.clicked.connect(self._add_media)
         layout.addWidget(self.add_media_btn)
+
+        # 🔍 Szukanie w rozmowie TEJ zakładki. Źródłem jest dziennik sesji
+        # (cała rozmowa, czysty tekst), więc działa tak samo na obu silnikach
+        # terminala i na wszystkich systemach — patrz search_dialog.
+        self.search_btn = QPushButton()
+        self.search_btn.setIcon(icon_set.button_icon('search'))
+        self.search_btn.setIconSize(PANEL_ICON_SIZE)
+        self.search_btn.setFixedSize(btn_size, btn_size)
+        self.search_btn.setToolTip(tr('search_tooltip'))
+        self.search_btn.clicked.connect(self.request_search.emit)
+        layout.addWidget(self.search_btn)
 
         # Quick actions dropdown
         self.quick_actions_btn = QToolButton()

@@ -27,6 +27,7 @@ wstawienia w splitter zwraca właściwość `.widget`: AgentTab woła metody bac
 a do layoutu dorzuca `backend.widget`.
 """
 import os
+import json
 import sys
 from pathlib import Path
 
@@ -168,6 +169,22 @@ class TerminalBackend(QObject):
 
     def copy_selection(self):
         raise NotImplementedError
+
+    # ----- szukanie (🔍) -----
+    def scroll_to_text(self, needle: str, on_result):
+        """Spróbuj przewinąć widok do NAJNOWSZEGO miejsca z frazą `needle`.
+
+        Wynik wraca przez `on_result(value)`, bo w WebTerminalu odpowiedź z JS
+        jest ASYNCHRONICZNA:
+          True  — przewinięto,
+          False — frazy nie ma w pamięci ekranu (wyjechała poza bufor),
+          None  — ten silnik terminala tego nie umie (nic nie twierdzimy!).
+
+        Trzeci stan istnieje CELOWO: powiedzenie „nie ma tego w oknie" na
+        silniku, który po prostu nie potrafi szukać, byłoby kłamstwem wobec
+        użytkownika. Pełne wyszukiwanie i tak idzie po dzienniku sesji.
+        """
+        on_result(None)
 
     def clear(self):
         """Wyczyść ekran terminala (uruchom `clear` w powłoce)."""
@@ -423,6 +440,23 @@ class WebTerminalBackend(TerminalBackend):
 
     def _forward_output(self, text):
         self.output_received.emit(text)
+
+    def scroll_to_text(self, needle: str, on_result):
+        """Przewiń xterm do frazy — bez dodatkowej biblioteki (patrz terminal.html).
+
+        Pytanie leci do JS, więc odpowiedź jest asynchroniczna i wraca callbackiem.
+        """
+        if not needle:
+            on_result(False)
+            return
+        try:
+            payload = json.dumps(str(needle))
+            self._term.view.page().runJavaScript(
+                f"window.__termScrollTo ? window.__termScrollTo({payload}) : null",
+                lambda value: on_result(value if isinstance(value, bool) else None),
+            )
+        except Exception:
+            on_result(None)
 
     @property
     def widget(self) -> QWidget:

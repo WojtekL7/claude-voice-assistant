@@ -22,6 +22,7 @@ import re
 import json
 import glob
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
@@ -32,6 +33,22 @@ TURN_IDLE = "idle"                  # agent skończył — ostatnia wypowiedź j
 TURN_OWES_TEXT = "owes_text"        # agent jest winien odpowiedź (myśli / ma wynik narzędzia)
 TURN_TOOL_PENDING = "tool_pending"  # pracuje narzędzie / czeka na zgodę — tekst nieprędko
 TURN_UNKNOWN = "unknown"            # nie da się orzec (brak sesji, plik nieczytelny)
+
+
+def _local_hhmm(timestamp: Optional[str]) -> str:
+    """Godzina wpisu jako `HH:MM` czasu LOKALNEGO (pusty string, gdy nie wiadomo).
+
+    ⚠️ Znaczniki w dzienniku Claude Code są w **UTC** (kończą się na `Z`).
+    Pokazanie ich wprost obok zegarka usera daje przesunięcie o strefę —
+    przy diagnozie 2026-07-25 wyglądało to nawet na „dziennik spóźniony o 2 h".
+    """
+    if not timestamp:
+        return ""
+    try:
+        stamp = datetime.strptime(timestamp[:19], "%Y-%m-%dT%H:%M:%S")
+        return stamp.replace(tzinfo=timezone.utc).astimezone().strftime("%H:%M")
+    except Exception:
+        return ""
 
 
 def _encode_project_dir(working_directory: str) -> str:
@@ -441,6 +458,68 @@ class TranscriptReader:
         if pending_tools:
             return last, TURN_TOOL_PENDING
         return last, TURN_OWES_TEXT
+
+    def conversation_entries(self) -> List[dict]:
+        """CAŁA rozmowa tej zakładki jako lista wpisów — dla wyszukiwarki (🔍).
+
+        Zwraca `[{'role': 'user'|'assistant', 'time': 'HH:MM', 'text': str}, …]`
+        w kolejności od najstarszego. Bierzemy WYŁĄCZNIE to, co ludzie nazywają
+        rozmową:
+        - wypowiedzi agenta (`_extract_text`: bez myślenia, narzędzi, pod-agentów,
+          komunikatów o błędach API),
+        - wiadomości NAPISANE przez użytkownika — czyli wpisy roli `user`, które
+          NIE są wynikiem narzędzia ani przerwaniem (to samo rozróżnienie, które
+          uratowało BUG #5: `tool_result` ma rolę `user`, a rozmową nie jest).
+
+        Wydruki narzędzi celowo pomijamy — user wybrał zakres „cała rozmowa",
+        nie „rozmowa plus listingi".
+        """
+        self._ensure_session()
+        if not self._session_file or not os.path.exists(self._session_file):
+            return []
+        out: List[dict] = []
+        try:
+            with open(self._session_file, encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        obj = json.loads(line)
+                    except Exception:
+                        continue
+                    text = self._extract_text(obj)
+                    role = "assistant"
+                    if text is None:
+                        text = self._user_message_text(obj)
+                        role = "user"
+                    if not text or not text.strip():
+                        continue
+                    out.append({
+                        "role": role,
+                        "time": _local_hhmm(obj.get("timestamp")),
+                        "text": text.strip(),
+                    })
+        except Exception:
+            return out
+        return out
+
+    @staticmethod
+    def _user_message_text(obj: dict) -> Optional[str]:
+        """Treść wiadomości NAPISANEJ przez użytkownika (nie wynik narzędzia)."""
+        if obj.get("type") != "user" or obj.get("isSidechain") or obj.get("isMeta"):
+            return None
+        if TranscriptReader._is_agent_turn_userentry(obj):
+            return None            # tool_result / „Request interrupted" = tura agenta
+        content = (obj.get("message") or {}).get("content")
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts = [b.get("text") for b in content
+                     if isinstance(b, dict) and b.get("type") == "text" and b.get("text")]
+            if parts:
+                return "\n\n".join(parts)
+        return None
 
     def session_size(self) -> int:
         """Rozmiar pliku sesji (-1 = nie znamy). Rosnący plik = agent pracuje."""

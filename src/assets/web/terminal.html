@@ -174,6 +174,27 @@
     window.__termWrite  = function (data) { safeWrite(data); };
     window.__termClear  = function () { term.clear(); };
     window.__termFocus  = function () { term.focus(); };
+
+    // 🔍 Szukanie: przewiń widok do NAJNOWSZEGO wiersza zawierającego frazę.
+    // Świadomie bez dodatkowej biblioteki (addon-search) — pełne wyszukiwanie
+    // robimy po dzienniku sesji w Pythonie, tu potrzebujemy tylko przewinięcia,
+    // a to daje sam bufor xterma. Zwraca true/false do wołającego (runJavaScript).
+    window.__termScrollTo = function (needle) {
+      try {
+        if (!needle) return false;
+        var target = String(needle).toLowerCase();
+        var buf = term.buffer.active;
+        for (var i = buf.length - 1; i >= 0; i--) {
+          var line = buf.getLine(i);
+          if (!line) continue;
+          if (line.translateToString(true).toLowerCase().indexOf(target) !== -1) {
+            term.scrollToLine(Math.max(0, i - Math.floor(term.rows / 2)));
+            return true;
+          }
+        }
+        return false;
+      } catch (e) { return false; }
+    };
     // Pełny motyw xterm: tło, tekst, kursor, zaznaczenie + 16 kolorów ANSI.
     // Przyjmuje obiekt ITheme (z Pythona idzie jako literał JSON). Brak pola =
     // xterm użyje swojego domyślnego.
