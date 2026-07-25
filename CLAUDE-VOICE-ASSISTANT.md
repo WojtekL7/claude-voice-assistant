@@ -83,8 +83,11 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
 - **Wykrywanie wyścigu „/login"** (`e6af2c3`) — patrz sekcja niżej. ✅ **Mechanizm ŻYJE** (2026-07-23:
   pierwszy wpis w `login-events.log` — `blad-api … zakladka=AI Manager … ENOTIMP`), ale to był błąd SIECI,
   nie wyścig o token → najważniejsza część (werdykt „wyścig vs prawdziwe wylogowanie") wciąż niewywołana.
-- **Wszystkie powyższe (poza 🔊 rundą 2) SĄ w becie z 2026-07-23** — sprawdzone przez porównanie dat commitów
-  (2–21 lipca) ze startem procesu apki. Czyli zaległe testy nie wymagają nowej bety, tylko chwili usera.
+- **Co JEST w uruchomionej becie (stan 2026-07-25):** wszystko powyższe **poza 🔊 rundą 3** (`d1ec938`) —
+  beta wstała 10:47, commit powstał później. Reszta zaległych testów (nadganianie lektora, polskie znaki,
+  wyścig /login) nie wymaga nowej bety, tylko chwili usera. ⚠️ Sprawdzaj to ZAWSZE przed diagnozą „fix nie
+  działa": `ps -o lstart= -p $(pgrep -f '[s]rc/main.py')` vs `git log -1 --format=%ad <commit>` — dwa razy
+  uratowało to przed szukaniem błędu w kodzie, którego apka w ogóle nie miała.
 - **Auto-czytanie po auto-compact** (`1b57c60`) — najstarsza niepotwierdzona rzecz. ⚠️ **NIE mylić z „auto-czytanie
   działa"** (to user potwierdził 2026-07-20 — patrz niżej): tu chodzi WYŁĄCZNIE o zachowanie po tym, jak Claude
   Code sam skróci długi dziennik. Wtedy plik ROBI SIĘ MNIEJSZY niż zapamiętany offset i stary kod ustawiał
