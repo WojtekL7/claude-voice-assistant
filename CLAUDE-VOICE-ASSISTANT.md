@@ -100,6 +100,10 @@ po naprawie BUG #6 (`0ce9609`), sprzątanie starych paczek (`updates/` trzyma 1 
   AI Managera były niewinne — jak pokazywał pomiar. → `qtermwidget-polskie-znaki-altgr.md`
 - **Nadganianie lektora** (`2156fe8`) — kolejka TTS dogania ekran przy dłuższych zadaniach.
   → `auto-czytanie-spoznione-kolejka.md`
+- **Auto-czytanie (zwykłe) na silniku WebTerminal** — długa wypowiedź (~3,3 tys. zn.) przeczytana
+  od pierwszego zdania DO KOŃCA, w becie z `CVA_WEBTERMINAL=1`. Wcześniejsze potwierdzenie (2026-07-20)
+  dotyczyło QTermWidgetu, a **pobrany AppImage Linuksa chodzi właśnie na WebTerminalu** → to domyka
+  silnik, którego realnie używają użytkownicy. ⚠️ Nadal NIE domyka przypadku po auto-compact (inny tor).
 ⚠️ „Auto-czytanie działa" NIE domyka przypadku po auto-compact — to inny tor kodu (patrz ⏳ wyżej).
 ⚠️ 🔊 był bugiem PRZERYWANYM — user obserwuje dalej. Przyczyny i dowody → archiwum,
 `czytaj-ostatnia-czyta-inna.md`, `pty-tekst-enter-sklejenie.md`.
