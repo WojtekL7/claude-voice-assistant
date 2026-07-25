@@ -52,6 +52,11 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
 
 ---
 
+## 🔴 PIERWSZE ZADANIE NASTĘPNEJ SESJI (user zatwierdził 2026-07-25)
+**Konsolidacja tego pliku** (465 linii / 65,7 tys. zn. wobec budżetu ~350) — zanim weźmiesz cokolwiek innego.
+Co ciąża i jaki przepis → pamięć `pamiec-odchudzanie-status.md`. ⚠️ Sukces mierz ZNAKAMI, nie liniami;
+archiwum (`CLAUDE-VOICE-ASSISTANT-ARCHIVE.md`) dostaje PEŁNĄ kopię PRZED cięciem.
+
 ## ⏳ WCIĄŻ DO TESTU NA ŻYWO
 - **🔍 SZUKANIE W ROZMOWIE — NOWA FUNKCJA** (2026-07-25). Lupa w dolnym pasku zakładki + `Ctrl+F`.
   Szuka w **dzienniku sesji** (`transcript_reader.conversation_entries()` — cała rozmowa: Twoje
