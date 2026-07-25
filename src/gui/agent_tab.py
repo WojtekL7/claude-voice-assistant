@@ -707,11 +707,12 @@ class AgentTab(QWidget):
     def recent_output_chars(self, window_secs: float = None) -> int:
         """Ile znaków treści przyszło z terminala w ostatnim oknie czasu.
 
-        Rozróżnia dwa stany, których sam „był ruch / nie było" nie odróżnia:
-        strumień odpowiedzi (setki znaków na sekundę) od animacji paska stanu
-        i odświeżeń ramki narzędzia (kilkadziesiąt). Używane przez 🔊, żeby
-        czekać na DOKOŃCZENIE długiej wypowiedzi, ale nie blokować przycisku
-        na czas pracy narzędzi.
+        Odróżnia strumień odpowiedzi (setki znaków na sekundę) od animacji paska
+        stanu (kilkadziesiąt). ⚠️ NIE decyduje już o niczym w 🔊 — decyzję
+        „czytać czy poczekać" podejmuje struktura tury z dziennika sesji
+        (`TranscriptReader.turn_snapshot`), bo licznik znaków nie odróżnia
+        „myśli, nic jeszcze nie napisał" od „nic nie robi" (runda 3, 2026-07-25).
+        Zostaje jako miara do logu diagnostycznego (`CVA_READ_LAST_DEBUG=1`).
         """
         window = READ_LAST_STREAM_WINDOW_SECS if window_secs is None else window_secs
         cutoff = time.monotonic() - window

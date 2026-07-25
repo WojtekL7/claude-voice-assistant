@@ -26,6 +26,14 @@ from pathlib import Path
 from typing import List, Optional
 
 
+# Stan TURY odczytany ze struktury dziennika (patrz TranscriptReader.turn_snapshot).
+# Nazwy trzymamy tu, bo używa ich też GUI (decyzja „czytać teraz czy poczekać").
+TURN_IDLE = "idle"                  # agent skończył — ostatnia wypowiedź jest ostatnią
+TURN_OWES_TEXT = "owes_text"        # agent jest winien odpowiedź (myśli / ma wynik narzędzia)
+TURN_TOOL_PENDING = "tool_pending"  # pracuje narzędzie / czeka na zgodę — tekst nieprędko
+TURN_UNKNOWN = "unknown"            # nie da się orzec (brak sesji, plik nieczytelny)
+
+
 def _encode_project_dir(working_directory: str) -> str:
     """Zamień ścieżkę katalogu roboczego na nazwę folderu w ~/.claude/projects.
 
@@ -377,10 +385,33 @@ class TranscriptReader:
         Używane przez przycisk 🔊 (ręczne "czytaj"), gdy nie ma zaznaczenia
         ani zaległości. Czyta cały plik sesji — w sam raz na akcję na żądanie.
         """
+        return self.turn_snapshot()[0]
+
+    def turn_snapshot(self):
+        """Zwróć `(ostatnia_wypowiedź, stan_tury)` — JEDEN przebieg po pliku.
+
+        Stan tury odpowiada na pytanie, którego NIE da się zadać terminalowi:
+        „czy agent jest nam jeszcze winien odpowiedź?". Terminal mówi tylko,
+        czy coś się rusza — a między odpowiedzią użytkownika a pierwszym
+        znakiem odpowiedzi agent potrafi MYŚLEĆ dziesiątki sekund (zmierzone
+        na żywym dzienniku CRM 2026-07-25: 30 s ciszy w pliku), pokazując przy
+        tym jedynie drobną animację. Dokładnie w tę dziurę wpadały rundy 1 i 2
+        naprawy 🔊 (progi liczone ze strumienia znaków) i czytały POPRZEDNIĄ
+        wypowiedź.
+
+        Czytamy więc STRUKTURĘ tury — co stoi ZA ostatnią wypowiedzią:
+          * nic (poza wpisami księgowymi)   → TURN_IDLE         (można czytać)
+          * odpowiedź usera / wynik narzędzia / „myślenie"
+                                            → TURN_OWES_TEXT    (czekaj na tekst)
+          * uruchomione narzędzie bez wyniku → TURN_TOOL_PENDING (nic nie nadchodzi zaraz)
+          * plik nieczytelny / brak sesji    → TURN_UNKNOWN      (decyduje stary czujnik)
+        """
         self._ensure_session()
         if not self._session_file or not os.path.exists(self._session_file):
-            return None
+            return None, TURN_UNKNOWN
         last = None
+        after = 0                # wpisy ROZMOWY stojące za ostatnią wypowiedzią
+        pending_tools = set()    # narzędzia uruchomione i jeszcze bez wyniku
         try:
             with open(self._session_file, encoding="utf-8", errors="ignore") as f:
                 for line in f:
@@ -393,10 +424,61 @@ class TranscriptReader:
                         continue
                     t = self._extract_text(obj)
                     if t:
+                        # Nowa wypowiedź = tura „zeruje się": wszystko wcześniejsze
+                        # (także narzędzia bez wyniku) dotyczy już przeszłości.
                         last = t
+                        after = 0
+                        pending_tools.clear()
+                        continue
+                    if not self._is_conversation_entry(obj):
+                        continue
+                    after += 1
+                    self._track_tools(obj, pending_tools)
         except Exception:
-            return None
-        return last
+            return last, TURN_UNKNOWN
+        if after == 0:
+            return last, TURN_IDLE
+        if pending_tools:
+            return last, TURN_TOOL_PENDING
+        return last, TURN_OWES_TEXT
+
+    def session_size(self) -> int:
+        """Rozmiar pliku sesji (-1 = nie znamy). Rosnący plik = agent pracuje."""
+        self._ensure_session()
+        if not self._session_file:
+            return -1
+        return self._safe_size(self._session_file)
+
+    @staticmethod
+    def _is_conversation_entry(obj: dict) -> bool:
+        """Czy wpis należy do ROZMOWY głównego agenta (a nie do księgowości)?
+
+        Claude Code dopisuje po zakończonej turze wpisy techniczne
+        (`system/turn_duration`, `last-prompt`, `ai-title`, `mode`,
+        `permission-mode`, `attachment`). Gdyby liczyły się jako „coś się
+        dzieje", KAŻDY bezczynny agent wyglądałby na winnego odpowiedź i 🔊
+        czekałby zawsze. Pod-agenci (`isSidechain`) prowadzą własną turę —
+        dla nas są niewidoczni.
+        """
+        if obj.get("isSidechain") or obj.get("isMeta"):
+            return False
+        return obj.get("type") in ("assistant", "user")
+
+    @staticmethod
+    def _track_tools(obj: dict, pending: set):
+        """Dopisz uruchomione narzędzia i skreśl te, które już oddały wynik."""
+        content = (obj.get("message") or {}).get("content")
+        if not isinstance(content, list):
+            return
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            if block.get("type") == "tool_use":
+                tool_id = block.get("id")
+                if tool_id:
+                    pending.add(tool_id)
+            elif block.get("type") == "tool_result":
+                pending.discard(block.get("tool_use_id"))
 
     def waiting_for_user(self) -> bool:
         """Czy agent ZATRZYMAŁ się i czeka na odpowiedź użytkownika?

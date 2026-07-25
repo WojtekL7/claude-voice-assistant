@@ -148,28 +148,35 @@ MEMORY_ENTER_DELAY_MS = 500
 # odpowiedzi 1,7–2,4 tys. znaków; wpis pojawia się 1–3 s po jej dokończeniu).
 # Na ekranie widać ją od pierwszego zdania, więc klik w tym oknie czytał
 # POPRZEDNIĄ wypowiedź (zgłoszenie usera: „czyta przedostatnią, w ~50%”).
-# Lek: gdy terminal właśnie pracuje, CZEKAMY na nowy wpis zamiast czytać stary.
+# Lek: gdy agent jest nam WINIEN odpowiedź, CZEKAMY na nią zamiast czytać starą.
 #
-# ⚠️ POPRAWKA 2026-07-23 (user: „w CRM dalej czyta przedostatnią"). Próg 2,0 s był
-# MNIEJSZY niż opóźnienie, które miał zasłaniać (1–3 s) → po dokończeniu odpowiedzi
-# terminal milkł, strażnik po 2 s orzekał „agent nie pisze" i apka czytała dziennik,
-# do którego wpis JESZCZE nie doszedł = przedostatnia wypowiedź. Okno poszerzone,
-# żeby cała zmierzona luka mieściła się w środku.
-READ_LAST_BUSY_SECS = 4.0          # ruch w terminalu świeższy niż to = czekamy
+# ⚠️ RUNDA 3 (2026-07-25) — DWIE poprzednie próby pytały o to samo, złe pytanie.
+# Runda 1 (próg 2,0 s) i runda 2 (4,0 s + licznik znaków strumienia) mierzyły
+# „czy z terminala leci tekst". Zmierzone na żywym dzienniku CRM w chwili
+# zgłoszenia: po odpowiedzi usera (11:20:13) agent MYŚLAŁ 30 s (11:20:43),
+# a tekst dopisał o 11:20:47. Przez te 30 s w pliku NIE MA ani jednego wpisu,
+# a terminal pokazuje tylko drobną animację (kilkadziesiąt znaków, poniżej progu
+# 200/2 s) → strażnik orzekał „nic nie leci", karencja 4 s mijała w środku
+# myślenia i apka czytała wypowiedź sprzed 6 minut. ŻADEN próg liczony ze
+# strumienia znaków tej dziury nie zamknie — bo w niej naprawdę nic nie leci.
+# Decyzję podejmuje teraz STRUKTURA TURY z dziennika (TranscriptReader.turn_snapshot);
+# terminal służy już tylko do rozpoznania „agent przestał pracować bez pisania".
+READ_LAST_BUSY_SECS = 4.0          # ruch w terminalu świeższy niż to = agent pracuje
 READ_LAST_WAIT_POLL_MS = 500       # co ile sprawdzać, czy wypowiedź już doszła
-# Odróżnienie „agent SYPIE TEKSTEM" od „kręci się kółko / pracuje narzędzie":
-# strumień odpowiedzi to setki znaków na sekundę, animacja paska stanu — kilkadziesiąt.
-# Dopóki leci strumień, przesuwamy termin (długa odpowiedź, 14–16 s, ma być doczekana
-# w całości); gdy strumień ustaje, zostaje krótka karencja na sam zapis do dziennika.
-# Próg celowo NISKI: pomyłka „to jeszcze strumień" kosztuje sekundy czekania,
-# pomyłka w drugą stronę przywraca błąd czytania przedostatniej.
-READ_LAST_STREAM_WINDOW_SECS = 2.0
-READ_LAST_STREAM_CHARS = 200
-READ_LAST_GRACE_SECS = 4.0         # po ustaniu strumienia tyle czekamy na wpis
-# Bezpiecznik: po tym czasie czytamy to, co jest w dzienniku (dawne zachowanie)
-# i mówimy o tym na pasku — nigdy cisza bez wyjaśnienia. 20 s z zapasem pokrywa
-# najdłuższą zmierzoną wypowiedź (16,2 s); dawne 30 s w zakładce pełnej narzędzi
-# (CRM: mediana 40 s między wypowiedziami) zamieniało przycisk w pół minuty ciszy.
+READ_LAST_STREAM_WINDOW_SECS = 2.0  # okno licznika znaków (już tylko do diagnostyki)
+# Cisza rozstrzygająca: tyle bez ruchu w terminale I bez przyrostu dziennika
+# znaczy „agent stanął, nie pisząc" (pytanie / prośba o zgodę) — czekanie nie ma
+# już na co czekać. Tyle samo czasu dajemy narzędziu: krótkie (grep, odczyt pliku)
+# oddaje wynik szybciej i czekanie leci dalej, długie (bash, pod-agent) zwalnia
+# przycisk zamiast go blokować.
+READ_LAST_STALL_SECS = 4.0
+# Bezpiecznik czekania, gdy dziennik DOWODZI, że odpowiedź jest w drodze.
+# 60 s pokrywa zmierzony najgorszy przypadek (30 s myślenia + 16,2 s pisania
+# = 46 s) z zapasem. Nie grozi to „pół minuty ciszy" z rundy 1, bo czekamy
+# WYŁĄCZNIE przy stanie „agent winien odpowiedź", a nie na wszelki wypadek.
+READ_LAST_OWED_TIMEOUT_SECS = 60.0
+# Bezpiecznik dla stanu NIEROZSTRZYGNIĘTEGO (nie da się odczytać dziennika →
+# decyduje stary czujnik terminala). Krótszy, bo to zgadywanie, nie dowód.
 READ_LAST_WAIT_TIMEOUT_SECS = 20.0
 # Pasywny log diagnostyczny 🔊 (włącz: CVA_READ_LAST_DEBUG=1). Pisze wyłącznie przy
 # kliknięciu i w trakcie czekania — nie w gorącej pętli — ale i tak z twardym limitem
@@ -542,6 +549,7 @@ UI_TRANSLATIONS = {
         "status_reading_last": "Czytam ostatnią odpowiedź...",
         "status_reading_wait": "⏳ Agent jeszcze pisze — czekam na koniec wypowiedzi...",
         "status_reading_wait_timeout": "Agent wciąż pisze — czytam ostatnią zapisaną wypowiedź.",
+        "status_reading_wait_stalled": "Agent zatrzymał się (pytanie lub praca narzędzia) — czytam ostatnią zapisaną wypowiedź.",
         "status_response_no_content": "Odpowiedź nie zawiera treści do odczytania",
         "status_no_response_found": "Nie znaleziono odpowiedzi do odczytania",
         "status_no_text": "Brak tekstu do odczytania",
@@ -1317,6 +1325,7 @@ UI_TRANSLATIONS = {
         "status_reading_last": "Reading the last response...",
         "status_reading_wait": "⏳ The agent is still writing — waiting for the answer to finish...",
         "status_reading_wait_timeout": "The agent is still writing — reading the last saved answer.",
+        "status_reading_wait_stalled": "The agent has paused (a question or tool work) — reading the last saved answer.",
         "status_response_no_content": "The response has no content to read",
         "status_no_response_found": "No response found to read",
         "status_no_text": "No text to read",
