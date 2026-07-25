@@ -53,18 +53,20 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTe
 ---
 
 ## ⏳ WCIĄŻ DO TESTU NA ŻYWO
-- **🔊 BUG #7 — RUNDA 2** (`d825e6d`, 2026-07-23). Runda 1 (`e365307`) była **przetestowana przez usera
-  i NIE WYSTARCZYŁA** (CRM dalej czytał przedostatnią). Diagnoza rundy 1 była TRAFNA (ekran wyprzedza
-  dziennik: wpis ląduje 1–3 s po dokończeniu tekstu), ale **próg strażnika `READ_LAST_BUSY_SECS` = 2,0 s
-  był WĘŻSZY niż zasłaniana luka 1–3 s** → klik 2–3 s po odpowiedzi (czyli tak, jak testuje człowiek)
-  wpadał w resztę szczeliny. Runda 2: próg 4,0 s + **czujnik STRUMIENIA** (`agent_tab.recent_output_chars`
-  — ile ZNAKÓW treści przyszło w oknie 2 s; strumień=setki, animacja paska=kilkadziesiąt) + dwa terminy:
-  karencja 4 s przesuwana dopóki leci strumień, twardy bezpiecznik 20 s. Bramki: 34/0 + mutacja kontrolna.
-  ⚠️ Próg 200 znaków dobrany ANALIZĄ, nie pomiarem żywego strumienia — przy „przycisk czeka za długo
-  podczas pracy narzędzi" podnieść ten JEDEN próg (log: `CVA_READ_LAST_DEBUG=1`).
-  Test: (1) klik 2–3 s po dokończeniu odpowiedzi w CRM → czyta TĘ odpowiedź; (2) klik w trakcie długiej
-  → ⏳ i czyta nową; (3) klik podczas pracy narzędzi → odpowiedź w kilka sekund; (4) bezczynny agent →
-  natychmiast; (5) zaznaczenie bez zmian. → `czytaj-ostatnia-czyta-inna.md`.
+- **🔊 BUG #7 — RUNDA 3** (`d1ec938`, 2026-07-25). Rundy 1 (`e365307`) i 2 (`d825e6d`) były **przetestowane
+  przez usera i OBIE zawiodły** — obie pytały terminal „czy leci tekst" (progi 2,0 s → 4,0 s + 200 zn./2 s).
+  **Zmierzone na kliknięciu usera:** po jego odpowiedzi na pytanie agenta (11:20:13) agent **MYŚLAŁ 30 s**
+  — w dzienniku ZERO wpisów, na ekranie animacja poniżej progu → karencja 4 s mijała w środku myślenia
+  i apka czytała wypowiedź sprzed 6 minut (nowa doszła 11:20:47). Żaden próg liczony ze strumienia tej
+  dziury nie zamknie. Runda 3: decyduje **STRUKTURA TURY** z dziennika (`transcript_reader.turn_snapshot()`
+  → `idle` / `owes_text` / `tool_pending` / `unknown`, z pominięciem wpisów księgowych i pod-agentów);
+  czekamy WYŁĄCZNIE przy `owes_text`, koniec czekania na DOWÓD (nowa wypowiedź · agent stanął bez pisania:
+  cisza terminala **I** dziennik nie rośnie ≥4 s · narzędzie >4 s · bezpiecznik 60 s). Bramki: 45/0 na
+  fixture z PRAWDZIWYCH wpisów CRM + mutacja kontrolna; regresja auto-czytania 22/22 i wyścigu /login 23/23.
+  Test: (1) w CRM klik 🔊 tuż po wysłaniu zadania → ⏳ i czyta TĘ nową odpowiedź; (2) bezczynny agent →
+  natychmiast; (3) pytanie na ekranie → w ~4 s czyta ostatnią + komunikat „agent zatrzymał się";
+  (4) długie narzędzie → odpowiedź w kilka sekund; (5) zaznaczenie i auto-czytanie bez zmian.
+  → `czytaj-ostatnia-czyta-inna.md`.
   - ⚠️ **PROFIL ZAKŁADKI CRM wywraca założenia projektowane pod „jedna długa odpowiedź na turę"**
     (zmierzone: 58 wypowiedzi, mediana **134 znaki**, mediana odstępu **40 s**, narzędzia 10 s–4 min).
     Bezpiecznik 30 s z rundy 1 zamieniał tam przycisk w pół minuty ciszy. Każdą zmianę w 🔊 / auto-czytaniu
