@@ -94,3 +94,7 @@ api_keys.txt
 # Generowane przy buildzie macOS (z icon.png)
 src/assets/icon.icns
 dist-release/
+
+# Eksporty makiet (Cloud Design) trzymamy poza repo — w repo lezy tylko
+# rozpakowana tresc tekstowa (design/), bez zrzutow ekranu. Repo jest PUBLICZNE.
+*.zip
