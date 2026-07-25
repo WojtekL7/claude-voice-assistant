@@ -100,6 +100,11 @@ po naprawie BUG #6 (`0ce9609`), sprzątanie starych paczek (`updates/` trzyma 1 
   AI Managera były niewinne — jak pokazywał pomiar. → `qtermwidget-polskie-znaki-altgr.md`
 - **Nadganianie lektora** (`2156fe8`) — kolejka TTS dogania ekran przy dłuższych zadaniach.
   → `auto-czytanie-spoznione-kolejka.md`
+- **Filtr emoji/emotikonów w TTS** (`f80c35a`, czekał na test od 2026-07-06) — na tekście próbnym
+  pominięte WSZYSTKIE: `:( :) ;) :-D xD :/ <3 -_- ^^ T_T o_O` oraz ⏳ ✅ → ▶ ░ ▪; kontrola odwrotna
+  przeszła (`10:30`, `(netto)`, `3:1`, `(x)` przeczytane normalnie). ⚠️ Strażnika `(?<!\w)`/`(?!\w)`
+  NIE ruszać: emotikon przyklejony do słowa (`gotowe:(`) zostaje w tekście, ale edge-tts i tak nie
+  wymawia samej interpunkcji → luka bez kosztu, a strażnik chroni `10:30`, `C:\Users`, `https://`.
 - **Auto-czytanie (zwykłe) na silniku WebTerminal** — długa wypowiedź (~3,3 tys. zn.) przeczytana
   od pierwszego zdania DO KOŃCA, w becie z `CVA_WEBTERMINAL=1`. Wcześniejsze potwierdzenie (2026-07-20)
   dotyczyło QTermWidgetu, a **pobrany AppImage Linuksa chodzi właśnie na WebTerminalu** → to domyka
