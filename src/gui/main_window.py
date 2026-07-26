@@ -6,6 +6,7 @@ import sys
 import os
 import json
 import re
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -417,6 +418,7 @@ from config import (
     AGENTS_FILE, MEMORY_PROJECTS_FILE, DEFAULT_AGENTS, DEFAULT_MEMORY_PROJECTS,
     CONFIG_DIR,
     ASSETS_DIR, CLAUDE_MODEL_CONTEXT_LIMITS, DEFAULT_AGENT_MODEL,
+    MODEL_CATALOG_CACHE,
     APP_TITLE_SUFFIX,
     UPDATE_APPCAST_URL, UPDATE_PUBLIC_KEY, UPDATE_DOWNLOAD_DIR,
     MAX_ACTIVE_AGENTS, RAM_PER_AGENT_GB, RAM_SYSTEM_RESERVE_GB,
@@ -563,6 +565,40 @@ def _skin_icon_name(icon_key: str) -> str:
     return SKIN_ICON_NAMES.get(icon_key, icon_key)
 
 
+class ModelCatalogChecker(QObject):
+    """Pobiera w tle listę modeli ze strony Anthropic (wzorzec jak UpdateManager).
+
+    Sieć NIGDY nie idzie w wątku okna — pobranie strony potrafi trwać sekundy,
+    a w wątku GUI zamroziłoby apkę. Wynik wraca sygnałem, więc dotyka interfejsu
+    już w głównym wątku."""
+
+    refreshed = pyqtSignal(object, object)   # models, changes
+    failed = pyqtSignal(str)
+
+    def __init__(self, cache_file, parent=None):
+        super().__init__(parent)
+        self._cache_file = cache_file
+        self._busy = False
+
+    def refresh_async(self):
+        """Bez podwójnego startu — dwa kliknięcia nie robią dwóch pobrań."""
+        if self._busy:
+            return
+        self._busy = True
+        threading.Thread(target=self._worker, daemon=True).start()
+
+    def _worker(self):
+        try:
+            from core import model_catalog
+            models, changes = model_catalog.refresh(self._cache_file)
+        except Exception as e:
+            self._busy = False
+            self.failed.emit(str(e))
+            return
+        self._busy = False
+        self.refreshed.emit(models, changes)
+
+
 class MainWindow(QMainWindow):
     """Main application window."""
 
@@ -607,6 +643,11 @@ class MainWindow(QMainWindow):
         # Aktualizacje sprawdzamy WYŁĄCZNIE przy starcie (i ręcznie z menu) —
         # nie przy zamykaniu, więc zamknięcie jest natychmiastowe.
         self._manual_update_check = False
+        # Katalog modeli — nazwy („Opus 5") i okna kontekstu ze strony Anthropic.
+        # Bez tego lista modeli starzeje się po cichu: alias `opus` uruchamia
+        # najnowszy model, a apka pokazuje nazwę sprzed dwóch wydań.
+        self.model_catalog_checker = ModelCatalogChecker(MODEL_CATALOG_CACHE, self)
+        self._manual_model_check = False
         # Wersja, dla której pokazaliśmy już SAMO okno pobierania — żeby cykliczne
         # sprawdzanie (co 30 min) nie otwierało go w kółko; nowsza wersja = znów okno.
         self._prompted_update_version = None
@@ -665,6 +706,11 @@ class MainWindow(QMainWindow):
         # Sprawdzenie aktualizacji ~3 s po starcie (po rozruchu terminala), w tle;
         # gdy jest nowsza wersja, _on_update_available SAM otworzy okno pobierania.
         QTimer.singleShot(3000, self._maybe_auto_check_updates)
+
+        # Odświeżenie listy modeli ~5 s po starcie — CICHO i tylko gdy plik
+        # podręczny jest starszy niż tydzień. Bez internetu nic się nie dzieje:
+        # apka zostaje na nazwach zapisanych wcześniej (fail-open).
+        QTimer.singleShot(5000, self._maybe_auto_check_models)
 
         # Cykliczne sprawdzanie aktualizacji co ~30 min (nie tylko przy starcie),
         # żeby nowa wersja zgłosiła się sama bez restartu programu. Lampka „nowa
@@ -2062,6 +2108,10 @@ class MainWindow(QMainWindow):
         claude_command_action.triggered.connect(self._show_claude_command_dialog)
         settings_menu.addAction(claude_command_action)
 
+        check_models_action = QAction(tr('menu_check_models'), self)
+        check_models_action.triggered.connect(self._check_models_manual)
+        settings_menu.addAction(check_models_action)
+
         settings_menu.addSeparator()
 
         cloud_action = QAction(tr('menu_cloud'), self)
@@ -2137,6 +2187,8 @@ class MainWindow(QMainWindow):
         self.update_manager.update_available.connect(self._on_update_available)
         self.update_manager.no_update.connect(self._on_no_update)
         self.update_manager.check_failed.connect(self._on_update_check_failed)
+        self.model_catalog_checker.refreshed.connect(self._on_models_refreshed)
+        self.model_catalog_checker.failed.connect(self._on_models_check_failed)
 
     def _setup_shortcuts(self):
         """Setup keyboard shortcuts."""
@@ -2269,6 +2321,77 @@ class MainWindow(QMainWindow):
         if getattr(self, 'auto_check_updates', True):
             self._manual_update_check = False
             self.update_manager.check_async()
+
+    # ---------- Katalog modeli (nazwy i okna kontekstu ze strony Anthropic) ----------
+
+    def _check_models_manual(self):
+        """Ręczne „Sprawdź nowe modele" z menu — pokazuje też wynik negatywny."""
+        self._manual_model_check = True
+        self._update_status(tr('status_checking_models'))
+        self.model_catalog_checker.refresh_async()
+
+    def _maybe_auto_check_models(self):
+        """Ciche odświeżenie przy starcie — tylko gdy dane są starsze niż tydzień.
+
+        Świadomie pod tym samym przełącznikiem co aktualizacje: dla użytkownika
+        to jedna sprawa („czy apka ma sama sprawdzać nowości"), a nie dwa
+        osobne ustawienia do ogarniania."""
+        if not getattr(self, 'auto_check_updates', True):
+            return
+        try:
+            from core.model_catalog import is_stale
+            if not is_stale(MODEL_CATALOG_CACHE):
+                return
+        except Exception:
+            return
+        self._manual_model_check = False
+        self.model_catalog_checker.refresh_async()
+
+    def _on_models_refreshed(self, models, changes):
+        """Świeży katalog pobrany — nakładamy nazwy i okna kontekstu na żywo."""
+        was_manual = self._manual_model_check
+        self._manual_model_check = False
+        self._update_status("")
+        try:
+            import config
+            config.apply_model_catalog(models)
+        except Exception:
+            return
+        # Pasek statusu pokazuje nazwę modelu — odśwież, żeby nie wisiała stara.
+        try:
+            widget = getattr(self, 'mcp_status_widget', None)
+            if widget is not None:
+                widget.force_refresh()
+        except Exception:
+            pass
+
+        renamed = (changes or {}).get('renamed') or []
+        new_families = (changes or {}).get('new_families') or []
+        if renamed:
+            opis = ", ".join(f"{z['from']} → {z['to']}" for z in renamed)
+            self._update_status(tr('status_models_updated').format(changes=opis))
+        elif was_manual:
+            QMessageBox.information(self, tr('menu_check_models'),
+                                    tr('models_up_to_date'))
+        # ⚠️ Nowej RODZINY modeli nie dodajemy sami — nie wiemy, czy `claude
+        # --model <alias>` przyjmie ją w wersji Claude Code zainstalowanej
+        # u użytkownika. Zgłoszenie zamiast cichego dodania pozycji, która
+        # mogłaby nie wystartować.
+        if new_families and was_manual:
+            nazwy = ", ".join(n['name'] for n in new_families)
+            QMessageBox.information(self, tr('menu_check_models'),
+                                    tr('models_new_family').format(names=nazwy))
+
+    def _on_models_check_failed(self, msg):
+        """Błąd pobierania — komunikat tylko przy ręcznym; przy cichym milczy.
+
+        Brak internetu nie jest awarią apki: lista modeli po prostu zostaje taka,
+        jaka była."""
+        self._update_status("")
+        if self._manual_model_check:
+            self._manual_model_check = False
+            QMessageBox.warning(self, tr('menu_check_models'),
+                                tr('models_check_failed').format(error=msg))
 
     def _on_update_available(self, info):
         """Jest nowsza wersja. Zapalamy lampkę „nowa wersja" w pasku ORAZ

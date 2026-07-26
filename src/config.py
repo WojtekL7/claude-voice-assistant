@@ -231,39 +231,62 @@ except Exception:
 # Claude Code models available for selection per agent.
 # Key is passed to `claude --model <key>`. "default" means: launch without --model
 # (Claude Code uses its own configured default).
-# Version numbers in labels are informational — aliases (sonnet/opus/haiku)
-# always resolve to the newest available version on Claude Code's side.
+#
+# ⚠️ TO JEDYNE MIEJSCE Z NAZWAMI MODELI. Wartości poniżej są AWARYJNE —
+# realne nazwy i okna kontekstu apka pobiera ze strony Anthropic
+# (`core/model_catalog.py`) i trzyma w pliku podręcznym. Opisy
+# („najbardziej zdolny") siedzą w tłumaczeniach jako `model_*_desc`,
+# żeby numer wersji NIE był powielony w słowniku i w dwóch językach naraz.
+#
+# Aliasy (fable/opus/sonnet/haiku) oznaczają ZAWSZE NAJNOWSZY model rodziny:
+# `claude --model opus` to dziś Opus 5. Wpis `claude-opus-4-8` to świadome
+# przypięcie starszego Opusa — pełna nazwa, nie alias, więc wersja się nie zmieni.
 CLAUDE_MODELS = {
-    "default": "Domyślny — Opus 4.8 (z konfiguracji Claude Code)",
-    "fable": "Fable 5 (najpotężniejszy, do najtrudniejszych zadań)",
-    "opus": "Opus 4.8 (najbardziej zdolny)",
-    "sonnet": "Sonnet 4.6 (szybki, zbalansowany)",
-    "haiku": "Haiku 4.5 (najszybszy)",
-}
-# Short labels used in compact lists (e.g. agent manager).
-CLAUDE_MODELS_SHORT = {
-    "default": "Domyślny — Opus 4.8",
+    "default": "Domyślny",
     "fable": "Fable 5",
-    "opus": "Opus 4.8",
-    "sonnet": "Sonnet 4.6",
+    "opus": "Opus 5",
+    "sonnet": "Sonnet 5",
     "haiku": "Haiku 4.5",
+    "claude-opus-4-8": "Opus 4.8",
 }
+# Krótka etykieta (pasek statusu, panel agentów) = sama nazwa modelu.
+CLAUDE_MODELS_SHORT = dict(CLAUDE_MODELS)
 # Fallback for agents that don't have a `model` field saved (backward compat).
 DEFAULT_AGENT_MODEL = "default"
 # Pre-selected model when the user creates a NEW agent.
 NEW_AGENT_DEFAULT_MODEL = "opus"
 
 # Okna kontekstu modeli (w tokenach). Claude Code uruchamia auto-compact
-# przy ~80–90% tej wartości — wartości używane do koloryzacji licznika
-# tokenów per-zakładka w pasku statusu.
-# "default" w Claude Code rozwiązuje się na Opus 4.8 z 1M oknem kontekstu.
+# przy ~80–90% tej wartości — używane do koloryzacji licznika tokenów
+# per-zakładka w pasku statusu.
+# ⚠️ Też AWARYJNE — nadpisywane świeżymi danymi z katalogu (patrz niżej).
 CLAUDE_MODEL_CONTEXT_LIMITS = {
     "default": 1_000_000,
     "fable":   1_000_000,
     "opus":    1_000_000,
-    "sonnet":    200_000,
+    "sonnet":  1_000_000,   # Sonnet 5 ma 1 mln (do 2026-07 było tu 200 tys.)
     "haiku":     200_000,
+    "claude-opus-4-8": 1_000_000,
 }
+
+# Plik podręczny katalogu modeli (nazwy + okna kontekstu ze strony Anthropic).
+MODEL_CATALOG_CACHE = CONFIG_DIR / "models-cache.json"
+
+# Nałóż świeże dane, jeśli katalog był kiedykolwiek pobrany.
+# ⛔ FAIL-OPEN: brak pliku, uszkodzony plik, brak modułu → zostajemy na
+# wartościach wbudowanych wyżej. Tu NIE MA sieci — pobieranie robi apka
+# w wątku tła (menu „Sprawdź nowe modele"), start nigdy nie czeka na internet.
+try:
+    from core.model_catalog import cached_models as _cached_models
+    from core.model_catalog import merge_into as _merge_models
+
+    _catalog = _cached_models(MODEL_CATALOG_CACHE)
+    if _catalog:
+        CLAUDE_MODELS, CLAUDE_MODEL_CONTEXT_LIMITS = _merge_models(
+            CLAUDE_MODELS, CLAUDE_MODEL_CONTEXT_LIMITS, _catalog)
+        CLAUDE_MODELS_SHORT = dict(CLAUDE_MODELS)
+except Exception:
+    pass
 
 # Groq API (for Speech-to-Text)
 # GROQ_API_URL — dawna ścieżka WPROST do Groq (zostawiona jako odniesienie).
@@ -472,6 +495,17 @@ UI_TRANSLATIONS = {
         "menu_groq_api": "Klucz AI Managera (dyktowanie)...",
         "menu_anthropic_api": "Klucz API Anthropic...",
         "menu_claude_command": "Komenda Claude Code...",
+        "menu_check_models": "Sprawdź nowe modele",
+        "status_checking_models": "Sprawdzam listę modeli...",
+        "status_models_updated": "Zaktualizowano nazwy modeli: {changes}",
+        "models_up_to_date": "Lista modeli jest aktualna.",
+        "models_new_family": ("Anthropic wypuścił nowy model: {names}.\n\n"
+                              "Nie dodaję go automatycznie, bo nie wiem, czy "
+                              "Twoja wersja Claude Code już go obsługuje — "
+                              "zgłoś to autorowi aplikacji."),
+        "models_check_failed": ("Nie udało się pobrać listy modeli.\n\n{error}\n\n"
+                                "Nic się nie zepsuło — apka używa nazw "
+                                "zapisanych wcześniej."),
         "menu_manage_actions": "Zarządzaj szybkimi akcjami...",
         "menu_help": "Pomoc",
         "menu_about": "O programie",
@@ -519,16 +553,15 @@ UI_TRANSLATIONS = {
         "model_click_change": "Kliknij aby zmienić model w edycji agenta.",
         # --- Etykiety modeli Claude Code (lista wyboru + status) ---
         "model_default_prefix": "Domyślny — ",
-        "model_default_full": "Domyślny — Opus 4.8 (z konfiguracji Claude Code)",
-        "model_default_short": "Domyślny — Opus 4.8",
-        "model_fable_full": "Fable 5 (najpotężniejszy, do najtrudniejszych zadań)",
-        "model_fable_short": "Fable 5",
-        "model_opus_full": "Opus 4.8 (najbardziej zdolny)",
-        "model_opus_short": "Opus 4.8",
-        "model_sonnet_full": "Sonnet 4.6 (szybki, zbalansowany)",
-        "model_sonnet_short": "Sonnet 4.6",
-        "model_haiku_full": "Haiku 4.5 (najszybszy)",
-        "model_haiku_short": "Haiku 4.5",
+        "model_default_full": "Domyślny (z konfiguracji Claude Code)",
+        "model_default_short": "Domyślny",
+        # Same OPISY — nazwa modelu dochodzi z CLAUDE_MODELS/katalogu,
+        # żeby numer wersji nie starzał się w dwóch językach naraz.
+        "model_fable_desc": "najpotężniejszy, do najtrudniejszych zadań",
+        "model_opus_desc": "najbardziej zdolny",
+        "model_sonnet_desc": "szybki, zbalansowany",
+        "model_haiku_desc": "najszybszy",
+        "model_claude_opus_4_8_desc": "starszy Opus — mniej tokenów na zadanie",
         # --- Komunikaty paska statusu ---
         "status_ready": "Gotowy",
         "status_generating_speech": "Generowanie mowy...",
@@ -1265,6 +1298,17 @@ UI_TRANSLATIONS = {
         "menu_groq_api": "AI Manager key (dictation)...",
         "menu_anthropic_api": "Anthropic API key...",
         "menu_claude_command": "Claude Code command...",
+        "menu_check_models": "Check for new models",
+        "status_checking_models": "Checking the model list...",
+        "status_models_updated": "Model names updated: {changes}",
+        "models_up_to_date": "The model list is up to date.",
+        "models_new_family": ("Anthropic released a new model: {names}.\n\n"
+                              "It was not added automatically — your installed "
+                              "Claude Code may not support it yet. Please report "
+                              "it to the app author."),
+        "models_check_failed": ("Could not fetch the model list.\n\n{error}\n\n"
+                                "Nothing is broken — the app keeps the names it "
+                                "saved earlier."),
         "menu_manage_actions": "Manage quick actions...",
         "menu_help": "Help",
         "menu_about": "About",
@@ -1312,16 +1356,14 @@ UI_TRANSLATIONS = {
         "model_click_change": "Click to change the model in agent settings.",
         # --- Claude Code model labels (selection list + status) ---
         "model_default_prefix": "Default — ",
-        "model_default_full": "Default — Opus 4.8 (from Claude Code config)",
-        "model_default_short": "Default — Opus 4.8",
-        "model_fable_full": "Fable 5 (most powerful, for the hardest tasks)",
-        "model_fable_short": "Fable 5",
-        "model_opus_full": "Opus 4.8 (most capable)",
-        "model_opus_short": "Opus 4.8",
-        "model_sonnet_full": "Sonnet 4.6 (fast, balanced)",
-        "model_sonnet_short": "Sonnet 4.6",
-        "model_haiku_full": "Haiku 4.5 (fastest)",
-        "model_haiku_short": "Haiku 4.5",
+        "model_default_full": "Default (from Claude Code config)",
+        "model_default_short": "Default",
+        # Descriptions only — the model name comes from CLAUDE_MODELS/catalog.
+        "model_fable_desc": "most powerful, for the hardest tasks",
+        "model_opus_desc": "most capable",
+        "model_sonnet_desc": "fast, balanced",
+        "model_haiku_desc": "fastest",
+        "model_claude_opus_4_8_desc": "older Opus — fewer tokens per task",
         # --- Status bar messages ---
         "status_ready": "Ready",
         "status_generating_speech": "Generating speech...",
@@ -2030,20 +2072,52 @@ def detect_system_language() -> str:
     return "en-US"
 
 
-def model_label(key: str) -> str:
-    """Pełna etykieta modelu Claude Code w bieżącym języku (lista wyboru/tooltip).
+def apply_model_catalog(models: dict) -> None:
+    """Nakłada świeżo pobrany katalog na ŻYWE słowniki modeli.
 
-    Fallback dla nieznanych kluczy (np. własny model) → słownik CLAUDE_MODELS."""
-    tkey = f"model_{key}_full"
-    val = t(tkey)
-    return val if val != tkey else CLAUDE_MODELS.get(key, key)
+    ⚠️ Mutujemy słowniki W MIEJSCU (`clear`+`update`), a NIE podmieniamy
+    przypisania. Inne moduły zrobiły `from config import CLAUDE_MODELS`
+    i trzymają REFERENCJĘ do tego obiektu — podmiana nazwy w tym module
+    byłaby dla nich niewidoczna i lista w oknie agenta zostałaby stara."""
+    try:
+        from core.model_catalog import merge_into
+    except Exception:
+        return
+    names, limits = merge_into(CLAUDE_MODELS, CLAUDE_MODEL_CONTEXT_LIMITS, models or {})
+    CLAUDE_MODELS.clear()
+    CLAUDE_MODELS.update(names)
+    CLAUDE_MODELS_SHORT.clear()
+    CLAUDE_MODELS_SHORT.update(names)
+    CLAUDE_MODEL_CONTEXT_LIMITS.clear()
+    CLAUDE_MODEL_CONTEXT_LIMITS.update(limits)
+
+
+def _model_desc_key(key: str) -> str:
+    """'claude-opus-4-8' → 'model_claude_opus_4_8_desc' (klucz tłumaczenia opisu)."""
+    safe = key.lower().replace("-", "_").replace(".", "_")
+    return f"model_{safe}_desc"
+
+
+def model_label(key: str) -> str:
+    """Pełna etykieta modelu: NAZWA (z katalogu) + OPIS (z tłumaczeń).
+
+    Rozdzielenie jest celowe — nazwa niesie numer wersji i przychodzi z sieci,
+    opis jest językowy i siedzi w słowniku. Dzięki temu nowy model nie wymaga
+    poprawek w tłumaczeniach. Nieznany klucz (własny model wpisany przez
+    użytkownika) → pokazujemy go takim, jaki jest."""
+    if key == "default":
+        return t("model_default_full")
+    name = CLAUDE_MODELS.get(key, key)
+    dkey = _model_desc_key(key)
+    desc = t(dkey)
+    return f"{name} ({desc})" if desc != dkey else name
 
 
 def model_label_short(key: str) -> str:
-    """Krótka etykieta modelu (pasek statusu, panel agentów)."""
-    tkey = f"model_{key}_short"
-    val = t(tkey)
-    return val if val != tkey else CLAUDE_MODELS_SHORT.get(key, key)
+    """Krótka etykieta modelu (pasek statusu, panel agentów) — sama nazwa."""
+    if key == "default":
+        return t("model_default_short")
+    return CLAUDE_MODELS_SHORT.get(key, key)
 
 
 def model_default_prefix() -> str:
