@@ -1181,3 +1181,484 @@ AI Managera → zakładka **„Claude Code"**.
 
 - **Biały błysk pola input (QTextEdit) po Enter.** Samo `background-color` w stylesheet zostawia paletę `Base`=biała; przy `clear()`+zmianie wysokości (po wysłaniu) Qt na ~1 klatkę maluje biały Base ZANIM nałoży styl → migający biały prostokąt (intermittentnie, „tylko czasem" — zależnie od trafienia między klatkami). Fix: ustaw też `QPalette.Base/Text` (kolor skórki) na polu **i jego `viewport()`**, nie tylko w stylesheet (commit `fccd618`). Uniwersalna pułapka PyQt — gdyby powstał 2. projekt PyQt, kandydat do COMMON.
 - **Biały błysk całego terminala (WebTerminal) ~1 s przy starcie.** `QWebEngineView`/`QWebEnginePage` maluje stronę na BIAŁO, dopóki `terminal.html` się nie wczyta (xterm.js + czcionka). Mimo że html ma ciemne tło, przez sekundę widać białą „pustą kartkę" silnika. Fix (1.0.20): `self._page.setBackgroundColor(QColor(0x1b,0x1b,0x1d))` PRZED `view.load(...)` w `web_terminal.__init__`. Dotyczy tylko WebTerminala (AppImage/Mac/Win), nie QTermWidgetu. Uniwersalna pułapka QtWebEngine → kandydat do COMMON.
+
+
+---
+
+# PELNA KOPIA CLAUDE-VOICE-ASSISTANT.md SPRZED KONSOLIDACJI 2026-07-26
+
+> Doslowna kopia calego pliku (470 linii / 66 085 znakow), nie wybor fragmentow.
+> Zywa wersja jest krotsza — tutaj szukaj wycietych szczegolow i pelnych narracji.
+
+---
+
+# CLAUDE-VOICE-ASSISTANT — Agent aplikacji desktopowej
+
+**Przed pracą załaduj również:**
+1. 🔴 [`docs/PRD.md`](docs/PRD.md) — Roadmap komercjalizacji 2026 (wizja, fazy, funkcje)
+2. [`../CLAUDE-COMMON.md`](../CLAUDE-COMMON.md) — wspólne procedury i pułapki (uniwersalne)
+3. [`CLAUDE.md`](CLAUDE.md) — auto-loaded przy starcie Claude Code w tym katalogu
+
+> **Historia sesji (pełne narracje, dziennik zmian):** `CLAUDE-VOICE-ASSISTANT-ARCHIVE.md` (NIE czytany na starcie) + `git log`.
+> **Zasada utrzymania:** do tego pliku trafiają TYLKO trwałe, aktualne, reużywalne rzeczy. Bez sekcji „SESJA <data>", bez stopki-dziennika. Gdy plik urośnie ponad budżet (~350 linii) → konsolidacja do archiwum (patrz CLAUDE-COMMON „ODCHUDZANIE PLIKÓW PAMIĘCI").
+
+---
+
+## Projekt
+
+- **Lokalizacja:** `/home/hdkrytbhdkf/Projekty/claude-voice-assistant/`
+- **Tech:** Python 3.12, PyQt5, QTermWidget (Linux), WebTerminal = xterm.js+QtWebEngine+PTY (Mac/Win), edge-tts, Groq Whisper, pygame
+- **GitHub:** https://github.com/WojtekL7/claude-voice-assistant
+- **Czym jest:** „pilot" nad CLI **Claude Code** — uruchamia `claude` w terminalu, dokłada głos (TTS/STT), zakładki agentów, MCP/Skills, skórki, auto-aktualizację. **Aplikacja NIE hostuje modelu ani nie zawiera CLI** — logowanie/konto Claude Code siedzi u usera (`~/.claude`).
+
+## Uruchomienie
+```bash
+cd /home/hdkrytbhdkf/Projekty/claude-voice-assistant
+source venv/bin/activate
+python3 src/main.py
+```
+WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. QTermWidget wheel: `wheels/qtermwidget-1.4.0-cp310-abi3-manylinux_2_17_x86_64.whl`.
+
+## Kluczowe pliki
+| Plik | Rola |
+|------|------|
+| `src/config.py` | Konfiguracja: języki, głosy TTS, modele, ścieżki, `APP_VERSION`, `UI_TRANSLATIONS`, `DEFAULT_SPLITTER_SIZES` |
+| `src/gui/main_window.py` | Główne okno, menu, TTS/STT, skórki, zakładki, auto-update, `_poll_transcripts` |
+| `src/gui/agent_tab.py` | Zakładka agenta: terminal, splitter, input, przyciski |
+| `src/gui/dialogs.py` | Dialogi (4-tab konfiguracja agenta, update, ClaudeSetupDialog) |
+| `src/gui/terminal_backend.py` | Wspólny interfejs terminala + fabryka (QTermWidget vs WebTerminal) |
+| `src/gui/web_terminal.py` | WebTerminal (xterm.js+QtWebEngine+PTY); ConPTY na Windows |
+| `src/core/tts_engine.py` | TTS (edge-tts + pygame), kolejka z prefetch |
+| `src/core/transcript_reader.py` | Czyta dziennik sesji `.jsonl` (auto-czytanie + flaga „?") |
+| `src/core/text_cleaner.py` | `prose_from_markdown()` — proza dla TTS |
+| `src/core/update_manager.py` | Self-update (pobieranie, sha256, samo-podmiana per OS) |
+| `src/core/platform_utils.py` | OS/arch, env Qt, `update_platform_id()`, `macos_app_bundle()` |
+| `tools/scan-dialog-clipping.py` | Skan regresji: buduje 16 okien offscreen, zgłasza widżety ucinające tekst |
+
+## Konfiguracja użytkownika — `~/.claude-voice-assistant/`
+`config.json` (język, głos, skin, `groq_api_key`, `auto_check_updates`) · `agents.json` (agenci + `splitter_sizes` per zakładka) · `memory_projects.json` · `quick_actions.json` · `tts.log` (błędy TTS) · `crash-logs/` (zrzuty „czarnej skrzynki" po crashu `claude` — patrz pułapka niżej).
+
+## Zależności (uwagi)
+- Klient HTTP = **`requests`**, NIE httpx (stt/license/update).
+- **Groq = tylko STT** (Whisper, wymaga `GROQ_API_KEY`). **TTS = edge-tts, działa BEZ klucza.**
+- `pyenchant` opcjonalny (`ENCHANT_AVAILABLE`); `asyncio` usunięte z requirements (stdlib).
+- `pygame.mixer.init()` owinięte try/except (brak audio = TTS off, reszta działa).
+
+---
+
+## 🔴 PIERWSZE ZADANIE NASTĘPNEJ SESJI (user zatwierdził 2026-07-25)
+**Konsolidacja tego pliku** (465 linii / 65,7 tys. zn. wobec budżetu ~350) — zanim weźmiesz cokolwiek innego.
+Co ciąża i jaki przepis → pamięć `pamiec-odchudzanie-status.md`. ⚠️ Sukces mierz ZNAKAMI, nie liniami;
+archiwum (`CLAUDE-VOICE-ASSISTANT-ARCHIVE.md`) dostaje PEŁNĄ kopię PRZED cięciem.
+
+## ⏳ WCIĄŻ DO TESTU NA ŻYWO
+- **🔍 SZUKANIE W ROZMOWIE — NOWA FUNKCJA** (2026-07-25). Lupa w dolnym pasku zakładki + `Ctrl+F`.
+  Szuka w **dzienniku sesji** (`transcript_reader.conversation_entries()` — cała rozmowa: Twoje
+  wiadomości i wypowiedzi agenta, bez myślenia/narzędzi/pod-agentów), NIE w buforze ekranu — bo bufor
+  ma cap 5000 zn., niesie znaki sterujące i RÓŻNI SIĘ między silnikami. Dopasowanie bez ogonków
+  i wielkości liter (`conversation_search.fold` — ⚠️ musi zachowywać DŁUGOŚĆ, inaczej pozycje trafień
+  wskazują nie to miejsce). Klik w wynik: pełny fragment + Kopiuj/Przeczytaj **oraz** próba przewinięcia
+  terminala (`TerminalBackend.scroll_to_text`, wynik asynchroniczny; WebTerminal = po buforze xterma
+  BEZ dodatkowej biblioteki, QTermWidget zwraca `None` = „nie umiem", i wtedy apka NIC nie twierdzi).
+  Bramki: `tools/test-conversation-search.py` **46/0** (z fixture z prawdziwego dziennika + kontrole
+  negatywne + budowa okna i przycisku). Test u usera: (1) lupa i Ctrl+F otwierają okno; (2) fraza bez
+  ogonków znajduje słowo z ogonkami; (3) klik w wynik przewija terminal, gdy fragment jest jeszcze
+  w oknie; (4) Przeczytaj czyta fragment; (5) dwie zakładki = dwa niezależne okna szukania.
+- **Serwery MCP** — sprawdzić na żywo (dodawanie/usuwanie, gating per agent, czy licznik i status w pasku
+  pokazują prawdę). Zgłoszone przez usera 2026-07-25 jako zaległość.
+- **Ładowanie agenta z CHMURY** — pobranie paczki na drugim komputerze i sprawdzenie, czy agent staje się
+  używalny (agenci, pamięć, skille, klucze API, komunikat o projektach do `git clone`). Kod Fazy 1 gotowy
+  i sprawdzony na atrapie oraz na prawdziwym Dysku Google, ale **klienckiego „pobierz i pracuj" user
+  jeszcze nie przeszedł**. → `chmura-sync-agentow.md`
+- **🔊 BUG #7 — RUNDA 3** (`d1ec938`, 2026-07-25). Rundy 1 (`e365307`) i 2 (`d825e6d`) były **przetestowane
+  przez usera i OBIE zawiodły** — obie pytały terminal „czy leci tekst" (progi 2,0 s → 4,0 s + 200 zn./2 s).
+  **Zmierzone na kliknięciu usera:** po jego odpowiedzi na pytanie agenta (11:20:13) agent **MYŚLAŁ 30 s**
+  — w dzienniku ZERO wpisów, na ekranie animacja poniżej progu → karencja 4 s mijała w środku myślenia
+  i apka czytała wypowiedź sprzed 6 minut (nowa doszła 11:20:47). Żaden próg liczony ze strumienia tej
+  dziury nie zamknie. Runda 3: decyduje **STRUKTURA TURY** z dziennika (`transcript_reader.turn_snapshot()`
+  → `idle` / `owes_text` / `tool_pending` / `unknown`, z pominięciem wpisów księgowych i pod-agentów);
+  czekamy WYŁĄCZNIE przy `owes_text`, koniec czekania na DOWÓD (nowa wypowiedź · agent stanął bez pisania:
+  cisza terminala **I** dziennik nie rośnie ≥4 s · narzędzie >4 s · bezpiecznik 60 s). Bramki: 45/0 na
+  fixture z PRAWDZIWYCH wpisów CRM + mutacja kontrolna; regresja auto-czytania 22/22 i wyścigu /login 23/23.
+  Test: (1) w CRM klik 🔊 tuż po wysłaniu zadania → ⏳ i czyta TĘ nową odpowiedź; (2) bezczynny agent →
+  natychmiast; (3) pytanie na ekranie → w ~4 s czyta ostatnią + komunikat „agent zatrzymał się";
+  (4) długie narzędzie → odpowiedź w kilka sekund; (5) zaznaczenie i auto-czytanie bez zmian.
+  → `czytaj-ostatnia-czyta-inna.md`.
+  - ⚠️ **PROFIL ZAKŁADKI CRM wywraca założenia projektowane pod „jedna długa odpowiedź na turę"**
+    (zmierzone: 58 wypowiedzi, mediana **134 znaki**, mediana odstępu **40 s**, narzędzia 10 s–4 min).
+    Bezpiecznik 30 s z rundy 1 zamieniał tam przycisk w pół minuty ciszy. Każdą zmianę w 🔊 / auto-czytaniu
+    / fladze sprawdzaj na CRM, nie tylko na zakładce z rozmową.
+- ~~**Nadganianie lektora**~~ ✅ **POTWIERDZONE 2026-07-25** — przeniesione do sekcji „POTWIERDZONE" niżej.
+  ⚠️ **Przestroga z tamtej sesji zostaje aktualna:** pomiar „7/7 żywych dzienników nie kończy się znakiem nowej linii"
+  (i wyciągnięty z niego wniosek „czytnik gubi najnowszy wpis") był **artefaktem złapania zapisu w locie** —
+  8/8 plików USTABILIZOWANYCH kończy się `\n`. Zielony test jednostkowy dowodził tylko, że mechanizm *zadziała*,
+  nie że w ogóle *występuje*. Nie idźcie tą drogą drugi raz. → `diagnoza-czytnika-dziennika-jsonl.md`.
+- **Wykrywanie wyścigu „/login"** (`e6af2c3`) — patrz sekcja niżej. ✅ **Mechanizm ŻYJE** (2026-07-23:
+  pierwszy wpis w `login-events.log` — `blad-api … zakladka=AI Manager … ENOTIMP`), ale to był błąd SIECI,
+  nie wyścig o token → najważniejsza część (werdykt „wyścig vs prawdziwe wylogowanie") wciąż niewywołana.
+- **Co JEST w uruchomionej becie (stan 2026-07-25):** wszystko powyższe **poza 🔊 rundą 3** (`d1ec938`) —
+  beta wstała 10:47, commit powstał później. Po odhaczeniu 2026-07-25 zostają już tylko rzeczy, których
+  NIE DA SIĘ wywołać na życzenie (wyścig /login, auto-compact) — nie czekają na chwilę usera, tylko na okazję. ⚠️ Sprawdzaj to ZAWSZE przed diagnozą „fix nie
+  działa": `ps -o lstart= -p $(pgrep -f '[s]rc/main.py')` vs `git log -1 --format=%ad <commit>` — dwa razy
+  uratowało to przed szukaniem błędu w kodzie, którego apka w ogóle nie miała.
+- **Auto-czytanie po auto-compact** (`1b57c60`) — najstarsza niepotwierdzona rzecz. ⚠️ **NIE mylić z „auto-czytanie
+  działa"** (to user potwierdził 2026-07-20 — patrz niżej): tu chodzi WYŁĄCZNIE o zachowanie po tym, jak Claude
+  Code sam skróci długi dziennik. Wtedy plik ROBI SIĘ MNIEJSZY niż zapamiętany offset i stary kod ustawiał
+  `offset=0` → lektor recytował rozmowę od początku. Test wymaga realnego compactu (długa rozmowa), więc nie da
+  się go „zrobić na życzenie" — łapiemy przy okazji. → `auto-czytanie-loop-po-kompaktowaniu.md`.
+
+## ✅ POTWIERDZONE PRZEZ USERA NA ŻYWO (2026-07-20, uzupełnione 2026-07-25)
+Działają: auto-czytanie (zwykłe), pliki pamięci w OSTATNICH zakładkach (`0361565`), 🔊 „czytaj ostatnią"
+po naprawie BUG #6 (`0ce9609`), sprzątanie starych paczek (`updates/` trzyma 1 paczkę).
+**2026-07-25 — user potwierdził DWIE zaległe rzeczy naraz:**
+- **Polskie znaki w terminalu + DYKTOWANIE** (`9aad8dd` wpisywanie wprost, `c38775f` WebTerminal) — bug
+  „dyktowanie ucina litery po `ł`/`ó`" (otwarty od 2026-07-23) **ZAMKNIĘTY**. Potwierdza też diagnozę:
+  to był JEDEN kanał (`sendText` → PTY → pole Claude Code), nie dwie osobne usterki, więc STT i bramka
+  AI Managera były niewinne — jak pokazywał pomiar. → `qtermwidget-polskie-znaki-altgr.md`
+- **Nadganianie lektora** (`2156fe8`) — kolejka TTS dogania ekran przy dłuższych zadaniach.
+  → `auto-czytanie-spoznione-kolejka.md`
+- **Filtr emoji/emotikonów w TTS** (`f80c35a`, czekał na test od 2026-07-06) — na tekście próbnym
+  pominięte WSZYSTKIE: `:( :) ;) :-D xD :/ <3 -_- ^^ T_T o_O` oraz ⏳ ✅ → ▶ ░ ▪; kontrola odwrotna
+  przeszła (`10:30`, `(netto)`, `3:1`, `(x)` przeczytane normalnie). ⚠️ Strażnika `(?<!\w)`/`(?!\w)`
+  NIE ruszać: emotikon przyklejony do słowa (`gotowe:(`) zostaje w tekście, ale edge-tts i tak nie
+  wymawia samej interpunkcji → luka bez kosztu, a strażnik chroni `10:30`, `C:\Users`, `https://`.
+- **Auto-czytanie (zwykłe) na silniku WebTerminal** — długa wypowiedź (~3,3 tys. zn.) przeczytana
+  od pierwszego zdania DO KOŃCA, w becie z `CVA_WEBTERMINAL=1`. Wcześniejsze potwierdzenie (2026-07-20)
+  dotyczyło QTermWidgetu, a **pobrany AppImage Linuksa chodzi właśnie na WebTerminalu** → to domyka
+  silnik, którego realnie używają użytkownicy. ⚠️ Nadal NIE domyka przypadku po auto-compact (inny tor).
+⚠️ „Auto-czytanie działa" NIE domyka przypadku po auto-compact — to inny tor kodu (patrz ⏳ wyżej).
+⚠️ 🔊 był bugiem PRZERYWANYM — user obserwuje dalej. Przyczyny i dowody → archiwum,
+`czytaj-ostatnia-czyta-inna.md`, `pty-tekst-enter-sklejenie.md`.
+
+- ~~**Przycisk „🔄 Napraw wygląd terminala"**~~ **UKRYTY 2026-07-16** (`cc9bccf`, `setVisible(False)`) — user
+  schował, bo usterka nie wystąpiła od kilku dni, a przycisk świecił białym kwadratem. ⚠️ **Usterka NIE jest
+  naprawiona, tylko uśpiona** — mechanizm (zrzut dowodowy + `claude --resume`) ZOSTAJE w kodzie i da się go
+  wywołać bez przycisku. Powrót = skasuj `setVisible(False)` **I dopisz przycisk do
+  `_apply_button_icon_styles`** (inaczej znów biały). → `tekst-rozstrzelony-w-terminalu.md`.
+
+## AKTUALNY STAN (wersja 1.0.27 — WYDANA 2026-07-20, 3 platformy)
+
+- **1.0.27** — pierwsze wydanie z CAŁYM redesignem „Vibe Purple" + naprawy: pliki pamięci w ostatnich
+  zakładkach (`0361565`), 🔊 BUG #6 (`0ce9609`), polskie znaki w WebTerminalu (`c38775f`), STT przez
+  bramkę AI Managera (`eab76b3`), jeden silnik terminala wszędzie (`1dc983a`). `SKIN_VERSION` = 4.
+  ⚠️ **Mac i Windows dostały redesign PIERWSZY RAZ tym wydaniem** — paczki na tych systemach nie były
+  z nim uruchomione przed publikacją. Przy zgłoszeniach „dziwny wygląd na Macu/Windows" zacznij od tego.
+  Szczegóły wydania i weryfikacji przed publikacją → archiwum + runbook „DYSTRYBUCJA / WYDANIA" niżej.
+- **KONWENCJA KOLORU (ustalona z userem 2026-07-16, rozszerzona 2026-07-20): skórka rządzi SPOCZYNKIEM,
+  kod niesie STAN.** Kolory znaczeniowe (`DANGER` nagrywanie/stop, `SUCCESS` czytanie/wznów) siedzą w kodzie —
+  w skórce dałoby się ustawić zielone nagrywanie i sygnał przestałby znaczyć. Nie dokładaj kluczy skórki
+  „per stan" (39 kluczy = dialog skórki i config działają bez zmian). „Biel" = `theme.TEXT` `#eae6f2`,
+  NIE `#ffffff` (czysta biel tylko na Wyślij, bo leży na gradiencie).
+  - **Rozszerzenie: „gdzie jestem" to też STAN.** `theme.TAB_ACTIVE` (aktywna zakładka) NIE idzie ze skórki,
+    choć kusi (`button_bg` był tam wcześniej) — ze skórki dałoby się ustawić aktywną zakładkę CIEMNIEJSZĄ
+    od pozostałych i sygnał zniknąłby. Ta sama zasada, co przy nagrywaniu/czytaniu.
+  - ⚠️ **Odcień NIOSĄCY SYGNAŁ musi mieć MARGINES kontrastu, nie tylko „inny numerek".** Redesign zszedł
+    z 15% do 4% różnicy wobec tła i dwa sygnały naraz („aktywna zakładka", „okno nieaktywne") stały się
+    nieczytelne, choć kod działał bez zarzutu. Przy zmianie palety **zmierz różnicę wobec SĄSIADA**
+    (średnia RGB wystarcza), nie oceniaj na oko w edytorze — próg roboczy: **≥20/255 (~8%)**.
+- **REDESIGN „Vibe Purple"** (`bc81a03`+`410c9ab`, wydany w 1.0.27): paleta w `src/gui/theme.py` =
+  JEDYNE źródło kolorów; zmiana palety wymaga podbicia `SKIN_VERSION` (inaczej NIEWIDOCZNA — config
+  nadpisuje). Szczegóły → `redesign-vibe-purple.md`, pułapki → `qt-pulapki-qss-redesign.md`, historia → archiwum.
+- **1.0.26:** `claude --session-id <uuid>` przypina czytnik do dokładnego pliku sesji.
+  ⚠️ Bez `--session-id` (ręczny `--resume` po crashu) czytnik jest odpięty → 🔊 czyta złą wypowiedź.
+- **1.0.25 (rebranding na „Vibe Coding Assistant"):** ⚠️ infrastruktura ZOSTAJE stara (`/cva/` URL, appcast,
+  repo `claude-voice-assistant`, wewn. binarka) — zmiana zerwałaby self-update. Rebrand MUSI obejmować też
+  `.ps1/.yml/.command` (pominięcie = padł build Windows). Ustawienia: `~/.vibe-coding-assistant`.
+- **Wieloplatformowość:** Linux (z kodu + AppImage), macOS (.dmg/.zip), Windows (.exe Inno). Pełna wersja PL/EN (domyślnie EN; PL gdy system polski).
+- **Self-update:** macOS ✅ (od 1.0.8) · Windows ✅ (od 1.0.14) · **Linux ✅** (kod od 1.0.16, w feedzie od 1.0.17). **Pipeline WYDANIA potwierdzony e2e 2× (1.0.18, 1.0.19)** — tag→Actions(mac/win)+lokalny AppImage→rsync paczek (sha256!)→appcast→downloads. **URUCHOMIENIE spakowanego AppImage POTWIERDZONE 2026-06-20** (okno + terminal działają — PO naprawie braku wtyczek Qt/xcb; paczka 1.0.19 przebudowana, sha `325378b4…`, wydana). Wciąż DO POTWIERDZENIA: pełny **kliencki cykl self-update** (feed→pobierz→podmień→wstań) — uruchomienie i samo-podmiana niepotwierdzone razem. Mac/Win: spakowane paczki **URUCHAMIAJĄ się** (obserwacja usera: Mac pokazuje kreator przy starcie, Windows startuje) → podejrzenie crashu z braku wtyczek Qt na Mac/Win **ODRZUCONE** (PyInstaller na mac/win dociąga `cocoa`/`qwindows` sam). Do potwierdzenia zostaje tylko pełny kliencki cykl self-update.
+- **Języki:** PL + jeden angielski (`en-US`); wariant brytyjski `en-GB` usunięty w 1.0.17 (scalony do en-US, migracja wsteczna w `set_ui_language`).
+- **Strona pobierania:** `https://pobierz.srv1251441.hstgr.cloud` (basicauth) + publiczny feed `…/cva/appcast.json` (bez auth). Kontener `cva-web` (nginx) na VPS w `/opt/cva-web/`.
+
+## KOMERCJALIZACJA 2026 — START (branding + strona, sesja 2026-06-22)
+Ruszył plan z `docs/PRD.md` od strony brandingu/strony (NIE od kodu monetyzacji).
+- **Nazwa publiczna: „Vibe Coding Assistant" (VCA)**; wewn. kod zostaje `claude-voice-assistant` (CVA). Marka bez „Claude". Domena do KUPIENIA (wolne `.app`: preferowana `vibe-code-app`, też `vibecoding`/`vca`/`vibecode`). → pamięć `vca-nazwa-domena.md`.
+- **Logo** (Koncept „Prompt Wave": `>` terminala + fala): źródła + eksport w `branding/logo/` (SVG, PNG 16–1024, `vca.ico`, `vca.icns`, favicon; generowane `rsvg-convert` + Pillow). **WPIĘTE w aplikację** → `src/assets/icon.{png,svg,128,64}` (okno przez `main.py`; paczki generują `.icns`/`.ico` z `icon.png`). Galeria konceptów: `branding/logo-concepts.html`.
+- **Strona produktowa (NA BRUDNO, staging):** `website/` → VPS `/opt/cva-web/html/cva/staging/` (publiczny, `noindex`), URL `https://pobierz.srv1251441.hstgr.cloud/cva/staging/`. PL+EN (`index.html`/`index-en.html`): loader, hero, funkcje (z wyróżnioną „Słuchaj, co wygenerował Claude Code"), cennik Free/Pro, pobieranie, FAQ, kontakt. **Makiety** (alert): płatności, pobieranie, formularz. Przełącznik 🌙/☀️ (+`prefers-color-scheme`), **auto-język po IP** (GeoJS `country.json` PL→pl, inne→en; ręczny wybór w `localStorage` nadrzędny; zabezpieczenie przed pętlą).
+- **Dokumenty prawne (wersja robocza):** `polityka-prywatnosci`/`licencja` (PL) + `privacy-policy`/`license` (EN). Dostawca = **Fulfillment Polska**; placeholdery `[forma prawna/adres/NIP]`. ⚠️ przed publikacją: przegląd prawny + DOPISAĆ geolokalizację (GeoJS wysyła IP) do polityki.
+- **Funkcje aplikacji (po kolei):** #1 ✅ własna ikona per zakładka (emoji/plik/paleta-popup). #2 ✅ kolor zakładki + ramka okna aktywnego agenta (1.0.21). #3 ✅ wybór głosu czytającego per agent (1.0.21; **322 darmowe głosy edge-tts**: 2 PL `Marek`/`Zofia`, 47 EN — dropdown z `edge_tts.list_voices()`).
+
+## Architektura terminala
+`terminal_backend.py` = interfejs `TerminalBackend` (metody: `set_shell_program`, `start_shell_program`, `send_text`, `selected_text`, `copy_selection`, `set_font`, `set_color_scheme`, `shutdown`; sygnały `output_received(str)`, `finished`). Fabryka: **Linux→QTermWidget** (chyba że `CVA_WEBTERMINAL=1`/brak wheela), **macOS/Windows→WebTerminal**. AgentTab woła backend, nie surowy widget → oba silniki tą samą ścieżką. Gotcha: `AA_ShareOpenGLContexts` + wczesny import QtWebEngine w `main.py`.
+
+## Architektura auto-czytania (Droga A — z dziennika, NIE z terminala)
+Auto-czytanie bierze prozę z **dziennika sesji** `~/.claude/projects/<zakodowana-cwd>/<sesja>.jsonl`, **nie** ze strumienia terminala (TUI = przerysowania, spinner literka-po-literce, ghost-text, skoki kursora → śmieci). Pipeline:
+| Klocek | Plik | Rola |
+|--------|------|------|
+| Czytnik dziennika | `transcript_reader.py` | offset bajtowy, `poll()` zwraca NOWE bloki `type=="text"` z `assistant` nie-sidechain; `seek_to_end()` priming |
+| Filtr prozy | `text_cleaner.prose_from_markdown()` | wycina kod/tabele/linki/emoji → proza |
+| Lektor | `tts_engine.py` | kolejka z prefetch (`enqueue`), `clear_queue()` przy zmianie zakładki |
+| Spinacz | `main_window._poll_transcripts()` (QTimer 800 ms) | aktywna zakładka → `enqueue`; nieaktywne → `pending_backlog` (cap 50) |
+
+Tylko **aktywna** zakładka czyta; przełączenie ucisza poprzednią. Priming `seek_to_end()` pomija historię.
+
+---
+
+## TRWAŁE PUŁAPKI PROJEKTU
+*(uniwersalne wersje wielu z nich są w CLAUDE-COMMON — tu skrót projektowy)*
+
+- **QSS NIE SIĘGA DO TEGO, CO MALUJE SAM STYL Z PALETY → jasne artefakty w ciemnym motywie (2026-07-16).**
+  Biała kreska nad zakładkami = „półka" paska (`PE_FrameTabBarBase`) rysowana kolorami PALETY, której nigdy
+  nie przemalowaliśmy; `QTabBar { background }` maluje TŁO, nie ten prymityw → „stylujemy, a i tak świeci".
+  Ta sama rodzina co biały błysk pola input (paleta `Base`) i domyślny biały kwadrat przycisku bez stylu.
+  **Reguła: objaw „stylowane, a jasne" → podejrzewaj PALETĘ/prymityw stylu, nie QSS.** Fix przez
+  `QProxyStyle.drawPrimitive()` (pomiń prymityw), nie przez `setDocumentMode` (POGARSZA — kreska szersza).
+  Diagnoza: **mierz piksele** (PIL `getpixel`, skan pionowy) — ujawniło DWIE różne linie brane za jedną
+  (3 px `#E2E8F0` = ramka koloru agenta, czyli FUNKCJA; 1 px `#FFFFFF` = bug). Bisekcja na replice z
+  PRAWDZIWYCH klas (`_AccentTabBar`/`_LeftAlignedTabStyle`/`_AccentFrame` + realny QSS + `QMainWindow` z tłem),
+  zwalidowanej zgodnością z realnym zrzutem — goły offscreen `QTabWidget` myli (patrz pułapka QTabBar niżej).
+- **KOLOR PRZYCISKU MA WIĘCEJ NIŻ JEDNO ŹRÓDŁO — popraw animację I sprawdź pseudostany QSS (2026-07-16).**
+  Mikrofon zalewała czerwień z DWÓCH miejsc naraz: `_animate_mic_pulse` ORAZ reguły
+  `QPushButton:checked { background: DANGER }` we WSPÓLNYM `_apply_button_icon_style` (`dictate_btn` = jedyny
+  `setCheckable(True)` na tym arkuszu). Naprawa samej animacji NIE wystarczyła — user słusznie zgłosił „tło
+  dalej czerwone". Reguła USUNIĘTA, nie przywracać. Pytając „skąd ten kolor?" sprawdź `setIcon` **oraz**
+  `:checked`/`:hover`/`:pressed`/`:disabled`. Weryfikacja bez GUI: wyrenderuj
+  `icon_set.button_icon(k, state, color).pixmap()` i policz dominujący nieprzezroczysty piksel; kształt per
+  stan = porównanie bajtów z `icon_by_name(...)` + KONTROLA NEGATYWNA (mic != hourglass), inaczej test
+  „przechodzi", nie rozróżniając niczego.
+- **Sztywne wysokości w GUI + wyższe czcionki redesignu = ucięte litery (2026-07-10).** Qt nie pokazuje suwaka,
+  gdy widżet dostaje mniej miejsca niż potrzebuje — po cichu ściska rzędy i przycina glify. Objawy: ogonki p/y/ż
+  w polu poleceń i oknie agenta, opisy skilli urwane w pół zdania. Zasada: **MIERZ, nie wpisuj liczby** (oprawa
+  = `height() - viewport().height()`; wysokość linii = `blockBoundingRect`, NIE `lineSpacing`; wysokość wiersza
+  listy = `heightForWidth` + zmierzona oprawa `QListWidget::item`). Regresję łapie `tools/scan-dialog-clipping.py`
+  (16 okien). Pełny opis pułapek pomiaru → pamięć `qt-pulapki-qss-redesign.md`. Commity `782120a` + `694251c`.
+- **WebTerminal — kopiowanie ginie przez odświeżenia Claude (1.0.23).** xterm.js KASUJE zaznaczenie przy każdym zapisie do bufora, a Claude (TUI) odświeża ekran ~1×/s → zaznaczenie z Shiftem POWSTAJE, ale znika w ~1–2 s (QTermWidget trzyma je mimo odświeżeń — stąd „działa w becie, nie w pobranej"). Fix (`terminal.html`): w trakcie przeciągania PRÓBKUJ zaznaczenie (`setInterval` 80 ms) i wysyłaj OSTATNIE NIEPUSTE do `_selection`; strażnik na `onSelectionChange` (tylko niepuste), by odświeżenie nie zerowało. Kopiowanie czyta `_selection` (`WebTerminalBackend.copy_selection`) → działa mimo migającego podświetlenia. Pełne „zamrożenie" jak QTermWidget = osobna przebudowa. **1.0.24 (TEST) — porządne rozwiązanie B1+B2** (samo próbkowanie z 1.0.23 było za słabe, u usera dalej nie działało): **B1** `_stripMouse()` wycina z wyjścia DECSET raportowania myszy (`?1000/1001/1002/1003/1005/1006/1015/1016 h`; WYŁĄCZAJĄCE `l` przepuszcza, carry na styku porcji) → xterm NIE wchodzi w tryb myszy → drag zaznacza natywnie, BEZ Shift (jak czysty bash). **B2** `safeWrite()` + `_writePaused`: na czas przeciągania (mousedown→mouseup, `el`/`window` capture) KOLEJKUJE `term.write`, po puszczeniu łapie zaznaczenie i `_flushWrites()` (bezpiecznik 6 s). Kompromis: Claude traci mysz w swoim oknie (przewijanie kółkiem działa natywnie). Wyjście PTY idzie `bridge.output → safeWrite` (`web_terminal._push_to_js`).
+- **Flaga „?" — wyświetlanie samonaprawiające się (1.0.23).** `_refresh_question_flag` porównuje zamiar `show` z REALNYM stanem paska (`bar.tabButton(index, LeftSide) is not None`), NIE z notatką `_question_flag_shown` (USUNIĘTA) — rozjazd cache↔rzeczywistość trwale blokował znaczek przez early-return (objaw: armed=True w tle, a flagi brak; arming DZIAŁAŁ — potwierdził log). Teraz znaczek odtwarza się sam przy najbliższym ticku (≤0,8 s). Pokazuje się tylko na zakładce NIEaktywnej. Diagnoza: czujnik logujący + offscreen Qt (`QT_QPA_PLATFORM=offscreen`) — render OK, więc błąd był w logice cache.
+- **QTabBar — pakiet pułapek (1.0.25, dużo iteracji).** (1) **QSS `QTabBar::tab` GEOMETRIA (padding/font-size) jest IGNOROWANA**, gdy pasek ma własny `QStyle` (Fusion `_LeftAlignedTabStyle`) — KOLORY z QSS działają, ale rozmiar/odstęp nie. Czcionkę i rozmiar ikony ustawiaj API: `tabBar().setFont(QFont(pt))`, `tab_widget.setIconSize(QSize)`. (2) **Widżet LeftSide (`setTabButton`) ma NIEUSUWALNY odstęp od ikony** — `margin`, szerokość ani override `subElementRect(SE_TabBarTabLeftButton)` go nie zamykają (próbowane, nie działa na realnym pasku). Flaga „?" jest teraz **ŻÓŁTĄ IKONĄ z lewej**: badge wmalowany w róg ikony-obrazka (`_icon_with_flag`) albo samodzielna ikonka dla agentów z emoji (`_flag_only_icon`); NIE kolorujemy tytułu (źle wg usera). (3) **`setTabIcon`/`setTabText`/`setTabTextColor` RESETUJĄ przewinięcie paska** — timer flagi (~0,8 s) wołający je co tick robił, że taby wracały po kliknięciu strzałki. Fix: `_refresh_question_flag` jest NO-OP gdy sygnatura `(show, nazwa, repr(icon_spec))` bez zmian (sig ze STABILNYCH danych — nie z `QIcon`, bo ikona-plik tworzona świeżo co wywołanie). (4) **emoji-ikona = TEKST** (rośnie z czcionką, `setIconSize` jej nie rusza, renderuje się monochromatycznie/kolorem tytułu); **obrazek = `setTabIcon`** (rośnie z `setIconSize`). (5) Dzióbki przewijania (`QTabBar QToolButton`) stylowalne tłem QSS + własne strzałki przez `::left-arrow/::right-arrow { image }`. ⚠️ **Render offscreen QTabWidget NIE oddaje wiarygodnie realnego paska** (wielokrotnie mylił) — sprawdzaj ZACHOWANIE testem funkcjonalnym (klik + geometria `tabRect`), a wygląd potwierdzaj u usera; najpierw sprawdź `ps -o etimes` instancji vs czas commita, czy beta na pewno ma nowy kod.
+- **WebTerminal — kilka kopii apki naraz = zalew `Cookie sqlite error: database is locked`** (współdzielony domyślny profil QtWebEngine). Fix: profil **off-the-record** (`QWebEngineProfile(parent)` bez nazwy → wszystko w pamięci, zero zapisu) podany do `QWebEnginePage(profile, parent)` w `web_terminal.py`. Terminal (lokalny `terminal.html`) nie potrzebuje ciasteczek/cache.
+- **Izolowane testy WebTerminala z kodu:** `python3 src/gui/web_terminal.py` = goły WebTerminal (jedno okno, BEZ `agents.json`) → reprodukcja błędów tylko-WebTerminalowych bez drugiej pełnej instancji apki (dwie instancje biją się o `agents.json`). Konsola JS → `~/.claude-voice-assistant/webterminal.log` (przez `_LoggingWebEnginePage`) = miejsce na tymczasowe `console.log`. Pełna apka w trybie WebTerminala: `CVA_WEBTERMINAL=1 python3 src/main.py`.
+- **WebTerminal — bufor wejścia do PTY.** Powłoka startuje dopiero po `frontend_ready` (~2 s w AppImage); `claude`/wiadomość wysłane wcześniej `_write_pty` gubił po cichu. Fix: `_pending_input` w `__init__`, buforuj gdy `_proc is None`, opróżnij w `_spawn()`.
+- **WebTerminal — czcionka pt vs px.** `set_font(size)` przekazuje PUNKTY; QTermWidget=`QFont(pt)`, xterm.js liczy w PIKSELACH. Konwersja `px=round(size*96/72)` TYLKO na styku `web_terminal._push_font` + `fontSize` startowy w `terminal.html`.
+- **WebTerminal (QtWebEngine) — drag&drop pliku: ścieżki NIE ma w JS.** Chromium ukrywa ścieżkę upuszczonego pliku → JS w `terminal.html` jej nie dostanie (sam `preventDefault` na `dragover`/`drop` likwiduje tylko pułapkę „otwarcia pliku na całe okno", bez wklejenia). Ścieżkę bierz PO STRONIE Qt: `eventFilter` na `view.focusProxy()` (to ON dostaje `QDropEvent`), `mimeData().urls()`→`toLocalFile()`→`_write_pty`. **Reinstaluj filtr w `showEvent`** — Qt PODMIENIA focusProxy przy ukryciu/przenoszeniu między zakładkami/splitterami (stary filtr przepada). Pole input (QTextEdit) obsłuż osobno: `insertFromMimeData` z `hasUrls()` (inaczej wkleja surowy obrazek). Objaw zgłaszany przez usera: „upuściłem obrazek i apka się zacięła, nie dało się wyjść" (commit `a123504`).
+- **Białe błyski (pole input po Enter, start WebTerminala)** — przyczyna leży w PALECIE Qt / tle
+  `QWebEnginePage`, nie w stylach. Obie pułapki są uniwersalne dla apek Qt → przeniesione do
+  `CLAUDE-COMMON.md` (sekcje „PUŁAPKI QT" i „PUŁAPKI QtWebEngine").
+- **Emoji w `QPushButton` bywa NIEWIDOCZNE przy ściśniętym layoucie; paleta emoji = klikalny `QLabel` w POPUPIE.** Inline siatka emoji w `QFormLayout` (zakładka „Podstawowe") wcisnęła się — etykiety nachodziły na rzędy, glify zniknęły. Fix: paleta w osobnym `QDialog` (własna przestrzeń, `QScrollArea`), a komórki to `_ClickableLabel(QLabel)` z sygnałem `clicked` (QLabel renderuje KOLOROWE emoji; przycisk przy ciasnym layoucie gubi glif). ⚠️ ciemne tło popupu trzeba ustawić jawnie na `QScrollArea` + jego `viewport()` + widget treści (`setStyleSheet` na samym `QDialog` nie wystarcza — viewport świeci na biało). Konwencja ikony zakładki (`_agent_label_icon`): **emoji = prefiks w TEKŚCIE** zakładki (renderuje się jak '🤖 '), **własny plik = `setTabIcon(QIcon)`** + sama nazwa, brak = '🤖 Nazwa'; flaga „?" po zniknięciu przywraca ikonę pliku (nie pustą). Edycja istniejącego agenta odświeża zakładkę na żywo (`_refresh_open_agent_tabs`).
+- **Wykrywanie `claude` MUSI iść przez powłokę logowania, nie przez PATH aplikacji.** GUI z Findera/Docka (macOS) dostaje OKROJONY PATH (bez Homebrew/nvm/npm) → `shutil.which("claude")` zawodzi mimo że CLI jest, a terminal go uruchamia (login shell `-l`). Skutek przed 1.0.20: kreator ustawień wyskakiwał na Macu PRZY KAŻDYM starcie. Fix: `platform_utils.claude_runnable()` pyta `zsh -lc 'command -v claude'` (mac/linux) / `where` (win) na wzbogaconym PATH — zgodnie z tym, co zobaczy terminal. Logowanie: `claude_logged_in()` = plik `~/.claude/.credentials.json` LUB wpis Keychain `␣Claude Code-credentials` (mac; `security find-generic-password -s`, returncode 44=brak). Gotowość liczona w wątku tła (powłoka logowania bywa wolna) → sygnał `_readiness_ready` do GUI.
+- **„Pobrana apka działa inaczej niż z kodu" (Linux) = inny backend terminala.** AppImage celowo wyklucza QTermWidget (`excludes=["QTermWidget"]` w `.spec`) i odpala z `CVA_WEBTERMINAL=1` → pobrana wersja = **WebTerminal (Chromium)**, beta z kodu = **QTermWidget**. Bug „tylko w pobranej apce" reprodukuj z kodu: `CVA_WEBTERMINAL=1 python3 src/main.py`.
+- **Flaga „?" (agent czeka).** Wykrywanie z dziennika+terminala, NIE z treści. Warunek = DWIE cisze: `transcript_reader.waiting_for_user()` (dziennik stoi) **I** `monotonic()-_last_terminal_data_ts >= QUESTION_TERMINAL_QUIET_SECS (3.0)` (TUI animuje pasek ~1×/s → cisza terminala = czeka). Sama cisza dziennika NIE wystarcza (dostaje tylko ukończone wpisy → stoi 20+ s podczas pisania).
+- **transcript_reader — przypięcie sesji + SAMONAPRAWA (1.0.24 TEST).** `set_working_directory` zapamiętuje `_preexisting` + `_reader_start`; **Poziom 1** (preferowany): plik `.jsonl` powstały PO starcie zakładki (ignoruje równoległą/starą sesję — ochrona zachowana). **Poziom 2** (samonaprawa, gdy brak pliku z Poziomu 1): przygarnij plik istniejący WCZEŚNIEJ, ale zapisywany PO starcie czytnika (`_safe_mtime>_reader_start` = WZNOWIONA żywa sesja tej zakładki), z przeskokiem na koniec w `_ensure_session` (`offset=size`, nie odgrywaj historii). Stare NIETKNIĘTE pliki (`mtime<=start`) dalej pomijane. **Bug 1.0.23:** po self-update/restarcie/reopenie czytnik był ślepy na trwającą rozmowę → cisza w czytaniu I flaga nie wykrywała ciszy (objaw F-P: ręczny 🔊 milczał mimo żywej rozmowy). Potwierdzony danymi: apka start 12:56, plik sesji „birth" 13:02 → reguła „ignoruj preexisting na zawsze" gubiła go. Test logiki 9/9.
+- **Lazy activation zakładek.** `self._ui_ready` (False przez `__init__`) w `_on_tab_changed`; primary tab aktywowany odroczonym `QTimer` (bo `setCurrentIndex(0)` nie emituje `currentChanged`). Guard idempotencji w 3 ogniwach (create / `_on_terminal_ready` / final-action).
+- **Sygnały zakładki = jedno źródło.** `MainWindow._connect_agent_tab_signals(tab)` — oba tory tworzenia (Dodaj agenta / „+") muszą wołać tę metodę (inaczej „+" gubi `terminal_output` → licznik tokenów milczy).
+- **`QTermWidgetBackend._on_received`.** `receivedData` niesie `str`, nie QByteArray — obsłuż `isinstance(str)` / `hasattr('data')` / `bytes()` (inaczej `bytes(str)` TypeError połykany → całe wyjście gubione).
+- **Zamykanie zakładki.** Najpierw `setCurrentWidget(cel z MRU `_tab_mru`)`, POTEM `removeTab` — „+" to atrapa-QWidget; inaczej Qt aktywuje ją (czarny ekran) lub przypadkowo sąsiada (start claude).
+- **Splitter nowej zakładki.** `config.DEFAULT_SPLITTER_SIZES=[1500,190]` (jedyne źródło) + `_inherit_splitter_sizes()` (dziedziczenie z aktywnej); `dialogs.get_data` NIE wpycha defaultu nowemu agentowi.
+- **Zakładki macOS do lewej.** `_LeftAlignedTabStyle` = QProxyStyle na silniku Fusion + override `subElementRect(SE_TabWidgetTabBar)` (QMacStyle IGNORUJE `SH_TabBar_Alignment`); podpięty do `tab_widget.setStyle` ORAZ `tabBar().setStyle`. → CLAUDE-COMMON „PUŁAPKI QT" pkt 5.
+- **Pauza TTS.** Sygnał `request_pause` → `_toggle_pause` → `tts.toggle_pause()`; przycisk ⏸ tylko podczas `PLAYING`.
+- **i18n.** Centralny `config.t(key)` (import `from config import t as tr` — ABSOLUTNIE, nie `from ..config`); parytet 2 słowników `pl-PL`/`en-US` w `UI_TRANSLATIONS` (en-GB usunięty w 1.0.17 — `set(pl)==set(us)`); przy zmianie języka USUWAJ stare QAction przed odbudową menu (inaczej „ambiguous shortcut"). → pamięć projektu `i18n-architektura.md`.
+- **TTS limit czasu.** `tts_engine._async_generate` ma `asyncio.wait_for(save, TTS_GEN_TIMEOUT=12)`, `_generate_audio` ponawia `TTS_GEN_ATTEMPTS=2`, błędy → `tts.log`; po nieudanych próbach pomija zdanie (lektor nie wisi). Bez tego zatkany edge-tts wieszał czytanie.
+- **Windows spakowany (QtWebEngine).** `QTWEBENGINE_DISABLE_SANDBOX=1`; polyfill `replaceChildren` w `terminal.html` przed xterm.js (Chromium 83 z PyQtWebEngine-Qt5 5.15.2); `collect_all('winpty')` w `.spec`; `sys.stdout/err.reconfigure(errors="replace")` w `main.py`. → CLAUDE-COMMON „PAKOWANIE" pkt 10/12.
+- **Rozróżnienie okna „z kodu (beta)" vs wydanego (AppImage).** `config.IS_DEV = not getattr(sys,'frozen',False)` (spakowane=frozen) → `APP_WM_CLASS` (`-beta` w dev), `APP_TITLE_SUFFIX` (' — beta'); `main.py`: `setApplicationName(APP_NAME + " (beta)")` + **`setDesktopFileName(APP_WM_CLASS)`**. Na **GNOME Wayland** dock/Show-Apps grupuje okna po **app_id** (= `setDesktopFileName`), NIE po X11 `WM_CLASS` → samo Qt nie wystarcza: trzeba zainstalować/poprawić `.desktop` w `~/.local/share/applications/` z `StartupWMClass` == app_id (beta=`claude-voice-assistant-beta`→`run-safe.sh`+ikona ze wstążką BETA; wydana=`claude-voice-assistant`→AppImage w `~/Applications/`+czysta `icon.png`). Nowy/zmieniony `.desktop` pojawia się w „Show Apps" dopiero **po wylogowaniu** (cache powłoki GNOME; na Wayland brak restartu powłoki w locie). Skróty są lokalne (poza repo).
+- **PyInstaller NIE dociągnął wtyczek platformowych Qt → AppImage crashuje przy starcie.** W buildach Linuksa do 1.0.19 w paczce brakowało CAŁEGO katalogu `PyQt5/Qt5/plugins/` (m.in. `platforms/libqxcb.so` + jego zależność `libQt5XcbQpa`) → `"Could not find the Qt platform plugin xcb"` i crash w 1. sekundzie (exit 134, core dump). Nikt nie wyłapał, bo spakowanej wersji NIGDY nie odpalano (testy „z kodu"). Fix w `packaging/linux/ClaudeVoiceAssistant.spec` (commit `075ff54`): JAWNIE dołącz grupy wtyczek jako **`binaries`** (nie `datas`! — binaries każą PyInstallerowi przeanalizować i wciągnąć zależności wtyczki: `libQt5XcbQpa`, `libxcb-*`) z miejscem docelowym `PyQt5/Qt5/plugins/<grupa>` (bo `qt.conf` ma `Prefix=..`). Grupy: `platforms`, `xcbglintegrations`, `platformthemes`, `platforminputcontexts`, `iconengines`, `imageformats`, `wayland-*`. Dodany twardy bezpiecznik: build przerywa się gdy brak grupy `platforms`. Weryfikacja: rozmiar AppImage 168→189 MB; `find -name libqxcb.so` w rozpakowanej paczce; przeżycie procesu >5 s zamiast crashu. ⚠️ **Specki macOS (`binaries=[]`) i Windows (tylko `winpty`) mają TEN SAM brak — paczki Mac/Win 1.0.19 prawdopodobnie tak samo zepsute, NIEZWERYFIKOWANE.** Uniwersalna pułapka PyInstaller+PyQt → kandydat do COMMON „PAKOWANIE".
+- **Linuksowy `.spec` był nieśledzony przez git** (reguła `*.spec` w `.gitignore`; specki macOS/Windows dodane przez `git add -f`, linuksowy nigdy). Skutek: recepta pakowania Linuksa poza wersjonowaniem → wadliwy build niereviewowany. Linuksowy `.spec` dodany przez `git add -f` (spójnie z pozostałymi). Reguła: każdy nowy `packaging/<os>/*.spec` → `git add -f`.
+- **Paczka jest „świeża" — sekrety NIE są w buildzie.** `GROQ_API_KEY = os.getenv('GROQ_API_KEY','')` (brak hardcode); klucz Groq zapisuje NASZA apka do `~/.claude-voice-assistant/config.json` (`CONFIG_DIR.mkdir` + `json.dump` w `main_window`), login Claude tworzy **samo Claude Code** w `~/.claude/.credentials.json` (my tylko czytamy `~/.claude/skills/`). `datas` w spec = tylko `src/assets`+`config.py`+`i18n`+`gui/*.svg`. „Pobrana apka ma moje ustawienia" = ZŁUDZENIE: na własnym kompie czyta pliki z HOME, nie z paczki. **Weryfikacja czystości paczki:** `AppImage --appimage-extract` + `grep -r` po WYPAKOWANYCH plikach — raw-grep na samym `.AppImage` myli (squashfs kompresuje → przypadkowe `gsk_` w szumie ORAZ przeoczenia realnych sekretów w plikach).
+- **`claude` zepsuty/niezgodny na Windows — apka utyka na STAREJ ścieżce (wsparcie 2026-06-30).** Objaw u usera: Windows „Nieobsługiwana aplikacja 16-bitowa" / „`…\npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe` nie jest zgodna z wersją Windows", a w terminalu apki widać wpisaną PEŁNĄ ścieżkę `C:\…\Roaming\npm\claude.CMD`. **Przyczyna NIE u nas** — to bug Claude Code (`@anthropic-ai/claude-code` 2.1.113–2.1.114: `claude update`/instalacja na Windows pobiera binarkę dla Linuksa zamiast Windows; reprodukuje się w gołym PowerShellu `claude --version`). Nasza apka woła `claude.CMD` poprawnie. **Dlaczego instalacja natywnej wersji + restart NIC nie dają:** (1) `find_claude_command()`=`shutil.which('claude')` zwraca PIERWSZY z PATH → zepsuty `…\npm\claude.CMD` przesłania natywną w `~\.local\bin`; (2) `main_window` PERSYSTUJE `claude_command` (pełną ścieżkę) w `config.json` (load ~2224 / save ~2247) i podmienia ją tylko gdy `find_claude_command()` zwróci INNĄ (`_on_readiness_checked` ~2062) — a dalej zwraca npm. **Naprawa u usera:** `npm uninstall -g @anthropic-ai/claude-code` (usuwa shadowing) → natywny instalator `irm https://claude.ai/install.ps1 | iex` (PowerShell) → Ustawienia→„Komenda Claude Code" = samo `claude` → restart apki. **TODO produktowe:** `claude_runnable()` testuje tylko OBECNOŚĆ (`where claude`→0), nie URUCHAMIALNOŚĆ → zwraca True dla obecnego-ale-zepsutego `claude.exe`; dla nietech. usera dołożyć wykrycie „niezgodny/16-bit" + podpowiedź natywnej reinstalacji zamiast surowego okna Windows.
+
+---
+
+## DIAGNOZA CRASHU `claude` W ZAKŁADCE + „czarna skrzynka"
+Objaw: zakładka „wypada" do gołego promptu basha z hintem `claude --resume <uuid>` — user widzi to jako „wylogowanie". To **crash procesu `claude`** (Claude Code), NIE crash CVA: powłoka (QTermWidget/WebTerminal) przeżywa, bo `claude` to jej dziecko → `backend.finished` NIE odpala. Ten sam ekran „Resume this session" to **ekran ratunkowy Claude Code po crashu**.
+
+**Kolejność wykluczania (potwierdzona na crashu 2026-06-17, sesja `2b03a6c5`):**
+1. **RAM/OOM?** → `journalctl --since today | grep -iE "earlyoom|oom-kill|killed process"`. Jest `earlyoom -m 8 -s 8 --prefer (claude|node|chrome|signal-desktop)` (ubija PREFEROWANE, m.in. `claude`, przy <8% mem+swap). Brak wpisu kill + log pokazuje sporo wolnego → NIE RAM. (Wtedy: 74% wolnej pamięci.)
+2. **Wylogowanie/token?** → mtime + `expiresAt` z `~/.claude/.credentials.json` (8h token). Ważny + brak realnego `401` w dzienniku → NIE auth. ⚠️ „401" w `.jsonl` to zwykle fałszywka (treść pamięci, cyfry w timestampach `…19.401Z`).
+3. **Błąd API/limit?** → w dzienniku sesji szukaj wpisu z `isApiErrorMessage:true`. Brak → claude nie zdążył odpowiedzieć (crash przed odpowiedzią).
+4. Zostaje **crash wewnętrzny `claude`** (np. przy przetwarzaniu konkretnego promptu/załącznika). Współbieżne sesje współdzielą `~/.claude.json` + `.credentials.json` (backup `~/.claude/backups/.claude.json.backup.<ms>` co do sekundy crashu = kolizja na wspólnym stanie to podejrzany trop).
+
+Dziennik sesji: `~/.claude/projects/<cwd-z-myślnikami>/<uuid>.jsonl`; padła sesja w pełni odzyskiwalna: `claude --resume <uuid>`.
+
+**„Czarna skrzynka" (od 2026-06-17):** dokładny stack trace szedł na stderr terminala i się przewijał (CVA czyta `.jsonl`, NIE stderr). Dlatego `AgentTab` trzyma ring-bufor surowego wyjścia (`_terminal_capture`, ~64 KB, `config.TERMINAL_CAPTURE_BYTES`) i przy wykryciu podpisu `claude --resume <uuid>` w strumieniu zrzuca go (ANSI usunięte) do `~/.claude-voice-assistant/crash-logs/crash-<agent>-<data>.log`. **Pierwsze miejsce do czytania przy NASTĘPNYM crashu.** Implementacja: `_on_terminal_output` (tani pre-check `"resume" in`), `_maybe_dump_crash_log` (regex `_CRASH_SIGNATURE_RE` + debounce 30 s), `_dump_crash_log`. Pasywne — nie zmienia uruchamiania `claude`.
+
+## PRZEPIS: dodać nowy model Claude Code
+Aplikacja woła `claude --model <klucz>`. Dodanie modelu = **jeden plik `src/config.py`** = 3 słowniki jako jedyne źródło prawdy: `CLAUDE_MODELS`, `CLAUDE_MODELS_SHORT`, `CLAUDE_MODEL_CONTEXT_LIMITS` (dropdown/panel agentów/licznik tokenów zasilają się same).
+1. **Zweryfikuj alias na żywo:** `claude --model <alias> -p "OK"` → exit 0.
+2. Dopisz TEN SAM klucz do **wszystkich 3** słowników (`set(A)==set(B)==set(C)`).
+3. `NEW_AGENT_DEFAULT_MODEL` zmieniaj świadomie (domyślny = **Opus**, tańszy).
+4. Test: `py_compile src/config.py` + odpalenie apki.
+
+Dostępne aliasy: `opus`/`sonnet`/`haiku`/`fable` (rozwiązują się po stronie CLI). **Fable 5** = okno 1M (jak Opus 4.8), ~2× droższy → do ciężkich zadań; Opus do bieżączki.
+
+## ⚠️ Pamięć/RAM — każda zakładka = osobny proces `claude`
+Aplikacja w Pythonie jest lekka (~80 MB). **Pamięć zżera Claude Code CLI: 3–5 GB NA ZAKŁADKĘ** (node, rośnie z długością sesji + dużym kontekstem startowym). 4 auto-startujące zakładki × ~4 GB przebijają RAM → swap → zawieszanie (i spowolnienie dyktowania/wszystkiego). Łagodzenie: mniej auto-startu (`auto_start=False`), restart długich zakładek (Stop→Uruchom / `/clear`), szczupłe pliki pamięci (mniejszy kontekst startowy), `earlyoom` jako siatka. Sam dokup RAM nie wystarczy — klucz to mniej jednoczesnych zakładek.
+
+---
+
+## 🟡 „Please run /login" = WYŚCIG O ODŚWIEŻENIE TOKENU — ETAP 1 (OBSERWACJA) ZROBIONY (`e6af2c3`, 2026-07-21)
+
+> Zgłoszenie usera: „coś mnie wylogowało z Claude Code". **User NIE był wylogowany** — plik poświadczeń był
+> cały i świeży. To zakładki VCA przewracają się nawzajem (diagnoza od agenta AI Managera, 2026-07-20).
+> **Stan:** apka WYKRYWA odmowę, po opóźnieniu orzeka „wyścig vs prawdziwe wylogowanie" i zapisuje zdarzenie
+> do `~/.vibe-coding-assistant/login-events.log` + komunikat na pasku. **Automatycznego restartu jeszcze NIE MA**
+> — świadomie, do czasu potwierdzenia rozpoznania na żywych danych. ⏳ niesprawdzone u usera na żywo.
+
+**Objaw:** jedna lub kilka zakładek nagle pokazuje `Please run /login` / `Unauthorized`, choć logowanie jest ważne.
+Proces `claude` NIE ginie — wisi dalej z martwą sesją, więc wygląda to na zawieszenie, nie na problem z logowaniem.
+
+**Zmierzone dowody (2026-07-20, laptop usera):** 8 procesów `claude` na jednym
+`~/.claude/.credentials.json`; 5 odmów w 4 zakładkach w ciągu 5 minut wokół wygaśnięcia tokenu (16:51),
+plik odnowiony 16:55 i ważny kolejne 8 h. Zjawisko powtarzalne kilka razy dziennie. Pełna oś czasu → archiwum.
+⚠️ **To NIE jest wina kolektora AI Managera** — on ten plik wyłącznie CZYTA i nigdy nie używa `refreshToken`.
+
+**Naprawa: pozbieranie się po przegranym wyścigu — NIE własne odświeżanie tokenu.**
+⛔ Nie dokładaj w VCA logiki odnawiania tokenu: to dołożyłoby DZIEWIĄTEGO uczestnika wyścigu i pogorszyło sprawę.
+Naprawą jest wykrycie odmowy i restart tej jednej zakładki — plik na dysku jest już wtedy poprawny.
+
+Kroki (masz gotowe wszystkie klocki):
+1. ✅ **ZROBIONE — Wykryj.** `TranscriptReader._is_api_error` + `take_api_errors()` → `_on_claude_api_error`.
+   ⚠️ Rozpoznanie idzie po **PIECZĄTCE `isApiErrorMessage`** (Claude Code stawia ją sam; taki wpis ma też
+   `message.model=="<synthetic>"`), **NIGDY po treści** — fraza „Please run /login" występuje w NORMALNEJ
+   rozmowie (te pliki pamięci, opis tej usterki), więc dopasowanie po tekście restartowałoby zakładkę za
+   każdym razem, gdy ktoś o tej usterce *napisze*. Kontrola negatywna w `tools/test-login-race.py`.
+   Przy okazji: komunikaty błędów przestały iść do lektora (nie czyta już „Login expired" na głos).
+2. ✅ **ZROBIONE — Odróżnij wyścig od PRAWDZIWEGO wylogowania** (bez tego pętla restartów):
+   `platform_utils.claude_credentials_state()` (data zapisu + `expiresAt`, BEZ czytania samych tokenów)
+   + `credentials_refreshed_since()` (czysta reguła, testowalna bez okna).
+   ⚠️ **WERDYKT MUSI ZAPADAĆ Z OPÓŹNIENIEM** — zwycięzca odnawia plik dopiero po kilku minutach (zmierzone
+   2026-07-20: **8 min** po pierwszej odmowie), więc ocena natychmiastowa orzekłaby „wylogowanie" dla KAŻDEGO
+   wyścigu. Dopytujemy co minutę przez 12 min (`LOGIN_VERDICT_INTERVAL_SECS`/`_MAX_CHECKS`).
+   ⚠️ **Pułapka wieloplatformowa:** na macOS poświadczeń NIE MA w pliku — siedzą w Pęku kluczy (`security
+   find-generic-password -s "Claude Code-credentials"`), więc test „mtime pliku" tam nie zadziała →
+   `available=False` = werdykt „nierozstrzygnięty" + bezpieczna rada „wpisz /login".
+
+**Do ETAPU 2 (automatyczny restart) zostało — włączyć DOPIERO gdy `login-events.log` pokaże, że werdykty
+trafiają bezbłędnie (dowód z żywych danych, nie z testów syntetycznych):**
+
+3. **Restart zakładki** — proces startuje z `claude --session-id <uuid>` (`main_window.py:2344`), a czytnik jest
+   przypięty do tego pliku (`TranscriptReader.pin_session`). Restart z TYM SAMYM `--session-id` zachowuje wątek
+   rozmowy; świeży proces czyta odnowione poświadczenia i wraca do pracy. User nie powinien niczego zauważyć
+   poza krótką przerwą (rozważ dyskretny komunikat na pasku, bez modala).
+4. **Bezpieczniki:** maks. 1 restart na zdarzenie wygaśnięcia (np. cooldown ~2 min per zakładka) + licznik prób;
+   po drugiej nieudanej próbie przestań i powiedz userowi wprost. Restart NIE może wejść w środek pisania odpowiedzi
+   — sprawdź `waiting_for_user()` albo odczekaj do końca tury.
+5. **Testy (oba kierunki, jak przy innych naprawach):** (a) wyścig → podstaw dziennik z `Please run /login`
+   + świeży plik poświadczeń → zakładka ma się zrestartować raz; (b) prawdziwe wylogowanie → ten sam błąd, ale plik
+   NIE odświeżony → zero restartów i komunikat. Bez (b) grozi pętla restartów przy realnym wylogowaniu.
+
+**Łagodzenie dla usera do czasu naprawy (bez kodu):** mniej jednoczesnych zakładek — każda to kolejny uczestnik
+wyścigu (przy jednej problem nie występuje, przy ośmiu jest niemal pewny co kilka godzin). Zbieżne z notatką
+„Pamięć/RAM — każda zakładka = osobny proces `claude`" wyżej: mniej zakładek pomaga na oba problemy naraz.
+
+---
+
+## DYSTRYBUCJA / WYDANIA — runbook (sprawdzony 1.0.13→1.0.17; 1.0.17 = pierwsze pełne 3-platformowe z Linuksem)
+1. Bump `APP_VERSION` w `src/config.py` → commit/push.
+2. `git tag vX.Y.Z && git push origin vX.Y.Z` → GitHub Actions buduje **mac+win naraz** (`build-macos.yml` runner `macos-14`, `build-windows.yml` `windows-latest`) i publikuje Release. (Iteracja bez wydania: `gh workflow run build-*.yml --ref main`.)
+3. `gh release download vX.Y.Z -p '*.zip' -p '*.dmg' -p '*.exe'` (do `dist-release/`, w .gitignore). ⚠️ Wzorzec **`*Setup.exe` NIE łapie** `VibeCodingAssistant-Setup-1.0.20.exe` (kończy się na `-X.Y.Z.exe`, nie na `Setup.exe`) — używaj `*.exe`.
+4. **Wgraj paczki PRZED appcastem** (inaczej okno błędu 404): `.zip`(mac)+`Setup.exe`(win)+`.AppImage`(linux, build lokalny `CVA_SKIP_DEPS=1 bash packaging/linux/build.sh`) → `/opt/cva-web/html/cva/`; potem `appcast.json`. ⚠️ **Duże paczki (~200 MB AppImage) przez `scp` BYWAJĄ UCINANE (broken pipe) — wgrany plik krótszy, bez błędu widocznego od razu.** Używaj `rsync --partial --inplace -e ssh PLIK host:ścieżka` (wznawialny) i ZAWSZE sprawdź rozmiar/sha256 na serwerze PRZED uploadem appcastu (potwierdzone na 1.0.17: AppImage przyszedł 167/198 MB). ⚠️ **`rsync --inplace` PRZENOSI uprawnienia źródła — a `gh release download` zapisuje `.exe` jako `-rw-------` (600) → nginx nie może go odczytać → publiczny URL `.exe` daje HTTP 403** (`.zip`/`.AppImage` z gh są 644, działają). Po uploadzie ZAWSZE `chmod 644` na `.exe` (w `cva/` ORAZ w `downloads/` po `cp`). Potwierdzone na 1.0.21. Build LINUX 1.0.21 = 179 MB (OK). Uwaga: `/downloads/` jest za basicauth (HTTP 401 przez curl bez hasła — to NORMALNE); publiczny jest tylko `/cva/`.
+5. `.dmg`/`Setup.exe`/`.AppImage` → `/opt/cva-web/html/downloads/` pod **stałą nazwą** (`VibeCodingAssistant-macos.dmg`, `VibeCodingAssistant-Setup.exe`, `VibeCodingAssistant-linux.AppImage`+`chmod +x`; starą jako `.bak`). Oszczędność łącza: exe/AppImage z cva/ skopiuj server-side (`cp`) zamiast wgrywać drugi raz.
+6. Wpis do feedu: `python3 packaging/make-appcast-entry.py PACZKA --version X --platform <macos-arm64|windows-x64|linux-x64> --base-url https://pobierz.srv1251441.hstgr.cloud/cva/ --appcast packaging/appcast.json --merge` → `scp appcast.json`.
+7. **Weryfikacja publicznym URL:** `curl …/cva/appcast.json` (version + wpis dla platformy!) + `curl -I …PACZKA` (HTTP 200, `content-length`==`size`, sha256 serwer==feed).
+
+**Retencja paczek na VPS:** cotygodniowy cron `/etc/cron.d/cva-prune-releases` (poniedziałki 4:30; źródło
+w repo: `packaging/prune-release-channel.py`, domyślnie PRÓBA NA SUCHO, kasuje z `--apply`). Chroni pliki
+wskazane przez `appcast.json` i strony; „N najnowszych" liczy w grupie aplikacja+platforma (`.dmg` i `.zip`
+Maca to OSOBNE grupy). Uruchomienie i wyniki z 2026-07-20 → archiwum.
+
+Uwagi: appcast ma **jedną** globalną `version` dla wszystkich platform (musi mieć wpis dla `update_platform_id()` bieżącej platformy, inaczej cicho „no_update"). `gh` zalogowany w keyring (po rotacji PAT). Aktualizacje pełnopaczkowe → przeskok wielu wersji bezpieczny (wyjątki: Mac ≤1.0.7 bootstrap, Win 1.0.12–1.0.13 kruchy downloader). Onboarding na świeżej maszynie: user musi doinstalować Node.js + `npm i -g @anthropic-ai/claude-code` + login (kreator `ClaudeSetupDialog` prowadzi).
+
+---
+
+## LINUX SELF-UPDATE (AppImage) — ZROBIONE (kod 1.0.16; commity `e91b76f` + `175b683`)
+Działa jak na Macu, prościej (AppImage = JEDEN plik, nie katalog ze symlinkami → bez `ditto`, bez kwarantanny):
+- `platform_utils.appimage_path()` → `$APPIMAGE` (plik .AppImage na dysku) lub `None`.
+- `update_manager`: `can_self_replace` (Linux + `.appimage` + `appimage_path()`), `_apply_worker` → `_linux_self_replace()` = skrypt bash czeka aż PID zniknie → atomowa podmiana (`cp` do pliku tymcz. obok celu + `mv`) → `chmod +x` → restart `setsid` → `relaunch_ready`.
+- Feed `linux-x64` w appcaście (publiczny `cva/`), strona PL+EN przycisk aktywny (`downloads/VibeCodingAssistant-linux.AppImage`, stała nazwa), instrukcje `instrukcja-linux.html(-en)`.
+
+**Trwałe pułapki:** podmieniaj **`$APPIMAGE`**, NIE `sys.executable`/`/tmp/.mount_*` (mount znika po zamknięciu); `chmod +x` obowiązkowy; feed MUSI mieć wpis `linux-x64` (inaczej cicho „no_update"); paczka na serwer **PRZED** appcastem; `$APPIMAGE` istnieje tylko gdy uruchomione jako AppImage (z kodu → ścieżka „otwórz", to OK).
+
+**Przetestowane:** gating `can_self_replace`/`appimage_path()` (oba tryby) + **mechanizm podmiany e2e na żywych plikach** (harness: proces-dziecko woła `_linux_self_replace` i ginie → pomocnik czeka na zgon PID → atomowy `mv` zmienia inode → `chmod +x` zachowany → `setsid` odpala nową wersję; zero śmieci `.new-*`). `UPDATE_APPCAST_URL` jest ZAPIEKANY w configu (brak env-override), więc pełny test GUI wymaga zbudowania paczki testowej.
+
+**Zostało (uznane za wystarczająco bezpieczne):** jedyna niepokryta luka = pełny KLIENCKI cykl w SPAKOWANYM AppImage (uruchom→feed→dialog→pobierz→podmień→wstań). Część „pobierz/dialog/sha" wspólna z Mac/Win (sprawdzona e2e); zostaje „czy zapakowany AppImage wstaje po podmianie". **Stan 2026-06-19:** 1.0.18 i 1.0.19 są w feedzie (pipeline wydania potwierdzony e2e 2×), więc test klienckiego cyklu = po prostu uruchomić zainstalowany AppImage i pozwolić mu się zaktualizować. Wciąż NIE potwierdzony przez usera (poprawki testowane z kodu). Pierwszą paczkę user instaluje raz ręcznie, od niej w górę aktualizuje się sama.
+
+## STRONY INSTRUKCJI (`packaging/web` → VPS `/opt/cva-web/html/cva/`, publiczne)
+PL + `-en`. Instalacja 3 systemów **SCALONA** w `instrukcja-instalacja.html` (górne menu macOS·Linux·Windows·Dyktowanie·Agenci; OS-y przełączane zakładkami JS — kotwica `#os`). Stare `instrukcja-{macos,linux,windows}{,-en}` = przekierowania na scaloną → **stare apki dalej działają**. Generatory (uruchamiać z `packaging/web/`): `build-instalacja.py` scala sekcje stron OS — **MUSI prefiksować `id`/anchory/`copyCmd('id')` per panel** (3 strony używały tych samych `id` cz1..cz5/npmcmd → kolizja `getElementById`; `copyCmd` siedzi PO `<footer>`, więc dołączany osobno); `inject-menu.py` wstrzykuje górne menu + sekcję „jak uruchomić dyktowanie" (idempotentny, pomija gdy `topnav` jest). ⚠️ `build-instalacja.py` nadpisuje strony OS przekierowaniami — przed ponownym uruchomieniem `git checkout` oryginałów. Aplikacja linkuje przez `config.install_guide_url`. Test układu: headless Chromium (Playwright) na `file://`.
+
+## Inne otwarte TODO
+- [x] ~~🔴 **DYKTOWANIE ucina litery po `ł`/`ó`**~~ ✅ **ZAMKNIĘTE 2026-07-25** (user potwierdził na żywo).
+      Hipoteza „ten sam kanał co wpisywanie wprost" okazała się trafna — naprawił to `9aad8dd`
+      (eventFilter → `sendText`), bez ruszania STT. → sekcja „POTWIERDZONE" wyżej.
+- [ ] **XSS (niski prio):** `src/gui/web_terminal.py` `_show_failure_page` — surowy f-string z `reason`
+      (reszta panelu admina domknięta 2026-07-14, `6b70b5a`; opis → archiwum).
+- [ ] **Redesign — do rozważenia po testach:** własna belka tytułowa (świadomie pominięta — ryzyko Wayland/macOS); okno ustawień jako jeden modal z bocznym menu zamiast menu górnego + osobnych dialogów — to zmiana UKŁADU, nie wyglądu, więc poza zakresem redesignu.
+      **Makieta tego ekranu żyje w repo:** `design/makieta-2026-07-09/` (`.dc.html` + `support.js`
+      + README ze stanem wdrożenia; `settingsTabs` = ten niewdrożony ekran). Zrzuty świadomie POMINIĘTE
+      — repo jest **publiczne**; pełny eksport z nimi: `~/Projekty/makiety/vca-redesign-2026-07-09.zip`.
+      ⚠️ `.gitignore` ma teraz `*.zip` — kolejny eksport makiety rozpakuj do `design/`, nie commituj archiwum.
+- [ ] **Strona/branding (po stronie usera/decyzji):** uzupełnić dane firmy `[forma prawna/adres/NIP]` w polityce+licencji (PL+EN naraz); kupić domenę; dopisać geolokalizację (GeoJS) do polityki prywatności; podpiąć link „Instrukcje" na stronie (teraz `#`) do `instrukcja-instalacja.html`; przegląd prawny przed publikacją; potem przepiąć stronę ze stagingu na docelową domenę.
+- [ ] Potwierdzić **kliencki** self-update spakowanego AppImage: uruchomić zainstalowany AppImage i sprawdzić aktualizację do 1.0.19 (patrz sekcja LINUX SELF-UPDATE).
+- [ ] **BUG Mac — CRASH QtWebEngine po wybudzeniu (nie „ostrzeżenie"!):** zrzut od usera (26.06, wersja **1.0.25**) = macOS „Raport problemu / Aplikacja nieoczekiwanie zakończyła pracę" (OK / Otwórz ponownie) → user bierze to za cykliczne ostrzeżenie, bo „Otwórz ponownie" → znów crash. Sygnatura: `Crashed Thread 0 CrBrowserMain` (QtWebEngine/Chromium), `EXC_BAD_ACCESS (SIGSEGV)`, **Time Since Wake: 88 s** = crash krótko po śnie. To DOKŁADNIE pamięć `mac-qtwebengine-crash-po-snie.md` (crash w CrBrowserMain po wybudzeniu, nie błąd wersji, raport leci do Apple; nasz `crash-logs/` łapie tylko crash `claude`, NIE QtWebEngine). Na **1.0.26** wystąpił RAZ (user niepewny czy po wybudzeniu), po zamknięciu+otwarciu apki NIE wraca → rzadki, niereprodukowalny przy normalnym starcie = niski priorytet. Kierunek naprawy (do analizy, NIE wdrażać, tylko gdyby się nasilił): flagi QtWebEngine na macOS (np. wyłączenie GPU/sandbox po wzorze `QTWEBENGINE_DISABLE_SANDBOX` z Windows) LUB reinicjalizacja WebTerminala na sygnał wybudzenia.
+- [ ] **Mac — Claude Code (CLI) przez npm: 401 + auto-update failed (NIE bug naszej apki).** Zrzut 1.07 (v1.0.26, apka działa OK): w terminalu dwa komunikaty CLAUDE CODE (nie naszej apki) — `Please run /login · API Error: 401 Invalid authentication credentials` (Claude Code wylogowany → user wpisuje `/login` w terminalu) + `Auto-update failed: no write permission to npm prefix · Run /doctor` (npm-owy Claude Code nie ma praw zapisu do prefiksu → nie aktualizuje się sam). Macowy odpowiednik znanego problemu npm z Windows (`windows-claude-niezgodny-npm`). Priorytet: `/login` odblokowuje agenta; auto-update do naprawy osobno (reinstalacja Claude Code natywnym instalatorem zamiast npm, albo naprawa praw prefiksu npm). Powiązanie z TODO „wykrywanie zepsutego `claude`".
+- [ ] Test zadania „nodecli" instalatora na świeżym Windows (auto-instalacja Node+Claude Code).
+- [ ] Kolejne języki: dopisać słownik w `UI_TRANSLATIONS` (parytet!) + `SUPPORTED_LANGUAGES` + `detect_system_language` + pliki `-xx.html` + dropdown.
+- [ ] **Wykrywanie ZEPSUTEGO `claude` (nietech. user, Windows):** `claude_runnable()` testuje tylko obecność, nie uruchamialność → przy zepsutej binarce npm apka utyka i pokazuje surowy błąd Windows („16-bit"/„niezgodny"). Dodać wykrycie tego stanu + czytelną podpowiedź natywnej reinstalacji (`irm https://claude.ai/install.ps1|iex` + `npm uninstall -g @anthropic-ai/claude-code`). Patrz pułapka „`claude` zepsuty/niezgodny na Windows" (2026-06-30).
+
+## CHMURA — stan prac (Faza 1)
+Plan: `docs/PLAN-CHMURA-SYNC.md` (sekcja 9 = szyfrowanie). Pamięć: `chmura-sync-agentow.md`.
+- **GOTOWE:** silnik paczki (`src/core/cloud/agent_bundle.py`) + szyfrowanie end-to-end
+  (`bundle_crypto.py`, AES-256-GCM + scrypt). Testy `tools/test-cloud-crypto.py` (26/26)
+  + `tools/test-cloud-bundle.py`. Na żywych danych: 10 agentów, 23 skille (273 pliki),
+  15 plików pamięci, szybkie akcje → **1081 KB** zaszyfrowanej paczki.
+- **Paczka niesie:** agentów (ikony/kolory/głosy), pliki pamięci, definicje skilli, gating
+  MCP, szybkie akcje, projekty pamięci, skórkę, język **oraz klucze API** (decyzja usera).
+  NIE niesie: kodu projektów (idzie przez `git clone`) ani `claude_command` (ścieżka lokalna).
+- **✅ POŁĄCZENIE Z DYSKIEM GOOGLE DZIAŁA NA ŻYWO (2026-07-21, `a7663f5`+`a6c5ddc`).**
+  `google_drive.py`: OAuth desktop + PKCE, loopback `127.0.0.1`, zakres `drive.file`
+  (apka widzi TYLKO własne pliki → Google nie wymaga audytu), token lokalnie z prawami 600.
+  Testy: 22 na atrapie serwera + 22 e2e („przeprowadzka na nowy komputer") + **przebieg
+  na PRAWDZIWYM Google** (logowanie → folder → wysyłka → pobranie bajt w bajt → sprzątnięcie).
+  Projekt Google usera: `impressive-bay-503111-d1` („VCA Google"), klient typu `installed`;
+  dane klienta i token w `~/.vibe-coding-assistant/cloud-google-{client,token}.json` (600).
+  ⚠️ Aplikacja MUSI być w trybie **Produkcja** (nie „Testowanie") — inaczej Google kasuje
+  bilet odnowienia po 7 dniach i user loguje się co tydzień.
+- **✅ FAZA 1 KOMPLETNA W KODZIE (2026-07-21).** Ekran „Chmura" (`src/gui/cloud_dialog.py`,
+  menu Ustawienia, prosty — user odrzucił makietę Cloud Design): konto, hasło paczki,
+  wyślij/pobierz. Praca z siecią w wątku roboczym (logowanie czeka minuty na zgodę
+  w przeglądarce → w wątku okna zamroziłoby apkę). Testy: `tools/test-cloud-dialog.py` (22).
+  **Hasło:** apka proponuje kod z `generate_passphrase()`, ale user może wpisać własne
+  (jego decyzja); kod zapamiętany w `cloud-passphrase.txt` (600), na nowym komputerze
+  przepisywany z kartki. Funkcja docelowo **Pro** (`license_manager` to wciąż zaślepka —
+  miejsce na sprawdzenie licencji oznaczyć, ale NIE udawać działającej blokady).
+- **✅ PRZEPROWADZKA POTWIERDZONA NA PRAWDZIWYCH DANYCH + PRAWDZIWYM DYSKU (2026-07-21):**
+  10 agentów, 1098 KB zaszyfrowanej paczki, 12 zapisanych plików pamięci, 273 pliki skilli,
+  **8 projektów do `git clone`**, 0 ostrzeżeń; ścieżki przemapowane, klucze API dojechały,
+  `claude_command` NIE. Import szedł do katalogu tymczasowego → konfiguracja usera nietknięta.
+  ⚠️ **Pliki pamięci leżące w repo gitowym są ŚWIADOMIE pomijane przy imporcie** (przyjdą
+  z `git clone`; kopiowanie wywaliłoby klon do niepustego katalogu) → okno MUSI mówić, ile
+  projektów czeka na sklonowanie, inaczej user widzi agentów bez kodu i zgłasza to jako błąd
+  (`7daddb4`). Pułapka pomiaru: „tylko 4 pliki .md w katalogu" było artefaktem liczenia —
+  ten sam `CLAUDE-COMMON.md` zapisywany dla 10 agentów to JEDEN plik na dysku.
+- ⚠️ **Etykieta bez jawnego `color:` = czarny tekst na czarnym tle** (zgłoszone przez usera,
+  `24eb386`). Qt bierze wtedy barwę z palety, nie ze skórki. W `cloud_dialog` pilnuje tego
+  reguła strukturalna w teście (każdy `QLabel` musi mieć `color:`), sprawdzona kontrolą
+  negatywną. ⚠️ Podgląd okna renderowany z WŁASNYM, doraźnym stylem tego NIE pokazał —
+  zrzut offscreen z ad-hoc QSS nie odtwarza warunków aplikacji.
+- ⚠️ **Znane ograniczenie: KASOWANIE NIE PROPAGUJE SIĘ.** Usunięta szybka akcja / plik pamięci
+  zostaje na drugim urządzeniu (import tylko dodaje i nadpisuje). Bez znaczenia przy ręcznym
+  „wyślij/pobierz", do rozwiązania przy automatycznej synchronizacji (Faza 2/3).
+- ⚠️ **`cryptography` + PyInstaller:** działa BEZ własnego hooka (rozszerzenie Rust
+  `_rust.abi3.so` wchodzi samo) — **zweryfikowane tylko na Linuksie 2026-07-20**.
+  Mac/Windows do potwierdzenia przy najbliższym buildzie CI (wcześniej paczki nie importowały
+  tej biblioteki, więc 1.0.27 niczego tu nie dowodzi).
+
+## Sygnały PyQt (AgentTab)
+`message_sent(str)` · `terminal_output(object)` · `status_changed(str)` · `request_tts(str)` · `request_dictation(bool)` · `request_pause` · `splitter_changed(list)`.
+
+## Częste problemy
+| Problem | Rozwiązanie |
+|---------|-------------|
+| QTermWidget not found | `pip install wheels/qtermwidget-*.whl` |
+| TTS nie działa | internet (edge-tts); sprawdź `~/.claude-voice-assistant/tts.log` |
+| STT nie nagrywa | `GROQ_API_KEY`, mikrofon |
+| `claude` not recognized | doinstalować Node + `npm i -g @anthropic-ai/claude-code` + restart |
+| `claude.exe` „niezgodny z Windows"/16-bit | Zła binarka z npm (bug Claude Code 2.1.113–114) — `npm uninstall -g @anthropic-ai/claude-code` + natywny instalator `irm https://claude.ai/install.ps1\|iex`; w apce komenda=`claude` (patrz pułapka „`claude` zepsuty/niezgodny na Windows") |
+| Apka nie startuje | `python3 -m py_compile src/main.py` |
+| Zawieszanie przy 2+ zakładkach | RAM — patrz „Pamięć/RAM" wyżej |
+
+---
+
+## PODŁĄCZENIE DO AI MANAGERA — ✅ DOMKNIĘTE
+Rozmowa z Claude idzie przez CLI (nie HTTP) → bramka jej nie łapie i nie musi; zużycie liczy osobno
+kolektor Claude Code AI Managera z lokalnych `.jsonl`. Po naszej stronie nic więcej do wpięcia.
+**STT (dyktowanie) na bramce** (potwierdzone na żywo 2026-07-13): `POST https://ai.srv1251441.hstgr.cloud/v1/audio/transcriptions`,
+`Authorization: Bearer aim-…` (klucz aplikacji **„VCA" (id=3)**), model z prefiksem `groq/…`; język auto = NIE wysyłaj
+pola `language`; kody: `401` zły klucz · `429` limit · `503` brak wolnego konta. → `stt-bramka-ai-manager.md`.
+⚠️ NIE mylić z osobną apką „Voice Assistant" (repo `voice-assistant`) — inny projekt, inny klucz.
