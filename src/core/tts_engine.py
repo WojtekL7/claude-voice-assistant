@@ -90,6 +90,30 @@ TTS_GEN_ATTEMPTS = 2
 # większość zdań w całości, więc prozodia pozostaje naturalna.
 MAX_TTS_CHUNK_CHARS = 200
 
+# ---------------------------------------------------------------------------
+# Format i bufor odtwarzania — NIE zostawiać wartości domyślnych.
+#
+# ZMIERZONE 2026-07-26 (zgłoszenie „trzeszczenie w czytaniu lektora"):
+# `pygame.mixer.init()` bez parametrów negocjuje z PipeWire bufor **128 próbek
+# (2,7 ms)**. PipeWire ustawia CAŁĄ kartę dźwiękową na NAJMNIEJSZY bufor,
+# jakiego zażądał którykolwiek program — a nasz strumień jest otwarty przez
+# cały czas życia aplikacji. Skutek: trzeszczał nie tylko lektor, ale KAŻDY
+# dźwięk w systemie (przeglądarka, filmy, muzyka), dopóki apka była włączona.
+# Dowód: pw-top pokazywał kartę na 128 i licznik błędów rosnący ~2-3/s;
+# wymuszenie bufora 1024 (`pw-metadata … clock.force-quantum`) uciszyło
+# wszystkie odtwarzacze naraz — potwierdzone odsłuchem u użytkownika.
+#
+# 4096 próbek przy 24 kHz to ~170 ms zapasu — dla czytania gotowych zdań
+# opóźnienie bez znaczenia (nie gramy na żywo), a odporność na zadyszkę
+# komputera ogromna (4 rdzenie + kilka procesów `claude` w tle).
+# 24 kHz mono = dokładnie to, co oddaje edge-tts → znika też przepróbkowanie
+# 24→44,1 kHz przy każdym zdaniu. pygame w tej aplikacji obsługuje WYŁĄCZNIE
+# mowę z edge-tts (żadnych innych dźwięków), więc zawężenie formatu jest bezpieczne.
+MIXER_FREQUENCY = 24000
+MIXER_SIZE = -16
+MIXER_CHANNELS = 1
+MIXER_BUFFER = 4096
+
 
 class TTSEngine:
     """
@@ -117,7 +141,13 @@ class TTSEngine:
         # zanim pojawiło się okno). Brak audio = czytanie wyłączone, reszta
         # aplikacji działa normalnie.
         try:
-            pygame.mixer.init()
+            try:
+                pygame.mixer.init(frequency=MIXER_FREQUENCY, size=MIXER_SIZE,
+                                  channels=MIXER_CHANNELS, buffer=MIXER_BUFFER)
+            except Exception:
+                # Sterownik odrzucił nasz format (rzadkie, ale możliwe na innym
+                # systemie) — lepiej czytać z domyślnymi ustawieniami niż wcale.
+                pygame.mixer.init()
             self.audio_available = True
         except Exception as e:
             self.audio_available = False
