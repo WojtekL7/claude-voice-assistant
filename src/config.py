@@ -2,6 +2,7 @@
 Vibe Coding Assistant - Configuration
 """
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -269,6 +270,34 @@ CLAUDE_MODEL_CONTEXT_LIMITS = {
     "claude-opus-4-8": 1_000_000,
 }
 
+# Mapa: TECHNICZNY identyfikator z dziennika sesji ("claude-opus-5") → klucz
+# z CLAUDE_MODELS ("opus"). Potrzebna, gdy agent ma ustawienie „Domyślny":
+# apka nie wie z góry, co uruchomi Claude Code, więc nazwę modelu poznaje
+# dopiero po fakcie — z dziennika, a tam stoi identyfikator API, nie nasz klucz.
+CLAUDE_MODEL_API_IDS = {}
+
+
+def _rebuild_api_id_map(catalog=None):
+    """Przebuduj mapę identyfikator API → klucz modelu.
+
+    Dwa źródła: (1) nasze własne klucze będące PEŁNĄ nazwą (`claude-opus-4-8`
+    — przypięta wersja, identyfikator to ona sama), (2) katalog ze strony
+    Anthropic, który dla każdej rodziny podaje `api_id`/`api_alias`.
+    Wołane przy imporcie ORAZ po każdym odświeżeniu katalogu.
+    """
+    CLAUDE_MODEL_API_IDS.clear()
+    for key in CLAUDE_MODELS:
+        if key.startswith("claude-"):
+            CLAUDE_MODEL_API_IDS[key] = key
+    for key, info in (catalog or {}).items():
+        if not isinstance(info, dict):
+            continue
+        for field in ("api_id", "api_alias"):
+            value = str(info.get(field) or "").strip()
+            if value:
+                CLAUDE_MODEL_API_IDS[value] = key
+
+
 # Plik podręczny katalogu modeli (nazwy + okna kontekstu ze strony Anthropic).
 MODEL_CATALOG_CACHE = CONFIG_DIR / "models-cache.json"
 
@@ -276,6 +305,7 @@ MODEL_CATALOG_CACHE = CONFIG_DIR / "models-cache.json"
 # ⛔ FAIL-OPEN: brak pliku, uszkodzony plik, brak modułu → zostajemy na
 # wartościach wbudowanych wyżej. Tu NIE MA sieci — pobieranie robi apka
 # w wątku tła (menu „Sprawdź nowe modele"), start nigdy nie czeka na internet.
+_catalog = None
 try:
     from core.model_catalog import cached_models as _cached_models
     from core.model_catalog import merge_into as _merge_models
@@ -287,6 +317,8 @@ try:
         CLAUDE_MODELS_SHORT = dict(CLAUDE_MODELS)
 except Exception:
     pass
+# Także przy braku katalogu — mapa niesie wtedy same wpisy wbudowane.
+_rebuild_api_id_map(_catalog)
 
 # Groq API (for Speech-to-Text)
 # GROQ_API_URL — dawna ścieżka WPROST do Groq (zostawiona jako odniesienie).
@@ -555,6 +587,10 @@ UI_TRANSLATIONS = {
         "model_default_prefix": "Domyślny — ",
         "model_default_full": "Domyślny (z konfiguracji Claude Code)",
         "model_default_short": "Domyślny",
+        # Ustawienie „Domyślny" + model WYKRYTY z dziennika sesji. Nazwy nie
+        # wpisujemy tu na sztywno — wstawia ją katalog modeli.
+        "model_default_detected": "Domyślny ({name})",
+        "model_detected_line": "Aktualnie odpowiada: {name}",
         # Same OPISY — nazwa modelu dochodzi z CLAUDE_MODELS/katalogu,
         # żeby numer wersji nie starzał się w dwóch językach naraz.
         "model_fable_desc": "najpotężniejszy, do najtrudniejszych zadań",
@@ -1358,6 +1394,9 @@ UI_TRANSLATIONS = {
         "model_default_prefix": "Default — ",
         "model_default_full": "Default (from Claude Code config)",
         "model_default_short": "Default",
+        # "Default" setting + the model DETECTED from the session transcript.
+        "model_default_detected": "Default ({name})",
+        "model_detected_line": "Currently answering: {name}",
         # Descriptions only — the model name comes from CLAUDE_MODELS/catalog.
         "model_fable_desc": "most powerful, for the hardest tasks",
         "model_opus_desc": "most capable",
@@ -2090,6 +2129,7 @@ def apply_model_catalog(models: dict) -> None:
     CLAUDE_MODELS_SHORT.update(names)
     CLAUDE_MODEL_CONTEXT_LIMITS.clear()
     CLAUDE_MODEL_CONTEXT_LIMITS.update(limits)
+    _rebuild_api_id_map(models or {})
 
 
 def _model_desc_key(key: str) -> str:
@@ -2123,6 +2163,51 @@ def model_label_short(key: str) -> str:
 def model_default_prefix() -> str:
     """Prefiks 'Domyślny — ' / 'Default — ' (do skracania etykiety na pasku statusu)."""
     return t("model_default_prefix")
+
+
+def _pretty_api_id(api_id: str) -> str:
+    """'claude-opus-5' → 'Opus 5' — awaryjne ładne nazywanie NIEZNANEGO modelu.
+
+    Używane, gdy identyfikatora z dziennika nie ma w katalogu (nowa rodzina
+    wydana po ostatnim odświeżeniu, model spoza listy). Nazwa jest WYPROWADZONA
+    z samego identyfikatora — nic nie zgadujemy o modelu, tylko go czytelnie
+    zapisujemy. Data wydania na końcu (`-20251001`) idzie precz.
+    """
+    text = re.sub(r"-\d{8}$", "", (api_id or "").strip())
+    if text.startswith("claude-"):
+        text = text[len("claude-"):]
+    parts = [p for p in text.split("-") if p]
+    if not parts:
+        return api_id or ""
+    family = parts[0][:1].upper() + parts[0][1:]
+    numbers = [p for p in parts[1:] if p.isdigit()]
+    return f"{family} {'.'.join(numbers)}" if numbers else family
+
+
+def model_name_for_api_id(api_id: str) -> str:
+    """Ludzka nazwa modelu dla identyfikatora z dziennika sesji ('Opus 5').
+
+    Pusty ciąg, gdy nie ma czego tłumaczyć — wołający ma wtedy NIC nie
+    twierdzić o modelu (lepiej samo „Domyślny" niż zmyślona nazwa)."""
+    raw = (api_id or "").strip()
+    if not raw:
+        return ""
+    key = CLAUDE_MODEL_API_IDS.get(raw)
+    if key:
+        return CLAUDE_MODELS_SHORT.get(key, key)
+    return _pretty_api_id(raw)
+
+
+def context_limit_for_api_id(api_id: str):
+    """Okno kontekstu (w tokenach) dla identyfikatora z dziennika albo None.
+
+    None = nie wiemy (model spoza katalogu) → licznik tokenów zostaje przy
+    swojej dotychczasowej wartości zamiast liczyć procent z wymyślonej liczby.
+    """
+    key = CLAUDE_MODEL_API_IDS.get((api_id or "").strip())
+    if not key:
+        return None
+    return CLAUDE_MODEL_CONTEXT_LIMITS.get(key)
 
 
 def install_guide_url(name: str) -> str:

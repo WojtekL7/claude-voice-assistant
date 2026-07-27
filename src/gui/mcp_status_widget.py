@@ -38,6 +38,7 @@ from core.agent_skills_settings import AgentSkillsSettings
 from config import (
     CLAUDE_MODELS_SHORT, CLAUDE_MODELS, DEFAULT_AGENT_MODEL,
     t as tr, model_label, model_label_short, model_default_prefix,
+    model_name_for_api_id,
 )
 
 
@@ -88,6 +89,10 @@ class McpStatusWidget(QWidget):
         self._agent_id: Optional[str] = None
         self._memory_files: List[str] = []
         self._model_key: str = DEFAULT_AGENT_MODEL
+        # Model WYKRYTY z dziennika sesji (identyfikator API, np.
+        # "claude-opus-5"). Ma znaczenie tylko przy ustawieniu „Domyślny" —
+        # wtedy apka nie narzuca modelu i inaczej nie ma skąd znać nazwy.
+        self._detected_model: Optional[str] = None
         # Cache MCP: {working_dir_str: (timestamp, [McpServer, ...])}
         self._cache: Dict[str, Tuple[float, List[McpServer]]] = {}
         self._loading: bool = False
@@ -104,6 +109,7 @@ class McpStatusWidget(QWidget):
         agent_id: Optional[str] = None,
         memory_files: Optional[List[str]] = None,
         model_key: Optional[str] = None,
+        detected_model: Optional[str] = None,
     ):
         """Ustaw kontekst agenta (zmiana zakładki).
 
@@ -115,6 +121,7 @@ class McpStatusWidget(QWidget):
         self._agent_id = agent_id
         self._memory_files = list(memory_files or [])
         self._model_key = model_key or DEFAULT_AGENT_MODEL
+        self._detected_model = detected_model
 
         # Statyczne liczniki — od razu
         self._render_skills()
@@ -415,8 +422,19 @@ class McpStatusWidget(QWidget):
 
     # ---------- Renderowanie: Model ----------
 
+    def set_detected_model(self, api_id: Optional[str]):
+        """Podaj model WYKRYTY z dziennika sesji aktywnej zakładki.
+
+        Wołane z pętli czytającej dziennik — dlatego przerysowujemy TYLKO przy
+        realnej zmianie (inaczej odświeżanie leciałoby kilka razy na sekundę).
+        """
+        if api_id == self._detected_model:
+            return
+        self._detected_model = api_id
+        self._render_model()
+
     def _render_model(self):
-        """Pokazuje wybrany model Claude Code dla agenta."""
+        """Pokazuje model Claude Code agenta (a przy „Domyślnym" — wykryty)."""
         self.model_btn.setEnabled(self._agent_id is not None)
         short = model_label_short(self._model_key)
         full = model_label(self._model_key)
@@ -425,6 +443,15 @@ class McpStatusWidget(QWidget):
         prefix = model_default_prefix()
         if short.startswith(prefix):
             short = short[len(prefix):]
+        # Ustawienie „Domyślny" NIE mówi, kto realnie odpowiada (Claude Code
+        # rozwija je po swojemu, a alias `opus` to zawsze NAJNOWSZY Opus).
+        # Nazwę bierzemy z dziennika sesji; gdy jej brak — zostaje samo
+        # „Domyślny", bo lepiej nic nie twierdzić niż zgadywać.
+        detected = ""
+        if self._model_key == DEFAULT_AGENT_MODEL:
+            detected = model_name_for_api_id(self._detected_model or "")
+            if detected:
+                short = tr('model_default_detected').format(name=detected)
         self.model_btn.setText(f"🤖 {short}")
         agent_label = self._agent_name or "—"
         tooltip_lines = [
@@ -433,6 +460,8 @@ class McpStatusWidget(QWidget):
             f"  🤖 {full}",
             "",
         ]
+        if detected:
+            tooltip_lines.insert(3, f"  {tr('model_detected_line').format(name=detected)}")
         if self._agent_id:
             tooltip_lines.append(f"<i>{tr('model_click_change')}</i>")
         else:

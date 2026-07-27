@@ -418,7 +418,7 @@ from config import (
     AGENTS_FILE, MEMORY_PROJECTS_FILE, DEFAULT_AGENTS, DEFAULT_MEMORY_PROJECTS,
     CONFIG_DIR,
     ASSETS_DIR, CLAUDE_MODEL_CONTEXT_LIMITS, DEFAULT_AGENT_MODEL,
-    MODEL_CATALOG_CACHE,
+    MODEL_CATALOG_CACHE, context_limit_for_api_id,
     APP_TITLE_SUFFIX,
     UPDATE_APPCAST_URL, UPDATE_PUBLIC_KEY, UPDATE_DOWNLOAD_DIR,
     MAX_ACTIVE_AGENTS, RAM_PER_AGENT_GB, RAM_SYSTEM_RESERVE_GB,
@@ -1549,6 +1549,12 @@ class MainWindow(QMainWindow):
             try:
                 if not reader.has_session():
                     continue
+                # Jaki model REALNIE odpowiada w tej zakładce? Ma znaczenie
+                # przy ustawieniu agenta „Domyślny" — apka nie przekazuje
+                # wtedy `--model`, więc nazwę zna wyłącznie dziennik.
+                # Sprawdzamy przed primingiem, żeby po restarcie apki przy
+                # trwającej rozmowie pasek uzupełnił się od razu.
+                self._sync_detected_model(tab, reader, tab is active)
                 # Priming — pomiń to, co było przed startem czytania.
                 if not getattr(tab, '_transcript_primed', False):
                     reader.seek_to_end()
@@ -1613,6 +1619,29 @@ class MainWindow(QMainWindow):
                     # Ogranicz rozrost (trzymamy ostatnie 50 wypowiedzi).
                     if len(tab.pending_backlog) > 50:
                         tab.pending_backlog = tab.pending_backlog[-50:]
+
+    def _sync_detected_model(self, tab, reader, is_active: bool):
+        """Zapamiętaj na zakładce model wykryty z dziennika; odśwież pasek.
+
+        `None` (jeszcze nie wiadomo — świeża zakładka, agent nic nie powiedział)
+        przekazujemy DALEJ, zamiast zostawiać poprzednią nazwę: po restarcie
+        zakładki stara nazwa byłaby już nieprawdą, a „Domyślny" bez nazwy jest
+        uczciwe. Czytnik zapomina model przy zmianie pliku sesji, więc to samo
+        w sobie nie miga — nieznane zostaje nieznane aż do pierwszej odpowiedzi.
+        """
+        try:
+            detected = reader.active_model()
+        except Exception:
+            return
+        if detected == getattr(tab, 'detected_model', None):
+            return
+        tab.detected_model = detected
+        if not is_active:
+            return
+        if hasattr(self, 'mcp_status_widget'):
+            self.mcp_status_widget.set_detected_model(detected)
+        # Okno kontekstu zależy od modelu → licznik tokenów też się zmienia.
+        self._refresh_context_label()
 
     def _catch_up_if_behind(self, proses):
         """Nadganianie: gdy lektor został DALEKO w tyle — przeskocz do najnowszej.
@@ -1828,6 +1857,7 @@ class MainWindow(QMainWindow):
                 agent_id=current.agent_id,
                 memory_files=current.memory_files,
                 model_key=current.model,
+                detected_model=getattr(current, 'detected_model', None),
             )
         else:
             self.mcp_status_widget.set_agent(None)
@@ -4969,8 +4999,15 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         tab = self._get_current_agent_tab()
         tokens = tab.total_context_tokens if tab is not None else 0
         model_key = tab.model if tab is not None else DEFAULT_AGENT_MODEL
-        limit = CLAUDE_MODEL_CONTEXT_LIMITS.get(model_key) or \
-                CLAUDE_MODEL_CONTEXT_LIMITS.get(DEFAULT_AGENT_MODEL, 1_000_000)
+        limit = None
+        if tab is not None and model_key == DEFAULT_AGENT_MODEL:
+            # „Domyślny" = apka nie wie z góry, co uruchomi Claude Code. Okno
+            # bierzemy z modelu WYKRYTEGO w dzienniku; bez tego procent liczyłby
+            # się z założonego 1 mln (Haiku ma 200 tys. → wynik 5× zaniżony).
+            limit = context_limit_for_api_id(getattr(tab, 'detected_model', None))
+        if not limit:
+            limit = CLAUDE_MODEL_CONTEXT_LIMITS.get(model_key) or \
+                    CLAUDE_MODEL_CONTEXT_LIMITS.get(DEFAULT_AGENT_MODEL, 1_000_000)
         percentage = (tokens / limit) * 100.0 if limit > 0 else 0.0
 
         if percentage < 50:

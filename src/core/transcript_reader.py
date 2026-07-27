@@ -99,6 +99,14 @@ class TranscriptReader:
         # przeciążenie API). To NIE są wypowiedzi agenta — nie idą do lektora;
         # odbiera je GUI przez take_api_errors().
         self._api_errors: List[dict] = []
+        # Model, który REALNIE odpowiadał w tej sesji (`message.model`, np.
+        # "claude-opus-5"). Potrzebny paskowi statusu przy ustawieniu
+        # „Domyślny": apka nie przekazuje wtedy `--model`, więc JEDYNYM pewnym
+        # źródłem nazwy jest to, czym Claude Code faktycznie odpisał
+        # (⚠️ `~/.claude.json` w tej sprawie kłamie — patrz pamięć projektu).
+        # None = jeszcze nie wiadomo (agent nic nie powiedział).
+        self._active_model: Optional[str] = None
+        self._model_scan_at: float = 0.0   # ostatni skan ogona (monotonic)
         self.set_working_directory(working_directory)
 
     # ---------- konfiguracja ----------
@@ -109,6 +117,7 @@ class TranscriptReader:
         self._project_dir = self._find_project_dir()
         self._session_file = None
         self._offset = 0
+        self._forget_active_model()
         # Moment startu czytnika (zegar ścienny). Służy do "przygarnięcia"
         # sesji, która ISTNIAŁA już przy starcie, ale jest dalej zapisywana
         # PO nim (= wznowiona sesja tej zakładki po restarcie/reopenie) — patrz
@@ -219,6 +228,7 @@ class TranscriptReader:
         self._wait_last_size = -1
         self._wait_stable = 0
         self._api_errors = []
+        self._forget_active_model()
 
     def _ensure_session(self):
         """Upewnij się, że śledzimy właściwy plik sesji.
@@ -239,11 +249,13 @@ class TranscriptReader:
                 if cand != self._session_file:
                     self._session_file = cand
                     self._offset = 0
+                    self._forget_active_model()
             # plik jeszcze nie powstał → czekamy (session_file zostaje None)
             return
         newest = self._newest_session_file()
         if newest != self._session_file:
             self._session_file = newest
+            self._forget_active_model()
             if newest and newest in getattr(self, "_preexisting", set()):
                 # Przygarnięto wznowioną sesję istniejącą wcześniej — ma już
                 # historię. Przeskocz na KONIEC, żeby nie odgrywać na głos całej
@@ -331,12 +343,112 @@ class TranscriptReader:
         """
         if not isinstance(obj, dict):
             return
+        # Nazwę modelu bierzemy PRZY OKAZJI tego samego odczytu — poll() i tak
+        # przelatuje przez każdy nowy wpis, więc detekcja jest darmowa
+        # (zero dodatkowych operacji na dysku).
+        model = self._entry_model(obj)
+        if model:
+            self._active_model = model
         if self._is_api_error(obj):
             self._record_api_error(obj)
             return
         text = self._extract_text(obj)
         if text:
             results.append(text)
+
+    # ---------- jaki model REALNIE odpowiada ----------
+
+    # Ile bajtów z KOŃCA dziennika przegląda jednorazowy skan (patrz
+    # active_model). 256 KB to z zapasem kilkadziesiąt wypowiedzi.
+    MODEL_TAIL_BYTES = 256 * 1024
+    # Minimalny odstęp między skanami ogona, gdy model wciąż nieznany.
+    # Bez tego sesja, w której agent jeszcze nic nie powiedział (a plik rośnie
+    # od wpisów użytkownika), skanowałaby ogon przy KAŻDYM ticku timera.
+    MODEL_SCAN_INTERVAL_SECS = 10.0
+
+    def _forget_active_model(self):
+        """Zapomnij wykryty model (zmiana sesji/katalogu = inna rozmowa)."""
+        self._active_model = None
+        self._model_scan_at = 0.0
+
+    @staticmethod
+    def _entry_model(obj: dict) -> Optional[str]:
+        """Identyfikator modelu z wpisu (`claude-opus-5`) albo None.
+
+        Bierzemy wyłącznie wypowiedzi GŁÓWNEGO agenta: pod-agent (`isSidechain`)
+        potrafi chodzić na innym modelu niż zakładka, a komunikat techniczny
+        Claude Code ma sztuczne `model == "<synthetic>"` i nie mówi nic
+        o tym, kto realnie odpowiada.
+        """
+        if not isinstance(obj, dict) or obj.get("type") != "assistant":
+            return None
+        if obj.get("isSidechain") or obj.get("isApiErrorMessage"):
+            return None
+        msg = obj.get("message")
+        if not isinstance(msg, dict):
+            return None
+        model = msg.get("model")
+        if not isinstance(model, str):
+            return None
+        model = model.strip()
+        if not model or model.startswith("<"):
+            return None
+        return model
+
+    def active_model(self) -> Optional[str]:
+        """Identyfikator modelu, który OSTATNIO odpowiadał w tej sesji.
+
+        Używane przez pasek statusu przy ustawieniu agenta „Domyślny" — wtedy
+        apka nie narzuca modelu i tylko dziennik wie, co Claude Code wybrał.
+        Zwraca np. "claude-opus-5" albo None, gdy jeszcze nie wiadomo
+        (świeża zakładka, w której agent nic nie powiedział).
+
+        Normalnie wartość przynosi poll() za darmo. Skan ogona pliku robimy
+        tylko wtedy, gdy poll() jeszcze nic nie złapał — typowo po restarcie
+        apki przy TRWAJĄCEJ rozmowie, bo priming (`seek_to_end`) świadomie
+        pomija historię.
+        """
+        if self._active_model:
+            return self._active_model
+        self._ensure_session()
+        path = self._session_file
+        if not path:
+            return None
+        now = time.monotonic()
+        if self._model_scan_at and (now - self._model_scan_at) < self.MODEL_SCAN_INTERVAL_SECS:
+            return None
+        self._model_scan_at = now
+        self._active_model = self._scan_tail_for_model(path)
+        return self._active_model
+
+    def _scan_tail_for_model(self, path: str) -> Optional[str]:
+        """Przejrzyj KONIEC dziennika wstecz w poszukiwaniu nazwy modelu."""
+        try:
+            size = self._safe_size(path)
+            if size <= 0:
+                return None
+            with open(path, "rb") as f:
+                if size > self.MODEL_TAIL_BYTES:
+                    f.seek(size - self.MODEL_TAIL_BYTES)
+                    # Skok w środek pliku rozcina linię — porzucamy ją jawnie.
+                    # (Zabezpieczenie DRUGIEJ linii: ogryzek i tak nie parsuje
+                    # się jako JSON i wypadłby niżej w `except` — sprawdzone
+                    # sabotażem, patrz tools/test-detected-model.py.)
+                    f.readline()
+                raw = f.read()
+        except Exception:
+            return None
+        for bline in reversed(raw.split(b"\n")):
+            if not bline.strip():
+                continue
+            try:
+                obj = json.loads(bline.decode("utf-8", "ignore"))
+            except Exception:
+                continue
+            model = self._entry_model(obj)
+            if model:
+                return model
+        return None
 
     # ---------- błędy Claude Code (wygasłe logowanie, przeciążenie) ----------
 

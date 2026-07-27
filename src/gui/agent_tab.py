@@ -337,6 +337,10 @@ class AgentTab(QWidget):
         # terminal i sesja claude już istnieją).
         self._transcript_reader = None
         self._transcript_primed = False
+        # Model WYKRYTY z dziennika tej zakładki (identyfikator API, np.
+        # "claude-opus-5"). Uzupełnia go pętla czytająca dziennik; służy
+        # paskowi statusu i licznikowi tokenów przy ustawieniu „Domyślny".
+        self.detected_model = None
         # Zaległa proza nazbierana, gdy zakładka była NIEAKTYWNA — do doczytania
         # przyciskiem 🔊 po przełączeniu (decyzja: komunikat + przycisk).
         self.pending_backlog = []
