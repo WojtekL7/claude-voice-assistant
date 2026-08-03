@@ -46,6 +46,25 @@ def fold(text: str) -> str:
     return ''.join(out).lower()
 
 
+def utf16_offset(text: str, index: int) -> int:
+    """Pozycja pythonowa (punkty kodowe) → pozycja Qt (jednostki UTF-16).
+
+    ⚠️ POWÓD ISTNIENIA TEJ FUNKCJI (zmierzone 2026-08-03, zgłoszone przez usera):
+    Python liczy znaki jako PUNKTY KODOWE, a `QString`/`QTextCursor` w JEDNOSTKACH
+    UTF-16 — każdy znak spoza BMP (emoji 🤖 🔍 ✅, część CJK) zajmuje w Qt DWA
+    miejsca. Podanie indeksu pythonowego wprost do `setPosition` przesuwało więc
+    podświetlenie w LEWO o tyle znaków, ile emoji stało wcześniej w tekście
+    (w realnej wypowiedzi: 5 emoji → zaznaczone „wie " zamiast „lupa").
+
+    Objaw MYLI: wygląda jak zły algorytm szukania, choć szukanie jest poprawne —
+    psuje się dopiero PRZEKAZANIE pozycji do widżetu. Dlatego przeliczenie robimy
+    WYŁĄCZNIE na styku z Qt; wewnątrz Pythona indeksy zostają pythonowe.
+    """
+    if index <= 0:
+        return 0
+    return len(text[:index].encode('utf-16-le')) // 2
+
+
 class Hit:
     """Jedno trafienie: skąd pochodzi, w którym miejscu i z jakim kontekstem."""
 

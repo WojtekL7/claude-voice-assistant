@@ -8,6 +8,21 @@ rozmowy z prawdziwego dziennika oraz to, że okno naprawdę się buduje.
 
 Każdy blok ma kontrolę negatywną — inaczej komplet zielonych niczego nie dowodzi.
 
+WYNIKI SABOTAŻU (2026-08-03) — ZMIERZONE, nie przewidziane. Psułem po jednej
+rzeczy w `search_dialog.py` i notowałem, co realnie padło:
+
+  1. pozycja pythonowa wprost do Qt (stary błąd emoji)  → 2 testy padły
+     („podświetlone DOKŁADNIE szukane słowo" pokazało ' (lu')
+  2. usunięte `setCurrentCharFormat(...)` (oba)          → ⚠️ NIC NIE PADŁO
+     Bo bleedowi zapobiega już ZWINIĘCIE kursora (przejmuje format znaku sprzed
+     trafienia). Zerowania są DRUGĄ LINIĄ OBRONY i żaden test ich nie pilnuje —
+     nie usuwaj ich jako „martwy kod", ale i nie licz, że są przetestowane.
+  3. zaznaczenie zostawione (bez zwinięcia)              → 4 testy padły
+     Ujawniło niespodziankę: `setCurrentCharFormat` przy AKTYWNYM zaznaczeniu
+     nadaje format zaznaczeniu, więc podświetlenie robi się PUSTE (nie niebieskie).
+  4. zawsze forma mnoga („1 razy")                       → 1 test padł
+  5. lista bez zawijania + stare proporcje 3:2           → 2 testy padły
+
 Uruchomienie:  python3 tools/test-conversation-search.py
 """
 import json
@@ -243,7 +258,9 @@ klucze = ['search_tooltip', 'search_title', 'search_placeholder', 'search_prev',
           'search_next', 'search_copy', 'search_read', 'search_close',
           'search_count', 'search_none', 'search_empty_journal',
           'search_role_user', 'search_role_assistant', 'search_copied',
-          'search_scrolled', 'search_not_on_screen']
+          'search_scrolled', 'search_not_on_screen',
+          'search_word_hit_one', 'search_word_hit_many',
+          'search_word_entry_one', 'search_word_entry_many']
 for lang, slownik in config.UI_TRANSLATIONS.items():
     brakuje = [k for k in klucze if k not in slownik]
     check(f"komplet napisów wyszukiwarki w {lang}", not brakuje, brakuje)
@@ -255,6 +272,113 @@ pola = {lang: sorted(re.findall(r'{(\w+)}', s['search_count']))
         for lang, s in config.UI_TRANSLATIONS.items()}
 check("pola do podstawienia zgodne w obu językach",
       len(set(map(tuple, pola.values()))) == 1, pola)
+
+# ============================================================================
+# 7. Podświetlenie trafienia w podglądzie (zgłoszenie usera 2026-08-03)
+#
+# Trzy usterki zmierzone na PRAWDZIWEJ wypowiedzi z dziennika:
+#   (a) pozycja pythonowa podana Qt → podświetlenie przesunięte w lewo o tyle
+#       znaków, ile emoji spoza BMP stało wcześniej (5 emoji → „wie " zamiast
+#       „lupa"). ⚠️ Wszystkie testy z bloków 1–6 przechodziły MIMO tego błędu,
+#       bo liczą po stronie Pythona — dlatego ten blok patrzy na WIDŻET.
+#   (b) `setPlainText` dziedziczy bieżący format znaku → od 2. szukania cała
+#       wypowiedź malowała się akcentem.
+#   (c) zostawione zaznaczenie przykrywało kolor skórki systemowym niebieskim.
+# ============================================================================
+from PyQt5.QtCore import Qt  # noqa: E402
+from PyQt5.QtGui import QColor, QTextCursor  # noqa: E402
+from core.conversation_search import utf16_offset  # noqa: E402
+from gui.search_dialog import SearchDialog  # noqa: E402
+from gui import theme  # noqa: E402
+
+# --- (a1) sam przelicznik pozycji, bez okien ---
+check("bez emoji pozycja się nie zmienia", utf16_offset("abcdef", 3) == 3)
+check("emoji przed trafieniem przesuwa pozycję o 1",
+      utf16_offset("\U0001F916abc", 1) == 2, utf16_offset("\U0001F916abc", 1))
+check("pięć emoji przesuwa o 5",
+      utf16_offset("\U0001F916" * 5 + "lupa", 5) == 10)
+check("polskie ogonki NIE przesuwają (są w BMP)", utf16_offset("żółw", 4) == 4)
+check("początek tekstu zawsze 0", utf16_offset("\U0001F916x", 0) == 0)
+# kontrola negatywna: gdyby funkcja tylko przepisywała indeks, powyższe by padło
+check("kontrola negatywna: przelicznik NIE jest tożsamością",
+      utf16_offset("\U0001F916abc", 3) != 3)
+
+# --- (a2..c) zachowanie WIDŻETU na wypowiedzi z emoji ---
+WIADOMOSC = (
+    "| \U0001F916 Domyslny (Opus 5) na pasku | 7c3e264 |\n"
+    "| \U0001F50D Szukanie w rozmowie (lupa / Ctrl+F) | 2026-07-25 |\n"
+    "| ✅ Katalog modeli | 2026-07-26 |\n"
+)
+
+
+class _Reader:
+    def conversation_entries(self):
+        return [{"role": "assistant", "time": "09:22", "text": WIADOMOSC}]
+
+
+def podswietlony_tekst(dialog):
+    """Który fragment NAPRAWDĘ ma tło akcentu (czyta format z dokumentu)."""
+    doc = dialog.preview.document()
+    kolor = QColor(theme.ACCENT)
+    kursor = QTextCursor(doc)
+    zebrane = []
+    for poz in range(1, doc.characterCount()):
+        kursor.setPosition(poz)
+        if kursor.charFormat().background().color() == kolor:
+            zebrane.append(doc.characterAt(poz - 1))
+    return ''.join(zebrane)
+
+
+_dlg = SearchDialog("Test", _Reader())
+_dlg.field.setText("lupa")
+_dlg._run_search()
+check("podświetlone jest DOKŁADNIE szukane słowo, mimo emoji wcześniej",
+      podswietlony_tekst(_dlg) == "lupa", repr(podswietlony_tekst(_dlg)))
+check("kontrola negatywna: podświetlenie nie jest puste",
+      podswietlony_tekst(_dlg) != "")
+
+# powtórne szukania — tu wcześniej cała wypowiedź robiła się fioletowa
+for _ in range(3):
+    _dlg.field.setText("lupa")
+    _dlg._run_search()
+_po_powtorce = podswietlony_tekst(_dlg)
+check("po kilku szukaniach akcent NADAL obejmuje tylko trafienie",
+      _po_powtorce == "lupa", repr(_po_powtorce[:60]))
+check("kontrola negatywna: akcent nie rozlał się na całą wypowiedź",
+      len(_po_powtorce) < len(WIADOMOSC) / 2, len(_po_powtorce))
+
+# zaznaczenie zwinięte → widać kolor skórki, nie systemowy niebieski
+check("po pokazaniu trafienia nie zostaje zaznaczenie",
+      _dlg.preview.textCursor().selectedText() == "",
+      repr(_dlg.preview.textCursor().selectedText()))
+
+# --- odmiana liczby trafień ---
+_dlg.field.setText("lupa")
+_dlg._run_search()
+check("dla jednego trafienia piszemy „1 raz w 1 wypowiedzi”",
+      _dlg.status.text() == "Znaleziono 1 raz w 1 wypowiedzi", _dlg.status.text())
+_dlg.field.setText("modeli")
+_dlg._run_search()
+_dlg.field.setText("|")
+_dlg._run_search()
+check("dla wielu trafień forma mnoga („razy”)",
+      " razy " in _dlg.status.text(), _dlg.status.text())
+check("kontrola negatywna: przy wielu trafieniach NIE ma formy pojedynczej",
+      " 1 raz " not in _dlg.status.text(), _dlg.status.text())
+_dlg.deleteLater()
+
+# --- układ okna: lista nie ma poziomego suwaka, podgląd nie jest mniejszy ---
+_dlg2 = SearchDialog("Test", _Reader())
+check("lista wyników zawija tekst zamiast przewijać w bok",
+      _dlg2.results.wordWrap() and
+      _dlg2.results.horizontalScrollBarPolicy() == Qt.ScrollBarAlwaysOff)
+_layout = _dlg2.layout()
+_i_lista = _layout.indexOf(_dlg2.results)
+_i_podglad = _layout.indexOf(_dlg2.preview)
+check("podgląd dostaje nie mniej miejsca niż lista",
+      _layout.stretch(_i_podglad) >= _layout.stretch(_i_lista),
+      (_layout.stretch(_i_lista), _layout.stretch(_i_podglad)))
+_dlg2.deleteLater()
 
 print(f"\nWynik: {PASS} OK / {FAIL} FAIL")
 sys.exit(1 if FAIL else 0)

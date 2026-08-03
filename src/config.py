@@ -624,7 +624,14 @@ UI_TRANSLATIONS = {
         "search_copy": "Kopiuj",
         "search_read": "Przeczytaj",
         "search_close": "Zamknij",
-        "search_count": "Znaleziono {hits} razy w {entries} wypowiedziach",
+        # Odmiana przez liczbę: „1 raz w 1 wypowiedzi" / „5 razy w 3 wypowiedziach".
+        # Po polsku wystarczą DWIE formy (raz/razy, wypowiedzi/wypowiedziach) —
+        # „22 razy" i „25 wypowiedziach" są poprawne tak samo jak „5 razy".
+        "search_count": "Znaleziono {hits} {hits_word} w {entries} {entries_word}",
+        "search_word_hit_one": "raz",
+        "search_word_hit_many": "razy",
+        "search_word_entry_one": "wypowiedzi",
+        "search_word_entry_many": "wypowiedziach",
         "search_none": "Nic takiego nie ma w tej rozmowie",
         "search_empty_journal": "Ta zakładka nie ma jeszcze zapisu rozmowy",
         "search_role_user": "Ty",
@@ -1429,7 +1436,11 @@ UI_TRANSLATIONS = {
         "search_copy": "Copy",
         "search_read": "Read aloud",
         "search_close": "Close",
-        "search_count": "Found {hits} times in {entries} messages",
+        "search_count": "Found {hits} {hits_word} in {entries} {entries_word}",
+        "search_word_hit_one": "time",
+        "search_word_hit_many": "times",
+        "search_word_entry_one": "message",
+        "search_word_entry_many": "messages",
         "search_none": "Nothing like that in this conversation",
         "search_empty_journal": "This tab has no conversation log yet",
         "search_role_user": "You",

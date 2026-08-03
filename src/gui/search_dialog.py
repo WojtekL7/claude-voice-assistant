@@ -18,7 +18,7 @@ from PyQt5.QtWidgets import (
 
 from config import t as tr
 from gui import theme, icon_set
-from core.conversation_search import find_hits, summarize
+from core.conversation_search import find_hits, summarize, utf16_offset
 
 # Po tylu milisekundach od ostatniego znaku uruchamiamy szukanie. Bez tego
 # każde naciśnięcie klawisza czytałoby cały plik sesji (ok. 1 MB).
@@ -93,14 +93,21 @@ class SearchDialog(QDialog):
         root.addWidget(self.status)
 
         # --- lista trafień ---
+        # Zawijanie zamiast POZIOMEGO suwaka: fragment ma ~120 znaków, więc
+        # w jednej linii trafienie uciekało poza prawą krawędź i trzeba było
+        # przewijać w bok, żeby je w ogóle zobaczyć (zgłoszenie usera 2026-08-03).
         self.results = QListWidget()
+        self.results.setWordWrap(True)
+        self.results.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.results.currentRowChanged.connect(self._on_row_changed)
-        root.addWidget(self.results, 3)
+        root.addWidget(self.results, 2)
 
         # --- pełny fragment + akcje ---
+        # Podgląd dostaje WIĘCEJ miejsca niż lista (3:2, wcześniej 2:3) — to on
+        # niesie treść, a lista przy jednym trafieniu świeciła pustką.
         self.preview = QTextEdit()
         self.preview.setReadOnly(True)
-        root.addWidget(self.preview, 2)
+        root.addWidget(self.preview, 3)
 
         actions = QHBoxLayout()
         self.hint = QLabel("")
@@ -165,7 +172,12 @@ class SearchDialog(QDialog):
 
         counts = summarize(self._hits)
         self.status.setText(tr('search_count').format(
-            hits=counts['hits'], entries=counts['entries']))
+            hits=counts['hits'],
+            hits_word=tr('search_word_hit_one' if counts['hits'] == 1
+                         else 'search_word_hit_many'),
+            entries=counts['entries'],
+            entries_word=tr('search_word_entry_one' if counts['entries'] == 1
+                            else 'search_word_entry_many')))
         for hit in self._hits:
             who = tr('search_role_user') if hit.role == 'user' else tr('search_role_assistant')
             label = f"[{hit.time}] {who}: {hit.snippet()}" if hit.time else f"{who}: {hit.snippet()}"
@@ -197,16 +209,46 @@ class SearchDialog(QDialog):
         self.request_scroll.emit(hit.matched_text() or hit.snippet(0))
 
     def _show_preview(self, hit):
-        """Pełna wypowiedź z podświetlonym trafieniem."""
+        """Pełna wypowiedź z podświetlonym trafieniem.
+
+        Trzy pułapki naraz, wszystkie ZMIERZONE (2026-08-03, zgłoszenie usera):
+
+        1. `QTextEdit.setPlainText` wpisuje tekst BIEŻĄCYM formatem znaku widżetu,
+           a po poprzednim podświetleniu był nim akcent → od DRUGIEGO szukania
+           cała wypowiedź robiła się fioletowa (0 px akcentu przy 1. szukaniu,
+           25 283 px przy 2.). Dlatego zerujemy format PRZED i PO wpisaniu.
+        2. Pozycje trafienia są pythonowe, Qt liczy w UTF-16 → `utf16_offset`.
+        3. Zostawione ZAZNACZENIE malowało się systemowym niebieskim NA WIERZCHU
+           koloru skórki (widać było #308cc6 zamiast akcentu), więc po nadaniu
+           formatu zwijamy je do samego początku trafienia.
+
+        ⚠️ KOLEJNOŚĆ NIE JEST DOWOLNA (zmierzone sabotażem, patrz nagłówek
+        `tools/test-conversation-search.py`):
+        · `setCurrentCharFormat` przy AKTYWNYM zaznaczeniu nadaje format temu
+          zaznaczeniu — zerowanie przed zwinięciem SKASOWAŁOBY podświetlenie
+          (sabotaż zdejmujący zwinięcie dał puste podświetlenie, nie niebieskie).
+        · Samo zwinięcie kursora JUŻ chroni przed pkt 1 wyżej (kursor przejmuje
+          format znaku SPRZED trafienia, czyli czysty). Zerowania to DRUGA LINIA
+          OBRONY — sabotaż ich usunięcia nie wywalił żadnego testu. Zostawiamy je
+          świadomie (chronią, gdyby ktoś kiedyś przestał zwijać zaznaczenie), ale
+          NIE licz na test, którego nie ma.
+        """
+        self.preview.setCurrentCharFormat(QTextCharFormat())
         self.preview.setPlainText(hit.text)
+
+        start = utf16_offset(hit.text, hit.start)
+        end = utf16_offset(hit.text, hit.end)
         cursor = self.preview.textCursor()
-        cursor.setPosition(hit.start)
-        cursor.setPosition(hit.end, QTextCursor.KeepAnchor)
+        cursor.setPosition(start)
+        cursor.setPosition(end, QTextCursor.KeepAnchor)
         fmt = QTextCharFormat()
         fmt.setBackground(QColor(theme.ACCENT))
         fmt.setForeground(QColor('#ffffff'))
-        cursor.setCharFormat(fmt)
+        cursor.mergeCharFormat(fmt)
+
+        cursor.setPosition(start)
         self.preview.setTextCursor(cursor)
+        self.preview.setCurrentCharFormat(QTextCharFormat())
         self.preview.ensureCursorVisible()
 
     # ---------- akcje ----------
