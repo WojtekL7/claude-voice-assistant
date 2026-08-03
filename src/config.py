@@ -182,8 +182,15 @@ READ_LAST_WAIT_TIMEOUT_SECS = 20.0
 # Pasywny log diagnostyczny 🔊 (włącz: CVA_READ_LAST_DEBUG=1). Pisze wyłącznie przy
 # kliknięciu i w trakcie czekania — nie w gorącej pętli — ale i tak z twardym limitem
 # (poprzedni taki log urósł kiedyś do 99 MB, patrz pamięć „diagnostyka tymczasowa").
-READ_LAST_DEBUG = os.getenv('CVA_READ_LAST_DEBUG', '') == '1'
+# ⚠️ Zmienna środowiskowa NIE WYSTARCZA: apkę uruchamia się ikoną z pulpitu
+# (rodzic = gnome-shell), więc przez 3 rundy napraw czujnik NIGDY nie był włączony
+# u usera — log w ogóle nie powstał, a poprawki szły na ślepo. Dlatego druga furtka:
+# PLIK-ZNACZNIK, który agent może założyć bez udziału (nietechnicznego) usera.
+# Kasowanie pliku gasi czujnik — pamiętaj o tym po zakończeniu diagnozy.
 READ_LAST_DEBUG_LOG = CONFIG_DIR / 'read-last-debug.log'
+READ_LAST_DEBUG_MARKER = CONFIG_DIR / 'read-last-debug.on'
+READ_LAST_DEBUG = (os.getenv('CVA_READ_LAST_DEBUG', '') == '1'
+                   or READ_LAST_DEBUG_MARKER.exists())
 READ_LAST_DEBUG_MAX_BYTES = 512 * 1024
 
 # Ensure config directory exists

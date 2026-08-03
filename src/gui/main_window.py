@@ -3313,6 +3313,58 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
+    def _read_last_debug_snapshot(self, tab, reader):
+        """Zdjęcie stanu W CHWILI kliknięcia 🔊 — do korelacji z „źle" od usera.
+
+        Po co: przez trzy rundy napraw nie mieliśmy ANI JEDNEGO pomiaru z realnego
+        kliknięcia. Zapisujemy więc to, co pozwala rozstrzygnąć spór „czytnik wybrał
+        złą wypowiedź" vs „w ogóle nie poszło przez dziennik":
+          · silnik terminala (WebTerminal ma LEPKIE zaznaczenie, QTermWidget nie),
+          · czy jest ZAZNACZENIE i ile ma sekund (do 30 s wygrywa z dziennikiem!),
+          · OSTATNIA i PRZEDOSTATNIA wypowiedź z dziennika — dzięki temu widać
+            wprost, którą z nich przeczytało, bez dopytywania usera.
+        Wywoływane wyłącznie przy kliknięciu, więc koszt (odczyt dziennika) jest
+        nieistotny; przy wyłączonym czujniku nie robi nic.
+        """
+        if not READ_LAST_DEBUG:
+            return
+        try:
+            backend = getattr(tab, 'terminal_backend', None) if tab else None
+            silnik = type(backend).__name__ if backend else 'brak'
+            ten_sam = (backend is self.terminal_backend)
+            zazn = ''
+            try:
+                zazn = (self.terminal_backend.active_selection()
+                        if self.terminal_backend else '')
+            except Exception:
+                zazn = '<blad odczytu>'
+            wiek = getattr(backend, '_selection_ts', None)
+            wiek_txt = (f"{time.monotonic() - wiek:.1f}s" if isinstance(wiek, float)
+                        else 'n/d')
+            nazwa = (getattr(tab, 'agent_config', None) or {}).get('name', '?')
+            self._read_last_debug(
+                f"--- KLIK 🔊 | zakladka={nazwa!r} silnik={silnik} "
+                f"backend_ten_sam={ten_sam} | zaznaczenie={len(zazn or '')} zn. "
+                f"(wiek={wiek_txt}) {(zazn or '')[:40]!r}")
+
+            wypowiedzi = []
+            try:
+                wpisy = reader.conversation_entries() if reader else []
+                wypowiedzi = [w for w in wpisy if w.get('role') == 'assistant'][-2:]
+            except Exception:
+                pass
+            for etykieta, w in zip(('PRZEDOSTATNIA', 'OSTATNIA'),
+                                   wypowiedzi[-2:] if len(wypowiedzi) > 1
+                                   else ['—'] + wypowiedzi):
+                if w == '—':
+                    continue
+                tekst = (w.get('text') or '')
+                self._read_last_debug(
+                    f"    {etykieta}: [{w.get('time', '?')}] {len(tekst)} zn.: "
+                    f"{tekst[:60]!r}")
+        except Exception:
+            pass
+
     def _terminal_idle_secs(self, tab) -> float:
         """Ile sekund minęło od OSTATNIEJ realnej treści w terminalu.
 
@@ -3362,12 +3414,17 @@ class MainWindow(QMainWindow):
         """
         cleaned_text = prose_from_markdown(text)
         if not cleaned_text:
+            self._read_last_debug("DO LEKTORA: nic (proza pusta po oczyszczeniu)")
             return False
         if reader is not None:
             try:
                 reader.seek_to_end()
             except Exception:
                 pass
+        # Ostatnie ogniwo: co NAPRAWDĘ usłyszał user. Bez tego log kończy się na
+        # decyzji, a spór dotyczy przecież tego, co zabrzmiało w głośniku.
+        self._read_last_debug(
+            f"DO LEKTORA ({len(cleaned_text)} zn.): {cleaned_text[:60]!r}")
         self.tts.speak(cleaned_text)
         return True
 
@@ -3514,7 +3571,19 @@ class MainWindow(QMainWindow):
             # ostatniej wypowiedzi (zdiagnozowane z read-last-debug.log 2026-07-11).
             selected = self.terminal_backend.active_selection()
 
+            # Zdjęcie stanu ZANIM cokolwiek zdecydujemy — inaczej nie da się potem
+            # odróżnić „czytnik wybrał złą wypowiedź" od „poszło zaznaczeniem".
+            self._read_last_debug_snapshot(
+                self._get_current_agent_tab(),
+                getattr(self._get_current_agent_tab(), '_transcript_reader', None))
+
             if selected:
+                # ⚠️ TA GAŁĄŹ NIE MIAŁA ŚLADU W LOGU przez wszystkie 3 rundy napraw,
+                # a na WebTerminalu (silnik pobranej apki i tej bety) zaznaczenie
+                # bywa PRZYPADKOWE i przez 30 s wypiera dziennik → objaw jest wtedy
+                # nieodróżnialny od „czyta przedostatnią".
+                self._read_last_debug(
+                    f"ŹRÓDŁO=ZAZNACZENIE ({len(selected)} zn.): {selected[:60]!r}")
                 # Fix Polish encoding first
                 selected = fix_polish_encoding(selected)
                 # User selected text - clean and read it
@@ -3575,9 +3644,9 @@ class MainWindow(QMainWindow):
                     return
 
                 self._read_last_debug(
-                    f"NATYCHMIAST: stan_tury={turn_state} "
+                    f"ŹRÓDŁO=DZIENNIK, NATYCHMIAST: stan_tury={turn_state} "
                     f"cisza_terminala={self._terminal_idle_secs(tab):.1f}s, "
-                    f"czytam {len(last or '')} zn.: {(last or '')[:40]!r}")
+                    f"czytam {len(last or '')} zn.: {(last or '')[:60]!r}")
                 if last and self._speak_journal_text(reader, last):
                     self._update_status(tr('status_reading_last'))
                     return
@@ -3593,6 +3662,11 @@ class MainWindow(QMainWindow):
                 last_response = extract_last_claude_response(tab_buf)
 
                 if last_response:
+                    # Tor EKRANU = brudny bufor TUI; jeśli objaw pojawia się TU,
+                    # szukanie winy w logice dziennika jest stratą czasu.
+                    self._read_last_debug(
+                        f"ŹRÓDŁO=EKRAN ({len(last_response)} zn.): "
+                        f"{last_response[:60]!r}")
                     last_response = fix_polish_encoding(last_response)
                     cleaned_text = text_cleaner.clean(last_response, use_dictionary=False)
 
