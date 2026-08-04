@@ -51,6 +51,22 @@ def _local_hhmm(timestamp: Optional[str]) -> str:
         return ""
 
 
+def _local_hhmmss(timestamp: Optional[str]) -> str:
+    """Jak `_local_hhmm`, ale z SEKUNDAMI — do diagnostyki 🔊.
+
+    Minuty nie wystarczają: spór „apka czytała stary wpis" rozstrzyga się
+    w skali kilku–kilkunastu sekund (zmierzone opóźnienie zapisu dziennika
+    to 0,7–31 s), a przy zaokrągleniu do minut ten zakres znika.
+    """
+    if not timestamp:
+        return ""
+    try:
+        stamp = datetime.strptime(timestamp[:19], "%Y-%m-%dT%H:%M:%S")
+        return stamp.replace(tzinfo=timezone.utc).astimezone().strftime("%H:%M:%S")
+    except Exception:
+        return ""
+
+
 def _encode_project_dir(working_directory: str) -> str:
     """Zamień ścieżkę katalogu roboczego na nazwę folderu w ~/.claude/projects.
 
@@ -570,6 +586,57 @@ class TranscriptReader:
         if pending_tools:
             return last, TURN_TOOL_PENDING
         return last, TURN_OWES_TEXT
+
+    def debug_file_state(self) -> dict:
+        """Stan PLIKU dziennika w tej chwili — WYŁĄCZNIE do diagnostyki 🔊.
+
+        Odpowiada na pytanie, którego czujnik rundy 4 zadać nie umiał, przez co
+        runda 5 utknęła na sprzeczności: **„apka nie widzi najnowszej wypowiedzi"
+        jest NIEODRÓŻNIALNE od „najnowszej wypowiedzi nie ma jeszcze na dysku"**,
+        dopóki nie znamy rozmiaru pliku i tego, czym on się kończy. Zmierzone
+        2026-08-04: apka dwukrotnie (09:41 i 09:46) nie widziała wpisu ze
+        znacznikiem 09:37, choć plik jest dopisywany tylko na końcu, ma jeden
+        `sessionId`, zero duplikatów i żadnych śladów kompaktowania — a zmierzone
+        opóźnienie zapisu dziennika wynosi 0,7–31 s. Te trzy pola rozstrzygają
+        spór w JEDNYM kliknięciu:
+          · `plik` + `rozmiar` + `mtime` → czy czytamy TEN plik i czy on urósł,
+          · `wypowiedzi` vs `linii`      → czy filtr `_extract_text` czegoś nie zjada,
+          · `ostatnia_linia`             → czym plik KOŃCZY SIĘ fizycznie, niezależnie
+                                           od tego, co przepuszcza filtr.
+        Wołane wyłącznie przy kliknięciu 🔊, więc pełny przebieg po pliku jest tani.
+        """
+        stan = {"plik": None, "rozmiar": -1, "mtime": "?", "linii": 0,
+                "wypowiedzi": 0, "ostatnia_linia": "?"}
+        try:
+            self._ensure_session()
+            sf = self._session_file
+            if not sf or not os.path.exists(sf):
+                return stan
+            stan["plik"] = os.path.basename(sf)
+            st = os.stat(sf)
+            stan["rozmiar"] = st.st_size
+            stan["mtime"] = datetime.fromtimestamp(st.st_mtime).strftime("%H:%M:%S")
+            ostatni = None
+            with open(sf, encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    stan["linii"] += 1
+                    try:
+                        obj = json.loads(line)
+                    except Exception:
+                        continue
+                    ostatni = obj
+                    if self._extract_text(obj):
+                        stan["wypowiedzi"] += 1
+            if ostatni is not None:
+                stan["ostatnia_linia"] = (
+                    f"{_local_hhmmss(ostatni.get('timestamp'))} "
+                    f"type={ostatni.get('type')}")
+        except Exception:
+            pass
+        return stan
 
     def conversation_entries(self) -> List[dict]:
         """CAŁA rozmowa tej zakładki jako lista wpisów — dla wyszukiwarki (🔍).

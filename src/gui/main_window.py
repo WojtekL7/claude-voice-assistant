@@ -3347,6 +3347,23 @@ class MainWindow(QMainWindow):
                 f"backend_ten_sam={ten_sam} | zaznaczenie={len(zazn or '')} zn. "
                 f"(wiek={wiek_txt}) {(zazn or '')[:40]!r}")
 
+            # STAN PLIKU dziennika — bez tego „apka nie widzi najnowszej
+            # wypowiedzi" jest nieodróżnialne od „wpisu nie ma jeszcze na dysku"
+            # (na tej sprzeczności utknęła runda 5, patrz
+            # TranscriptReader.debug_file_state).
+            try:
+                if reader is not None:
+                    st = reader.debug_file_state()
+                    self._read_last_debug(
+                        f"    PLIK: {st['plik']} rozmiar={st['rozmiar']} B "
+                        f"mtime={st['mtime']} linii={st['linii']} "
+                        f"wypowiedzi={st['wypowiedzi']} "
+                        f"koniec_pliku=[{st['ostatnia_linia']}]")
+                else:
+                    self._read_last_debug("    PLIK: brak czytnika (reader=None)")
+            except Exception as e:
+                self._read_last_debug(f"    PLIK: blad odczytu stanu: {e!r}")
+
             wypowiedzi = []
             try:
                 wpisy = reader.conversation_entries() if reader else []
