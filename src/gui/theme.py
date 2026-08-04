@@ -155,6 +155,12 @@ def skin_colors() -> dict:
         'icon_add_media_color': TEXT_DIM,
         'icon_send_color': '#ffffff',   # na gradiencie akcentu
         'icon_quick_actions_color': TEXT,
+        # Lupa — BIAŁA (życzenie usera 2026-08-04: „ma być jak reszta, negatyw
+        # tego co było"). Klucz DODANY, nie zmieniony, więc działa bez podbijania
+        # SKIN_VERSION: `_load_settings` iteruje po DEFAULT_SKIN_COLORS i bierze
+        # z config.json tylko klucze, KTÓRE TAM SĄ — nowego nie ma, więc zostaje
+        # ta wartość, a zapisana skórka użytkownika pozostaje nietknięta.
+        'icon_search_color': TEXT,
 
         # --- Terminal (16 kolorów ANSI + tło/tekst) ---
         # Dobrane pod składnię, jaką rysuje Claude Code: zielony = dodane linie,

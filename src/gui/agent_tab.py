@@ -597,17 +597,6 @@ class AgentTab(QWidget):
         self.add_media_btn.clicked.connect(self._add_media)
         layout.addWidget(self.add_media_btn)
 
-        # 🔍 Szukanie w rozmowie TEJ zakładki. Źródłem jest dziennik sesji
-        # (cała rozmowa, czysty tekst), więc działa tak samo na obu silnikach
-        # terminala i na wszystkich systemach — patrz search_dialog.
-        self.search_btn = QPushButton()
-        self.search_btn.setIcon(icon_set.button_icon('search'))
-        self.search_btn.setIconSize(PANEL_ICON_SIZE)
-        self.search_btn.setFixedSize(btn_size, btn_size)
-        self.search_btn.setToolTip(tr('search_tooltip'))
-        self.search_btn.clicked.connect(self.request_search.emit)
-        layout.addWidget(self.search_btn)
-
         # Quick actions dropdown
         self.quick_actions_btn = QToolButton()
         self.quick_actions_btn.setIcon(icon_set.button_icon('quick_actions'))
@@ -632,6 +621,23 @@ class AgentTab(QWidget):
         self.mouse_mode_btn.clicked.connect(self._toggle_mouse_mode)
         self._update_mouse_mode_btn()
         layout.addWidget(self.mouse_mode_btn)
+
+        # 🔍 Szukanie w rozmowie TEJ zakładki. Źródłem jest dziennik sesji
+        # (cała rozmowa, czysty tekst), więc działa tak samo na obu silnikach
+        # terminala i na wszystkich systemach — patrz search_dialog.
+        # Pozycja: SAM KONIEC paska, za myszką (życzenie usera 2026-08-04).
+        # ⚠️ Przycisk MUSI być w `MainWindow._apply_button_icon_styles` — bez tego
+        # Qt zostawia fabryczny BIAŁY kwadrat, odstający od reszty paska. Ten sam
+        # błąd złapał wcześniej `mouse_mode_btn` i `repair_terminal_btn`; tutaj
+        # user zgłosił go jako „lupa ma odwrotne kolory niż reszta" (zmierzone na
+        # zrzucie: tło lupy RGB(248,248,248) wobec RGB(23,18,33) sąsiadów).
+        self.search_btn = QPushButton()
+        self.search_btn.setIcon(icon_set.button_icon('search'))
+        self.search_btn.setIconSize(PANEL_ICON_SIZE)
+        self.search_btn.setFixedSize(btn_size, btn_size)
+        self.search_btn.setToolTip(tr('search_tooltip'))
+        self.search_btn.clicked.connect(self.request_search.emit)
+        layout.addWidget(self.search_btn)
 
         # „Napraw wygląd terminala" — ratunek na rzadką usterkę, gdy Claude Code
         # zaczyna rysować tekst rozstrzelony („N a j p i l n i e j s z e", kreski

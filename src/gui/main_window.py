@@ -4243,6 +4243,14 @@ class MainWindow(QMainWindow):
             if hasattr(tab, 'mouse_mode_btn'):
                 self._apply_button_icon_style(tab.mouse_mode_btn, 'icon_copy_color')
 
+            # Lupa — DOKŁADNIE ten sam powód co wyżej. Brak tej linijki zostawiał
+            # fabryczny biały kwadrat Qt: zmierzone na zrzucie usera tło lupy
+            # RGB(248,248,248) wobec RGB(23,18,33) wszystkich sąsiadów (2026-08-04).
+            # To trzeci przycisk złapany przez to samo przeoczenie — dokładając
+            # KAŻDY nowy przycisk do paska, dopisz go TUTAJ.
+            if hasattr(tab, 'search_btn'):
+                self._apply_button_icon_style(tab.search_btn, 'icon_search_color')
+
             # Pause button - uses same style as other buttons but with disabled state
             if hasattr(tab, 'pause_btn'):
                 self._apply_button_icon_style(tab.pause_btn, 'icon_pause_color', with_disabled=True)

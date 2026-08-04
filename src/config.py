@@ -1232,6 +1232,7 @@ UI_TRANSLATIONS = {
         "skin_color_icon_add_media_color": "Kolor ikony dodaj media",
         "skin_color_icon_send_color": "Kolor ikony wyślij",
         "skin_color_icon_quick_actions_color": "Kolor ikony szybkich akcji",
+        "skin_color_icon_search_color": "Kolor ikony lupy",
         # nazwy ikon skórki
         "skin_icon_dictate": "Mikrofon (dyktowanie)",
         "skin_icon_read": "Głośnik (czytanie)",
@@ -2041,6 +2042,7 @@ UI_TRANSLATIONS = {
         "skin_color_icon_add_media_color": "Add media icon color",
         "skin_color_icon_send_color": "Send icon color",
         "skin_color_icon_quick_actions_color": "Quick actions icon color",
+        "skin_color_icon_search_color": "Search icon color",
         # skin icon names
         "skin_icon_dictate": "Microphone (dictation)",
         "skin_icon_read": "Speaker (reading)",
