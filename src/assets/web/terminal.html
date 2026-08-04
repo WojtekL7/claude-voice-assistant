@@ -92,8 +92,18 @@
   <script src="vendor/addon-fit.js"></script>
   <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
   <script>
+    // ===== Łańcuch czcionek terminala — JEDNO źródło =====
+    // Kolejność NIE jest dowolna. Najpierw NASZE pliki (@font-face wyżej), potem
+    // realne monospace systemu, a Menlo/Consolas dopiero NA KOŃCU. Powód: na
+    // Linuksie fontconfig nigdy nie odmawia — nieznaną rodzinę (Menlo to krój
+    // macOS) podmienia na "najlepsze dopasowanie", u nas PROPORCJONALNE Noto Sans
+    // (sprawdzone `fc-match Menlo`). Gdyby Menlo stało przed realnym monospace,
+    // pomiar szerokości znaku mógłby wypaść na czcionce o ZMIENNEJ szerokości.
+    // Na macOS/Windows DejaVu zwykle nie ma → łańcuch schodzi do Menlo/Consolas.
+    var FONT_STACK = '"JetBrains Mono", "Ubuntu Mono", "DejaVu Sans Mono", Menlo, Consolas, monospace';
+
     const term = new Terminal({
-      fontFamily: '"JetBrains Mono", "Ubuntu Mono", Menlo, "DejaVu Sans Mono", Consolas, monospace',
+      fontFamily: FONT_STACK,
       // 17 px = 13 pt przeliczone (96/72) — wartość startowa zgodna z tym, co
       // Python dośle przez __termFont (patrz web_terminal._push_font). Dzięki
       // temu litery nie "mrugają" mniejszym rozmiarem przez pierwszą klatkę.
@@ -106,15 +116,122 @@
     const fitAddon = new FitAddon.FitAddon();
     term.loadAddon(fitAddon);
     term.open(document.getElementById('terminal'));
-    fitAddon.fit();
 
-    // Gdy Ubuntu Mono się załaduje, przerysuj terminal tą czcionką (inaczej
-    // pierwsza klatka idzie zamiennikiem, zanim font dojedzie).
-    if (document.fonts && document.fonts.load) {
-      document.fonts.load('14px "Ubuntu Mono"').then(function () {
-        try { term.options.fontFamily = '"Ubuntu Mono", Menlo, monospace'; } catch (e) {}
-        fitAddon.fit();
-        term.refresh(0, term.rows - 1);
+    // ==================== SIATKA TERMINALA (kratka na znak) ====================
+    // USTERKA 2026-08-04 „rozstrzelone litery" — zmierzona na zrzucie użytkownika:
+    // xterm.js mierzy szerokość znaku RAZ, przy najbliższym rysowaniu po zmianie
+    // czcionki. Gdy pomiar trafi w moment, w którym nasze .ttf jeszcze się nie
+    // doczytały, przeglądarka rysuje SWOIM domyślnym krojem — na Linuksie
+    // SZERYFOWYM ('W' w Noto Serif = 17,80 px przy fontSize 17, wobec 9,52 px
+    // kratki Ubuntu Mono). Kratka zostaje wtedy ~1,88× za szeroka: litery mają
+    // dziury, a druga połowa każdej linii wyjeżdża poza prawą krawędź i ZNIKA
+    // (dowód z logu: PTY dostał 122 kolumny, na ekranie mieściło się ~65).
+    // Trzy zabezpieczenia: (1) czujnik do logu, (2) fit() NIGDY w tym samym
+    // takcie co zmiana czcionki, (3) strażnik przytomności z przemierzeniem.
+
+    // Szerokość kratki, którą xterm.js REALNIE zmierzył — dokładnie tego pola
+    // używa addon-fit do liczenia kolumn (pole prywatne biblioteki → try/catch).
+    function cellWidth() {
+      try { return term._core._renderService.dimensions.css.cell.width || 0; }
+      catch (e) { return 0; }
+    }
+
+    // CZUJNIK — console.log trafia do ~/.vibe-coding-assistant/webterminal.log
+    // (przechwytuje _LoggingWebEnginePage.javaScriptConsoleMessage w Pythonie).
+    function logGrid(tag) {
+      try {
+        var fs = term.options.fontSize || 0;
+        var cw = cellWidth();
+        console.log('siatka[' + tag + '] cols=' + term.cols + ' rows=' + term.rows +
+          ' kratka=' + cw.toFixed(2) + 'px fontSize=' + fs +
+          ' kratka/fontSize=' + (fs ? (cw / fs).toFixed(3) : '?') +
+          ' dpr=' + window.devicePixelRatio +
+          ' fontGotowy=' + (document.fonts ? document.fonts.check(fs + 'px "Ubuntu Mono"') : '?') +
+          ' rodzina=' + term.options.fontFamily);
+      } catch (e) {}
+    }
+
+    // Dwie klatki rysowania — po nich xterm.js ma już PRZEMIERZONĄ kratkę.
+    function afterTwoFrames(fn) {
+      if (window.requestAnimationFrame) {
+        requestAnimationFrame(function () { requestAnimationFrame(fn); });
+      } else { setTimeout(fn, 32); }
+    }
+
+    // Wymuś ponowny pomiar. xterm przemierza tylko przy ZMIANIE opcji, więc
+    // przypisanie tej samej wartości nic nie da — mrugamy rozmiarem o 1 px.
+    function remeasure() {
+      try {
+        var fs = term.options.fontSize;
+        term.options.fontSize = fs + 1;
+        term.options.fontSize = fs;
+      } catch (e) {}
+    }
+
+    // fit() + czujnik + STRAŻNIK PRZYTOMNOŚCI. Każdy monospace ma kratkę
+    // 0,50–0,62 rozmiaru czcionki (Ubuntu Mono 0,56; DejaVu/JetBrains 0,60);
+    // zamiennik proporcjonalny dawał 1,04. Poza przedziałem 0,45–0,75 →
+    // przemierz i dopasuj ponownie, JEDNO podejście (żeby nie wpaść w pętlę).
+    // Strażnik zamyka usterkę nawet wtedy, gdy przyczyna okaże się inna niż
+    // wyścig z ładowaniem czcionki.
+    var repairing = false;
+    function safeFit(tag) { fitAndGuard(tag, 0); }
+
+    function fitAndGuard(tag, attempt) {
+      try { fitAddon.fit(); } catch (e) { repairing = false; return; }
+      logGrid(tag);
+      var fs = term.options.fontSize || 0;
+      var cw = cellWidth();
+      var ratio = (fs && cw) ? cw / fs : 0;
+      if (!ratio || (ratio >= 0.45 && ratio <= 0.75)) { repairing = false; return; }
+      if (attempt === 0 && repairing) return;      // naprawa już trwa
+      if (attempt >= 2) {                          // dwie próby wystarczą
+        console.log('siatka[' + tag + ']: kratka NADAL poza normą (' +
+                    ratio.toFixed(3) + ') — zostawiam, żeby nie zapętlić');
+        repairing = false;
+        return;
+      }
+      repairing = true;
+      console.log('siatka[' + tag + ']: kratka POZA NORMĄ (' + ratio.toFixed(3) +
+                  ') — próba naprawy ' + (attempt + 1));
+      // DRUGA próba — PLAN B. Samo przemierzenie nie pomoże, gdy rodzina jest
+      // BEZ POKRYCIA (nazwa kroju, którego w systemie nie ma i który nie doczytał
+      // się z naszych .ttf): przeglądarka rysuje wtedy domyślnym SZERYFOWYM i
+      // każdy kolejny pomiar zwraca tę samą złą wartość (zmierzone sondą:
+      // 17,82 px w kółko). Wracamy więc na pełny łańcuch, który kończy się
+      // generycznym `monospace` — ten ZAWSZE ma stałą szerokość.
+      if (attempt === 1) {
+        try { term.options.fontFamily = FONT_STACK; } catch (e) {}
+      }
+      remeasure();
+      afterTwoFrames(function () {
+        fitAndGuard(tag + '/naprawa' + (attempt + 1), attempt + 1);
+        try { term.refresh(0, term.rows - 1); } catch (e) {}
+      });
+    }
+
+    // Zmiana czcionki → dopasowanie DOPIERO po przemierzeniu, nie w tym takcie.
+    // `remeasure()` jest OBOWIĄZKOWE, nie ozdobne: samo odczekanie dwóch klatek
+    // nie wymusza pomiaru, gdy xterm.js uzna, że opcje się nie zmieniły. Zmierzone
+    // sondą 2026-08-04: po doczytaniu naszych .ttf kratka ZOSTAWAŁA ta z czcionki
+    // zapasowej (10,25 px DejaVu zamiast 9,53 px Ubuntu Mono) — litery rozstrzelone
+    // o 7%, czyli ta sama usterka, tylko cichsza.
+    function fitAfterFontChange(tag) {
+      remeasure();
+      afterTwoFrames(function () {
+        safeFit(tag);
+        try { term.refresh(0, term.rows - 1); } catch (e) {}
+      });
+    }
+
+    safeFit('start');
+
+    // Nasze .ttf doczytują się asynchronicznie — po ich załadowaniu kratkę MUSIMY
+    // zmierzyć jeszcze raz, inaczej zostaje ta z zamiennika. (`fonts.ready` czeka
+    // na WSZYSTKIE kroje strony, `fonts.load` tylko na jeden — stąd zmiana.)
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(function () {
+        fitAfterFontChange('fonty-gotowe');
       }).catch(function () {});
     }
 
@@ -201,10 +318,20 @@
     window.__termTheme  = function (theme) {
       if (theme && typeof theme === 'object') term.options.theme = theme;
     };
+    // Python dosyła TU rodzinę i rozmiar czcionki. fit() NIE MOŻE iść w tym samym
+    // takcie: xterm.js przemierza kratkę dopiero przy najbliższym rysowaniu, więc
+    // dopasowanie policzone teraz użyłoby metryki POPRZEDNIEJ czcionki. To była
+    // przyczyna „rozstrzelonych liter" (patrz blok SIATKA TERMINALA wyżej).
     window.__termFont   = function (family, size) {
       if (family) term.options.fontFamily = family;
       if (size)   term.options.fontSize = size;
-      fitAddon.fit();
+      fitAfterFontChange('python-font');
+    };
+
+    // Wymuszone przemierzenie siatki na żądanie Pythona — powrót do zakładki
+    // i przeniesienie okna na inny ekran (patrz WebTerminal._refit_grid).
+    window.__termRefit  = function () {
+      fitAfterFontChange('refit');   // remeasure() jest już w środku
     };
 
     new QWebChannel(qt.webChannelTransport, function (channel) {
@@ -229,12 +356,15 @@
         if (s) bridge.set_selection(s);
       });
       // Dopasuj rozmiar i zgłoś gotowość (Python odpali wtedy powłokę).
-      fitAddon.fit();
+      safeFit('frontend-ready');
       bridge.frontend_ready(term.cols, term.rows);
       term.focus();
     });
 
-    window.addEventListener('resize', function () { fitAddon.fit(); });
+    // Zmiana rozmiaru okna. To ONA leczyła usterkę „rozstrzelonych liter" sama
+    // z siebie (log 2026-08-04, 09:10) — teraz idzie przez strażnika, więc
+    // przy okazji naprawia kratkę, zamiast tylko przeliczać kolumny.
+    window.addEventListener('resize', function () { safeFit('resize-okna'); });
 
     // ===== Utrzymanie zaznaczenia + zamrożenie na czas przeciągania (B2) =====
     // W trakcie przeciągania myszą: (1) WSTRZYMUJEMY rysowanie wyjścia (_writePaused),

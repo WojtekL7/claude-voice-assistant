@@ -282,14 +282,26 @@ class WebTerminal(QWidget):
         if self._pending_font is None:
             return
         family, size = self._pending_font
-        fam = json.dumps(family)
+        # ŁAŃCUCH ZAPASOWY JEST OBOWIĄZKOWY — nie wysyłaj gołej nazwy rodziny.
+        # "Ubuntu Mono"/"JetBrains Mono" to NASZE pliki .ttf (@font-face w
+        # terminal.html), które doczytują się asynchronicznie. Sama nazwa bez
+        # zapasu zostaje w tym czasie bez pokrycia, więc przeglądarka rysuje
+        # SWOIM domyślnym krojem — na Linuksie SZERYFOWYM. xterm.js mierzy wtedy
+        # kratkę na czcionce PROPORCJONALNEJ ('W' w Noto Serif = 17,80 px zamiast
+        # 9,52 px Ubuntu Mono przy fontSize 17) i cała siatka zostaje ~1,88× za
+        # szeroka. Objaw: „rozstrzelone litery" + ucięta prawa połowa linii
+        # (2026-08-04; wyliczenie z webterminal.log 122/65 = 17,87 px zgodne
+        # z Noto Serif co do 0,4%). Kolejność zapasów jak FONT_STACK w
+        # terminal.html: realne monospace PRZED Menlo/Consolas.
+        stack = json.dumps(
+            f'"{family}", "DejaVu Sans Mono", Menlo, Consolas, monospace')
         # Wspólny interfejs przekazuje rozmiar w PUNKTACH (jak QTermWidget/QFont),
         # a xterm.js liczy fontSize w PIKSELACH. Bez przeliczenia te same "13"
         # dają na WebTerminalu litery ~30% mniejsze niż na QTermWidget (objaw:
         # "czcionka nieczytelna w AppImage"). Przelicznik CSS: 1pt = 96/72 px.
         px = round(int(size) * 4 / 3)
         self.view.page().runJavaScript(
-            f"window.__termFont && window.__termFont({fam}, {px});")
+            f"window.__termFont && window.__termFont({stack}, {px});")
 
     def focus_terminal(self):
         self.view.setFocus()
@@ -395,6 +407,47 @@ class WebTerminal(QWidget):
         # Render widget bywa tworzony/podmieniany po pokazaniu — (re)instaluj filtr.
         self._install_drop_filter()
         QTimer.singleShot(200, self._install_drop_filter)
+        # Powrót do zakładki = darmowa okazja, żeby przemierzyć siatkę terminala.
+        # Gdyby kratka została za szeroka (patrz _push_font), objaw „rozstrzelonych
+        # liter" zniknie sam, bez wiedzy użytkownika.
+        QTimer.singleShot(0, self._refit_grid)
+        self._watch_screen_changes()
+
+    # ==================== Siatka terminala ====================
+
+    def _refit_grid(self):
+        """Przemierz kratkę znaku i dopasuj liczbę kolumn (siatka bezpieczeństwa).
+
+        Tania operacja (dwie klatki rysowania w JS), więc wołamy ją przy każdej
+        okazji, w której układ mógł się zmienić. Po stronie JS pilnuje tego
+        strażnik przytomności — patrz `safeFit` w terminal.html.
+        """
+        if not self._frontend_ready:
+            return
+        self.view.page().runJavaScript(
+            "window.__termRefit && window.__termRefit();")
+
+    def _watch_screen_changes(self):
+        """Przeniesienie okna na INNY EKRAN → przemierz siatkę.
+
+        POTWIERDZONY wyzwalacz usterki „rozstrzelonych liter" (2026-08-04): user
+        przeniósł okno na pionowy monitor. Przenosiny przeliczają układ strony,
+        a xterm.js potrafi zostać ze starą metryką kratki — samo przeciągnięcie
+        okna nie zawsze daje zdarzenie `resize`, więc `resize` w JS to za mało.
+        Podpinamy się RAZ (idempotentnie); okno istnieje dopiero po pokazaniu.
+        """
+        if getattr(self, "_screen_hooked", False):
+            return
+        try:
+            handle = self.window().windowHandle()
+            if handle is None:
+                return          # jeszcze nie ma okna — spróbujemy przy showEvent
+            handle.screenChanged.connect(
+                lambda _screen: QTimer.singleShot(150, self._refit_grid))
+            self._screen_hooked = True
+            _log("siatka: podpięto reakcję na zmianę ekranu")
+        except Exception as e:  # nigdy nie wywalaj apki z powodu diagnostyki
+            _log(f"siatka: nie udało się podpiąć screenChanged: {e!r}")
 
     # ==================== Wewnętrzne ====================
 
