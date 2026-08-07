@@ -11,7 +11,7 @@ APP_NAME = "Vibe Coding Assistant"
 # APP_VERSION — JEDYNE źródło prawdy o wersji. Używane przez auto-aktualizację
 # (M3) do porównania z wersją w pliku appcast na serwerze. Podbijaj przy każdym
 # wydaniu (semver: MAJOR.MINOR.PATCH).
-APP_VERSION = "1.0.27"
+APP_VERSION = "1.0.28"
 APP_AUTHOR = "Fulfillment Polska"
 
 # Tryb deweloperski — uruchomienie WPROST z kodu (`python3 src/main.py`).
