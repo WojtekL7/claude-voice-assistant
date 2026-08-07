@@ -5,6 +5,7 @@ Main entry point for the application.
 """
 import sys
 import os
+import gc
 import traceback
 from pathlib import Path
 
@@ -121,7 +122,22 @@ def main():
     window.show()
 
     # Run application
-    sys.exit(app.exec_())
+    #
+    # ⛔ NIE pisz tu `sys.exit(app.exec_())` — to była przyczyna crashu przy ZAMYKANIU
+    # (Mac 1.0.25/1.0.26/1.0.28, `EXC_BAD_ACCESS`; pełny stos w pamięci projektu).
+    # Mechanizm: `SystemExit` trzyma swój traceback → traceback trzyma RAMKĘ tej funkcji
+    # → ramka trzyma JEDNOCZEŚNIE `app` i `window`. Oba giną więc dopiero przy sprzątaniu
+    # wyjątku i w kolejności, na którą nie mamy wpływu — zmierzone: `QApplication` ginął
+    # PIERWSZY, a `MainWindow` dopiero w środku jego destruktora. Ukrywanie okna woła
+    # wtedy `QApplication::setActiveWindow()`, które ROZSYŁA zdarzenia po widżetach —
+    # a te mają już zwolnioną stronę C++ (segfault w `QWidget::palette()`).
+    #
+    # Dlatego niszczymy okno JAWNIE, póki `QApplication` jeszcze żyje.
+    # ⚠️ Kolejność jest tu istotą poprawki — nie „upraszczaj" tego z powrotem do jednej linii.
+    rc = app.exec_()
+    del window
+    gc.collect()
+    sys.exit(rc)
 
 
 if __name__ == "__main__":
