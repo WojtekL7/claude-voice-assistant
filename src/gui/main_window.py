@@ -426,7 +426,7 @@ from config import (
     LOGIN_EVENT_LOG, LOGIN_EVENT_LOG_MAX_BYTES,
     LOGIN_VERDICT_INTERVAL_SECS, LOGIN_VERDICT_MAX_CHECKS,
     READ_LAST_BUSY_SECS, READ_LAST_WAIT_POLL_MS, READ_LAST_WAIT_TIMEOUT_SECS,
-    READ_LAST_STALL_SECS, READ_LAST_OWED_TIMEOUT_SECS,
+    READ_LAST_STALL_SECS, READ_LAST_OWED_STALL_SECS, READ_LAST_OWED_TIMEOUT_SECS,
     READ_LAST_DEBUG, READ_LAST_DEBUG_LOG, READ_LAST_DEBUG_MAX_BYTES,
     t as tr, set_ui_language, detect_system_language,
 )
@@ -438,7 +438,7 @@ from core.text_cleaner import TextCleanerForTTS, extract_last_claude_response, f
 from gui.search_dialog import SearchDialog
 from core.transcript_reader import (
     TranscriptReader,
-    TURN_OWES_TEXT, TURN_TOOL_PENDING, TURN_UNKNOWN,
+    TURN_IDLE, TURN_OWES_TEXT, TURN_TOOL_PENDING, TURN_UNKNOWN,
 )
 from core.update_manager import UpdateManager
 from core.platform_utils import (
@@ -3422,7 +3422,31 @@ class MainWindow(QMainWindow):
             return self._agent_is_writing(tab)
         return False
 
-    def _speak_journal_text(self, reader, text: str) -> bool:
+    def _already_spoken(self, tab, text: str) -> bool:
+        """Czy TĘ SAMĄ wypowiedź czytaliśmy w tej zakładce ostatnim razem?
+
+        Bezpiecznik rundy 6 na powtórkę: gdy agent PRACUJE (nie jest bezczynny),
+        a w dzienniku wciąż leży ta sama wypowiedź co poprzednio, to znaczy, że
+        nic nowego nie doszło — recytowanie jej drugi raz brzmi dokładnie jak
+        „przeczytał starą odpowiedź".
+        ⚠️ Celowo NIE blokuje powtórki przy agencie BEZCZYNNYM: „przeczytaj mi to
+        jeszcze raz" jest wtedy normalnym życzeniem usera, nie usterką.
+        """
+        if tab is None or not text:
+            return False
+        return getattr(tab, '_last_spoken_journal_text', None) == text
+
+    def _should_skip_repeat(self, tab, turn_state, text) -> bool:
+        """Czy pominąć czytanie, bo to POWTÓRKA, a agent wciąż pracuje?
+
+        Wydzielone z `_read_last_response` NIE dla urody: warunek stojący inline
+        w wielkiej metodzie jest w praktyce nietestowalny, a to on decyduje
+        o różnicy między „przeczytaj mi jeszcze raz" (wolno) a „przeczytał
+        starą odpowiedź" (usterka).
+        """
+        return turn_state != TURN_IDLE and self._already_spoken(tab, text)
+
+    def _speak_journal_text(self, reader, text: str, tab=None) -> bool:
         """Przeczytaj prozę z dziennika i oznacz ją jako skonsumowaną.
 
         `seek_to_end()` przesuwa czytnik na koniec pliku, żeby auto-czytanie
@@ -3442,6 +3466,8 @@ class MainWindow(QMainWindow):
         # decyzji, a spór dotyczy przecież tego, co zabrzmiało w głośniku.
         self._read_last_debug(
             f"DO LEKTORA ({len(cleaned_text)} zn.): {cleaned_text[:60]!r}")
+        if tab is not None:
+            tab._last_spoken_journal_text = text
         self.tts.speak(cleaned_text)
         return True
 
@@ -3495,16 +3521,26 @@ class MainWindow(QMainWindow):
         except Exception:
             return -1
 
-    def _finish_read_last_wait(self, reader, last, status_key: str, reason: str):
-        """Zakończ czekanie i przeczytaj to, co jest w dzienniku."""
+    def _give_up_read_last_wait(self, last, status_key: str, reason: str):
+        """Zakończ czekanie BEZ czytania — nowej wypowiedzi po prostu nie ma.
+
+        ⛔ RUNDA 6 (2026-08-11): wcześniej ta ścieżka czytała `last`, czyli
+        wypowiedź, na której czekanie się zaczęło — a to DOKŁADNIE objaw
+        zgłaszany przez usera („przeczytało przedostatnią"). Czekanie kończące
+        się bez nowego tekstu znaczy tylko tyle, że agent jeszcze nie napisał
+        odpowiedzi; podstawianie w to miejsce starej wypowiedzi jest zgadywaniem
+        i brzmi dla usera jak awaria wyboru. Zgodnie z regułą „gdy warstwa nie
+        umie odpowiedzieć, oddaj trzeci stan (nie wiem), a nie fałszywe »nie«"
+        mówimy wprost, co się dzieje.
+        Skutek uboczny (pożądany): bez `seek_to_end()` czytnik zostaje na miejscu,
+        więc gdy wypowiedź dojdzie, przeczyta ją AUTO-czytanie.
+        """
         started = getattr(self, '_read_wait_started', time.monotonic())
         self._cancel_read_last_wait()
-        self._read_last_debug(f"WAIT -> {reason} po {time.monotonic() - started:.1f}s, "
-                              f"czytam {len(last or '')} zn.")
-        if last and self._speak_journal_text(reader, last):
-            self._update_status(tr(status_key))
-        else:
-            self._update_status(tr('status_no_response_found'))
+        self._read_last_debug(
+            f"WAIT -> {reason} po {time.monotonic() - started:.1f}s, "
+            f"NIE CZYTAM (brak nowej wypowiedzi; stara miala {len(last or '')} zn.)")
+        self._update_status(tr(status_key))
 
     def _check_read_last_wait(self):
         tab = getattr(self, '_read_wait_tab', None)
@@ -3527,7 +3563,7 @@ class MainWindow(QMainWindow):
             self._cancel_read_last_wait()
             self._read_last_debug(f"WAIT -> nowa wypowiedz po {now - self._read_wait_started:.1f}s "
                                   f"({len(last)} zn.)")
-            if self._speak_journal_text(reader, last):
+            if self._speak_journal_text(reader, last, tab):
                 self._update_status(tr('status_reading_last'))
             else:
                 self._update_status(tr('status_response_no_content'))
@@ -3546,24 +3582,27 @@ class MainWindow(QMainWindow):
             if self._read_wait_tool_since is None:
                 self._read_wait_tool_since = now
             elif now - self._read_wait_tool_since >= READ_LAST_STALL_SECS:
-                self._finish_read_last_wait(reader, last, 'status_reading_wait_stalled',
-                                            'pracuje narzedzie')
+                self._give_up_read_last_wait(last, 'status_reading_wait_stalled',
+                                             'pracuje narzedzie')
                 return
         else:
             self._read_wait_tool_since = None
 
-        # Agent STANĄŁ, nie pisząc: ekran zamarł i dziennik nie rośnie. Tak
-        # wygląda pytanie do usera albo prośba o zgodę — czekanie nie ma na co
-        # czekać, więc czytamy to, co jest (to najnowszy tekst na ekranie).
-        if (self._terminal_idle_secs(tab) >= READ_LAST_STALL_SECS
-                and now - self._read_wait_size_changed >= READ_LAST_STALL_SECS):
-            self._finish_read_last_wait(reader, last, 'status_reading_wait_stalled',
-                                        'agent stanal bez pisania')
+        # Agent STANĄŁ, nie pisząc: ekran zamarł i dziennik nie rośnie.
+        # ⚠️ RUNDA 6: próg musi być DŁUŻSZY niż zwykła pauza na myślenie, bo
+        # myślenie wygląda identycznie (cisza w terminalu + brak wpisu). Przy
+        # 4 s czekanie pękało w środku myślenia — zmierzone na zakładce AS:
+        # 28% przerw w środku pracy > 4 s, a „wynik narzędzia → tekst" nigdy
+        # nie zszedł poniżej 20 s. Stąd READ_LAST_OWED_STALL_SECS (30 s).
+        if (self._terminal_idle_secs(tab) >= READ_LAST_OWED_STALL_SECS
+                and now - self._read_wait_size_changed >= READ_LAST_OWED_STALL_SECS):
+            self._give_up_read_last_wait(last, 'status_reading_wait_stalled',
+                                         'agent stanal bez pisania')
             return
 
         if now >= self._read_wait_hard_deadline:
-            self._finish_read_last_wait(reader, last, 'status_reading_wait_timeout',
-                                        'bezpiecznik czasowy')
+            self._give_up_read_last_wait(last, 'status_reading_wait_timeout',
+                                         'bezpiecznik czasowy')
 
     def _read_last_response(self):
         """Read the last Claude Code response aloud (cleaned for TTS)."""
@@ -3664,7 +3703,16 @@ class MainWindow(QMainWindow):
                     f"ŹRÓDŁO=DZIENNIK, NATYCHMIAST: stan_tury={turn_state} "
                     f"cisza_terminala={self._terminal_idle_secs(tab):.1f}s, "
                     f"czytam {len(last or '')} zn.: {(last or '')[:60]!r}")
-                if last and self._speak_journal_text(reader, last):
+                # Agent PRACUJE, a wypowiedź ta sama co poprzednio → nic nowego
+                # nie doszło (typowo: ruszyło narzędzie). Powtórka brzmiałaby
+                # jak „przeczytał przedostatnią" — mówimy prawdę zamiast czytać.
+                if self._should_skip_repeat(tab, turn_state, last):
+                    self._read_last_debug(
+                        "NIE CZYTAM: ta sama wypowiedz co poprzednio, agent pracuje "
+                        f"(stan_tury={turn_state})")
+                    self._update_status(tr('status_reading_nothing_new'))
+                    return
+                if last and self._speak_journal_text(reader, last, tab):
                     self._update_status(tr('status_reading_last'))
                     return
 

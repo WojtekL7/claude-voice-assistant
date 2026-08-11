@@ -15,6 +15,26 @@ Historia buga (ten sam objaw, trzy podejścia):
     200 zn./2 s → strażnik orzekał „nic nie leci" i czytał wypowiedź sprzed
     6 minut. Wniosek: pytanie „czy leci tekst" jest ZŁE. Pytamy dziennik
     o STRUKTURĘ TURY (`TranscriptReader.turn_snapshot`).
+  * runda 6 (2026-08-11) — user w zakładce AS: „przeczytało przedostatnią".
+    Runda 3 pytała już o STRUKTURĘ (poprawnie: „agent winien tekst" → czekaj),
+    ale został TERMINOWY bezpiecznik: 4 s ciszy w terminalu + 4 s bez przyrostu
+    dziennika = „agent stanął". Zmierzone na dzienniku AS: 28% przerw w środku
+    pracy przekracza 4 s, a „wynik narzędzia → następny tekst" trwał 20,7 /
+    23,1 / 29,6 / 70,7 s — czyli bezpiecznik pękał w środku MYŚLENIA. Leki:
+    (1) próg 4 s → 30 s (`READ_LAST_OWED_STALL_SECS`);
+    (2) poddanie się NIE CZYTA już starej wypowiedzi — mówi „nowej jeszcze
+        nie ma" (podstawianie starej BYŁO objawem zgłaszanym przez usera);
+    (3) bezpiecznik na powtórkę tej samej wypowiedzi przy pracującym agencie.
+
+⚠️ ZMIERZONE wyniki sabotażu (URUCHOMIONE 2026-08-11, nie przewidziane).
+Bez sabotażu: 53 OK / 0 FAIL.
+  * `READ_LAST_OWED_STALL_SECS` 30 → 4.0        → 50 OK / 3 FAIL
+  * `_give_up_read_last_wait` znów czyta `last` → 50 OK / 3 FAIL
+  * `_already_spoken` zawsze False              → 51 OK / 2 FAIL
+  * `_should_skip_repeat` bez `!= TURN_IDLE`    → 52 OK / 1 FAIL
+⚠️ Przy sabotażu licz też, ILE testów się WYKONAŁO — gdy atrapa nie pożyczy
+nowej metody `MainWindow`, skrypt wywala się w połowie, a filtrowane wyjście
+wygląda wtedy jak „zero awarii" (wpadłem w to pisząc tę bramkę).
 
 Testujemy DECYZJĘ (czekać czy czytać) bez okna GUI: metody MainWindow wołamy
 na atrapie. Fixture'y stanu tury pochodzą z PRAWDZIWEGO dziennika CRM zdjętego
@@ -31,7 +51,16 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'src'))
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 
+# ⛔ Bramka woła PRAWDZIWE `_read_last_debug`, więc bez tego dopisuje ATRAPOWE
+# wpisy („NOWA odpowiedź", „STARA") do ŻYWEGO `read-last-debug.log` usera —
+# czyli do jedynego źródła dowodowego trwającej diagnozy 🔊. Raz już tak
+# zaśmieciłem log (2026-08-11). Wyłączamy czujnik na czas testu, ZANIM
+# `gui.main_window` zaimportuje stałą.
+import config as _config  # noqa: E402
+_config.READ_LAST_DEBUG = False
+
 from gui.main_window import MainWindow  # noqa: E402
+from config import READ_LAST_OWED_STALL_SECS  # noqa: E402
 from core.transcript_reader import (  # noqa: E402
     TranscriptReader, TURN_IDLE, TURN_OWES_TEXT, TURN_TOOL_PENDING, TURN_UNKNOWN,
 )
@@ -109,7 +138,8 @@ class FakeTimer:
 
 _WAIT_METHODS = ('_agent_is_writing', '_terminal_idle_secs', '_should_wait_for_response',
                  '_speak_journal_text', '_cancel_read_last_wait', '_check_read_last_wait',
-                 '_finish_read_last_wait', '_session_size', '_read_last_debug')
+                 '_give_up_read_last_wait', '_session_size', '_read_last_debug',
+                 '_already_spoken', '_should_skip_repeat')
 
 
 class FakeWindow:
@@ -209,18 +239,29 @@ check("myślenie (mało znaków, dziennik stoi) NIE kończy czekania — "
       f"powiedziano: {w.tts.spoken}")
 
 # ============================================================================
-# 5. Agent STANĄŁ bez pisania (pytanie / prośba o zgodę) → czytamy, co jest
+# 5. Agent STANĄŁ bez pisania → kończymy czekanie, ale NIE czytamy starego
+#    ⚠️ RUNDA 6 zmieniła TU dwie rzeczy naraz (obie z pomiaru zakładki AS):
+#    (a) próg 4 s → 30 s, bo 4 s to zwykła pauza na myślenie, nie zastój;
+#    (b) po poddaniu się NIE czytamy starej wypowiedzi — to był objaw
+#        zgłaszany przez usera („przeczytało przedostatnią").
 # ============================================================================
-tab = FakeTab(idle_secs=10.0)                      # ekran zamarł
+tab = FakeTab(idle_secs=10.0)                      # ekran zamarł na 10 s
 reader = FakeReader(["OSTATNIA notka"], states=[TURN_OWES_TEXT], sizes=[1000])
 w = FakeWindow(tab, reader, before="OSTATNIA notka", journal_idle=10.0)
 w._check_read_last_wait()
-check("cisza w terminalu + dziennik nie rośnie → czytamy najnowszą z dziennika",
-      len(w.tts.spoken) == 1 and "OSTATNIA" in w.tts.spoken[0],
+check("10 s ciszy to jeszcze NIE zastój — czekamy dalej (runda 6)",
+      w.tts.spoken == [] and w._read_wait_timer is not None,
       f"powiedziano: {w.tts.spoken}")
-check("i mówi na pasku, że agent się zatrzymał",
-      any("zatrzyma" in s.lower() or "paused" in s.lower() for s in w.statuses),
-      f"statusy: {w.statuses}")
+
+tab = FakeTab(idle_secs=35.0)                      # dopiero to jest zastój
+reader = FakeReader(["OSTATNIA notka"], states=[TURN_OWES_TEXT], sizes=[1000])
+w = FakeWindow(tab, reader, before="OSTATNIA notka", journal_idle=35.0)
+w._check_read_last_wait()
+check("prawdziwy zastój kończy czekanie, ale NIE czyta starej wypowiedzi",
+      w.tts.spoken == [], f"powiedziano: {w.tts.spoken}")
+check("i mówi userowi, że nowej odpowiedzi jeszcze nie ma",
+      any("nowej odpowiedzi" in s.lower() or "new answer" in s.lower()
+          for s in w.statuses), f"statusy: {w.statuses}")
 check("przycisk nie wisi do bezpiecznika", w._read_wait_timer is None)
 
 # kontrola negatywna: dziennik ROŚNIE (agent pracuje) → czekamy dalej
@@ -244,8 +285,9 @@ check("krótkie narzędzie nie przerywa czekania od razu",
       f"powiedziano: {w.tts.spoken}")
 w._read_wait_tool_since = time.monotonic() - 5.0        # narzędzie mieli już 5 s
 w._check_read_last_wait()
-check("narzędzie pracujące dłużej niż próg → czytamy, co jest",
-      len(w.tts.spoken) == 1 and "STARA" in w.tts.spoken[0],
+check("narzędzie pracujące dłużej niż próg → zwalnia przycisk, ale NIE czyta "
+      "starej wypowiedzi (runda 6)",
+      w.tts.spoken == [] and w._read_wait_timer is None,
       f"powiedziano: {w.tts.spoken}")
 
 # ============================================================================
@@ -255,10 +297,9 @@ tab = FakeTab(0.2)
 reader = FakeReader(["STARA"], states=[TURN_OWES_TEXT], sizes=[1000, 1100])
 w = FakeWindow(tab, reader, before="STARA", hard_deadline_in=-1.0)
 w._check_read_last_wait()
-check("po twardym limicie czytamy to, co jest (nigdy cisza bez wyjaśnienia)",
-      len(w.tts.spoken) == 1 and "STARA" in w.tts.spoken[0],
-      f"powiedziano: {w.tts.spoken}")
-check("i mówi o tym na pasku",
+check("po twardym limicie NIE czytamy starej wypowiedzi (runda 6)",
+      w.tts.spoken == [], f"powiedziano: {w.tts.spoken}")
+check("i mówi o tym na pasku (nigdy cisza bez wyjaśnienia)",
       any("pisze" in s or "writing" in s for s in w.statuses),
       f"statusy: {w.statuses}")
 
@@ -453,6 +494,42 @@ else:
 
     if os.path.exists(tmp):
         os.remove(tmp)
+
+# ============================================================================
+# 11. RUNDA 6 (2026-08-11) — zgłoszenie usera z zakładki AS
+#     Zmierzone w chwili kliknięcia: stan tury = „agent winien tekst", terminal
+#     i dziennik milczą 6,5 s (agent MYŚLI), a apka orzekła „stanął" i odczytała
+#     41-znakowy wtręt sprzed 7 minut. Na tym samym dzienniku: 28% przerw
+#     w środku pracy > 4 s, a droga „wynik narzędzia → tekst" trwała
+#     20,7 / 23,1 / 29,6 / 70,7 s — ani razu poniżej 20 s.
+# ============================================================================
+tab = FakeTab(idle_secs=6.5)
+reader = FakeReader(["Znalazłem coś ważnego. Sprawdzam głębiej:"],
+                    states=[TURN_OWES_TEXT], sizes=[1000])
+w = FakeWindow(tab, reader, before="Znalazłem coś ważnego. Sprawdzam głębiej:",
+               journal_idle=6.5)
+w._check_read_last_wait()
+check("PRZYPADEK AS: 6,5 s ciszy w środku myślenia NIE przerywa czekania",
+      w.tts.spoken == [] and w._read_wait_timer is not None,
+      f"powiedziano: {w.tts.spoken}")
+check("PRZYPADEK AS: nie odczytano wtrętu sprzed 7 minut",
+      not any("Sprawdzam głębiej" in s for s in w.tts.spoken))
+check("próg zastoju leży POWYŻEJ zmierzonych pauz na myślenie (>20 s)",
+      READ_LAST_OWED_STALL_SECS >= 20.0, f"{READ_LAST_OWED_STALL_SECS}s")
+
+# Bezpiecznik powtórki: ta sama wypowiedź przy PRACUJĄCYM agencie = nic nowego,
+# ale przy BEZCZYNNYM „przeczytaj mi jeszcze raz" musi dalej działać.
+tab = FakeTab(0.2)
+tab._last_spoken_journal_text = "Ta sama wypowiedź"
+w = FakeWindow(tab, FakeReader(["Ta sama wypowiedź"]), before=None)
+check('powtórka + agent PRACUJE narzędziem → pomijamy (nic nowego)',
+      w._should_skip_repeat(tab, TURN_TOOL_PENDING, "Ta sama wypowiedź") is True)
+check("powtórka + agent WINIEN tekst → też pomijamy",
+      w._should_skip_repeat(tab, TURN_OWES_TEXT, "Ta sama wypowiedź") is True)
+check("powtórka + agent BEZCZYNNY → DOZWOLONA (życzenie usera, nie usterka)",
+      w._should_skip_repeat(tab, TURN_IDLE, "Ta sama wypowiedź") is False)
+check("NOWA wypowiedź nigdy nie uchodzi za powtórkę (kontrola negatywna)",
+      w._should_skip_repeat(tab, TURN_TOOL_PENDING, "Inna wypowiedź") is False)
 
 print(f"\nWynik: {PASS} OK / {FAIL} FAIL")
 sys.exit(1 if FAIL else 0)

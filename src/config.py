@@ -171,11 +171,24 @@ READ_LAST_STREAM_WINDOW_SECS = 2.0  # okno licznika znaków (już tylko do diagn
 # oddaje wynik szybciej i czekanie leci dalej, długie (bash, pod-agent) zwalnia
 # przycisk zamiast go blokować.
 READ_LAST_STALL_SECS = 4.0
+# ⛔ RUNDA 6 (2026-08-11) — próg 4 s ZWALNIAŁ CZEKANIE W ŚRODKU MYŚLENIA agenta.
+# Zmierzone na dzienniku zakładki AS w chwili zgłoszenia usera: gdy agent jest
+# w środku pracy, przerwa w zapisie przekracza 4 s w 28% przypadków, 10 s w 18%,
+# 30 s w 6%; a droga „wynik narzędzia → następna wypowiedź" zajęła 20,7 / 23,1 /
+# 29,6 / 70,7 s — ANI RAZU poniżej 20 s. Czyli zwykła pauza na myślenie wyglądała
+# dla apki identycznie jak „agent skończył i już nic nie napisze" (klik o 10:31:00
+# → po 6,5 s odczyt wypowiedzi sprzed 7 minut). Próg musi leżeć POWYŻEJ typowej
+# pauzy, dlatego 30 s (ponad 90. percentyl zmierzonych przerw).
+# ⚠️ Nie mylić z READ_LAST_STALL_SECS — tamten zwalnia przycisk, gdy RUSZYŁO
+# NARZĘDZIE (o tym dziennik mówi wprost), i ma zostać krótki.
+READ_LAST_OWED_STALL_SECS = 30.0
 # Bezpiecznik czekania, gdy dziennik DOWODZI, że odpowiedź jest w drodze.
-# 60 s pokrywa zmierzony najgorszy przypadek (30 s myślenia + 16,2 s pisania
-# = 46 s) z zapasem. Nie grozi to „pół minuty ciszy" z rundy 1, bo czekamy
-# WYŁĄCZNIE przy stanie „agent winien odpowiedź", a nie na wszelki wypadek.
-READ_LAST_OWED_TIMEOUT_SECS = 60.0
+# RUNDA 6: 60 s → 180 s. Stary budżet pokrywał „30 s myślenia + 16 s pisania",
+# ale zmierzony najgorszy realny przypadek to 70,7 s, a w dniu zgłoszenia dziennik
+# milczał 12 minut przy pracującym agencie. Wydłużenie jest tanie, bo po zmianie
+# z tej samej rundy wyczerpanie budżetu NIE CZYTA już starej wypowiedzi — mówi
+# tylko „agent jeszcze pisze", więc pomyłka nic nie kosztuje.
+READ_LAST_OWED_TIMEOUT_SECS = 180.0
 # Bezpiecznik dla stanu NIEROZSTRZYGNIĘTEGO (nie da się odczytać dziennika →
 # decyduje stary czujnik terminala). Krótszy, bo to zgadywanie, nie dowód.
 READ_LAST_WAIT_TIMEOUT_SECS = 20.0
@@ -648,8 +661,9 @@ UI_TRANSLATIONS = {
         "search_not_on_screen": "Tego fragmentu nie ma już w oknie terminala",
         "status_reading_last": "Czytam ostatnią odpowiedź...",
         "status_reading_wait": "⏳ Agent jeszcze pisze — czekam na koniec wypowiedzi...",
-        "status_reading_wait_timeout": "Agent wciąż pisze — czytam ostatnią zapisaną wypowiedź.",
-        "status_reading_wait_stalled": "Agent zatrzymał się (pytanie lub praca narzędzia) — czytam ostatnią zapisaną wypowiedź.",
+        "status_reading_wait_timeout": "Agent wciąż pisze — nowej odpowiedzi jeszcze nie ma. Kliknij 🔊 ponownie za chwilę.",
+        "status_reading_wait_stalled": "Agent jeszcze nie napisał nowej odpowiedzi. Kliknij 🔊 ponownie za chwilę.",
+        "status_reading_nothing_new": "Agent pracuje — od ostatniego czytania nic nowego nie napisał.",
         "status_response_no_content": "Odpowiedź nie zawiera treści do odczytania",
         "status_no_response_found": "Nie znaleziono odpowiedzi do odczytania",
         "status_no_text": "Brak tekstu do odczytania",
@@ -1458,8 +1472,9 @@ UI_TRANSLATIONS = {
         "search_not_on_screen": "This fragment is no longer in the terminal window",
         "status_reading_last": "Reading the last response...",
         "status_reading_wait": "⏳ The agent is still writing — waiting for the answer to finish...",
-        "status_reading_wait_timeout": "The agent is still writing — reading the last saved answer.",
-        "status_reading_wait_stalled": "The agent has paused (a question or tool work) — reading the last saved answer.",
+        "status_reading_wait_timeout": "The agent is still writing — there is no new answer yet. Click 🔊 again in a moment.",
+        "status_reading_wait_stalled": "The agent has not written a new answer yet. Click 🔊 again in a moment.",
+        "status_reading_nothing_new": "The agent is working — nothing new since the last read.",
         "status_response_no_content": "The response has no content to read",
         "status_no_response_found": "No response found to read",
         "status_no_text": "No text to read",
