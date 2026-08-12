@@ -11,6 +11,7 @@ obecny jako pełnoprawny obywatel; miejsca wymagające osobnej implementacji
 (np. ConPTY zamiast `pty` w terminalu) są oznaczone `TODO(Windows)`.
 """
 import os
+import re
 import sys
 import json
 import shutil
@@ -189,29 +190,189 @@ def default_shell() -> str:
     return os.environ.get("SHELL") or "/usr/bin/bash"
 
 
-def find_claude_command() -> str:
-    """Znajdź CLI `claude` niezależnie od systemu (PATH + typowe lokalizacje)."""
-    found = shutil.which("claude")
-    if found:
-        return found
+# ==================== Zdrowie binarki `claude` ====================
+#
+# Paczka `@anthropic-ai/claude-code` z npm NIE zawiera gotowego programu — wozi
+# ATRAPĘ (plik `bin/claude.exe`, w środku zwykły TEKST) i dociąga prawdziwą
+# binarkę dopiero krokiem po instalacji (`install.cjs`, z optionalDependencies
+# `…-win32-x64` itd.). Gdy ten krok się nie wykona (`--ignore-scripts`, część
+# konfiguracji pnpm, `--omit=optional`), na dysku ZOSTAJE atrapa.
+#
+# Skutek na Windows jest wyjątkowo mylący: system próbuje uruchomić tekst nazwany
+# `.exe`, nie rozpoznaje formatu i pokazuje modalne „Nieobsługiwana aplikacja
+# 16-bitowa" — użytkownik czyta to jako awarię NASZEJ aplikacji. Na Linux/macOS
+# ta sama atrapa wypisuje czytelny komunikat i kończy się kodem 1.
+#
+# Dlatego sprawdzamy plik, a NIE uruchamiamy go: uruchomienie zepsutej binarki
+# przez nakładkę `.cmd` samo wywołałoby to modalne okno Windows, czyli dokładnie
+# to, co chcemy przed użytkownikiem schować.
+_CLAUDE_PLACEHOLDER_MARK = b"native binary not installed"
+_WIN_EXECUTABLE_MAGIC = b"MZ"
+# Ścieżka wewnątrz nakładki npm (`claude.cmd`) liczona od jej katalogu: `%dp0%\…`.
+_WIN_SHIM_PATH_RE = re.compile(r"%~?dp0%?[\\/]+([^\"\r\n]+)")
+_NODE_SCRIPT_SUFFIXES = (".js", ".cjs", ".mjs")
+_WIN_WRAPPER_SUFFIXES = (".cmd", ".bat", ".ps1")
 
-    home = Path.home()
-    candidates = [home / ".local" / "bin" / "claude"]
-    if is_macos():
-        candidates += [Path("/opt/homebrew/bin/claude"),
-                      Path("/usr/local/bin/claude")]
-    elif is_windows():
-        candidates += [home / "AppData" / "Roaming" / "npm" / "claude.cmd",
-                      home / "AppData" / "Roaming" / "npm" / "claude"]
-    else:  # Linux
-        candidates += [Path("/usr/bin/claude"), Path("/usr/local/bin/claude")]
 
-    for c in candidates:
+def _win_shim_target(path: Path):
+    """Plik, który realnie uruchamia nakładka npm `claude.cmd`/`.ps1`.
+
+    Zwraca `None`, gdy nie da się tego ustalić — świadomie, bo zgadywanie
+    kończyłoby się oskarżeniem sprawnej instalacji."""
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return None
+    base = path.parent
+    for rel in reversed(_WIN_SHIM_PATH_RE.findall(text)):
+        rel = rel.strip().strip('"').split('" ')[0].strip('"')
+        if not rel.lower().endswith((".exe",) + _NODE_SCRIPT_SUFFIXES):
+            continue
         try:
-            if c.exists():
-                return str(c)
+            target = (base / rel.replace("\\", os.sep).replace("/", os.sep)).resolve()
+            if target.exists():
+                return target
         except Exception:
             continue
+    # Zapasowo: typowy układ globalnej instalacji npm obok nakładki.
+    fallback = (base / "node_modules" / "@anthropic-ai" / "claude-code"
+                / "bin" / "claude.exe")
+    try:
+        if fallback.exists():
+            return fallback
+    except Exception:
+        pass
+    return None
+
+
+def claude_binary_health(command: str = None) -> dict:
+    """Czy plik `claude` jest PRAWDZIWYM programem, czy atrapą po nieudanej instalacji.
+
+    Zwraca `{'status', 'path', 'target', 'reason'}`, gdzie status to:
+      * `ok`      — plik wygląda na sprawny program (albo nie mamy podstaw sądzić inaczej),
+      * `missing` — nie ma czego sprawdzać,
+      * `broken`  — to atrapa albo plik nie jest programem tego systemu,
+      * `unknown` — nie umiemy rozstrzygnąć (błąd odczytu, nietypowa nakładka).
+
+    ⚠️ NIE uruchamia sprawdzanego pliku (patrz komentarz nad znacznikami wyżej)
+    i celowo działa FAIL-OPEN: przy jakiejkolwiek wątpliwości oddaje `ok`/`unknown`,
+    nigdy `broken`. Fałszywe „zepsute" zablokowałoby pracę na sprawnej instalacji,
+    a to koszt większy niż przepuszczenie rzadkiego przypadku."""
+    out = {'status': 'unknown', 'path': None, 'target': None, 'reason': None}
+    raw = (command or "").strip()
+    name = (raw.split()[0] if raw else "claude") or "claude"
+    name = name.strip('"')
+
+    path = None
+    absolute = False
+    try:
+        p = Path(name)
+        absolute = p.is_absolute()
+        if absolute and p.exists():
+            path = p
+    except Exception:
+        path = None
+    # Pytanie o KONKRETNĄ ścieżkę, której nie ma, to „missing" — NIE wolno po
+    # cichu podstawiać innego `claude` z PATH: werdykt dotyczyłby wtedy pliku,
+    # o który nikt nie pytał (a rozjazd byłby niewidoczny dla wołającego).
+    if path is None and not absolute:
+        which = shutil.which(name) or shutil.which("claude")
+        if which:
+            try:
+                path = Path(which)
+            except Exception:
+                path = None
+    if path is None:
+        out['status'] = 'missing'
+        return out
+    out['path'] = str(path)
+
+    target = path
+    try:
+        if is_windows() and path.suffix.lower() in _WIN_WRAPPER_SUFFIXES:
+            resolved = _win_shim_target(path)
+            if resolved is None:
+                # Nietypowa nakładka — nie oskarżamy, mówimy „nie wiem".
+                out['reason'] = 'wrapper_unresolved'
+                return out
+            target = resolved
+        out['target'] = str(target)
+
+        with open(target, "rb") as fh:
+            head = fh.read(4096)
+
+        if _CLAUDE_PLACEHOLDER_MARK in head:
+            out['status'] = 'broken'
+            out['reason'] = 'placeholder'
+            return out
+        # Skrypt Node (np. `cli-wrapper.cjs`) jest poprawną drogą uruchomienia —
+        # jego treść to tekst i sprawdzanie magii pliku byłoby tu bez sensu.
+        if target.suffix.lower() in _NODE_SCRIPT_SUFFIXES:
+            out['status'] = 'ok'
+            return out
+        if is_windows() and not head.startswith(_WIN_EXECUTABLE_MAGIC):
+            out['status'] = 'broken'
+            out['reason'] = 'not_windows_program'
+            return out
+        out['status'] = 'ok'
+        return out
+    except Exception:
+        out['reason'] = 'unreadable'
+        return out
+
+
+def claude_is_broken(command: str = None) -> bool:
+    """Skrót do bramkowania: TYLKO jednoznaczne „to atrapa" blokuje uruchomienie."""
+    try:
+        return claude_binary_health(command).get('status') == 'broken'
+    except Exception:
+        return False
+
+
+def _claude_candidates() -> list:
+    """Kolejność szukania CLI `claude` — od najbardziej wiarygodnej lokalizacji."""
+    home = Path.home()
+    candidates = []
+    found = shutil.which("claude")
+    if found:
+        candidates.append(Path(found))
+    if is_windows():
+        # Instalator natywny Anthropic (zalecany po awarii npm) ląduje w .local\bin.
+        candidates += [home / ".local" / "bin" / "claude.exe",
+                       home / ".local" / "bin" / "claude",
+                       home / "AppData" / "Roaming" / "npm" / "claude.cmd",
+                       home / "AppData" / "Roaming" / "npm" / "claude"]
+    elif is_macos():
+        candidates += [home / ".local" / "bin" / "claude",
+                       Path("/opt/homebrew/bin/claude"),
+                       Path("/usr/local/bin/claude")]
+    else:  # Linux
+        candidates += [home / ".local" / "bin" / "claude",
+                       Path("/usr/bin/claude"), Path("/usr/local/bin/claude")]
+    out = []
+    for c in candidates:
+        try:
+            if c.exists() and str(c) not in out:
+                out.append(str(c))
+        except Exception:
+            continue
+    return out
+
+
+def find_claude_command() -> str:
+    """Znajdź CLI `claude` niezależnie od systemu (PATH + typowe lokalizacje).
+
+    Wybiera pierwszy SPRAWNY plik, a nie pierwszy znaleziony: zepsuta instalacja
+    z npm leży zwykle wcześniej na PATH niż naprawiona natywna, więc bez tego
+    aplikacja po naprawie u użytkownika dalej trzymałaby się atrapy."""
+    candidates = _claude_candidates()
+    for c in candidates:
+        if claude_binary_health(c).get('status') != 'broken':
+            return c
+    # Wszystkie zepsute → oddaj pierwszy, żeby aplikacja mogła powiedzieć
+    # „zainstalowany, ale uszkodzony" zamiast mylącego „nie znaleziono".
+    if candidates:
+        return candidates[0]
     # Fallback: gołe 'claude' (powłoka znajdzie je na PATH przy uruchomieniu).
     return "claude"
 

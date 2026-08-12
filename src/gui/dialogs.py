@@ -4144,6 +4144,12 @@ class ClaudeSetupDialog(QDialog):
     """
 
     NPM_COMMAND = "npm install -g @anthropic-ai/claude-code"
+    # Naprawa uszkodzonej instalacji: usuwamy wersję z npm (to ona zawodzi —
+    # paczka wozi atrapę i dociąga program osobnym krokiem, który bywa pomijany)
+    # i wgrywamy oficjalny instalator Anthropic, który npm omija.
+    NPM_UNINSTALL_COMMAND = "npm uninstall -g @anthropic-ai/claude-code"
+    NATIVE_INSTALL_COMMAND_WINDOWS = "irm https://claude.ai/install.ps1 | iex"
+    NATIVE_INSTALL_COMMAND_UNIX = "curl -fsSL https://claude.ai/install.sh | bash"
 
     # Ścieżka znalezionego CLI po kliknięciu „Sprawdź ponownie" — MainWindow
     # podmienia claude_command bez restartu aplikacji.
@@ -4267,11 +4273,16 @@ class ClaudeSetupDialog(QDialog):
         """Przerysuj listę kontrolną z aktualnego stanu gotowości."""
         self._clear_content()
         r = self._readiness
-        claude_ok = bool(r.get('claude_installed'))
-        login_ok = bool(r.get('claude_logged_in'))
+        broken = bool(r.get('claude_broken'))
+        # Uszkodzona instalacja to TRZECI stan, nie „brak": plik jest, więc rada
+        # „zainstaluj Claude Code" byłaby myląca (użytkownik go przecież ma).
+        claude_ok = bool(r.get('claude_installed')) and not broken
+        login_ok = bool(r.get('claude_logged_in')) and not broken
         dict_ok = bool(r.get('dictation'))
 
-        self._content.addWidget(self._status_row(tr('dlg_setup_item_claude'), claude_ok))
+        self._content.addWidget(self._status_row(
+            tr('dlg_setup_item_claude'), claude_ok,
+            warn=broken, warn_text=tr('dlg_setup_broken_chip')))
         self._content.addWidget(self._status_row(tr('dlg_setup_item_login'), login_ok))
         self._content.addWidget(self._status_row(tr('dlg_setup_item_dictation'), dict_ok))
 
@@ -4281,7 +4292,9 @@ class ClaudeSetupDialog(QDialog):
             self._content.addWidget(done)
 
         # Szczegóły „co zrobić" pokazujemy TYLKO przy brakujących punktach.
-        if not claude_ok:
+        if broken:
+            self._content.addWidget(self._claude_broken_box(r.get('claude_broken_path')))
+        elif not claude_ok:
             self._content.addWidget(self._claude_install_box())
         elif not login_ok:
             # Zainstalowany, ale niezalogowany — wystarczy sam krok logowania.
@@ -4291,8 +4304,11 @@ class ClaudeSetupDialog(QDialog):
 
         self._content.addStretch()
 
-    def _status_row(self, label_text, ok):
-        """Wiersz: nazwa punktu + chip „gotowe / do zrobienia"."""
+    def _status_row(self, label_text, ok, warn=False, warn_text=None):
+        """Wiersz: nazwa punktu + chip „gotowe / uszkodzone / do zrobienia".
+
+        `warn` to trzeci stan (instalacja jest, ale nie działa) — bez niego
+        uszkodzony Claude Code wyglądał identycznie jak brak instalacji."""
         row = QWidget()
         h = QHBoxLayout(row)
         h.setContentsMargins(0, 0, 0, 0)
@@ -4302,11 +4318,56 @@ class ClaudeSetupDialog(QDialog):
         name.setFont(nf)
         h.addWidget(name)
         h.addStretch()
-        status = QLabel(tr('dlg_setup_ready') if ok else tr('dlg_setup_missing'))
-        status.setStyleSheet(f"color:{theme.SUCCESS};font-weight:700;" if ok
-                             else f"color:{theme.DANGER};font-weight:700;")
+        if warn:
+            text, color = (warn_text or tr('dlg_setup_missing')), theme.WARNING
+        elif ok:
+            text, color = tr('dlg_setup_ready'), theme.SUCCESS
+        else:
+            text, color = tr('dlg_setup_missing'), theme.DANGER
+        status = QLabel(text)
+        status.setStyleSheet(f"color:{color};font-weight:700;")
         h.addWidget(status)
         return row
+
+    def _claude_broken_box(self, broken_path=None):
+        """Instalacja Claude Code jest, ale to ATRAPA po nieudanym `npm install`.
+
+        Osobne od „brak Claude Code", bo rada jest INNA: nie „zainstaluj",
+        tylko „usuń wersję z npm i wgraj oficjalną". Na Windows ten stan bez
+        wyjaśnienia objawia się modalnym oknem systemu o „aplikacji 16-bitowej",
+        które wygląda na awarię naszego programu."""
+        box = QGroupBox(tr('dlg_setup_broken_title'))
+        v = QVBoxLayout(box)
+        v.addWidget(self._rich_label(tr('dlg_setup_broken_intro')))
+        v.addWidget(self._rich_label(tr('dlg_setup_broken_why')))
+        if self._os == "windows":
+            v.addWidget(self._rich_label(tr('dlg_setup_broken_why_windows')))
+        if broken_path:
+            where = QLabel(tr('dlg_setup_broken_path').format(path=str(broken_path)))
+            where.setWordWrap(True)
+            where.setStyleSheet(f"color:{theme.TEXT_DIM};")
+            v.addWidget(where)
+        v.addWidget(self._rich_label("<b>%s</b>" % tr('dlg_setup_broken_steps_title')))
+        # Kroki 2 i 3 nazywają konkretne okno systemu — na Macu/Linuksie nie ma
+        # PowerShella, a błędna nazwa zatrzymałaby nietechnicznego użytkownika.
+        suffix = "" if self._os == "windows" else "_unix"
+        for key in ('dlg_setup_broken_step1', 'dlg_setup_broken_step2' + suffix,
+                    'dlg_setup_broken_step3' + suffix, 'dlg_setup_broken_step4'):
+            v.addWidget(self._rich_label(tr(key)))
+        # Polecenia do przepisania — pola tylko do odczytu, żeby dało się je
+        # zaznaczyć i skopiować bez ryzyka przypadkowej edycji.
+        native = (self.NATIVE_INSTALL_COMMAND_WINDOWS if self._os == "windows"
+                  else self.NATIVE_INSTALL_COMMAND_UNIX)
+        for cmd in (self.NPM_UNINSTALL_COMMAND, native):
+            field = QLineEdit(cmd)
+            field.setReadOnly(True)
+            v.addWidget(field)
+        v.addWidget(self._rich_label(tr('dlg_setup_broken_after')))
+        guide = QPushButton(tr('dlg_setup_full_guide'))
+        guide.clicked.connect(
+            lambda: QDesktopServices.openUrl(QUrl(self._guide_url)))
+        v.addWidget(guide)
+        return box
 
     def _rich_label(self, text):
         lbl = QLabel(text)
@@ -4407,11 +4468,14 @@ class ClaudeSetupDialog(QDialog):
             self.claude_found.emit(str(path))
         self._render()
         if not silent:
-            all_ok = (r.get('claude_installed') and r.get('claude_logged_in')
-                      and r.get('dictation'))
+            all_ok = (r.get('claude_installed') and not r.get('claude_broken')
+                      and r.get('claude_logged_in') and r.get('dictation'))
             if all_ok:
                 QMessageBox.information(self, tr('dlg_setup_found_title'),
                                         tr('dlg_setup_all_ready'))
+            elif r.get('claude_broken'):
+                QMessageBox.warning(self, tr('dlg_setup_broken_title'),
+                                    tr('dlg_setup_broken_msg'))
             elif not r.get('claude_installed'):
                 QMessageBox.information(self, tr('dlg_setup_not_found_title'),
                                         tr('dlg_setup_not_found_msg'))

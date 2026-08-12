@@ -87,6 +87,15 @@ def build_all():
         ("_McpJsonImportDialog",   lambda: D._McpJsonImportDialog(None, 'user', False)),
         ("UpdateAvailableDialog",  lambda: D.UpdateAvailableDialog(FakeUM(), FakeInfo(), "1.0.26", None)),
         ("ClaudeSetupDialog",      lambda: D.ClaudeSetupDialog(None)),
+        # Stan „uszkodzona instalacja" ma WŁASNĄ, dłuższą treść (4 kroki + dwa
+        # pola z poleceniami) — bez osobnego przypadku skan nigdy by go nie
+        # obejrzał, a to okno widzi użytkownik z zepsutym Claude Code.
+        ("ClaudeSetupDialog[uszkodzony]", lambda: D.ClaudeSetupDialog(
+            None, readiness={'claude_installed': True, 'claude_broken': True,
+                             'claude_broken_path': r"C:\Users\HP\AppData\Roaming\npm"
+                                                   r"\node_modules\@anthropic-ai"
+                                                   r"\claude-code\bin\claude.exe",
+                             'claude_logged_in': False, 'dictation': True})),
         ("QuickActionsDialog",     lambda: MW.QuickActionsDialog(None, [{'label':'Test','text':'echo hi'}])),
         ("SkinSettingsDialog",     lambda: MW.SkinSettingsDialog(None, dict(theme.DEFAULT_SKIN) if hasattr(theme,'DEFAULT_SKIN') else {}, {})),
         ("SettingsDialog",         lambda: MW.SettingsDialog(None, "")),

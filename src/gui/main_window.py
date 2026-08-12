@@ -665,6 +665,11 @@ class MainWindow(QMainWindow):
         self.skin_colors = DEFAULT_SKIN_COLORS.copy()  # Custom skin colors (interfejs + terminal)
         self.skin_icons = {k: v.copy() for k, v in DEFAULT_SKIN_ICONS.items()}  # Custom icons
         self.claude_command = CLAUDE_COMMAND  # rozwiązywane wieloplatformowo (config.find_claude_command)
+        # Werdykt „instalacja Claude Code jest uszkodzona" (atrapa po nieudanym
+        # npm). Ustawiany po sprawdzeniu gotowości w tle; do tego czasu False,
+        # żeby nie blokować startu na podstawie niczego.
+        self._claude_broken = False
+        self._claude_broken_path = None
         self.auto_run_claude = True  # Auto-run Claude command on startup
         # Id ostatnio aktywnej zakładki — używane do wyboru "primary agent" przy
         # starcie (aktywuje się od razu; pozostałe zakładki czekają na klik).
@@ -2257,13 +2262,27 @@ class MainWindow(QMainWindow):
         logowania przy wykrywaniu `claude`), dlatego przy starcie wołane w wątku
         tła; przez „Sprawdź ponownie" w kreatorze — synchronicznie."""
         from core.platform_utils import (
-            claude_runnable, claude_logged_in, find_claude_command)
+            claude_runnable, claude_logged_in, find_claude_command,
+            claude_binary_health)
         installed = claude_runnable(self.claude_command)
+        # Znaleziony ≠ sprawny. Nieudana instalacja z npm zostawia ATRAPĘ (plik
+        # `claude.exe` z tekstem w środku) — istnieje, więc do 1.0.28 apka
+        # meldowała „gotowe" i wpuszczała użytkownika prosto na modalne okno
+        # Windows „Nieobsługiwana aplikacja 16-bitowa". Szukamy zdrowej wersji,
+        # a gdy jej nie ma — mówimy wprost, że instalacja jest uszkodzona.
+        healthy_path = find_claude_command() if installed else None
+        health = claude_binary_health(self.claude_command) if installed else {}
+        broken = health.get('status') == 'broken'
+        if broken and healthy_path:
+            # Może istnieć DRUGA, sprawna instalacja (np. natywna obok npm).
+            broken = claude_binary_health(healthy_path).get('status') == 'broken'
         return {
             'claude_installed': installed,
+            'claude_broken': broken,
+            'claude_broken_path': (health.get('target') or health.get('path')) if broken else None,
             'claude_logged_in': claude_logged_in() if installed else False,
             'dictation': bool(self.stt.api_key),
-            'claude_command_path': find_claude_command() if installed else None,
+            'claude_command_path': healthy_path,
         }
 
     def _maybe_show_claude_setup(self):
@@ -2288,7 +2307,12 @@ class MainWindow(QMainWindow):
         if r.get('claude_installed') and path and path != self.claude_command:
             self.claude_command = path
             self._save_settings()
+        # Zapamiętaj werdykt: bramkuje auto-start zakładek (patrz _claude_blocked).
+        self._claude_broken = bool(r.get('claude_broken'))
+        self._claude_broken_path = r.get('claude_broken_path')
+        self._last_readiness = dict(r)
         need = (not r.get('claude_installed')
+                or r.get('claude_broken')
                 or not r.get('claude_logged_in')
                 or (not r.get('dictation') and not self.dictation_reminder_dismissed))
         if not need:
@@ -2686,13 +2710,34 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
+    def _claude_blocked(self) -> bool:
+        """Czy wolno wysłać `claude` do terminala.
+
+        Blokujemy WYŁĄCZNIE przy jednoznacznym werdykcie „to atrapa": na Windows
+        uruchomienie takiego pliku wywołuje modalne okno systemu („Nieobsługiwana
+        aplikacja 16-bitowa"), którego użytkownik nie ma jak zrozumieć ani
+        powiązać z prawdziwą przyczyną. Zamiast tego pokazujemy własny kreator
+        z instrukcją naprawy. Przy niepewności NIE blokujemy (fail-open)."""
+        if not getattr(self, '_claude_broken', False):
+            return False
+        self._update_status(tr('status_claude_broken'))
+        if not getattr(self, '_claude_broken_notified', False):
+            self._claude_broken_notified = True
+            self._claude_setup_shown = True
+            # Bierzemy wynik POLICZONY W TLE, nie liczymy od nowa: świeże
+            # sprawdzenie odpala powłokę logowania (limit 5 s) i zamroziłoby
+            # okno dokładnie w chwili, gdy użytkownik czeka na wyjaśnienie.
+            QTimer.singleShot(300, lambda: self._show_claude_setup_dialog(
+                readiness=getattr(self, '_last_readiness', None)))
+        return True
+
     def _auto_run_claude_command(self):
         """Auto-run Claude command in all terminals with auto_start enabled.
 
         NOTE: Ta metoda jest używana tylko przy starcie aplikacji.
         Dla nowych zakładek tworzonych później używamy _run_claude_in_tab().
         """
-        if not self.claude_command:
+        if not self.claude_command or self._claude_blocked():
             return
 
         self._update_status(tr('status_starting_cmd').format(cmd=self.claude_command))
@@ -2712,7 +2757,7 @@ class MainWindow(QMainWindow):
             agent_tab: Zakładka agenta
             force: Wymuś uruchomienie nawet jeśli auto_start=False
         """
-        if not self.claude_command:
+        if not self.claude_command or self._claude_blocked():
             return
 
         if agent_tab.terminal_backend and (agent_tab.auto_start or force):
