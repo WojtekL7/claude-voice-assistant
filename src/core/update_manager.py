@@ -27,6 +27,7 @@ zostaje na „otwórz instalator", dopóki nie powstanie paczka podmienialna w m
 """
 import os
 import re
+import time
 import hashlib
 import tempfile
 import threading
@@ -39,6 +40,10 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from core.platform_utils import (is_macos, is_windows, is_linux, is_frozen,
                                   macos_app_bundle, appimage_path)
+# Ustawienia sprzątania trzymamy w JEDNYM miejscu (config), żeby nie powstały
+# dwie kopie tej samej liczby — patrz `_prune_old_crash_logs` / `_cap_growing_logs`.
+from config import (CRASH_LOG_DIR, CRASH_LOG_MAX_AGE_DAYS, CRASH_LOG_AGE_FLOOR,
+                    CAPPED_LOG_FILES)
 
 
 class UpdateInfo:
@@ -493,7 +498,22 @@ class UpdateManager(QObject):
     # Martwe logi diagnostyczne (kod ich już NIE pisze) — do skasowania przy starcie.
     # UWAGA: „debug.log" NIE jest tu wymieniony CELOWO — claude_bridge.py wciąż do
     # niego pisze (żywy plik). Nie dopisuj go bez sprawdzenia.
-    _STALE_LOG_NAMES = ("flag-debug.log", "read-last-debug.log", "debug_buffer.txt")
+    _STALE_LOG_NAMES = ("flag-debug.log", "debug_buffer.txt")
+
+    # ⛔ Logi diagnostyczne, które BYWAJĄ ŻYWE — kasujemy je WYŁĄCZNIE wtedy, gdy
+    # ich czujnik jest wyłączony (brak pliku-znacznika i brak zmiennej
+    # środowiskowej). Powód, dla którego to tu stoi: „read-last-debug.log" był
+    # zwykłym wpisem w _STALE_LOG_NAMES (był wtedy martwy — czujnik skasowano
+    # commitem 9ae59c3), ale przy rundzie 5 bugu 🔊 czujnik ODŻYŁ, a lista została
+    # nietknięta. Skutek: KAŻDY start apki kasował dziennik dowodowy trwającej
+    # diagnozy — czyli dokładnie plik, na podstawie którego mieliśmy orzec, czy
+    # poprawka działa. Objaw zerowy (nikt nie zgłosi braku pliku, o którym nie wie).
+    # ⚠️ NIE przenoś tych nazw z powrotem do _STALE_LOG_NAMES „bo są martwe" —
+    # najpierw sprawdź, czy nikt do nich nie pisze (grep po nazwie w src/).
+    # Format: (nazwa logu, nazwa pliku-znacznika, nazwa zmiennej środowiskowej).
+    _GATED_LOG_NAMES = (
+        ("read-last-debug.log", "read-last-debug.on", "CVA_READ_LAST_DEBUG"),
+    )
 
     def _updates_dirs(self):
         """Foldery z pobranymi paczkami: bieżący (config nowy) + zmigrowany stary."""
@@ -543,7 +563,8 @@ class UpdateManager(QObject):
             pass
 
     def cleanup_stale_files(self):
-        """Jednorazowe sprzątanie przy starcie: stare paczki + martwe logi.
+        """Jednorazowe sprzątanie przy starcie: stare paczki, martwe logi,
+        przeterminowane zrzuty crashu i logi, które urosły ponad limit.
 
         Woływane raz przy uruchomieniu apki (w wątku tła). Idempotentne i miękkie
         — gdy nie ma czego kasować, po prostu nic nie robi."""
@@ -555,6 +576,62 @@ class UpdateManager(QObject):
         for base in config_dirs:
             for name in self._STALE_LOG_NAMES:
                 self._safe_unlink(base / name)
+            self._prune_gated_debug_logs(base)
+        self._prune_old_crash_logs()
+        self._cap_growing_logs()
+
+    def _prune_gated_debug_logs(self, base):
+        """Skasuj log diagnostyczny TYLKO wtedy, gdy jego czujnik jest wyłączony.
+
+        Czujnik jest włączony, gdy istnieje plik-znacznik ALBO ustawiona jest
+        zmienna środowiskowa (dwie furtki — patrz komentarz przy READ_LAST_DEBUG
+        w config.py). Włączony czujnik = trwa diagnoza = log jest DOWODEM."""
+        for log_name, marker_name, env_name in self._GATED_LOG_NAMES:
+            try:
+                if (base / marker_name).exists():
+                    continue                      # czujnik włączony znacznikiem
+                if os.getenv(env_name, "") == "1":
+                    continue                      # czujnik włączony zmienną
+                self._safe_unlink(base / log_name)
+            except Exception:
+                pass
+
+    def _prune_old_crash_logs(self):
+        """Skasuj zrzuty starsze niż CRASH_LOG_MAX_AGE_DAYS, zostawiając podłogę.
+
+        Uzupełnia limit SZTUK (CRASH_LOG_KEEP w agent_tab), który działa wyłącznie
+        przy powstawaniu NOWEGO zrzutu — bez tego pliki z dawno zamkniętej sprawy
+        leżą w nieskończoność. Bierze `*.log`, więc obejmuje też
+        `terminal-glitch-*.log`, których limit sztuk w ogóle nie widział."""
+        try:
+            if not CRASH_LOG_DIR.is_dir():
+                return
+            logs = [p for p in CRASH_LOG_DIR.glob("*.log") if p.is_file()]
+            if len(logs) <= CRASH_LOG_AGE_FLOOR:
+                return          # podłoga: nie zostawiamy katalogu pustego
+            logs.sort(key=lambda p: self._safe_mtime(p), reverse=True)
+            cutoff = time.time() - CRASH_LOG_MAX_AGE_DAYS * 86400
+            # Najnowsze CRASH_LOG_AGE_FLOOR zostają ZAWSZE, reszta tylko gdy świeża.
+            for old in logs[CRASH_LOG_AGE_FLOOR:]:
+                if self._safe_mtime(old) < cutoff:
+                    self._safe_unlink(old)
+        except Exception:
+            pass
+
+    def _cap_growing_logs(self):
+        """Skasuj logi, które przekroczyły swój limit rozmiaru.
+
+        Ten sam prosty wzorzec, co w `web_terminal.py` (kasujemy zamiast przycinać
+        — log diagnostyczny ma pokazywać BIEŻĄCY przebieg, a nie archiwum)."""
+        for base in (Path.home() / ".vibe-coding-assistant",
+                     Path.home() / ".claude-voice-assistant"):
+            for name, max_bytes in CAPPED_LOG_FILES.items():
+                try:
+                    path = base / name
+                    if path.is_file() and path.stat().st_size > max_bytes:
+                        self._safe_unlink(path)
+                except Exception:
+                    pass
 
     @staticmethod
     def _safe_mtime(path):

@@ -69,6 +69,20 @@ CRASH_LOG_KEEP = 20
 # Minimalny odstęp [s] między kolejnymi zrzutami tej samej zakładki — debounce,
 # by powtarzające się przerysowania ekranu ratunkowego nie tworzyły serii plików.
 CRASH_LOG_DEBOUNCE_SECS = 30
+# Sprzątanie zrzutów WIEKIEM (uzupełnia CRASH_LOG_KEEP, które liczy tylko SZTUKI
+# i tylko przy nowym zrzucie — bez tego zrzuty z zamkniętej sprawy leżą latami,
+# a pliki `terminal-glitch-*.log` nie były sprzątane w ogóle).
+CRASH_LOG_MAX_AGE_DAYS = 30
+# ...ale NIGDY nie zostawiaj katalogu pustego: po długim spokoju kasowanie wiekiem
+# wywaliłoby CAŁĄ historię, a przy następnym crashu nie ma z czym porównać.
+CRASH_LOG_AGE_FLOOR = 5
+
+# --- Limity rosnących logów (sprawdzane przy starcie) ------------------------
+# `webterminal.log` pilnuje się sam (web_terminal.py), `login-events.log` też
+# (LOGIN_EVENT_LOG_MAX_BYTES). `tts.log` NIE miał żadnego limitu — rósł w
+# nieskończoność, a to ten sam wzorzec co „diagnostyka tymczasowa urosła do
+# 99 MB". Format: nazwa pliku w katalogu konfiguracji → limit w bajtach.
+CAPPED_LOG_FILES = {"tts.log": 512 * 1024}
 
 # --- Nadganianie lektora (auto-czytanie) -------------------------------------
 # Agent potrafi pisać SZYBCIEJ, niż lektor mówi (mowa ~15 znaków/s). Kolejka
