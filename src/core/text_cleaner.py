@@ -6,6 +6,23 @@ import re
 from typing import Optional, List
 
 
+# ── RAMKI BLOKÓW KODU — JEDNO ŹRÓDŁO DLA WSZYSTKICH CZYŚCIKÓW ────────────────
+# ⛔ Ramką bloku jest WYŁĄCZNIE potrójny znacznik na POCZĄTKU LINII (tak działa
+#    Markdown). Parowanie „gdziekolwiek w tekście" psuło się, gdy agent o tych
+#    znacznikach PISAŁ w zdaniu („owinięty w znaczniki ```") — parowanie
+#    przesuwało się o jeden i czyścik POŁYKAŁ treść (zmierzone na produkcji:
+#    8 z 316 wypowiedzi, średnio 50% zamiast 75% treści docierało do lektora).
+# ⚠️ Ten wzorzec był WKLEJONY INLINE w trzech czyścikach naraz, więc naprawa
+#    jednego zostawiałaby dwa zepsute (droga 🔊/auto-czytania, droga „czytaj
+#    zaznaczenie", droga odczytu z ekranu). Dlatego stoi tu RAZ.
+# ⚠️ OSIEROCONY znacznik trzeba zdjąć PRZED regułą kodu-w-zdaniu: dwa takie
+#    znaczniki w jednym zdaniu wyglądają dla niej jak para i kasuje tekst
+#    POMIĘDZY nimi (zmierzone: z „owija w ``` a potem ```" ginie „a potem").
+# Bramka: tools/test-prose-blocks.py
+CODE_FENCE_RE = re.compile(r"^[ \t]*```.*?^[ \t]*```[^\n]*$", re.DOTALL | re.MULTILINE)
+ORPHAN_FENCE_RE = re.compile(r"`{3,}")
+
+
 def fix_polish_encoding(text: str) -> str:
     """
     Fix common UTF-8/Latin-1 encoding issues with Polish characters.
@@ -191,7 +208,7 @@ class TextCleanerForTTS:
             # Email addresses
             'emails': re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'),
             # Code blocks (markdown)
-            'code_blocks': re.compile(r'```[\s\S]*?```', re.MULTILINE),
+            'code_blocks': CODE_FENCE_RE,
             # Inline code (markdown)
             'inline_code': re.compile(r'`[^`]+`'),
             # Multiple dashes, equals, underscores (separators)
@@ -291,6 +308,8 @@ class TextCleanerForTTS:
 
         # Step 2: Remove code blocks first (before other processing)
         text = self._patterns['code_blocks'].sub('', text)
+        # osierocone znaczniki znikają, ZDANIE ZOSTAJE (patrz CODE_FENCE_RE)
+        text = ORPHAN_FENCE_RE.sub(' ', text)
         text = self._patterns['inline_code'].sub('', text)
 
         # Step 2b: Remove markdown tables (dotąd BRAK w tej drodze — dlatego
@@ -552,9 +571,10 @@ def extract_last_claude_response(terminal_buffer: str) -> str:
 
     # Step 1.5: Remove markdown code blocks (``` ... ```) and inline code (` ... `)
     # These should not be read by TTS
-    code_block_pattern = re.compile(r'```[\s\S]*?```', re.MULTILINE)
     inline_code_pattern = re.compile(r'`[^`]+`')
-    clean_buffer = code_block_pattern.sub('', clean_buffer)
+    clean_buffer = CODE_FENCE_RE.sub('', clean_buffer)
+    # osierocone znaczniki znikają, ZDANIE ZOSTAJE (patrz CODE_FENCE_RE)
+    clean_buffer = ORPHAN_FENCE_RE.sub(' ', clean_buffer)
     clean_buffer = inline_code_pattern.sub('', clean_buffer)
 
     # Step 1.6: Remove markdown tables (lines with | pipes)
@@ -718,6 +738,8 @@ def extract_last_claude_response(terminal_buffer: str) -> str:
 
     # Final cleanup: remove multiple spaces
     result = re.sub(r'\s+', ' ', result)
+    # Po zdjęciu znaczników zostaje spacja przed interpunkcją („znaczniki , więc")
+    result = re.sub(r'\s+([,.;:!?\u2026])', r'\1', result)
     result = result.strip()
 
     # Verify we have meaningful content
@@ -813,10 +835,26 @@ def prose_from_markdown(md_text: str) -> str:
     text = md_text.replace("\r\n", "\n").replace("\r", "\n")
 
     # 1) Bloki kodu ``` ... ``` oraz ~~~ ... ~~~ — całe precz.
-    text = re.sub(r"```.*?```", " ", text, flags=re.DOTALL)
-    text = re.sub(r"~~~.*?~~~", " ", text, flags=re.DOTALL)
-    # niedomknięty blok kodu na końcu (jeszcze dopisywany)
-    text = re.sub(r"```.*\Z", " ", text, flags=re.DOTALL)
+    #    ⛔ RAMKĘ BLOKU UZNAJEMY WYŁĄCZNIE NA POCZĄTKU LINII (tak działa Markdown).
+    #    Potrójny znacznik W ŚRODKU ZDANIA to zwykły tekst — agent często o nich
+    #    PISZE („oddaje JSON owinięty w znaczniki ```”). Parowanie na ślepo
+    #    przesuwało się wtedy o jeden, ostatni niesparowany trafiał na regułę
+    #    „niedomknięty blok = wytnij do końca” i KASOWAŁ TREŚĆ. Objaw ma DWIE
+    #    postacie: urwanie do końca (głośne) ORAZ ciche POŁKNIĘCIE ŚRODKA —
+    #    zmierzone na oryginalnej wypowiedzi ze zgłoszenia (2026-08-11, 3035 zn.,
+    #    5 znaczników, tylko 2 na początku linii): zginęło ~950 zn. ZE ŚRODKA,
+    #    a zakończenie dojechało całe. Czyli „doczytał do końca” nie dowodzi,
+    #    że nic nie zginęło.
+    #    NIE upraszczaj z powrotem do wzorca bez kotwicy ^ — to jest TA usterka.
+    #    Bramka: tools/test-prose-blocks.py
+    text = CODE_FENCE_RE.sub(" ", text)
+    text = re.sub(r"^[ \t]*~~~.*?^[ \t]*~~~[^\n]*$", " ", text,
+                  flags=re.DOTALL | re.MULTILINE)
+    # niedomknięty blok kodu na końcu (jeszcze dopisywany) — też tylko od początku linii
+    text = re.sub(r"^[ \t]*```.*\Z", " ", text, flags=re.DOTALL | re.MULTILINE)
+    # resztki potrójnych znaczników w środku zdania: znika znacznik, ZDANIE ZOSTAJE
+    text = ORPHAN_FENCE_RE.sub(" ", text)
+    text = re.sub(r"~{3,}", " ", text)
 
     # 2) Obrazki ![alt](url) — całe precz (przed linkami!).
     text = re.sub(r"!\[[^\]]*\]\([^)]*\)", " ", text)
@@ -876,4 +914,6 @@ def prose_from_markdown(md_text: str) -> str:
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\s*\n\s*", " ", text)
     text = re.sub(r"\s{2,}", " ", text)
+    # Po wycięciu znaczników zostaje spacja przed interpunkcją („znaczniki , więc”).
+    text = re.sub(r"\s+([,.;:!?…])", r"\1", text)
     return text.strip()
