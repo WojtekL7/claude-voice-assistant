@@ -475,7 +475,12 @@ DEFAULT_SKIN_COLORS = theme.skin_colors()
 #   aktywne" — jaśniejsza AKTYWNA zakładka (nowy token `theme.TAB_ACTIVE`) oraz
 #   jaśniejszy `inactive_panel_bg`. Redesign zbliżył oba do tła (różnica 4%),
 #   przez co przestały cokolwiek sygnalizować; wróciły do ~12% jak przed nim.
-SKIN_VERSION = 4
+# 5 (2026-08-28): ikony paska zeszły na jedną, przygaszoną tonację. Podbicie
+# JEST KONIECZNE — bez niego zapisane w config.json kolory przykryłyby nowe
+# i user nie zobaczyłby żadnej zmiany. Sprawdzone przed podbiciem: user miał
+# 40/40 kolorów identycznych z domyślnymi (zero własnych), więc nic nie ginie;
+# własne NAPISY na przyciskach (skin_icons) i tak nie podlegają migracji.
+SKIN_VERSION = 5
 
 # Nazwy kolorów do wyświetlenia w UI (po polsku)
 SKIN_COLOR_NAMES = {

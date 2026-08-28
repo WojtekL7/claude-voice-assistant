@@ -117,9 +117,60 @@ spr(2, "lupa stoi ZA przełącznikiem myszy",
     f"mysz={kolejnosc.index('mouse_mode_btn')} lupa={kolejnosc.index('search_btn')}")
 
 # ---- 3. Klucz skórki ---------------------------------------------------------
-spr(3, "istnieje klucz skórki icon_search_color i jest BIELĄ motywu",
-    DEFAULT_SKIN_COLORS.get("icon_search_color") == theme.TEXT,
-    f"{DEFAULT_SKIN_COLORS.get('icon_search_color')} vs TEXT={theme.TEXT}")
+# ⚠️ PRZESTARZAŁA PREMISA (2026-08-28): ta asercja wymagała, żeby lupa była
+# BIELĄ motywu. Premisa wygasła — user zgłosił, że mikrofon, X i błyskawica są
+# „bardziej białe niż pozostałe”, i zdecydował, że ikony paska mają trzymać
+# JEDNĄ przygaszoną tonację. Nie odwracamy asercji na ślepo: pytamy, czego
+# pilnowała (że klucz ISTNIEJE i ma sensowny kolor motywu) i zastępujemy ją
+# REGUŁĄ mocniejszą niż poprzednia — wszystkie ikony niosące samą funkcję mają
+# TEN SAM odcień, a wyjątki są wymienione z nazwy i z powodem.
+IKONY_PASKA = ('dictate', 'read', 'copy', 'clear_input', 'add_media',
+               'quick_actions', 'search')
+_tony = {k: DEFAULT_SKIN_COLORS.get(f"icon_{k}_color") for k in IKONY_PASKA}
+spr(3, "wszystkie ikony paska niosące FUNKCJĘ mają jedną tonację",
+    len(set(_tony.values())) == 1 and set(_tony.values()) == {theme.TEXT_DIM},
+    f"rozjazd: {_tony}")
+spr("3b", "cztery zgłoszone przez usera zeszły z prawie bieli",
+    all(_tony[k] != theme.TEXT for k in ('dictate', 'clear_input', 'quick_actions', 'search')),
+    f"{_tony}")
+spr("3c", "kolory ZNACZENIOWE nietknięte (pauza=akcent, stop=czerwień, wyślij=biel)",
+    DEFAULT_SKIN_COLORS.get("icon_pause_color") == theme.ACCENT_LIGHT
+    and DEFAULT_SKIN_COLORS.get("icon_stop_color") == theme.DANGER
+    and DEFAULT_SKIN_COLORS.get("icon_send_color") == "#ffffff",
+    "ktoś ujednolicił kolor niosący STAN — to gasi sygnał")
+
+# Gałki przełącznika „Auto-czytaj odpowiedzi” — ta biała kropka ze zgłoszenia.
+import re as _re
+_ICONS = os.path.join(ROOT, "src", "assets", "icons")
+
+
+def _fill(nazwa):
+    with open(os.path.join(_ICONS, nazwa), encoding="utf-8") as fh:
+        return _re.findall(r'fill="(#[0-9a-fA-F]{6})"', fh.read())
+
+
+def _jasnosc(hexcol):
+    h = hexcol.lstrip("#")
+    return sum(int(h[i:i + 2], 16) for i in (0, 2, 4)) / 3
+
+
+_off_tor, _off_galka = _fill("toggle-off.svg")
+_on_tor, _on_galka = _fill("toggle-on.svg")
+
+spr("3d", "gałka WYŁĄCZONEGO przełącznika ma tonację przycisków (nie biel)",
+    _off_galka.lower() == theme.TEXT_DIM.lower(), f"{_off_galka} vs {theme.TEXT_DIM}")
+spr("3e", "gałka WŁĄCZONEGO przełącznika nie jest już czystą bielą",
+    _on_galka.lower() != "#ffffff", _on_galka)
+# ⚠️ Na fiolecie nie wolno zejść do TEXT_DIM: różnica byłaby 10/255, poniżej
+# progu 20 zapisanego w projekcie dla odcienia niosącego SYGNAŁ — kropka zlałaby
+# się z tłem i user przestałby widzieć, czy auto-czytanie działa.
+spr("3f", "...ale zachowuje margines kontrastu na fioletowym torze (≥20/255)",
+    abs(_jasnosc(_on_galka) - _jasnosc(_on_tor)) >= 20,
+    f"gałka {_on_galka}={_jasnosc(_on_galka):.0f}, tor {_on_tor}={_jasnosc(_on_tor):.0f}, "
+    f"różnica {abs(_jasnosc(_on_galka) - _jasnosc(_on_tor)):.0f}")
+spr("3g", "gałka wyłączonego też jest widoczna na ciemnym torze (kontrola odwrotna)",
+    abs(_jasnosc(_off_galka) - _jasnosc(_off_tor)) >= 20,
+    f"różnica {abs(_jasnosc(_off_galka) - _jasnosc(_off_tor)):.0f}")
 
 
 # ---- 4-6. KOLOR — mierzony na pikselach --------------------------------------

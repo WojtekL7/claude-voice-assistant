@@ -146,21 +146,29 @@ def skin_colors() -> dict:
         # mikrofon / „wyczyść pole" / akcje błyskawiczne są BIAŁE, nie kolorowe.
         # ⚠️ To wartości DOMYŚLNE skórki — zmiana jest niewidoczna bez podbicia
         # SKIN_VERSION (config.json usera je przykrywa). Patrz main_window.
-        'icon_dictate_color': TEXT,
+        # ⚠️ IKONY PASKA TRZYMAJĄ JEDNĄ TONACJĘ (TEXT_DIM) — decyzja usera
+        # 2026-08-28: „mikrofon, X i błyskawica są bardziej białe niż pozostałe”.
+        # Zmierzone: rysunki ikon są identycznej jasności, różnicę robił WYŁĄCZNIE
+        # kolor przypisany tutaj (cztery na TEXT, reszta na TEXT_DIM).
+        # Wyjątki poniżej są CELOWE i nie wolno ich „ujednolicić”:
+        #   * pause/stop niosą STAN (akcent / czerwień) — patrz konwencja koloru;
+        #   * send zostaje bielą, bo leży na gradiencie akcentu.
+        # Pilnuje tego tools/test-bottom-bar-icons.py.
+        'icon_dictate_color': TEXT_DIM,
         'icon_read_color': TEXT_DIM,
         'icon_pause_color': ACCENT_LIGHT,
         'icon_stop_color': DANGER,
         'icon_copy_color': TEXT_DIM,
-        'icon_clear_input_color': TEXT,
+        'icon_clear_input_color': TEXT_DIM,
         'icon_add_media_color': TEXT_DIM,
         'icon_send_color': '#ffffff',   # na gradiencie akcentu
-        'icon_quick_actions_color': TEXT,
+        'icon_quick_actions_color': TEXT_DIM,
         # Lupa — BIAŁA (życzenie usera 2026-08-04: „ma być jak reszta, negatyw
         # tego co było"). Klucz DODANY, nie zmieniony, więc działa bez podbijania
         # SKIN_VERSION: `_load_settings` iteruje po DEFAULT_SKIN_COLORS i bierze
         # z config.json tylko klucze, KTÓRE TAM SĄ — nowego nie ma, więc zostaje
         # ta wartość, a zapisana skórka użytkownika pozostaje nietknięta.
-        'icon_search_color': TEXT,
+        'icon_search_color': TEXT_DIM,
 
         # --- Terminal (16 kolorów ANSI + tło/tekst) ---
         # Dobrane pod składnię, jaką rysuje Claude Code: zielony = dodane linie,
