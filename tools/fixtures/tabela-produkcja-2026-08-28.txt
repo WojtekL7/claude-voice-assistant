@@ -1,0 +1,24 @@
+Przeczytałem oba pliki w całości (COMMON 1179 linii, VCA 320 linii — czytane kawałkami, bo `cat` obcina duże pliki). Kontekst mam.
+
+Zgodnie z zasadą „START SESJI" z COMMON — oto **co wisi**:
+
+## ⏳ VCA — czeka na test / decyzję
+
+| # | Sprawa | Stan |
+|---|--------|------|
+| 1 | **5 napraw w kodzie, w żadnej wydanej paczce** (kanał dalej rozdaje 1.0.28) | `9e3afde` crash Maca przy zamykaniu · `621b977` 🔊 · `9e5bedc` log przeżywa start · `7d0a7bc` atrapa `claude` · `fc4a1ca` lektor gubił treść. **4 potwierdzone**, droga wydania sprawdzona (feed 200, 14 GB wolnego) → rekomendacja: **wydać 1.0.29** |
+| 2 | 🗓️ **Lektor / potrójny znacznik ```** — test zaplanowany na **2026-08-27 (wczoraj)**, więc dziś jest do rozliczenia. Wymaga **restartu bety** (stary czyścik siedzi w pamięci) | 5 scenariuszy: 🔊 na zdaniu o znacznikach · kontrola odwrotna z prawdziwym kodem · auto-czytanie · lupa → „przeczytaj fragment" · „czytaj zaznaczenie" |
+| 3 | 🧹 **Dług po diagnostyce 🔊** — skasować `read-last-debug.on` + wyjąć diagnostykę z kodu (trzymana 1 rundę na wypadek nawrotu). ⚠️ Nie usuwać przy tym `_GATED_LOG_NAMES` | do zrobienia przy wydaniu |
+| 4 | **Serwery MCP** — nigdy niesprawdzone na żywo (dodawanie, gating, licznik w pasku) | zaległość od 2026-07-25 |
+| 5 | **Chmura — ładowanie agenta na drugim komputerze** | kliencka droga „pobierz i pracuj" nieprzeszła |
+| 6 | **Self-update na Linuksie (AppImage) i Windows** | Mac ✅ 2026-08-07, tamte dwa bez potwierdzenia |
+| 7 | **Auto-czytanie po auto-compact** (`1b57c60`) | najstarsza niepotwierdzona rzecz |
+| 8 | **Wyścig `/login`** — Etap 1 czeka na werdykt z **Linuksa** (Mac z definicji „nierozstrzygnięty") | Etap 2 (auto-restart) zablokowany do tego czasu |
+| 9 | ❓ Pytanie do Ciebie (zadane 2×, nie naciskam): apka na Macu **znikała sama**, czy okno Apple wyskakiwało dopiero przy zamykaniu? |
+
+## 📋 VCA — otwarte TODO bez terminu
+Redesign: własna belka tytułowa / ustawienia jako jeden modal · strona i branding (dane firmy w polityce, zakup domeny, geolokalizacja GeoJS, link „Instrukcje", przegląd prawny, przepięcie ze stagingu) · test zadania „nodecli" na świeżym Windows · kolejne języki.
+
+⚠️ Zgodnie z własną nauką z tego pliku: **pierwszym krokiem każdej z tych pozycji jest POMIAR, nie plan** — dwie z nich już raz kłamały (XSS i sprzątanie plików były zrobione od dawna).
+
+Od czego zaczynamy?

@@ -23,6 +23,87 @@ CODE_FENCE_RE = re.compile(r"^[ \t]*```.*?^[ \t]*```[^\n]*$", re.DOTALL | re.MUL
 ORPHAN_FENCE_RE = re.compile(r"`{3,}")
 
 
+# ── TABELE MARKDOWN — JEDNO ŹRÓDŁO DLA WSZYSTKICH CZYŚCIKÓW ───────────────────
+# ⛔ Tabeli NIE WOLNO wycinać w całości. Do 2026-08-28 wszystkie trzy czyściki
+#    kasowały każdy wiersz `|...|` — a w tabeli siedzi zwykle NAJGĘSTSZA treść
+#    wiadomości. Objaw był CICHY („początek i koniec są, środek zniknął"),
+#    zmierzony na produkcji: 322 z 565 długich wypowiedzi (57%) zawiera tabelę,
+#    średnio do lektora docierało 73% treści, najgorsze przypadki 23–30%.
+# ⚠️ Ten wzorzec był — dokładnie jak wcześniej ramki bloków kodu — WKLEJONY
+#    INLINE w trzech czyścikach naraz (🔊/auto-czytanie/lupa, „czytaj
+#    zaznaczenie", odczyt z ekranu), więc naprawa jednego zostawiłaby dwa
+#    zepsute. Dlatego stoi tu RAZ. Nie wklejaj go z powrotem inline.
+# ⚠️ Wołaj PO usunięciu bloków kodu — inaczej tabela w bloku kodu zostanie
+#    przeczytana, choć kodu czytać nie wolno.
+# Bramka: tools/test-table-prose.py
+TABLE_ROW_RE = re.compile(r"^[ \t]*\|.*$")
+_TABLE_SEP_CELL_RE = re.compile(r"^:?-+:?$")
+# Nagłówek będący samym symbolem („#", „№") nie jest słowem — czytamy wtedy
+# samą wartość. Nie wstawiamy tu słowa „Numer": ten moduł nie zna języka
+# interfejsu, a apka chodzi też po angielsku.
+_SYMBOL_HEADER_RE = re.compile(r"^[^\w]+$")
+
+
+def _split_table_row(line: str) -> List[str]:
+    """Wiersz tabeli -> lista komórek. Kreska ekranowana (\\|) to DANE."""
+    s = line.strip().replace("\\|", "\x00")
+    if s.startswith("|"):
+        s = s[1:]
+    if s.endswith("|"):
+        s = s[:-1]
+    return [c.strip().replace("\x00", "|") for c in s.split("|")]
+
+
+def _is_separator_row(cells: List[str]) -> bool:
+    """Wiersz |---|:---:| — rysunek tabeli, nigdy treść."""
+    filled = [c for c in cells if c]
+    return bool(filled) and all(_TABLE_SEP_CELL_RE.match(c) for c in filled)
+
+
+def _table_block_to_prose(rows: List[str]) -> str:
+    """Blok tabeli -> zdania „Nagłówek: wartość." (wybór usera 2026-08-28)."""
+    parsed = [_split_table_row(r) for r in rows]
+    sep = next((i for i, c in enumerate(parsed) if _is_separator_row(c)), None)
+    if sep is not None and sep > 0:
+        headers = parsed[sep - 1]
+        data = parsed[:sep - 1] + parsed[sep + 1:]
+    else:
+        headers = []
+        data = parsed
+    out = []
+    for cells in data:
+        if _is_separator_row(cells):
+            continue
+        parts = []
+        for i, cell in enumerate(cells):
+            if not cell:
+                continue
+            label = headers[i].strip() if i < len(headers) else ""
+            if label and not _SYMBOL_HEADER_RE.match(label):
+                parts.append("%s: %s" % (label, cell))
+            else:
+                parts.append(cell)
+        if parts:
+            out.append(". ".join(parts).rstrip(". ") + ".")
+    return "\n".join(out)
+
+
+def tables_to_prose(text: str) -> str:
+    """Zamienia tabele markdown na zdania. Reszta tekstu nietknięta."""
+    out, block = [], []
+    for line in text.split("\n"):
+        if "|" in line and TABLE_ROW_RE.match(line):
+            block.append(line)
+            continue
+        if block:
+            out.append(_table_block_to_prose(block))
+            block = []
+        out.append(line)
+    if block:
+        out.append(_table_block_to_prose(block))
+    return "\n".join(out)
+
+
 def fix_polish_encoding(text: str) -> str:
     """
     Fix common UTF-8/Latin-1 encoding issues with Polish characters.
@@ -312,11 +393,8 @@ class TextCleanerForTTS:
         text = ORPHAN_FENCE_RE.sub(' ', text)
         text = self._patterns['inline_code'].sub('', text)
 
-        # Step 2b: Remove markdown tables (dotąd BRAK w tej drodze — dlatego
-        # zaznaczenie tabelki myszką było czytane). Najpierw separator |---|,
-        # potem zwykłe wiersze |...|.
-        text = re.sub(r'^\s*\|[-:\s|]+\|?\s*$', '', text, flags=re.MULTILINE)
-        text = re.sub(r'^\s*\|.*\|\s*$', '', text, flags=re.MULTILINE)
+        # Step 2b: Tabele -> ZDANIA (nie kasujemy; patrz TABLE_ROW_RE).
+        text = tables_to_prose(text)
 
         # Step 3: Remove package manager output
         text = self._patterns['package_managers'].sub('', text)
@@ -577,13 +655,8 @@ def extract_last_claude_response(terminal_buffer: str) -> str:
     clean_buffer = ORPHAN_FENCE_RE.sub(' ', clean_buffer)
     clean_buffer = inline_code_pattern.sub('', clean_buffer)
 
-    # Step 1.6: Remove markdown tables (lines with | pipes)
-    # Table rows: | col1 | col2 |
-    # Table separators: |---|---|
-    table_row_pattern = re.compile(r'^\s*\|.*\|\s*$', re.MULTILINE)
-    table_separator_pattern = re.compile(r'^\s*\|[-:\|\s]+\|\s*$', re.MULTILINE)
-    clean_buffer = table_separator_pattern.sub('', clean_buffer)
-    clean_buffer = table_row_pattern.sub('', clean_buffer)
+    # Step 1.6: Tabele -> ZDANIA (nie kasujemy; patrz TABLE_ROW_RE).
+    clean_buffer = tables_to_prose(clean_buffer)
 
     # Step 2: Remove ALL ASCII box drawing characters (Claude Code UI frames)
     box_chars = re.compile(r'[─━│┃┄┅┆┇┈┉┊┋═║╒╓╔╕╖╗╘╙╚╛╜╝╞╟╠╡╢╣╤╥╦╧╨╩╪╫╬╭╮╯╰┌┐└┘├┤┬┴┼▶▷◀◁●○■□★☆→←↑↓⬆⬇❯âââââ]+')
@@ -871,17 +944,18 @@ def prose_from_markdown(md_text: str) -> str:
     # niedomknięty inline-kod na końcu
     text = re.sub(r"`[^`\n]*\Z", " ", text)
 
-    # 5) Przetwarzanie liniami: tabele, linie poziome, znaczniki.
+    # 4b) Tabele -> ZDANIA. Stoi po usunięciu bloków kodu (wyżej) porządkowo.
+    #     ⚠️ ZMIERZONE sabotażem 2026-08-28: przeniesienie tego wyżej NIE wpuszcza
+    #     tabeli z bloku kodu do lektora (ramka i tak kasuje swoją zawartość), więc
+    #     bramka tej kolejności NIE pilnuje — nie traktuj jej jak bezpiecznika.
+    text = tables_to_prose(text)
+
+    # 5) Przetwarzanie liniami: linie poziome, znaczniki.
     out_lines = []
     for line in text.split("\n"):
         stripped = line.strip()
         if not stripped:
             out_lines.append("")
-            continue
-        # Tabela markdown: wiersz |...|...|  oraz separator |---|:---|
-        if re.match(r"^\|.*\|?\s*$", stripped) or re.match(r"^[:\-\|\s]+$", stripped) and "|" in stripped:
-            continue
-        if re.match(r"^\|", stripped):
             continue
         # Linia pozioma --- *** ___
         if re.match(r"^([-*_])\1{2,}\s*$", stripped):
