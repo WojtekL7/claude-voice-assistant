@@ -707,6 +707,21 @@ class TranscriptReader:
             return -1
         return self._safe_size(self._session_file)
 
+    def session_age_secs(self) -> float:
+        """Ile sekund temu dziennik był ZAPISYWANY (-1 = nie wiemy).
+
+        Duża wartość przy turze „winnej tekst” znaczy, że agent NIE myśli:
+        Claude Code wstrzymuje zapis, dopóki pytanie z polami wyboru czeka
+        na odpowiedź (patrz `config.READ_LAST_BLOCKED_AGE_SECS`).
+        """
+        self._ensure_session()
+        if not self._session_file:
+            return -1.0
+        m = self._safe_mtime(self._session_file)
+        if not m:
+            return -1.0
+        return max(0.0, time.time() - m)
+
     @staticmethod
     def _is_conversation_entry(obj: dict) -> bool:
         """Czy wpis należy do ROZMOWY głównego agenta (a nie do księgowości)?

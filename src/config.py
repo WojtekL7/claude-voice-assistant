@@ -203,6 +203,20 @@ READ_LAST_OWED_STALL_SECS = 30.0
 # z tej samej rundy wyczerpanie budżetu NIE CZYTA już starej wypowiedzi — mówi
 # tylko „agent jeszcze pisze", więc pomyłka nic nie kosztuje.
 READ_LAST_OWED_TIMEOUT_SECS = 180.0
+
+# ⚠️ 🔊 „czytaj ostatnią” a PYTANIE Z POLAMI WYBORU (zmierzone 2026-08-28).
+# Claude Code 2.1.250 NIE zapisuje wypowiedzi do dziennika, dopóki pytanie
+# (AskUserQuestion / prośba o zgodę) czeka na odpowiedź — cały blok (tekst
+# ORAZ pytanie) ląduje w pliku dopiero po kliknięciu odpowiedzi. Zmierzone na
+# żywym dzienniku: wpisy ze znacznikiem 08:27 trafiły do pliku po 09:00, plik
+# stał zamrożony 32 minuty. W tym czasie 🔊 widzi STARĄ, krótką wypowiedź
+# i „agent winien tekst” → czeka → milczy. 26 z 28 nieudanych kliknięć tego
+# dnia miało wiszące pytanie (kontrola: 5 z 83 udanych).
+# Gdy tura jest „winna tekst”, a dziennik nie drgnął dłużej niż ten próg,
+# agent NIE myśli — czeka na użytkownika, więc czekanie niczego nie przyniesie.
+# Próg z POMIARU, nie z intuicji: najdłuższa zmierzona przerwa „wynik
+# narzędzia → tekst” to ~71 s, więc 120 s leży bezpiecznie powyżej ogona normy.
+READ_LAST_BLOCKED_AGE_SECS = 120.0
 # Bezpiecznik dla stanu NIEROZSTRZYGNIĘTEGO (nie da się odczytać dziennika →
 # decyduje stary czujnik terminala). Krótszy, bo to zgadywanie, nie dowód.
 READ_LAST_WAIT_TIMEOUT_SECS = 20.0

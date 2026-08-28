@@ -427,6 +427,7 @@ from config import (
     LOGIN_VERDICT_INTERVAL_SECS, LOGIN_VERDICT_MAX_CHECKS,
     READ_LAST_BUSY_SECS, READ_LAST_WAIT_POLL_MS, READ_LAST_WAIT_TIMEOUT_SECS,
     READ_LAST_STALL_SECS, READ_LAST_OWED_STALL_SECS, READ_LAST_OWED_TIMEOUT_SECS,
+    READ_LAST_BLOCKED_AGE_SECS,
     READ_LAST_DEBUG, READ_LAST_DEBUG_LOG, READ_LAST_DEBUG_MAX_BYTES,
     t as tr, set_ui_language, detect_system_language,
 )
@@ -434,7 +435,9 @@ from core.claude_bridge import ClaudeBridgeAsync
 from core.tts_engine import TTSEngine, TTSState
 from core.stt_engine import STTEngine, STTState
 from core.license_manager import LicenseManager, LicenseStatus
-from core.text_cleaner import TextCleanerForTTS, extract_last_claude_response, fix_polish_encoding, prose_from_markdown
+from core.text_cleaner import (TextCleanerForTTS, extract_last_claude_response,
+                              fix_polish_encoding, prose_from_markdown,
+                              repair_terminal_mojibake)
 from gui.search_dialog import SearchDialog
 from core.transcript_reader import (
     TranscriptReader,
@@ -3566,6 +3569,89 @@ class MainWindow(QMainWindow):
         except Exception:
             return -1
 
+    @staticmethod
+    def _bez_spacji(tekst: str):
+        """Tekst bez białych znaków + mapa pozycji na oryginał."""
+        czysty, poz = [], []
+        for i, c in enumerate(tekst):
+            if not c.isspace():
+                czysty.append(c)
+                poz.append(i)
+        return "".join(czysty), poz
+
+    def _journal_is_frozen(self, reader, turn_state) -> float:
+        """Czy dziennik ZAMARŁ, choć tura jest „winna tekst”? (wiek albo -1).
+
+        Wydzielone z `_read_last_response` NIE dla urody: warunek stojący inline
+        w wielkiej metodzie jest nietestowalny, a to on odróżnia „agent myśli,
+        poczekaj” od „agent czeka na Ciebie, czekanie nic nie da”.
+        """
+        if turn_state != TURN_OWES_TEXT or reader is None:
+            return -1.0
+        try:
+            wiek = reader.session_age_secs()
+        except Exception:
+            return -1.0
+        return wiek if wiek >= READ_LAST_BLOCKED_AGE_SECS else -1.0
+
+    def _screen_tail_since(self, tab, anchor: str):
+        """Co pojawiło się na EKRANIE po ostatniej wypowiedzi znanej z dziennika.
+
+        ⛔ Nie da się tu użyć samego `extract_last_claude_response`: on szuka
+        RAMEK okna (`╰`), a te bywają rozsypane przez kodowanie — na prawdziwym
+        zrzucie z `crash-logs/` zwracał 0 znaków, czyli naprawa milczałaby po
+        cichu. Kotwiczymy się więc w tekście, który ZNAMY z dziennika, i bierzemy
+        wszystko po nim; porównanie jest odporne na zawijanie wierszy przez
+        terminal (obie strony bez białych znaków).
+        """
+        buf = getattr(tab, '_terminal_output_buffer', '') if tab else ''
+        if not buf or not buf.strip():
+            return None, 'brak bufora'
+        if anchor:
+            k = re.sub(r"\s+", "", anchor)[-120:]
+            if len(k) >= 40:
+                plaski, poz = self._bez_spacji(buf)
+                i = plaski.rfind(k)
+                if i >= 0:
+                    ogon = buf[poz[i + len(k) - 1] + 1:]
+                    if len(ogon.strip()) >= 40:
+                        return ogon, 'kotwica'
+        wyluskane = extract_last_claude_response(buf)
+        if wyluskane and len(wyluskane.strip()) >= 40:
+            return wyluskane, 'ekstraktor'
+        return None, 'nic nie wylowiono'
+
+    def _speak_screen_text(self, tab, anchor: str, powod: str) -> bool:
+        """Przeczytaj to, co widać na EKRANIE (z opcjami pytania włącznie).
+
+        Wchodzi TYLKO wtedy, gdy dziennik nie może pomóc: Claude Code wstrzymuje
+        zapis, dopóki pytanie z polami wyboru czeka na odpowiedź, więc ekran jest
+        JEDYNYM miejscem, gdzie ta wypowiedź w ogóle istnieje.
+        ⚠️ Bufora NIE czyścimy — inaczej drugie kliknięcie pod rząd nic nie da.
+        """
+        surowy, metoda = self._screen_tail_since(tab, anchor)
+        if not surowy:
+            self._read_last_debug(f"EKRAN ({powod}): {metoda} — NIE CZYTAM")
+            return False
+        tekst = TextCleanerForTTS(self.current_language).clean(
+            fix_polish_encoding(repair_terminal_mojibake(surowy)), use_dictionary=False)
+        if not tekst or len(tekst.strip()) < 40:
+            self._read_last_debug(f"EKRAN ({powod}): po czyszczeniu za krótkie — NIE CZYTAM")
+            return False
+        # Ekran mógł pokazywać wciąż tę samą, starą wypowiedź (agent naprawdę
+        # stanął) — czytanie jej to dokładnie bug #6 („przeczytał przedostatnią").
+        if anchor and self._bez_spacji(tekst)[0][:150] == self._bez_spacji(anchor)[0][:150]:
+            self._read_last_debug(f"EKRAN ({powod}): to ta sama wypowiedz co w dzienniku — NIE CZYTAM")
+            return False
+        self._read_last_debug(
+            f"ŹRÓDŁO=EKRAN [{powod}/{metoda}] bufor={len(getattr(tab, '_terminal_output_buffer', ''))} zn. "
+            f"-> DO LEKTORA ({len(tekst)} zn.): {tekst[:60]!r}")
+        if hasattr(self, '_tts_timer') and self._tts_timer is not None:
+            self._tts_timer.stop()
+        self.tts.speak(tekst)
+        self._update_status(tr('status_reading_last'))
+        return True
+
     def _give_up_read_last_wait(self, last, status_key: str, reason: str):
         """Zakończ czekanie BEZ czytania — nowej wypowiedzi po prostu nie ma.
 
@@ -3581,7 +3667,12 @@ class MainWindow(QMainWindow):
         więc gdy wypowiedź dojdzie, przeczyta ją AUTO-czytanie.
         """
         started = getattr(self, '_read_wait_started', time.monotonic())
+        tab = getattr(self, '_read_wait_tab', None)
         self._cancel_read_last_wait()
+        # PLAN B: dziennik nic nie da (typowo: na ekranie wisi pytanie z polami
+        # wyboru, a Claude Code wstrzymał zapis). Tekst JEST na ekranie.
+        if self._speak_screen_text(tab, last, f'poddanie: {reason}'):
+            return
         self._read_last_debug(
             f"WAIT -> {reason} po {time.monotonic() - started:.1f}s, "
             f"NIE CZYTAM (brak nowej wypowiedzi; stara miala {len(last or '')} zn.)")
@@ -3717,14 +3808,20 @@ class MainWindow(QMainWindow):
             # uznał dziennik za spóźniony, apka NAJPIERW sięgała po ekran. Miało
             # to sens, gdy stary Claude Code ODRACZAŁ zapis wypowiedzi kończącej
             # turę pytaniem `AskUserQuestion` do odpowiedzi użytkownika. Nowszy
-            # Claude Code (2.1.212) zapisuje wypowiedź OD RAZU, ale przyrostowo →
+            # Claude Code (2.1.212) zapisywał wypowiedź OD RAZU, ale przyrostowo →
             # w oknie oczekiwania `journal_lags_screen()` losowo raz widział
             # ostatni wpis jako `assistant` (→ dziennik), raz jako `user`
             # (→ ekran) → „raz czyta ostatnią, raz przedostatnią". Do tego przy
             # DŁUGIEJ wypowiedzi bufor ekranu (cap 5000) miał już tylko końcówkę
             # + widget pytania → `extract_last_claude_response` wyłuskiwał OPCJE
             # pytania zamiast wypowiedzi. Oba objawy = zależność od ekranu; lek:
-            # dziennik zawsze pierwszy. `journal_lags_screen()` zostaje w czytniku
+            # dziennik zawsze pierwszy. ⛔ SPROSTOWANIE 2026-08-28 (Claude Code
+            # 2.1.250): teza „nowszy zapisuje od razu” JUŻ NIE OBOWIĄZUJE —
+            # przy pytaniu z polami wyboru zapis jest znów wstrzymywany do
+            # odpowiedzi (zmierzone: wpisy z 08:27 trafiły do pliku po 09:00,
+            # plik zamrożony 32 min). Dziennik zostaje pierwszy, ale gdy jest
+            # zamrożony, schodzimy na ekran — patrz `_speak_screen_text`.
+            # `journal_lags_screen()` zostaje w czytniku
             # (nieużywane), gdyby kiedyś wrócić do wariantu z krótką pauzą.
             # Zweryfikowane sondą PTY na żywym claude 2.1.212.
             if reader is not None:
@@ -3740,6 +3837,17 @@ class MainWindow(QMainWindow):
                 # zgłaszany przez usera („czyta przedostatnią”). O tym, czy
                 # odpowiedź jest w drodze, rozstrzyga STRUKTURA TURY z dziennika,
                 # a nie ruch w terminalu (ten nie odróżnia myślenia od ciszy).
+                # SZYBKA ŚCIEŻKA: tura „winna tekst”, ale dziennik nie drgnął
+                # od dawna = agent NIE myśli, tylko czeka na Ciebie (pytanie
+                # z polami wyboru). Czekanie 30 s niczego nie przyniesie.
+                wiek = self._journal_is_frozen(reader, turn_state)
+                if wiek >= 0:
+                    self._read_last_debug(
+                        f"DZIENNIK ZAMROZONY {wiek:.0f}s przy stanie {turn_state} "
+                        f"-> probuje EKRANU bez czekania")
+                    if self._speak_screen_text(tab, last, 'dziennik zamrozony'):
+                        return
+
                 if self._should_wait_for_response(tab, turn_state):
                     self._start_read_last_wait(tab, reader, last, turn_state)
                     return
@@ -3786,9 +3894,9 @@ class MainWindow(QMainWindow):
                             self._tts_timer.stop()
                         self.tts.speak(cleaned_text)
                         self._update_status(tr('status_reading_last'))
-                        # Clear buffer after reading
-                        if tab is not None:
-                            tab._terminal_output_buffer = ""
+                        # ⚠️ Bufora NIE czyścimy (2026-08-28): czyszczenie
+                        # sprawiało, że DRUGIE kliknięcie 🔊 pod rząd nie miało
+                        # już z czego czytać.
                     else:
                         self._update_status(tr('status_response_no_content'))
                 else:

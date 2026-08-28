@@ -104,6 +104,46 @@ def tables_to_prose(text: str) -> str:
     return "\n".join(out)
 
 
+def repair_terminal_mojibake(text: str) -> str:
+    """Napraw bufor terminala rozsypany jako UTF-8-czytany-jak-Latin-1.
+
+    ⚠️ Po co OSOBNA funkcja, skoro jest `fix_polish_encoding`: tamta przyjmuje
+    naprawę tylko wtedy, gdy tekst NIE SKURCZY SIĘ o więcej niż 10% — a naprawa
+    mojibake z definicji skraca (trzy znaki śmiecia -> jeden znak). Zmierzone na
+    prawdziwym zrzucie z `crash-logs/`: 792 -> 550 zn. (69%), więc tamten
+    bezpiecznik ODRZUCAŁ naprawę dokładnie tam, gdzie była potrzebna, i do
+    lektora szła ściana „â¿ Â Waitingâ¦ââââ”.
+
+    Kryterium jest inne i sprawdzone w OBIE strony: przyjmujemy naprawę, gdy
+    TREŚĆ ASCII przetrwała w całości (>=98% liter i cyfr ASCII — mojibake składa
+    się wyłącznie ze znaków spoza ASCII, więc jego zniknięcie tego nie rusza),
+    a znaczniki rozsypania praktycznie znikają. Kontrola negatywna: poprawny
+    polski tekst zostaje ODRZUCONY, czyli nietknięty (zmierzone 2026-08-28:
+    ASCII 321->321, mojibake 122->0, polskie znaki odzyskane).
+    """
+    if not text:
+        return text
+    smieci = text.count("\u00e2") + text.count("\u00c2")
+    if smieci == 0:
+        return text
+    try:
+        fixed = text.encode("latin-1", "ignore").decode("utf-8", "ignore")
+    except (UnicodeDecodeError, UnicodeEncodeError):
+        return text
+    if "\ufffd" in fixed:
+        return text
+
+    def _ascii_alnum(s):
+        return sum(1 for c in s if c.isalnum() and c.isascii())
+
+    przed = _ascii_alnum(text)
+    if przed and _ascii_alnum(fixed) < 0.98 * przed:
+        return text
+    if fixed.count("\u00e2") + fixed.count("\u00c2") >= smieci * 0.2:
+        return text
+    return fixed
+
+
 def fix_polish_encoding(text: str) -> str:
     """
     Fix common UTF-8/Latin-1 encoding issues with Polish characters.

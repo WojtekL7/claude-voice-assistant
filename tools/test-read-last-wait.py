@@ -136,10 +136,18 @@ class FakeTimer:
         self.stopped += 1
 
 
+# ⚠️ 2026-08-28: `_give_up_read_last_wait` ma teraz PLAN B — zamiast milczeć,
+# próbuje przeczytać to, co widać na EKRANIE (przy pytaniu z polami wyboru
+# Claude Code wstrzymuje zapis do dziennika). Atrapa musi znać te metody, inaczej
+# bramka wywala się na AttributeError. Asercje niżej zostają BEZ ZMIAN i nadal są
+# prawdziwe: tutejsze atrapy zakładek nie mają bufora ekranu, więc plan B nie ma
+# z czego czytać i zachowanie jest jak dotąd (cisza + komunikat).
+# Sam plan B pilnuje osobna bramka: tools/test-read-last-blocked.py.
 _WAIT_METHODS = ('_agent_is_writing', '_terminal_idle_secs', '_should_wait_for_response',
                  '_speak_journal_text', '_cancel_read_last_wait', '_check_read_last_wait',
                  '_give_up_read_last_wait', '_session_size', '_read_last_debug',
-                 '_already_spoken', '_should_skip_repeat')
+                 '_already_spoken', '_should_skip_repeat',
+                 '_speak_screen_text', '_screen_tail_since', '_journal_is_frozen')
 
 
 class FakeWindow:
@@ -148,6 +156,8 @@ class FakeWindow:
     def __init__(self, tab, reader, before, hard_deadline_in=60.0,
                  terminal_idle=0.2, journal_idle=0.0):
         self.tts = FakeTts()
+        self.current_language = 'pl-PL'
+        self._bez_spacji = MainWindow._bez_spacji   # statyczna — bez wiązania
         self.statuses = []
         self._current_tab = tab
         self._read_wait_timer = FakeTimer()
@@ -337,6 +347,8 @@ class FakeQWindow(QObject):
     def __init__(self, tab, reader):
         QObject.__init__(self)
         self.tts = FakeTts()
+        self.current_language = 'pl-PL'
+        self._bez_spacji = MainWindow._bez_spacji   # statyczna — bez wiązania
         self.statuses = []
         self._current_tab = tab
         self._read_wait_timer = None
