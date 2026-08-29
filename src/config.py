@@ -382,6 +382,36 @@ STT_API_URL = "https://ai.srv1251441.hstgr.cloud/v1/audio/transcriptions"
 STT_MODEL = "groq/whisper-large-v3"          # bramka wymaga przedrostka „groq/"
 STT_LANGUAGE_DEFAULT = "auto"                # „auto" = nie wysyłaj pola language (bramka sama wykrywa)
 
+# ⛔ DZIENNIK DYKTOWANIA — ZAWSZE WŁĄCZONY, CELOWO BEZ CZUJNIKA DO WŁĄCZANIA.
+# Powód (2026-08-29): dyktowanie było JEDYNĄ funkcją apki bez ani jednej linijki
+# logu, a jego komunikat o błędzie ginął w tej samej milisekundzie (patrz
+# `_on_stt_state_changed` → „Gotowy" nadpisywało „Błąd rozpoznawania"). Skutek:
+# przy zgłoszeniu „dyktowanie nie wchodzi" NIE BYŁO CZEGO CZYTAĆ — ani śladu, czy
+# nagrywanie w ogóle ruszyło, czy padła wysyłka. Diagnoza sprowadzała się do
+# zgadywania. Nie stawiamy tu czujnika na zmiennej środowiskowej ani na
+# pliku-znaczniku, bo apkę uruchamia się IKONĄ z pulpitu (rodzic = gnome-shell) —
+# taki czujnik bywa martwy przez kolejne rundy napraw, a nikt tego nie zauważa.
+# Koszt jest znikomy: piszemy WYŁĄCZNIE przy kliknięciu mikrofonu (nie w pętli),
+# kilka linii na dyktowanie, z twardym limitem rozmiaru.
+DICTATION_LOG = CONFIG_DIR / 'dictation.log'
+DICTATION_LOG_MAX_BYTES = 512 * 1024
+
+# Limit czasu na odpowiedź bramki. Było 30 s — za długo: przez te 30 s apka stała
+# w stanie „przetwarzam", a w tym stanie KAŻDE kliknięcie mikrofonu było ciche
+# (patrz STT_PROCESSING_STUCK_SECS). 12 s = tyle samo, ile ma lektor (TTS_GEN_TIMEOUT),
+# a zmierzony czas poprawnej odpowiedzi bramki to ~1,2 s — zapas ponad 10×.
+STT_HTTP_TIMEOUT = 12.0
+
+# Po tylu sekundach stan „przetwarzam" uznajemy za ZAKLESZCZONY i odblokowujemy go
+# na żądanie użytkownika. Dlaczego to w ogóle możliwe, skoro wyżej jest limit:
+# limit `requests` NIE OBEJMUJE zamiany nazwy na adres (DNS) — przy zerwanym Wi-Fi
+# `getaddrinfo` potrafi wisieć minutami, a wtedy wątek nie dochodzi do `finally`,
+# które przywraca stan spoczynku. Zmierzone u usera 2026-08-29: mikrofon przestał
+# reagować całkowicie (ikona NIE pulsowała), bo `start_recording()` wychodzi po
+# cichu, gdy stan ≠ spoczynek. Wartość > STT_HTTP_TIMEOUT, żeby nie przerwać
+# uczciwie trwającej wysyłki.
+STT_PROCESSING_STUCK_SECS = 15.0
+
 # TTS Settings
 TTS_DEFAULT_VOICE = "pl-PL-ZofiaNeural"
 TTS_DEFAULT_RATE = "+0%"
@@ -1181,6 +1211,14 @@ UI_TRANSLATIONS = {
         "stt_err_bad_key": "Zły klucz AI Managera — wpisz klucz aplikacji „Voice Assistant\" w Ustawieniach.",
         "stt_err_rate_limit": "Za dużo dyktowania naraz — spróbuj ponownie za chwilę.",
         "stt_err_busy": "Bramka dyktowania jest chwilowo zajęta — spróbuj za moment.",
+        # Dyktowanie — komunikaty, które MUSZĄ dotrzeć do użytkownika (2026-08-29).
+        "stt_err_network": "Nie udało się wysłać nagrania — sprawdź internet. Powiedz to jeszcze raz.",
+        "stt_err_empty": "Nie usłyszałem słów — powiedz to jeszcze raz, trochę dłużej.",
+        "status_stt_busy": "Przetwarzam poprzednie nagranie — chwileczkę…",
+        "status_stt_unblocked": "Dyktowanie odblokowane — mów.",
+        "dlg_stt_failed_title": "Dyktowanie nie doszło",
+        "dlg_stt_failed_msg": ("Nagranie nie zostało rozpoznane, więc nic nie wpisałem w pole poleceń.\n\n"
+                               "Powód: {reason}\n\nPowiedz to jeszcze raz."),
         "dlg_anthropic_key_title": "Klucz API Anthropic",
         "dlg_anthropic_key_prompt": "Podaj klucz API Anthropic (Claude):\n\nAktualny: {key}",
         "dlg_anthropic_key_saved": "Klucz API Anthropic został zapisany.",
@@ -2009,6 +2047,14 @@ UI_TRANSLATIONS = {
         "stt_err_bad_key": "Invalid AI Manager key — enter the 'Voice Assistant' app key in Settings.",
         "stt_err_rate_limit": "Too much dictation at once — please try again in a moment.",
         "stt_err_busy": "The dictation gateway is momentarily busy — please try again shortly.",
+        # Dictation — messages that MUST reach the user (2026-08-29).
+        "stt_err_network": "Could not send the recording — check your internet. Please say it again.",
+        "stt_err_empty": "I did not hear any words — please say it again, a bit longer.",
+        "status_stt_busy": "Still processing the previous recording — one moment…",
+        "status_stt_unblocked": "Dictation unblocked — go ahead.",
+        "dlg_stt_failed_title": "Dictation did not arrive",
+        "dlg_stt_failed_msg": ("The recording was not recognised, so nothing was typed into the command field.\n\n"
+                               "Reason: {reason}\n\nPlease say it again."),
         "dlg_anthropic_key_title": "Anthropic API key",
         "dlg_anthropic_key_prompt": "Enter your Anthropic (Claude) API key:\n\nCurrent: {key}",
         "dlg_anthropic_key_saved": "The Anthropic API key has been saved.",

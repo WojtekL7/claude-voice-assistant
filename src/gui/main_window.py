@@ -433,7 +433,9 @@ from config import (
 )
 from core.claude_bridge import ClaudeBridgeAsync
 from core.tts_engine import TTSEngine, TTSState
-from core.stt_engine import STTEngine, STTState
+from core.stt_engine import (STTEngine, STTState, dictation_log, decide_mic_click,
+                             KLIK_STOP, KLIK_NAGRYWAJ, KLIK_ODBLOKUJ, KLIK_ZAJETE,
+                             KLIK_BRAK_KLUCZA)
 from core.license_manager import LicenseManager, LicenseStatus
 from core.text_cleaner import (TextCleanerForTTS, extract_last_claude_response,
                               fix_polish_encoding, prose_from_markdown,
@@ -3087,7 +3089,14 @@ class MainWindow(QMainWindow):
             # Stop pulse animation and reset style
             self._mic_pulse_timer.stop()
             self._reset_mic_style()
-            self._update_status(tr('status_ready'))
+            # ⛔ NIE nadpisuj świeżego błędu dyktowania słowem „Gotowy" — to była
+            # przyczyna, dla której komunikat o nieudanym dyktowaniu nigdy nie
+            # dotarł do użytkownika (patrz `_on_stt_error`). Chorągiewkę zdejmujemy
+            # od razu, więc kolejne wejście w spoczynek zachowa się normalnie.
+            if getattr(self, '_stt_error_pending', False):
+                self._stt_error_pending = False
+            else:
+                self._update_status(tr('status_ready'))
 
     # ==================== Animation Methods ====================
 
@@ -3147,6 +3156,20 @@ class MainWindow(QMainWindow):
 
     def _on_transcription(self, text: str):
         """Handle transcription result - inserts at cursor position."""
+        # Do dziennika idzie NAZWA ZAKŁADKI, a nie sam fakt „rozpoznano": pole
+        # poleceń jest mirrorem AKTYWNEJ zakładki (`_update_current_tab_references`),
+        # więc gdy tekst wyląduje nie tam, gdzie user patrzył, chcemy to widzieć.
+        tab = self._get_current_agent_tab()
+        dictation_log(f"WSTAWIAM do zakladki='{tab.agent_name if tab else '?'}' "
+                      f"pole={'jest' if self.input_field is not None else 'BRAK'} "
+                      f"znakow={len(text)}")
+        if self.input_field is None:
+            # Nie powinno się zdarzyć, ale gdyby — mów o tym zamiast gubić tekst
+            # w wyjątku, którego i tak nikt nie zobaczy (stderr idzie do dziennika
+            # systemowego, bo apkę uruchamia ikona z pulpitu).
+            dictation_log("BLAD: brak pola polecen — tekst przepadl")
+            self._on_stt_error(tr('stt_err_network'))
+            return
         if text.strip():
             cursor = self.input_field.textCursor()
             pos = cursor.position()
@@ -3186,9 +3209,40 @@ class MainWindow(QMainWindow):
             self._append_system_message(f"Rozpoznano: {text}")
 
     def _on_stt_error(self, error: str):
-        """Handle STT error."""
-        self._append_system_message(f"Błąd rozpoznawania: {error}")
-        self._update_status(tr('status_stt_error'))
+        """Pokaż błąd dyktowania TAK, ŻEBY DAŁO SIĘ GO PRZECZYTAĆ.
+
+        ⛔ Dawniej ten komunikat był NIEWIDZIALNY i to zmierzone, nie domysł:
+        `_append_system_message` w trybie zakładek spada do paska stanu
+        (`conversation_area` jest `None`), a zaraz po błędzie silnik wchodzi w stan
+        spoczynku, którego obsługa wpisuje na ten sam pasek „Gotowy". Kolejność była
+        więc: „Błąd rozpoznawania: …" → „Gotowy" w tej samej milisekundzie. Użytkownik
+        widział wyłącznie „Gotowy" i miał prawo sądzić, że dyktowanie działa.
+
+        Teraz: (1) chorągiewka wstrzymuje nadpisanie przez „Gotowy",
+        (2) okno z wyjaśnieniem — NIEMODALNE (nie blokuje pracy) i dławione, żeby
+        przy dłuższej awarii sieci nie sypać nim po każdej próbie.
+        """
+        dictation_log(f"POKAZUJE USEROWI BLAD: {error[:120]}")
+        self._stt_error_pending = True
+        self._stt_error_at = time.monotonic()
+        self._update_status(f"⚠️ {error}")
+
+        # Dyktowanie to WYPOWIEDŹ użytkownika — jej utrata jest utratą pracy, więc
+        # sam pasek stanu to za mało (łatwo go przeoczyć). Okno raz na 5 minut.
+        ostatnie = getattr(self, '_stt_dialog_at', 0.0)
+        if time.monotonic() - ostatnie < 300:
+            return
+        self._stt_dialog_at = time.monotonic()
+        okno = QMessageBox(self)
+        okno.setIcon(QMessageBox.Warning)
+        okno.setWindowTitle(tr('dlg_stt_failed_title'))
+        okno.setText(tr('dlg_stt_failed_msg').format(reason=error))
+        okno.setStandardButtons(QMessageBox.Ok)
+        okno.setWindowModality(Qt.NonModal)
+        # Referencja MUSI przeżyć wyjście z metody — bez niej Python sprząta obiekt
+        # i okno znika w tej samej klatce, w której się pojawiło.
+        self._stt_dialog = okno
+        okno.show()
 
     # ==================== Actions ====================
 
@@ -3263,28 +3317,69 @@ class MainWindow(QMainWindow):
         self.attached_files = []
         self._update_attachments_display()
 
+    def _sync_dictate_button(self):
+        """Ustaw przycisk mikrofonu zgodnie z FAKTYCZNYM stanem silnika.
+
+        Przycisk jest „wciskany" (`setCheckable`), więc klik przestawia go SAM,
+        zanim ktokolwiek sprawdzi, czy nagrywanie w ogóle ruszy. Gdy odmawiamy
+        startu, przycisk musi wrócić — inaczej świeci jak podczas nagrywania,
+        a nic się nie nagrywa (dokładnie ten obraz zgłosił user 2026-08-29:
+        „kliknąłem, ikona nie pulsowała, nic nie weszło").
+        """
+        tab = self._get_current_agent_tab()
+        if tab and hasattr(tab, 'dictate_btn'):
+            tab.dictate_btn.setChecked(self.stt.is_recording())
+
     def _toggle_dictation(self):
         """Toggle voice dictation."""
-        if self.stt.is_recording():
+        tab = self._get_current_agent_tab()
+        dictation_log(f"--- KLIK mikrofonu | zakladka='{tab.agent_name if tab else '?'}' "
+                      f"stan={self.stt.get_state().value}")
+
+        # ⛔ STAN „PRZETWARZAM" NIE MOŻE JUŻ POCHŁANIAĆ KLIKNIĘĆ PO CICHU.
+        # Dawniej wszystko poza nagrywaniem lądowało w `start_recording()`, które
+        # przy stanie ≠ spoczynek wychodziło bez słowa — a że wysyłka potrafi wisieć
+        # (zerwany DNS obchodzi limit `requests`), mikrofon bywał martwy na zawsze.
+        decyzja = decide_mic_click(
+            is_recording=self.stt.is_recording(),
+            is_processing=self.stt.is_processing(),
+            is_stuck=self.stt.is_stuck(),
+            has_key=bool(self.stt.api_key),
+        )
+        dictation_log(f"    decyzja={decyzja} wiek_przetwarzania={self.stt.processing_age():.1f}s")
+
+        if decyzja == KLIK_STOP:
             self.stt.stop_recording()
-        else:
-            if not self.stt.api_key:
-                # Brak klucza Groq. Dyktowanie (STT) go WYMAGA; czytanie (TTS,
-                # edge-tts) działa bez klucza. Wyjaśnij i zaproponuj dodanie.
-                # (Wcześniej wołano nieistniejące _show_api_key_dialog →
-                #  AttributeError, przez co klik mikrofonu nic nie robił na
-                #  świeżej instalacji bez klucza.)
-                answer = QMessageBox.question(
-                    self,
-                    tr('dlg_groq_required_title'),
-                    tr('dlg_groq_required_msg'),
-                    QMessageBox.Yes | QMessageBox.No,
-                    QMessageBox.Yes,
-                )
-                if answer == QMessageBox.Yes:
-                    self._show_groq_api_dialog()
-                return
-            self.stt.start_recording()
+            return
+
+        if decyzja == KLIK_ZAJETE:
+            self._update_status(tr('status_stt_busy'))
+            self._sync_dictate_button()
+            return
+
+        if decyzja == KLIK_ODBLOKUJ:
+            self.stt.force_reset("klikniecie uzytkownika po zakleszczeniu")
+            self._update_status(tr('status_stt_unblocked'))
+
+        if decyzja == KLIK_BRAK_KLUCZA:
+            # Brak klucza Groq. Dyktowanie (STT) go WYMAGA; czytanie (TTS,
+            # edge-tts) działa bez klucza. Wyjaśnij i zaproponuj dodanie.
+            # (Wcześniej wołano nieistniejące _show_api_key_dialog →
+            #  AttributeError, przez co klik mikrofonu nic nie robił na
+            #  świeżej instalacji bez klucza.)
+            self._sync_dictate_button()
+            answer = QMessageBox.question(
+                self,
+                tr('dlg_groq_required_title'),
+                tr('dlg_groq_required_msg'),
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes,
+            )
+            if answer == QMessageBox.Yes:
+                self._show_groq_api_dialog()
+            return
+
+        self.stt.start_recording()
 
     def _open_search_in_tab(self, tab=None):
         """🔍 Otwórz „Szukaj w rozmowie" dla zakładki (lupa albo Ctrl+F).
