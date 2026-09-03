@@ -60,6 +60,19 @@ def main():
     QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
     QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
 
+    # NIE ZAOKRAGLAJ powiekszenia ekranu do pelnych liczb.
+    # Qt5 domyslnie stosuje polityke "Round": ustawienie Windows 150% rysowalo
+    # program w 200%, czyli DWUKROTNIE za duzo (a 175% tak samo). Na ekranie
+    # 1366x768 okno wychodzilo wtedy poza krawedz i dolu nie dalo sie zobaczyc.
+    # PassThrough oddaje dokladnie te wartosc, ktora wybral uzytkownik systemu.
+    # MUSI stac PRZED utworzeniem QApplication. Fail-open: starsze Qt (<5.14)
+    # nie zna tej metody -> zachowanie jak dotad.
+    try:
+        QApplication.setHighDpiScaleFactorRoundingPolicy(
+            Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
+    except Exception:
+        pass
+
     # Pasek menu: natywny na macOS/Windows, w oknie na Linuksie (pozycjonowanie
     # pod XWayland bywa błędne). Atrybut "DontUseNative" = odwrotność.
     QApplication.setAttribute(Qt.AA_DontUseNativeMenuBar, not use_native_menu_bar())

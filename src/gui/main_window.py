@@ -609,6 +609,46 @@ class ModelCatalogChecker(QObject):
         self.refreshed.emit(models, changes)
 
 
+# Rozmiar okna startowego — WPISANE NA SZTYWNO LICZBY NIE MIESZCZA SIE NA MALYM
+# EKRANIE. Ekran 1366x768 przy powiekszeniu Windows 150% daje obszar roboczy
+# mniejszy niz nasze minimum 900x650 pikseli logicznych -> okna NIE DA SIE
+# zmiescic nawet po maksymalizacji (minimum blokuje zmniejszenie), a dol
+# programu zostaje pod krawedzia ekranu. Decyzja stoi tu jako CZYSTA FUNKCJA,
+# zeby dalo sie ja odpytac testem bez budowania okna.
+DEFAULT_WINDOW_SIZE = (1100, 750)     # rozmiar startowy na duzym ekranie
+DEFAULT_WINDOW_MINIMUM = (900, 650)   # najmniejszy sensowny rozmiar roboczy
+
+
+def startup_geometry_for(avail_w, avail_h):
+    """Rozmiar startowy i minimalny DOPASOWANE do obszaru roboczego ekranu.
+
+    Wejscie i wyjscie w pikselach LOGICZNYCH — tych samych, w ktorych licza
+    `resize()` i `setMinimumSize()`.
+
+    Zwraca (min_w, min_h, w, h, dopasowane), gdzie `dopasowane` mowi, czy
+    ekran wymusil zmniejszenie (wtedy warto okno wysrodkowac).
+
+    Na duzym ekranie zwraca DOKLADNIE dotychczasowe wartosci — zmiana nie ma
+    prawa ruszyc wygladu tam, gdzie dotad bylo dobrze.
+    """
+    pref_w, pref_h = DEFAULT_WINDOW_SIZE
+    min_w, min_h = DEFAULT_WINDOW_MINIMUM
+    try:
+        avail_w = int(avail_w)
+        avail_h = int(avail_h)
+    except (TypeError, ValueError):
+        return min_w, min_h, pref_w, pref_h, False
+    if avail_w <= 0 or avail_h <= 0:
+        # Brak wiarygodnych danych o ekranie -> zachowanie jak dotad.
+        return min_w, min_h, pref_w, pref_h, False
+    # Zapas na ramke okna i pasek tytulu — bez niego dol i tak ucieka.
+    w = min(pref_w, int(avail_w * 0.95))
+    h = min(pref_h, int(avail_h * 0.92))
+    # Minimum NIGDY wieksze niz to, co realnie mozna pokazac — inaczej
+    # uzytkownik nie moze zmniejszyc okna do rozmiaru swojego ekranu.
+    return min(min_w, w), min(min_h, h), w, h, (w, h) != (pref_w, pref_h)
+
+
 class MainWindow(QMainWindow):
     """Main application window."""
 
@@ -754,11 +794,49 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(0, self._recolor_all_tabs)
         QTimer.singleShot(0, self._apply_active_tab_frame)
 
+    def _available_screen_size(self):
+        """Obszar roboczy ekranu (bez paska zadan) w pikselach logicznych.
+
+        Zwraca (szerokosc, wysokosc) albo (0, 0), gdy Qt nie zna ekranu
+        (np. render offscreen w testach) — wtedy wolajacy zostaje przy
+        dotychczasowych wartosciach.
+        """
+        try:
+            screen = QApplication.primaryScreen()
+            if screen is None:
+                return 0, 0
+            avail = screen.availableGeometry()
+            return avail.width(), avail.height()
+        except Exception:
+            return 0, 0
+
+    def _startup_geometry(self):
+        """Rozmiar startowy i minimalny dopasowany do EKRANU UZYTKOWNIKA."""
+        avail_w, avail_h = self._available_screen_size()
+        return startup_geometry_for(avail_w, avail_h)
+
+    def _center_on_screen(self, win_w, win_h):
+        """Postaw okno na srodku obszaru roboczego (tylko gdy je zmniejszylismy)."""
+        try:
+            screen = QApplication.primaryScreen()
+            if screen is None:
+                return
+            avail = screen.availableGeometry()
+            self.move(avail.x() + max(0, (avail.width() - win_w) // 2),
+                      avail.y() + max(0, (avail.height() - win_h) // 2))
+        except Exception:
+            pass
+
     def _setup_ui(self):
         """Setup user interface."""
         self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}{APP_TITLE_SUFFIX}")
-        self.setMinimumSize(900, 650)
-        self.resize(1100, 750)  # Domyślny rozmiar startowy
+        min_w, min_h, win_w, win_h, dopasowane = self._startup_geometry()
+        self.setMinimumSize(min_w, min_h)
+        self.resize(win_w, win_h)
+        if dopasowane:
+            # Ekran mniejszy niz domyslne okno -> wysrodkuj. Menedzer okien
+            # potrafi postawic za duze okno tak, ze dol wychodzi poza ekran.
+            self._center_on_screen(win_w, win_h)
 
         # Central widget
         central_widget = _AccentFrame()
