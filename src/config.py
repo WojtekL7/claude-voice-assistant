@@ -217,6 +217,15 @@ READ_LAST_OWED_TIMEOUT_SECS = 180.0
 # Próg z POMIARU, nie z intuicji: najdłuższa zmierzona przerwa „wynik
 # narzędzia → tekst” to ~71 s, więc 120 s leży bezpiecznie powyżej ogona normy.
 READ_LAST_BLOCKED_AGE_SECS = 120.0
+# Ile sekund migawka EKRANU (siatka xterma) jest jeszcze wiarygodna. Odczyt
+# z xterm.js wraca callbackiem, wiec trzymamy ostatni wynik pod reka; starsza
+# migawka moglaby pokazywac ekran sprzed odpowiedzi. 3 s = ~4 obroty petli
+# `_poll_transcripts` (800 ms), czyli z zapasem, a wciaz "to, co widac teraz".
+READ_LAST_SCREEN_FRESH_SECS = 3.0
+# Ile znakow ogona ekranu czytamy, gdy nie da sie ustalic POCZATKU wypowiedzi
+# (kotwica z dziennika wyjechala poza ekran). Ostatecznosc, ale lepsza niz cisza:
+# uzytkownik zglosil brak reakcji, a nie nadmiar tresci. ~2 ekrany tekstu.
+TERMINAL_SCREEN_TAIL_CHARS = 4000
 # Bezpiecznik dla stanu NIEROZSTRZYGNIĘTEGO (nie da się odczytać dziennika →
 # decyduje stary czujnik terminala). Krótszy, bo to zgadywanie, nie dowód.
 READ_LAST_WAIT_TIMEOUT_SECS = 20.0

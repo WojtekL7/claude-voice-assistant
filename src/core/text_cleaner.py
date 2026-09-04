@@ -104,6 +104,66 @@ def tables_to_prose(text: str) -> str:
     return "\n".join(out)
 
 
+# ---------------------------------------------------------------------------
+# ŚMIECI INTERFEJSU CLAUDE CODE (TUI) — jedno źródło wzorca
+# ---------------------------------------------------------------------------
+# Gdy Claude Code zamraża dziennik sesji (pytanie z polami wyboru), lektor musi
+# czytać z EKRANU — a ekran niesie też ozdoby terminala: pasek spinnera z licznikiem
+# tokenów, podpowiedzi „Tip:", instrukcje klawiszy i ramki okien. Bez tego filtra
+# 🔊 czyta na głos „Working… 12m 12s ↓ 22.4k tokens" (zmierzone na prawdziwym
+# zrzucie `tools/fixtures/ekran-pytanie-2026-06-18.txt`).
+#
+# ⛔ WZORZEC STOI TU RAZ I MA TU ZOSTAĆ. Nie wklejaj go inline do czyścików —
+# dokładnie ten błąd (ta sama reguła w 3 kopiach) kosztował dwie rundy przy
+# bugu „lektor gubił treść na potrójnym znaczniku". Bramka pilnuje jednego źródła.
+#
+# ⚠️ Filtr jest CELOWO wąski i kotwiczony na CAŁEJ linii: kasowanie „podejrzanie
+# wyglądających" fragmentów w środku zdania to prosta droga do zjadania treści
+# (patrz historia `tables_to_prose`). Linia z treścią użytkownika ma przeżyć.
+_TUI_NOISE_LINE_RE = re.compile(
+    r"""^[^\w\n]{0,10}(?:
+          # pasek pracy: „✻ Working… (12m 12s · ↓ 22.4k tokens)" — rozpoznajemy
+          # po NAWIASIE z czasem i/lub tokenami, nie po liście czasowników
+          # (Claude Code losuje dziesiątki gerundiów: Pondering, Herding, Vibing…)
+          [\W_]{0,4}\s*[A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż]+[.…]*\s*
+              \([^()]*(?:\d+\s*[hms]\b|tokens?\b|esc\s+to\s+interrupt)[^()]*\)\s*
+        | (?:Tip|Wskazówka)\s*:\s.*
+        | .*\b(?:ctrl|shift|alt)\s*\+\s*\w+\s+to\s+\w+.*
+        | (?:Enter|Return)\s+to\s+\w+.*
+        | (?:Esc|esc)\s+to\s+(?:cancel|interrupt|exit).*
+        | .*\bfor\s+shortcuts\s*
+        | \?\s+for\s+.*
+        | [⏴-⏷]{1,3}\s*.*(?:accept\s+edits|plan\s+mode|bypass\s+permissions).*
+    )[\s─-╿]*$""",
+    re.IGNORECASE | re.VERBOSE,
+)
+
+# Same ozdoby graficzne w linii (ramki, strzałki stanu) — do zdjęcia z KRAWĘDZI
+# linii, która poza nimi niesie treść.
+_TUI_EDGE_CHARS = "\u2500-\u257f\u23f4-\u23f7\u23fa\u25cf\u25cb\u2022 \t"
+_TUI_EDGE_RE = re.compile(r"^[%s]+|[%s]+$" % (_TUI_EDGE_CHARS, _TUI_EDGE_CHARS))
+
+
+def strip_tui_noise(text: str) -> str:
+    """Zdejmij ozdoby interfejsu Claude Code z tekstu zdjętego z EKRANU.
+
+    Wejście: surowa siatka terminala. Wyjście: to, co jest TREŚCIĄ.
+    Linia będąca w całości ozdobą znika; linia z treścią traci tylko obramowanie.
+    Puste linie zwijamy do jednej, bo siatka terminala jest ich pełna
+    (zmierzone: 2247 linii w zrzucie, z czego 124 z treścią).
+    """
+    if not text:
+        return text
+    wynik = []
+    for linia in text.splitlines():
+        if _TUI_NOISE_LINE_RE.match(linia):
+            continue
+        okrojona = _TUI_EDGE_RE.sub("", linia)
+        wynik.append(okrojona)
+    sklejone = "\n".join(wynik)
+    return re.sub(r"\n{3,}", "\n\n", sklejone).strip()
+
+
 def repair_terminal_mojibake(text: str) -> str:
     """Napraw bufor terminala rozsypany jako UTF-8-czytany-jak-Latin-1.
 

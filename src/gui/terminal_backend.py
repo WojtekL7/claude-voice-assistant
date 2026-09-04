@@ -186,6 +186,19 @@ class TerminalBackend(QObject):
         """
         on_result(None)
 
+    def screen_text(self, on_result, max_lines: int = 400):
+        """Oddaj TEKST WIDOCZNY na ekranie (siatka terminala), asynchronicznie.
+
+        Wynik przez `on_result(value)`:
+          str  — tekst z ekranu (bez ANSI, tak jak widzi go użytkownik),
+          None — ten silnik tego nie umie (NIC nie twierdzimy o ekranie!).
+
+        Trzeci stan jest tu równie ważny jak w `scroll_to_text`: wołający ma po
+        `None` zejść na własny bufor wyjścia, a NIE uznać, że ekran jest pusty.
+        Po co to w ogóle jest — patrz `__termScreenText` w `terminal.html`.
+        """
+        on_result(None)
+
     def clear(self):
         """Wyczyść ekran terminala (uruchom `clear` w powłoce)."""
         self.send_text("clear\n")
@@ -454,6 +467,16 @@ class WebTerminalBackend(TerminalBackend):
             self._term.view.page().runJavaScript(
                 f"window.__termScrollTo ? window.__termScrollTo({payload}) : null",
                 lambda value: on_result(value if isinstance(value, bool) else None),
+            )
+        except Exception:
+            on_result(None)
+
+    def screen_text(self, on_result, max_lines: int = 400):
+        """Tekst z ekranu prosto z xterm.js — patrz `__termScreenText`."""
+        try:
+            self._term.view.page().runJavaScript(
+                f"window.__termScreenText ? window.__termScreenText({int(max_lines)}) : null",
+                lambda value: on_result(value if isinstance(value, str) else None),
             )
         except Exception:
             on_result(None)

@@ -124,7 +124,7 @@ class FakeTts:
         self.wypowiedziane.append(text)
 
 
-_METODY = ('_screen_tail_since', '_speak_screen_text',
+_METODY = ('_screen_tail_since', '_screen_source', '_speak_screen_text',
            '_journal_is_frozen', '_terminal_idle_secs', '_give_up_read_last_wait',
            '_cancel_read_last_wait')
 
@@ -164,7 +164,7 @@ tab = FakeTab(EKRAN)
 ogon, metoda = w._screen_tail_since(tab, KOTWICA)
 
 jest("A1 kotwica z dziennika odnaleziona w buforze ekranu",
-     ogon is not None and metoda == 'kotwica', f"metoda={metoda}")
+     ogon is not None and metoda.startswith('kotwica'), f"metoda={metoda}")
 plaski = re.sub(r"\s+", "", ogon or "")
 jest("A2 w ogonie są OPCJE pytania (user chce je słyszeć)",
      all(p.replace(" ", "") in plaski for p in ["Do you want to proceed", "1. Yes", "3. No"]),

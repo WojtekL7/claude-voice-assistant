@@ -147,7 +147,8 @@ _WAIT_METHODS = ('_agent_is_writing', '_terminal_idle_secs', '_should_wait_for_r
                  '_speak_journal_text', '_cancel_read_last_wait', '_check_read_last_wait',
                  '_give_up_read_last_wait', '_session_size', '_read_last_debug',
                  '_already_spoken', '_should_skip_repeat',
-                 '_speak_screen_text', '_screen_tail_since', '_journal_is_frozen')
+                 '_speak_screen_text', '_screen_tail_since', '_screen_source',
+                 '_journal_is_frozen')
 
 
 class FakeWindow:

@@ -312,6 +312,30 @@
         return false;
       } catch (e) { return false; }
     };
+    // 🔊 Oddaj Pythonowi TEKST Z EKRANU (wyrenderowaną siatkę xterma).
+    // Po co osobna funkcja, skoro Python ma własny bufor wyjścia: tamten to
+    // STRUMIEŃ porcji z PTY — z kodami ANSI, z duchami po przerysowaniach TUI
+    // (spinner pisze ~1×/s) i PRZYCIĘTY DO 5000 ZNAKÓW. Tutaj czytamy to, co
+    // użytkownik NAPRAWDĘ widzi: xterm ma już złożoną siatkę, więc tekst jest
+    // bez ANSI, bez mojibake (dekodowanie UTF-8 zrobił terminal) i bez powtórek.
+    // To JEDYNE wiarygodne źródło, gdy Claude Code zamraża dziennik sesji na
+    // czas pytania z polami wyboru (zmierzone 2026-09-04: dziennik stał 762 s,
+    // a kotwica z dziennika była o 73 min starsza niż zawartość bufora 5000 zn.,
+    // więc 🔊 milczał). `translateToString(true)` obcina puste ogony wierszy.
+    window.__termScreenText = function (maxLines) {
+      try {
+        var buf = term.buffer.active;
+        var ile = Math.max(1, Math.min(Number(maxLines) || 400, buf.length));
+        var od  = Math.max(0, buf.length - ile);
+        var out = [];
+        for (var i = od; i < buf.length; i++) {
+          var line = buf.getLine(i);
+          out.push(line ? line.translateToString(true) : '');
+        }
+        return out.join('\n');
+      } catch (e) { return null; }
+    };
+
     // Pełny motyw xterm: tło, tekst, kursor, zaznaczenie + 16 kolorów ANSI.
     // Przyjmuje obiekt ITheme (z Pythona idzie jako literał JSON). Brak pola =
     // xterm użyje swojego domyślnego.

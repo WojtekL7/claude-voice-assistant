@@ -427,7 +427,8 @@ from config import (
     LOGIN_VERDICT_INTERVAL_SECS, LOGIN_VERDICT_MAX_CHECKS,
     READ_LAST_BUSY_SECS, READ_LAST_WAIT_POLL_MS, READ_LAST_WAIT_TIMEOUT_SECS,
     READ_LAST_STALL_SECS, READ_LAST_OWED_STALL_SECS, READ_LAST_OWED_TIMEOUT_SECS,
-    READ_LAST_BLOCKED_AGE_SECS,
+    READ_LAST_BLOCKED_AGE_SECS, READ_LAST_SCREEN_FRESH_SECS,
+    TERMINAL_SCREEN_TAIL_CHARS,
     READ_LAST_DEBUG, READ_LAST_DEBUG_LOG, READ_LAST_DEBUG_MAX_BYTES,
     t as tr, set_ui_language, detect_system_language,
 )
@@ -439,7 +440,7 @@ from core.stt_engine import (STTEngine, STTState, dictation_log, decide_mic_clic
 from core.license_manager import LicenseManager, LicenseStatus
 from core.text_cleaner import (TextCleanerForTTS, extract_last_claude_response,
                               fix_polish_encoding, prose_from_markdown,
-                              repair_terminal_mojibake)
+                              repair_terminal_mojibake, strip_tui_noise)
 from gui.search_dialog import SearchDialog
 from core.transcript_reader import (
     TranscriptReader,
@@ -1676,6 +1677,17 @@ class MainWindow(QMainWindow):
                 terminal_quiet = _term_idle >= self.QUESTION_TERMINAL_QUIET_SECS
                 _armed = journal_quiet and terminal_quiet
                 self._arm_question(tab, _armed)
+
+                # 🔊 PODGRZANIE MIGAWKI EKRANU. Gdy agent czeka na użytkownika
+                # (na dole wisi pytanie z polami wyboru), Claude Code ZAMRAŻA
+                # dziennik sesji — jedynym miejscem, gdzie wypowiedź w ogóle
+                # istnieje, jest wtedy EKRAN. Odczyt z xterm.js wraca callbackiem,
+                # więc pytamy o niego JUŻ TERAZ, żeby po kliknięciu 🔊 migawka
+                # była gotowa (decyzja „czytaj czy czekaj" jest synchroniczna).
+                # Koszt: jedno zapytanie do JS na tick, WYŁĄCZNIE w tym stanie
+                # i tylko dla zakładki na wierzchu — czyli praktycznie zero.
+                if _armed and tab is active:
+                    tab.refresh_screen_text_cache()
 
                 new_blocks = reader.poll()
                 # Komunikaty błędów Claude Code (wygasłe logowanie, przeciążenie
@@ -3772,32 +3784,84 @@ class MainWindow(QMainWindow):
             return -1.0
         return wiek if wiek >= READ_LAST_BLOCKED_AGE_SECS else -1.0
 
-    def _screen_tail_since(self, tab, anchor: str):
-        """Co pojawiło się na EKRANIE po ostatniej wypowiedzi znanej z dziennika.
+    def _screen_source(self, tab):
+        """Skad wziac tekst EKRANU — i powiedz WPROST, ktore to zrodlo.
 
-        ⛔ Nie da się tu użyć samego `extract_last_claude_response`: on szuka
-        RAMEK okna (`╰`), a te bywają rozsypane przez kodowanie — na prawdziwym
-        zrzucie z `crash-logs/` zwracał 0 znaków, czyli naprawa milczałaby po
-        cichu. Kotwiczymy się więc w tekście, który ZNAMY z dziennika, i bierzemy
-        wszystko po nim; porównanie jest odporne na zawijanie wierszy przez
-        terminal (obie strony bez białych znaków).
+        1. SIATKA xterma (`screen_text_snapshot`) — to, co uzytkownik NAPRAWDE
+           widzi: bez ANSI, bez mojibake, bez duchow po przerysowaniach TUI.
+        2. Stary bufor wyjscia — strumien porcji z PTY, PRZYCIETY DO 5000 zn.
+           Zostaje wylacznie jako zapas dla silnika, ktory siatki nie odda
+           (QTermWidget) albo gdy migawka jeszcze nie doszla.
+
+        ⛔ Kolejnosc nie jest kosmetyka. 2026-09-04 zmierzone: kotwica z dziennika
+        byla o 73 min starsza niz zawartosc bufora 5000 zn., wiec tor (2) nie mial
+        SZANSY jej znalezc i 🔊 milczal. Tor (1) nie zalezy od wieku kotwicy.
         """
-        buf = getattr(tab, '_terminal_output_buffer', '') if tab else ''
-        if not buf or not buf.strip():
-            return None, 'brak bufora'
+        if tab is None:
+            return "", "brak zakladki"
+        try:
+            siatka = tab.screen_text_snapshot(READ_LAST_SCREEN_FRESH_SECS)
+        except Exception:
+            siatka = ""
+        if siatka and siatka.strip():
+            return siatka, "siatka"
+        return getattr(tab, '_terminal_output_buffer', '') or "", "bufor5k"
+
+    def _screen_tail_since(self, tab, anchor: str):
+        """Co widac na EKRANIE — najlepiej to, co pojawilo sie PO `anchor`.
+
+        Trzy tory, w kolejnosci malejacej pewnosci; zwracamy tez NAZWE toru, zeby
+        log mowil, skad wziela sie tresc (spor zawsze dotyczy wyniku, nie decyzji).
+
+        ⛔ NAPRAWA KODOWANIA IDZIE PRZED POROWNANIEM, nie po nim. Kotwica z
+        dziennika ma polskie znaki („Przeczytalem…”); gdy ekran niesie mojibake,
+        porownanie surowych bajtow nie ma prawa trafic — i milczy bez sladu.
+
+        ⛔ TOR 3 ISTNIEJE PO TO, ZEBY NIGDY NIE ODDAC PUSTKI, GDY EKRAN COS MA.
+        Poprzednio brak kotwicy = `None` = lektor milczal. A gdy dziennik jest
+        zamrozony, kotwica jest z DEFINICJI przeterminowana (pochodzi sprzed
+        zamrozenia) — im dluzsze zamrozenie, tym pewniej wyjechala poza ekran.
+        Opieranie sie wylacznie na niej bylo sprzecznoscia wbudowana w projekt.
+        """
+        surowy, zrodlo = self._screen_source(tab)
+        if not surowy or not surowy.strip():
+            return None, f'brak bufora [{zrodlo}]'
+
+        czysty = repair_terminal_mojibake(surowy)
+
+        # TOR 1: kotwica — bierzemy wszystko PO ostatniej znanej wypowiedzi.
+        # Porownanie bez bialych znakow, bo terminal zawija wiersze inaczej niz dziennik.
         if anchor:
-            k = re.sub(r"\s+", "", anchor)[-120:]
+            k = re.sub(r"\s+", "", repair_terminal_mojibake(anchor))[-120:]
             if len(k) >= 40:
-                plaski, poz = self._bez_spacji(buf)
+                plaski, poz = self._bez_spacji(czysty)
                 i = plaski.rfind(k)
                 if i >= 0:
-                    ogon = buf[poz[i + len(k) - 1] + 1:]
+                    ogon = czysty[poz[i + len(k) - 1] + 1:]
                     if len(ogon.strip()) >= 40:
-                        return ogon, 'kotwica'
-        wyluskane = extract_last_claude_response(buf)
-        if wyluskane and len(wyluskane.strip()) >= 40:
-            return wyluskane, 'ekstraktor'
-        return None, 'nic nie wylowiono'
+                        return ogon, f'kotwica [{zrodlo}]'
+
+        # TOR 2: ekstraktor ramek okna — gdy trafi, daje najczystszy wynik.
+        # ⛔ ALE MA PROG ZAUFANIA, i to nie z ostroznosci, tylko z POMIARU:
+        # na prawdziwym ekranie z pytaniem oddal 79 znakow z 490 dostepnych
+        # (zmierzone 2026-09-04 na `tools/fixtures/ekran-pytanie-2026-06-18.txt`).
+        # Szuka RAMEK okna, a te przy pytaniu z polami wyboru naleza do WIDGETU
+        # PYTANIA, nie do wypowiedzi — wiec „trafienie" bywa okruchem. Przeczytanie
+        # 1/6 tresci brzmi dla uzytkownika jak nowa usterka, gorzej niz ogon ekranu.
+        # Ufamy mu wiec tylko wtedy, gdy oddaje kawalek WSPOLMIERNY z tym, co widac.
+        wyluskane = (extract_last_claude_response(czysty) or '').strip()
+        widoczne = len(czysty.strip())
+        if len(wyluskane) >= 40 and (len(wyluskane) >= 200 or widoczne < 400):
+            return wyluskane, f'ekstraktor [{zrodlo}]'
+
+        # TOR 3: ogon ekranu. Nie wiemy, gdzie zaczyna sie wypowiedz, wiec bierzemy
+        # koncowke tego, co widac. Lepiej przeczytac troche za duzo niz zamilczec —
+        # user zglosil wlasnie CISZE, a nie nadmiar.
+        ogon = czysty[-TERMINAL_SCREEN_TAIL_CHARS:]
+        if len(ogon.strip()) >= 40:
+            return ogon, f'ogon ekranu [{zrodlo}]'
+
+        return None, f'nic nie wylowiono [{zrodlo}]'
 
     def _speak_screen_text(self, tab, anchor: str, powod: str) -> bool:
         """Przeczytaj to, co widać na EKRANIE (z opcjami pytania włącznie).
@@ -3807,12 +3871,25 @@ class MainWindow(QMainWindow):
         JEDYNYM miejscem, gdzie ta wypowiedź w ogóle istnieje.
         ⚠️ Bufora NIE czyścimy — inaczej drugie kliknięcie pod rząd nic nie da.
         """
+        # Poproś o ŚWIEŻĄ siatkę na przyszłość — odpowiedź z xterm.js wraca
+        # callbackiem, więc tej akurat próbie już nie pomoże, ale kolejne
+        # kliknięcie (i pętla czekania) zastaną migawkę gotową.
+        try:
+            if tab is not None:
+                tab.refresh_screen_text_cache()
+        except Exception:
+            pass
         surowy, metoda = self._screen_tail_since(tab, anchor)
         if not surowy:
             self._read_last_debug(f"EKRAN ({powod}): {metoda} — NIE CZYTAM")
             return False
+        # KOLEJNOSC MA ZNACZENIE: najpierw napraw kodowanie (inaczej filtr nie
+        # rozpozna „Working…" zapisanego jako „Workingâ€¦"), potem zdejmij ozdoby
+        # interfejsu, dopiero na koncu czyscik TTS. Wzorzec ozdob stoi JEDEN RAZ
+        # w `text_cleaner.strip_tui_noise` — nie wklejaj go tutaj inline.
         tekst = TextCleanerForTTS(self.current_language).clean(
-            fix_polish_encoding(repair_terminal_mojibake(surowy)), use_dictionary=False)
+            fix_polish_encoding(strip_tui_noise(repair_terminal_mojibake(surowy))),
+            use_dictionary=False)
         if not tekst or len(tekst.strip()) < 40:
             self._read_last_debug(f"EKRAN ({powod}): po czyszczeniu za krótkie — NIE CZYTAM")
             return False

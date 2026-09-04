@@ -281,6 +281,14 @@ class AgentTab(QWidget):
         self.terminal = None
         self.conversation_area = None
         self._terminal_output_buffer = ""
+        # 🔊 MIGAWKA TEKSTU Z EKRANU (wyrenderowana siatka xterma) + jej wiek.
+        # Odczyt z xterm.js wraca CALLBACKIEM, a decyzja „czytaj czy czekaj" w
+        # MainWindow jest synchroniczna — trzymamy więc ostatni wynik pod ręką.
+        # Odświeżaniem steruje MainWindow: tylko gdy dziennik sesji jest
+        # zamrożony (pytanie z polami wyboru), czyli rzadko. Zero kosztu w
+        # normalnej pracy. Patrz `refresh_screen_text_cache`.
+        self._screen_text_cache = ""
+        self._screen_text_cache_ts = 0.0
         # Tryb myszy terminala: 'claude' (DOMYŚLNY — kółko przewija rozmowę Claude,
         # klik w menu wyboru, zaznaczanie z Shift) albo 'select' (zaznaczanie/
         # kopiowanie przeciągnięciem bez Shift). Przełącznik w pasku przycisków.
@@ -789,6 +797,35 @@ class AgentTab(QWidget):
             # Auto-czytanie NIE korzysta już z tego śmieciowego bufora terminala.
             # Czytamy czystą prozę z dziennika sesji (Droga A) — patrz
             # MainWindow._poll_transcripts. Tu zostaje tylko liczenie tokenów.
+
+    def refresh_screen_text_cache(self):
+        """Poproś terminal o tekst z ekranu i zapamiętaj go (asynchronicznie).
+
+        Świadomie NIE zeruje migawki przy niepowodzeniu: lepsza migawka sprzed
+        sekundy niż pustka. `None` z backendu = „ten silnik nie umie" (patrz
+        `TerminalBackend.screen_text`), a wtedy wołający zejdzie na własny bufor.
+        """
+        backend = self.terminal_backend
+        if backend is None:
+            return
+
+        def gotowe(tekst):
+            if isinstance(tekst, str) and tekst.strip():
+                self._screen_text_cache = tekst
+                self._screen_text_cache_ts = time.monotonic()
+
+        try:
+            backend.screen_text(gotowe)
+        except Exception:
+            pass
+
+    def screen_text_snapshot(self, max_age_secs: float):
+        """Migawka ekranu, o ile nie starsza niż `max_age_secs` (inaczej '')."""
+        if not self._screen_text_cache:
+            return ""
+        if time.monotonic() - self._screen_text_cache_ts > max_age_secs:
+            return ""
+        return self._screen_text_cache
 
     def _on_terminal_finished(self):
         """Handle terminal process finished."""
