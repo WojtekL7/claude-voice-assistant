@@ -45,6 +45,59 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. Whe
 
 ---
 
+## 🔴 KONTRAKT OD AGENTA „Mieszkanie” 2026-09-06 — NOWA ZAKŁADKA WSTAJE BEZ `claude`
+
+**Zgłoszone przez:** agenta projektu Mieszkanie, na podstawie zrzutu ekranu od właściciela
+i odczytu kodu. **Nie ruszałem kodu VCA** — to zgłoszenie, nie naprawa.
+
+### Objaw, jaki widzi użytkownik
+Zakładka nowego agenta („komputery”) otwiera się i wygląda normalnie, ale **siedzi w niej sama
+powłoka bash, bez Claude Code**. Wpisane zdania trafiają do powłoki jako polecenia:
+`Przeanalizuj: command not found`, `Czytaj: command not found`. Właściciel odczytał to jako
+„Claude Code w ogóle się nie włączył” i nie miał jak dojść, dlaczego — bo **nic nie zgłasza błędu**.
+
+### Przyczyna — ZMIERZONA w kodzie, nie zgadnięta
+Agent miał `auto_start: False` (w `~/.vibe-coding-assistant/agents.json`), a start jest bramkowany
+w `src/gui/main_window.py:1903`:
+```python
+if (agent_tab.auto_start or force_start) and self.claude_command:
+```
+⛔ **Sedno jest jednak w tym, że dwie opcje nie wiedzą o sobie nawzajem:**
+· `AgentsManagerDialog._add_agent` (`src/gui/dialogs.py:2651`) przy dodawaniu agenta ustawia
+  **wyłącznie `_run_immediately`** (otwórz zakładkę);
+· `_run_agent`, czyli przycisk „▶️ Uruchom” (`src/gui/dialogs.py:2640-2641`), ustawia
+  **`_run_immediately` ORAZ `_force_start`**.
+Czyli kombinacja **„otwórz od razu” + odznaczony „uruchamiaj automatycznie”** daje otwartą
+zakładkę, w której `claude` nigdy nie zostaje wywołany. Użytkownik prosił o otwarcie agenta,
+dostał okno bez agenta i żadnego komunikatu.
+⚠️ Skala: w tej instalacji **7 z 16 agentów ma `auto_start: False`**, więc to nie jest przypadek brzegowy.
+
+### Do rozstrzygnięcia przez właściciela VCA (nie przesądzam)
+1. **Czy „otwórz od razu” ma implikować uruchomienie Claude?** Moim zdaniem tak — user prosi
+   o otwarcie AGENTA, nie terminala. Wtedy poprawka to dopisanie `_force_start = True` obok
+   `_run_immediately` w `_add_agent`. ⚠️ Ale to zmienia znaczenie odznaczonego checkboxa,
+   więc jest to decyzja produktowa, nie kosmetyka.
+2. **Albo ostrzeżenie w oknie dodawania agenta**, gdy „otwórz od razu” jest zaznaczone przy
+   odznaczonym autostarcie („zakładka otworzy się bez Claude — uruchomisz go przyciskiem ▶️”).
+3. ⭐ **Niezależnie od (1) i (2): zakładka bez uruchomionego `claude` nie powinna milczeć.**
+   Dziś wygląda identycznie jak działająca. Wystarczy pasek/przycisk „▶️ Uruchom Claude”
+   widoczny dopóki proces nie wstał — to leczy CAŁĄ klasę przypadków (także crash `claude`
+   tuż po starcie), a nie tylko ten jeden.
+
+### Sprawdzian, który zamyka temat (obie strony obowiązkowe)
+· **Pozytywny:** dodaj agenta z zaznaczonym „otwórz od razu” i ODZNACZONYM autostartem →
+  w zakładce ma wstać `claude` (albo ma być widoczny jawny przycisk uruchomienia).
+· **Kontrola odwrotna:** agent z `auto_start: False` otwierany PÓŹNIEJ, przy starcie aplikacji,
+  **nadal NIE MOŻE** startować sam — inaczej poprawka kasuje sens tej opcji dla pozostałych
+  6 agentów, którzy celowo jej używają.
+
+### Drugi, mniejszy wniosek z tej samej sytuacji
+Gdy użytkownik ratuje się, wpisując `claude` ręcznie w terminalu, **pamięć nie zostaje wysłana** —
+`send_memory_on_start` jest sprawdzane tylko na ścieżce startu z aplikacji
+(`main_window.py:1909`, warunek `if claude_started and ...`). Efekt: agent wstaje bez pamięci
+projektu i nikt tego nie widzi. Do rozważenia: wykrywać start `claude` w terminalu i wtedy
+dosłać pamięć — albo przynajmniej to zapisać, żeby następna sesja nie badała tego od nowa.
+
 ## ⏳ CZEKA NA TEST NA ŻYWO
 
 - 🎤 **DYKTOWANIE: mikrofon milkł NA STAŁE, a błąd był NIEWIDZIALNY** (`78a3ef6`, 2026-08-29). Zgłoszenie: „dyktuję, tekst nie wchodzi w pole poleceń; **ikona nawet nie pulsowała**" — brak pulsowania = nagrywanie w ogóle nie ruszało. ⛔ **Zanim ruszysz ten temat: przeczytaj `~/.vibe-coding-assistant/dictation.log`** — od tej poprawki dyktowanie w końcu coś zapisuje.
