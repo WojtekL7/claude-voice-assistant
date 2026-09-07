@@ -405,8 +405,21 @@ Plan: `docs/PLAN-CHMURA-SYNC.md` (sekcja 9 = szyfrowanie). Pamięć: `chmura-syn
 | Zawieszanie przy 2+ zakładkach | RAM — patrz „Pamięć/RAM" |
 | Kopiowanie/odczyt zaznaczenia zwraca pustkę | Claude (TUI) przejmuje mysz → zaznaczaj z **Shift** (nie błąd kodu) |
 
-## PODŁĄCZENIE DO AI MANAGERA — ✅ DOMKNIĘTE
+## PODŁĄCZENIE DO AI MANAGERA — ✅ działa, ⏳ JEDNA RZECZ OTWARTA (przepięcie na zadania)
 
 Rozmowa z Claude idzie przez CLI (nie HTTP) → bramka jej nie łapie i nie musi; zużycie liczy osobno kolektor Claude Code AI Managera z lokalnych `.jsonl`.
 **STT (dyktowanie) na bramce** (potwierdzone 2026-07-13): `POST https://ai.srv1251441.hstgr.cloud/v1/audio/transcriptions`, `Authorization: Bearer aim-…` (klucz aplikacji **„VCA" (id=3)**), model z prefiksem `groq/…`; język auto = NIE wysyłaj pola `language`; kody: `401` zły klucz · `429` limit · `503` brak wolnego konta. → `stt-bramka-ai-manager.md`
 ⚠️ NIE mylić z osobną apką „Voice Assistant" (repo `voice-assistant`) — inny projekt, inny klucz.
+
+⏳ **DO ZROBIENIA — przepiąć dyktowanie na ZADANIE `task/transcribe` (zgłoszone przez AI Managera 2026-09-07).**
+Dziś `STT_MODEL = "groq/whisper-large-v3"` (`src/config.py:391`), czyli wołamy model **PO NAZWIE** — bramka
+rotuje wtedy wyłącznie między dwoma kontami **tego samego dostawcy**, więc awaria Groqa = dyktowanie martwe
+bez zejścia. `task/transcribe` daje trzy kroki u **dwóch** dostawców (groq → cloudflare → groq).
+Zmierzone u nich: **1361 z 1361 naszych wywołań poszło bez zadania**; to nie nasz błąd — podłączyliśmy się
+2026-07-13, a system zadań powstał 26.07. Zmiana to **jedna linia**, `STT_API_URL` zostaje bez zmian.
+📄 **Instrukcja krok po kroku — JEDNO ŹRÓDŁO, świadomie BEZ kopii tutaj (dwie kopie się rozjadą):**
+`~/Projekty/AI Manager/docs/KONTRAKT-VCA-ZADANIA.md`
+⚠️ Uczciwie: dziś nic nie pada (30 dni, 513 wywołań, wszystkie 200) — to ryzyko uśpione, nie awaria.
+⛔ Uwaga na jedną pułapkę z kontraktu: **żaden nasz test nie sprawdza dziś, jaki model wychodzi na sieć**
+(`tools/test-dictation.py` nie ma takiej asercji), więc po zmianie NIC się nie zaczerwieni — i nic nie obroni
+tej poprawki przed cofnięciem przy refaktorze. Asercję trzeba dopisać i potwierdzić sabotażem.
