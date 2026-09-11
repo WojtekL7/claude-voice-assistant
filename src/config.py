@@ -391,6 +391,72 @@ STT_API_URL = "https://ai.srv1251441.hstgr.cloud/v1/audio/transcriptions"
 STT_MODEL = "groq/whisper-large-v3"          # bramka wymaga przedrostka „groq/"
 STT_LANGUAGE_DEFAULT = "auto"                # „auto" = nie wysyłaj pola language (bramka sama wykrywa)
 
+# ── POPRAWIANIE TRANSKRYPCJI PO FAKCIE (2026-09-11) ──────────────────────────
+# Zgloszenie wlasciciela: „dziurawe dyktowanie, tekst nie jest tym, co dyktuje".
+# ZMIERZONE tego dnia, zanim cokolwiek zmieniono (cala droga tekstu jest zdrowa):
+#   · 328/328 nagran ma liczbe ramek zgodna z zegarem  → nic nie ginie przy nagrywaniu
+#   · dlugosc odpowiedzi bramki == dlugosc wstawiona do pola → nic nie ginie w drodze
+#   · 325/325 dyktowan trafilo we wlasciwa zakladke
+# Wina lezy w SAMYM rozpoznawaniu: na nagraniu wzorcowym o znanej tresci Whisper
+# przekreca nawet przy czystym dzwieku studyjnym (klucz→„kruc", usun→„usun",
+# zepsul→„cepsul"). To sufit modelu, nie usterka apki.
+# OBALONE POMIAREM (nie powtarzaj tych prob — kazda kosztowala wywolanie bramki):
+#   · language=pl                 → wynik CO DO ZNAKU identyczny z „auto"
+#     (kontrola: language=de zwrocil niemiecki, wiec parametr NAPRAWDE dziala)
+#   · prompt ze slownictwem       → bez zmian
+#   · temperature=0               → bez zmian
+#   · ciche wzmocnienie mikrofonu → 21% i 10% glosnosci: zgodnosc bez zmian (97,4%)
+#   · whisper-large-v3-turbo      → GORSZY (95,2% wobec 97,4%)
+# CO ZADZIALALO: poprawka tekstu po fakcie modelem jezykowym przez te sama bramke.
+#   Na wzorcu 97,4% → 100%. Na PRAWDZIWYM tekscie wlasciciela z zakladki AI Manager:
+#   kazda→kazda z ogonkiem, usun→usun z ogonkiem, daje→Daj, dostawione kropki
+#   miedzy zdaniami; sens nietkniety (+4 znaki).
+STT_FIX_ENABLED_DEFAULT = True
+STT_FIX_API_URL = "https://ai.srv1251441.hstgr.cloud/v1/chat/completions"
+# ⭐ MODEL WYBRANY POMIAREM, nie z katalogu. Porownane na TYM SAMYM tekscie:
+#   gemini-3.5-flash-lite  → 1,3–2,1 s, poprawnosc 98,5–100%, zachowuje 5/5
+#                            wlasnych sformulowan uzytkownika        ← WYBRANY
+#   gemini-3.6-flash       → mediana 8,5 s, raz 18,3 s — za wolne dla dyktowania
+#   gpt-oss-120b           → szybkie (1,7–2,8 s), ale PRZEPISUJE wypowiedz
+#                            („daj mi"→„pokaz", „wyrzuc mi"→„usun") = niedopuszczalne
+#   gpt-oss-20b            → oddaje PUSTA tresc
+STT_FIX_MODEL = "gemini/gemini-3.5-flash-lite"
+
+# Limit czasu na poprawke. To krok DODATKOWY: lepiej oddac tekst surowy niz
+# kazac czekac. ⛔ PROG DOBRANY NA LADUNKU PRODUKCYJNYM, nie na probce — pierwsza
+# wersja miala 8 s z pomiaru na krotkim zdaniu i ODCINALA uczciwa prace: prawdziwy
+# tekst uzytkownika (524 znaki) konczyl sie `ReadTimeout` i po cichu wracal surowy.
+# Zmierzone na 524 i 1244 znakach: mediana 1,7 s, najgorszy przypadek 8,8 s.
+STT_FIX_HTTP_TIMEOUT = 12.0
+
+# Powyzej tylu znakow nie poprawiamy — dlugie dyktowanie i tak jest zwykle
+# dzielone przez uzytkownika, a koszt i czas rosna liniowo.
+STT_FIX_MAX_CHARS = 6000
+
+# ⚠️ CZEGO TEN BEZPIECZNIK NIE ZLAPIE (zmierzone, zeby nikt na to nie liczyl):
+# PRZEPISANIA wypowiedzi innymi slowami. Model parafrazujacy zmiescil sie w widelkach
+# (stosunek 1,07), a podobienstwo znakowe NIE ROZROZNIA obu zachowan — model wierny
+# dal 90,5%, parafrazujacy 95,1%, czyli WIECEJ. Dlatego nie dokladamy progu
+# podobienstwa (bylby zielony nad przepisanym tekstem); przed parafraza chroni
+# WYBOR MODELU wyzej, potwierdzony pomiarem zachowanych sformulowan.
+# ⛔ BEZPIECZNIK SENSU. Model jezykowy MOZE zmienic tresc — a tresc dyktowania to
+# wypowiedz czlowieka, nie nasza wlasnosc. Przyjmujemy poprawke TYLKO wtedy, gdy
+# dlugosc zostala w tych widelkach; poza nimi oddajemy tekst SUROWY. To celowo
+# tepe kryterium: ma lapac „model dopisal komentarz" i „model strescil", a nie
+# oceniac jakosc polszczyzny.
+STT_FIX_MIN_RATIO = 0.80
+STT_FIX_MAX_RATIO = 1.30
+
+# Polecenie dla modelu. Bez cudzyslowow typograficznych — patrz CLAUDE-COMMON,
+# „polski cudzyslow zamykajacy bywa zwyklym ASCII i urywa lancuch".
+STT_FIX_PROMPT = (
+    "Popraw zapis polskiej transkrypcji mowy. Popraw polskie znaki diakrytyczne, "
+    "wielkie litery na poczatku zdan, interpunkcje oraz oczywiste przeslyszenia "
+    "slow technicznych z dziedziny programowania i IT. "
+    "NIE zmieniaj sensu, NIE dodawaj i NIE usuwaj tresci, NIE komentuj. "
+    "Zwroc WYLACZNIE poprawiony tekst."
+)
+
 # ⛔ DZIENNIK DYKTOWANIA — ZAWSZE WŁĄCZONY, CELOWO BEZ CZUJNIKA DO WŁĄCZANIA.
 # Powód (2026-08-29): dyktowanie było JEDYNĄ funkcją apki bez ani jednej linijki
 # logu, a jego komunikat o błędzie ginął w tej samej milisekundzie (patrz

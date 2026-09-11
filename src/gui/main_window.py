@@ -414,7 +414,7 @@ from config import (
     APP_NAME, APP_VERSION, WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT,
     SUPPORTED_LANGUAGES, UI_TRANSLATIONS, DEFAULT_QUICK_ACTIONS,
     CONFIG_FILE, QUICK_ACTIONS_FILE, CLAUDE_COMMAND, GROQ_API_KEY,
-    STT_LANGUAGE_DEFAULT,
+    STT_LANGUAGE_DEFAULT, STT_FIX_ENABLED_DEFAULT,
     AGENTS_FILE, MEMORY_PROJECTS_FILE, DEFAULT_AGENTS, DEFAULT_MEMORY_PROJECTS,
     CONFIG_DIR,
     ASSETS_DIR, CLAUDE_MODEL_CONTEXT_LIMITS, DEFAULT_AGENT_MODEL,
@@ -2655,6 +2655,8 @@ class MainWindow(QMainWindow):
                     # Set Groq API key
                     api_key = settings.get('groq_api_key', GROQ_API_KEY)
                     self.stt.set_api_key(api_key)
+                    self.stt.set_fix_enabled(
+                        settings.get('stt_fix_enabled', STT_FIX_ENABLED_DEFAULT))
 
                     # Set Anthropic API key
                     self.anthropic_api_key = settings.get('anthropic_api_key', '')
@@ -2702,6 +2704,7 @@ class MainWindow(QMainWindow):
             'language': self.current_language,
             'auto_read': self.auto_read_responses,
             'groq_api_key': self.stt.api_key,
+            'stt_fix_enabled': self.stt.fix_enabled,
             'anthropic_api_key': getattr(self, 'anthropic_api_key', ''),
             'skin_version': SKIN_VERSION,     # patrz _load_settings (migracja)
             'skin_colors': self.skin_colors,  # Zawiera kolory interfejsu + terminala
@@ -3262,8 +3265,32 @@ class MainWindow(QMainWindow):
             return
         if text.strip():
             cursor = self.input_field.textCursor()
-            pos = cursor.position()
             current_text = self.input_field.toPlainText()
+
+            # ── KROK A (2026-09-11) — POMIAR, NIE ZMIANA ZACHOWANIA ──
+            # Bez tych trzech liczb NIE DA SIE odroznic „program nadpisal"
+            # od „user sam poprawial": log notowal dotad wylacznie ILE znakow
+            # wstawiono, wiec zgloszenie o gubionych fragmentach bylo
+            # nierozstrzygalne (zmierzone: 689 znakow wstawionych, 524 wyslane
+            # — roznicy nie dalo sie przypisac ani nam, ani czlowiekowi).
+            # Tresci NIE zapisujemy — same liczby.
+            zaznaczone = cursor.selectionEnd() - cursor.selectionStart()
+            dictation_log(f"    pole: znakow={len(current_text)} "
+                          f"kursor={cursor.position()} zaznaczone={zaznaczone}")
+
+            # ── KROK B — DYKTOWANIE NIE MA PRAWA NICZEGO KASOWAC ──
+            # `QTextCursor.insertText` ZASTEPUJE zaznaczenie. Jesli w polu cokolwiek
+            # bylo zaznaczone (choćby przypadkiem), dotad znikalo BEZ SLADU — ani
+            # bledu, ani wpisu w logu. Zwijamy zaznaczenie do jego KONCA i dopisujemy
+            # obok. Wstawianie w miejscu kursora ZOSTAJE (przydaje sie przy
+            # dopisywaniu w srodku) — zmieniamy wylacznie to, ze nic nie ginie.
+            if cursor.hasSelection():
+                dictation_log(f"    OCHRONA: bylo zaznaczone {zaznaczone} znakow "
+                              f"— NIE nadpisuje, dopisuje obok")
+                cursor.setPosition(cursor.selectionEnd())
+                self.input_field.setTextCursor(cursor)
+
+            pos = cursor.position()
 
             # Sprawdź czy trzeba dodać spację PRZED (jeśli poprzedni znak nie jest spacją/enterem)
             needs_space_before = pos > 0 and current_text[pos-1] not in (' ', '\n', '\t')

@@ -19,6 +19,9 @@ import requests
 from config import (
     STT_API_URL, STT_MODEL, STT_LANGUAGE_DEFAULT,
     STT_HTTP_TIMEOUT, STT_PROCESSING_STUCK_SECS,
+    STT_FIX_ENABLED_DEFAULT, STT_FIX_API_URL, STT_FIX_MODEL,
+    STT_FIX_HTTP_TIMEOUT, STT_FIX_MAX_CHARS, STT_FIX_MIN_RATIO,
+    STT_FIX_MAX_RATIO, STT_FIX_PROMPT,
     DICTATION_LOG, DICTATION_LOG_MAX_BYTES,
     t as tr,
 )
@@ -89,6 +92,19 @@ def decide_mic_click(is_recording: bool, is_processing: bool,
     return KLIK_NAGRYWAJ
 
 
+def _zdejmij_ramke_kodu(tekst: str) -> str:
+    """Zdejmij ramke bloku kodu, gdyby model owinal nia odpowiedz.
+
+    Celowo BEZ wyrazenia regularnego: wzorzec ramki bloku kodu ma w tym projekcie
+    JEDNO zrodlo (`text_cleaner.CODE_FENCE_RE`) i pilnuje tego bramka — druga
+    kopia inline wrocilaby jako ta sama usterka, ktora tam naprawiono.
+    """
+    linie = (tekst or "").strip().splitlines()
+    if len(linie) >= 2 and linie[0].startswith("```") and linie[-1].startswith("```"):
+        return "\n".join(linie[1:-1])
+    return tekst
+
+
 class STTEngine:
     """
     Speech-to-Text engine using Groq Whisper API.
@@ -101,6 +117,11 @@ class STTEngine:
         # nie wprost do Groq. Adres i model = jedno źródło prawdy w config.py.
         self.api_url = STT_API_URL
         self.model = STT_MODEL
+        # Poprawianie transkrypcji po fakcie (patrz STT_FIX_* w config.py).
+        # Wlaczane/wylaczane z ustawien uzytkownika przez `set_fix_enabled`.
+        self.fix_enabled = STT_FIX_ENABLED_DEFAULT
+        self.fix_api_url = STT_FIX_API_URL
+        self.fix_model = STT_FIX_MODEL
 
         # Audio settings
         self.sample_rate = 16000
@@ -279,6 +300,80 @@ class STTEngine:
                 self.on_error(f"Recording error: {str(e)}")
             self._set_state(STTState.IDLE)
 
+
+    def set_fix_enabled(self, enabled: bool):
+        """Wlacz/wylacz poprawianie transkrypcji (ustawienie uzytkownika)."""
+        self.fix_enabled = bool(enabled)
+
+    def _popraw_transkrypcje(self, text: str) -> str:
+        """Popraw zapis rozpoznanego tekstu modelem jezykowym przez te sama bramke.
+
+        ⛔ TEN KROK NIE MA PRAWA NICZEGO ZGUBIC. Tresc dyktowania to wypowiedz
+        czlowieka — przy KAZDEJ watpliwosci (wylaczone, brak klucza, awaria sieci,
+        zly kod, pusta lub podejrzanie zmieniona odpowiedz) oddajemy tekst SUROWY.
+        Poprawka jest premia, nie warunkiem dzialania dyktowania.
+
+        Dlaczego w ogole istnieje — patrz komentarz przy STT_FIX_* w `config.py`:
+        cala droga tekstu jest zdrowa (zmierzone), a bledy rodzi samo rozpoznawanie
+        i nie da sie ich zdjac zadnym parametrem wysylki (language/prompt/temperature
+        sprawdzone, zero wplywu).
+        """
+        if not self.fix_enabled:
+            return text
+        if not self.api_key:
+            return text
+
+        surowy = text.strip()
+        if len(surowy) < 3 or len(surowy) > STT_FIX_MAX_CHARS:
+            dictation_log(f"POPRAWKA POMINIETA: dlugosc {len(surowy)} poza zakresem")
+            return text
+
+        t0 = time.monotonic()
+        try:
+            odpowiedz = requests.post(
+                self.fix_api_url,
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                json={
+                    "model": self.fix_model,
+                    "messages": [
+                        {"role": "system", "content": STT_FIX_PROMPT},
+                        {"role": "user", "content": surowy},
+                    ],
+                    "temperature": 0,
+                },
+                timeout=(STT_FIX_HTTP_TIMEOUT, STT_FIX_HTTP_TIMEOUT),
+            )
+        except requests.exceptions.RequestException as e:
+            dictation_log(f"POPRAWKA NIEUDANA ({type(e).__name__}) — oddaje tekst surowy")
+            return text
+
+        dt = time.monotonic() - t0
+        if odpowiedz.status_code != 200:
+            dictation_log(f"POPRAWKA NIEUDANA: kod={odpowiedz.status_code} "
+                          f"po {dt:.1f}s — oddaje tekst surowy")
+            return text
+        try:
+            poprawiony = odpowiedz.json()["choices"][0]["message"]["content"]
+        except Exception as e:
+            dictation_log(f"POPRAWKA NIEUDANA: zla odpowiedz ({type(e).__name__}) "
+                          f"— oddaje tekst surowy")
+            return text
+
+        poprawiony = _zdejmij_ramke_kodu(poprawiony or "").strip()
+        if not poprawiony:
+            dictation_log(f"POPRAWKA ODRZUCONA: pusta odpowiedz po {dt:.1f}s "
+                          f"— oddaje tekst surowy")
+            return text
+
+        stosunek = len(poprawiony) / len(surowy)
+        if not (STT_FIX_MIN_RATIO <= stosunek <= STT_FIX_MAX_RATIO):
+            dictation_log(f"POPRAWKA ODRZUCONA: {len(surowy)}->{len(poprawiony)} znakow "
+                          f"(stosunek {stosunek:.2f}) poza widelkami — oddaje tekst surowy")
+            return text
+
+        dictation_log(f"POPRAWKA: {len(surowy)}->{len(poprawiony)} znakow po {dt:.1f}s")
+        return poprawiony
+
     def _transcribe_audio(self, attempt: int = 0):
         """Transcribe recorded audio using Groq API.
 
@@ -306,6 +401,14 @@ class STTEngine:
 
             if text:
                 dictation_log(f"ROZPOZNANO: {len(text)} znakow, poczatek={text[:40]!r}")
+                text = self._popraw_transkrypcje(text)
+                # Poprawka trwa okolo sekundy — w tym czasie uzytkownik mogl
+                # odblokowac dyktowanie i zaczac nowe. Sprawdzamy PONOWNIE,
+                # inaczej stary tekst wpadlby w srodek nowej pracy.
+                if attempt and attempt != self._attempt:
+                    dictation_log(f"WYNIK PORZUCONY PO POPRAWCE: podejscie #{attempt} "
+                                  f"nieaktualne (biezace #{self._attempt})")
+                    return
                 if self.on_transcription:
                     self.on_transcription(text)
             else:
