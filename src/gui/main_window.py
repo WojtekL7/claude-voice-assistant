@@ -1262,6 +1262,8 @@ class MainWindow(QMainWindow):
         agent_tab.request_dictation.connect(self._handle_dictation_request)
         agent_tab.request_terminal_repair.connect(
             lambda tab=agent_tab: self._repair_terminal_in_tab(tab))
+        agent_tab.button_active_changed.connect(
+            lambda attr, on, tab=agent_tab: self._set_button_active(tab, attr, on))
         agent_tab.request_search.connect(
             lambda tab=agent_tab: self._open_search_in_tab(tab))
         agent_tab.message_sent.connect(self._on_message_sent)
@@ -2756,7 +2758,11 @@ class MainWindow(QMainWindow):
                 add_action.triggered.connect(self._add_quick_action)
                 menu.addAction(add_action)
 
-                tab.quick_actions_btn.setMenu(menu)
+                # ⛔ NIE wołaj tu `setMenu` wprost — menu wpina WYŁĄCZNIE
+                # `AgentTab._attach_quick_menu`, bo ono dokłada sygnały podświetlenia
+                # „w użyciu". To druga z DWÓCH dróg budowania tego menu; wpięcie
+                # sygnałów tylko w jednej dawałoby „czasem się podświetla".
+                tab._attach_quick_menu(menu)
 
     def _check_license(self):
         """Check license status (silent - no popups)."""
@@ -3516,8 +3522,15 @@ class MainWindow(QMainWindow):
             dialog.request_speak.connect(self._speak_search_result)
             dialog.request_scroll.connect(
                 lambda text, t=tab: self._scroll_terminal_to(t, text))
-            dialog.finished.connect(lambda _r, t=tab: setattr(t, '_search_dialog', None))
+            # Lupa świeci akcentem, DOPÓKI okno szukania jest otwarte. `finished`
+            # łapie każde zamknięcie (✕, Escape, Zamknij), więc przycisk nie ma jak
+            # zostać fioletowy po zniknięciu okna.
+            dialog.finished.connect(lambda _r, t=tab: (
+                setattr(t, '_search_dialog', None),
+                self._set_button_active(t, 'search_btn', False),
+            ))
             tab._search_dialog = dialog
+        self._set_button_active(tab, 'search_btn', True)
         dialog.show()
         dialog.raise_()
         dialog.activateWindow()
@@ -4615,8 +4628,29 @@ class MainWindow(QMainWindow):
         """Get icon for a button from skin_icons."""
         return self.skin_icons.get(button_name, {}).get(state, '?')
 
+    # Przyciski paska, które mają stan „W UŻYCIU" → klucz koloru ikony w skórce.
+    # Kopiuj NIE jest tu celowo: kopiowanie trwa ułamek sekundy, więc nie ma „podczas" —
+    # jego komunikatem zostaje zielony błysk („skopiowane"), niosący więcej niż „użyto".
+    _ACTIVE_BUTTON_COLOR_KEYS = {
+        'add_media_btn': 'icon_add_media_color',
+        'quick_actions_btn': 'icon_quick_actions_color',
+        'mouse_mode_btn': 'icon_copy_color',
+        'search_btn': 'icon_search_color',
+    }
+
+    def _set_button_active(self, tab, attr: str, active: bool):
+        """Podświetl przycisk paska na czas UŻYWANIA (albo zgaś po zakończeniu)."""
+        button = getattr(tab, attr, None)
+        if button is None:
+            return
+        color_key = self._ACTIVE_BUTTON_COLOR_KEYS.get(attr)
+        if color_key is None:
+            return
+        self._apply_button_icon_style(button, color_key, active=active)
+
     def _apply_button_icon_style(self, button, color_key: str, font_size: int = 22,
-                                 with_disabled: bool = False, border_override: str = None):
+                                 with_disabled: bool = False, border_override: str = None,
+                                 active: bool = False):
         """Apply transparent style with colored icon to a button.
 
         Args:
@@ -4629,6 +4663,13 @@ class MainWindow(QMainWindow):
                 chwilowy nie jest OSOBNYM arkuszem, który po cichu się rozjedzie.
                 Zgodnie z konwencją projektu: skórka rządzi SPOCZYNKIEM, kod niesie
                 STAN, więc barwa sygnału przychodzi z kodu, nie z klucza skórki.
+            active: przycisk jest „W UŻYCIU" (otwarte menu, otwarte okno, włączony
+                tryb) — całe tło idzie w akcent, ikona na jasną. Trwa TAK DŁUGO,
+                jak trwa używanie; to nie jest błysk po kliknięciu.
+                ⛔ NIE realizuj tego przez wspólną regułę QSS `:checked` — jedynym
+                „wciskanym" przyciskiem paska jest MIKROFON i fiolet zalałby go
+                podczas nagrywania, gasząc czerwony sygnał nagrywania (ta sama
+                pułapka, przez którą regułę `:checked` usunięto 2026-07-16).
 
         ⛔ SELEKTOR BIERZEMY Z KLASY WIDŻETU, NIE WPISUJEMY „QPushButton" NA SZTYWNO.
         Reguła `QPushButton {…}` na QToolButtonie NIE DOPASOWUJE SIĘ — Qt nie zgłasza
@@ -4646,6 +4687,17 @@ class MainWindow(QMainWindow):
         icon_color = self.skin_colors.get(color_key, theme.TEXT_DIM)
         border_color = border_override or self.skin_colors.get('border_color', theme.BORDER)
         surface = self.skin_colors.get('button_bg', theme.SURFACE)
+
+        if active:
+            # „W UŻYCIU" — otwarte menu/okno albo włączony tryb. Kolor z KODU, nie ze
+            # skórki: to sygnał stanu, a w skórce dałoby się ustawić fiolet na fiolecie.
+            # ⚠️ Ikona MUSI zejść z tonacji spoczynkowej na jasną: zmierzone na akcencie
+            # #a855f7 (jasność 167) szare #9b93a8 (155) daje różnicę 12, czyli PONIŻEJ
+            # progu 20, który projekt przyjął dla odcienia niosącego sygnał — ikona
+            # zlałaby się z tłem. Jasny tekst daje 68.
+            surface = theme.ACCENT
+            border_color = border_override or theme.ACCENT
+            icon_color = theme.TEXT
 
         # „QPushButton" / „QToolButton" — nazwa klasy widżetu, tak jak widzi ją QSS.
         sel = button.metaObject().className()

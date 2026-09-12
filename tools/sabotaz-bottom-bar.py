@@ -16,7 +16,7 @@ Uzycie:  python3 tools/sabotaz-bottom-bar.py B1
          python3 tools/sabotaz-bottom-bar.py --kotwice
 
 SABOTAZ - WYNIKI ZMIERZONE (uruchomione 2026-09-12, NIE przewidziane).
-Zdrowy kod: 23 sprawdzen, 23 OK, 0 FAIL. Kazdy wariant: 23 WYKONANYCH (czyli
+Zdrowy kod: 31 sprawdzen, 31 OK, 0 FAIL. Kazdy wariant: 31 WYKONANYCH (czyli
 bramka ani razu nie urwala sie w polowie) i przywrocenie dowiedzione sha256.
   wariant | co popsute                                        | co padlo
   --------+---------------------------------------------------+--------------------
@@ -26,9 +26,22 @@ bramka ani razu nie urwala sie w polowie) i przywrocenie dowiedzione sha256.
   B4      | zdjete wywolanie malarza dla szybkich akcji        | 7, 8, 9, 9b, 10, 12
   B5      | powrot wlasnego arkusza zielonego blysku           | 13b
   B6      | blysk gubi SYGNAL (ramka nie jest zielona)         | 13
+  B7      | zdjety caly stan „w uzyciu"                        | 14, 14b
+  B8      | ikona zostaje szara na fiolecie (znika)            | 14c
+  B9      | mysz nie zglasza trybu zaznaczania                 | 16
+  B10     | dodaj media nie gasnie po anulowaniu               | 17
+  B11     | okno glowne znowu wpina menu wlasnym setMenu       | 15
 ⭐ B5 i B6 sa PARA i to jest celowe: B5 pilnuje, zeby stan chwilowy nie mial
    wlasnego wygladu, a B6 - zeby przy tym ujednoliceniu nie zgubic SYGNALU.
    Sam B5 przeszedlby tez nad blyskiem, ktory w ogole przestal byc zielony.
+⭐ B7 i B8 to ta sama para o poziom nizej: B7 pilnuje, ze stan „w uzyciu" W OGOLE
+   istnieje, B8 - ze jest CZYTELNY. B7 nie zapala [14c] i tak ma byc: przy zdjetym
+   stanie ikona zostaje na ciemnym tle, wiec kontrast jest w porzadku - problemem
+   jest wtedy brak fioletu, nie kontrast.
+⛔ B10 pilnuje ryzyka, ktore najbardziej zabolaloby uzytkownika: okno wyboru pliku
+   da sie zamknac „Anuluj" albo krzyzykiem, a bez `finally` przycisk zostalby
+   fioletowy NA ZAWSZE i wygladalby na zepsuty. Dlatego bramka anuluje okno
+   (podstawia puste okno), zamiast wybierac plik - sciezka „udalo sie" tego nie lapie.
 
 ⛔ CZEGO NAUCZYL SABOTAZ O SAMEJ BRAMCE (wart zapamietania):
    wariant B2 w PIERWSZYM przebiegu zapalil TYLKO [7] i [10] - asercje [8], [9]
@@ -48,8 +61,9 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 OKNO = REPO / "src" / "gui" / "main_window.py"
+ZAKLADKA = REPO / "src" / "gui" / "agent_tab.py"
 BRAMKA = REPO / "tools" / "test-bottom-bar-icons.py"
-OCZEKIWANE = 23          # ile sprawdzen ma WYKONAC bramka na zdrowym kodzie
+OCZEKIWANE = 31          # ile sprawdzen ma WYKONAC bramka na zdrowym kodzie
 
 _VENV = REPO / "venv" / "bin" / "python"
 PYTHON = str(_VENV) if _VENV.exists() else sys.executable
@@ -106,6 +120,22 @@ WARIANTY = {
     "B6": (OKNO, "blysk gubi SYGNAL - ramka zwyczajna zamiast zielonej",
            "                                      border_override=theme.SUCCESS)",
            "                                      border_override=None)"),
+    # --- stan „W UZYCIU" (fiolet trwa tyle, ile trwa uzywanie) ---
+    "B7": (OKNO, "zdjety caly stan aktywny - przycisk w uzyciu wyglada jak w spoczynku",
+           "        if active:",
+           "        if False:"),
+    "B8": (OKNO, "ikona zostaje szara na fiolecie (znika - ponizej progu kontrastu)",
+           "            icon_color = theme.TEXT",
+           "            icon_color = theme.TEXT_DIM"),
+    "B9": (ZAKLADKA, "przelacznik myszy nie zglasza wlaczonego trybu zaznaczania",
+           "        self.button_active_changed.emit('mouse_mode_btn', sel)",
+           "        pass  # SABOTAZ"),
+    "B10": (ZAKLADKA, "dodawanie mediow nie gasnie po anulowaniu (zostaje fioletowe NA ZAWSZE)",
+            "            self.button_active_changed.emit('add_media_btn', False)",
+            "            pass  # SABOTAZ"),
+    "B11": (OKNO, "okno glowne znowu wpina menu wlasnym setMenu (traci sygnaly)",
+            "                tab._attach_quick_menu(menu)",
+            "                tab.quick_actions_btn.setMenu(menu)"),
 }
 
 

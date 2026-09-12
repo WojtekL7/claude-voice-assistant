@@ -316,6 +316,90 @@ spr("13c", "KONTROLA ODWROTNA: po błysku przycisk wraca do wyglądu sąsiada",
     and theme.SUCCESS.lower() not in reguly(tab.copy_btn).get("", {}).get("border", "").lower(),
     f"po powrocie={reguly(tab.copy_btn).get('', {})}")
 
+# ---- 14-17. „W UŻYCIU" — fiolet trwa tyle, ile trwa używanie ------------------
+# Życzenie właściciela 2026-09-12: przycisk ma ZOSTAĆ fioletowy podczas używania,
+# a nie mignąć po kliknięciu. Dotyczy: szybkich akcji (otwarte menu), lupy
+# (otwarte okno), myszy (włączony tryb zaznaczania) i dodawania mediów (otwarte
+# okno wyboru pliku). Kopiuj NIE ma stanu „podczas" — zostaje przy zielonym błysku.
+
+def jasnosc_hex(h):
+    h = h.lstrip("#")
+    return sum(int(h[i:i + 2], 16) for i in (0, 2, 4)) / 3
+
+
+_atrapa2 = Atrapa(tab)
+_atrapa2._set_button_active = lambda t, a, on: MainWindow._set_button_active(_atrapa2, t, a, on)
+_atrapa2._ACTIVE_BUTTON_COLOR_KEYS = MainWindow._ACTIVE_BUTTON_COLOR_KEYS
+
+MainWindow._set_button_active(_atrapa2, tab, "quick_actions_btn", True)
+_akt = reguly(tab.quick_actions_btn)
+spr(14, "przycisk W UŻYCIU wygląda INACZEJ niż w spoczynku",
+    _akt.get("", {}) != _qa.get("", {}),
+    f"aktywny={_akt.get('', {}).get('background-color')} spoczynek={_qa.get('', {}).get('background-color')}")
+
+_tlo_akt = _akt.get("", {}).get("background-color", "")
+_ikona_akt = _akt.get("", {}).get("color", "")
+spr("14b", "tło W UŻYCIU to AKCENT (ten sam fiolet co ramka po najechaniu)",
+    _tlo_akt.lower() == theme.ACCENT.lower(),
+    f"{_tlo_akt} vs {theme.ACCENT}")
+
+# Sedno pomiaru: szara ikona na fiolecie ZNIKA. Próg 20/255 jest ten sam, którym
+# projekt mierzy każdy odcień niosący sygnał (patrz asercja 3f).
+spr("14c", "ikona na fiolecie zachowuje kontrast (≥20/255) — inaczej znika",
+    abs(jasnosc_hex(_ikona_akt) - jasnosc_hex(_tlo_akt)) >= 20,
+    f"ikona {_ikona_akt}={jasnosc_hex(_ikona_akt):.0f}, tło {_tlo_akt}={jasnosc_hex(_tlo_akt):.0f}, "
+    f"różnica {abs(jasnosc_hex(_ikona_akt) - jasnosc_hex(_tlo_akt)):.0f}")
+
+MainWindow._set_button_active(_atrapa2, tab, "quick_actions_btn", False)
+spr("14d", "KONTROLA ODWROTNA: po zakończeniu wraca do wyglądu sąsiada",
+    _poza_ikona(reguly(tab.quick_actions_btn).get("", {})) == _poza_ikona(_sas.get("", {})),
+    f"{reguly(tab.quick_actions_btn).get('', {})}")
+
+# --- 15. Menu szybkich akcji: DWÓCH autorów, JEDNO wejście --------------------
+# Gdyby MainWindow wołało `setMenu` wprost, jego droga (przebudowa po zmianie listy
+# akcji) straciłaby sygnały i podświetlenie działałoby „czasem".
+_zrodlo_okna = open(os.path.join(ROOT, "src", "gui", "main_window.py"), encoding="utf-8").read()
+spr(15, "okno główne wpina menu przez WSPÓLNY helper, nie własnym setMenu",
+    "_attach_quick_menu(menu)" in _zrodlo_okna
+    and "quick_actions_btn.setMenu(" not in _zrodlo_okna,
+    "setMenu w main_window: %s" % ("JEST (źle)" if "quick_actions_btn.setMenu(" in _zrodlo_okna else "brak"))
+
+_zdarzenia = []
+tab.button_active_changed.connect(lambda a, on: _zdarzenia.append((a, on)))
+tab._attach_quick_menu(tab.quick_actions_btn.menu())
+tab.quick_actions_btn.menu().aboutToShow.emit()
+tab.quick_actions_btn.menu().aboutToHide.emit()
+# ⚠️ Zdarzenia bywają tu ZDUBLOWANE i to NIE jest usterka: bramka wpina sygnały do
+# menu, które zostało już wpięte przy budowie zakładki, więc lambda wisi dwa razy.
+# W produkcji każda przebudowa tworzy NOWE QMenu, więc dublowania nie ma. Asercja
+# pyta o OBECNOŚĆ obu zdarzeń, nie o ich liczbę — celowo.
+spr("15b", "otwarcie i zamknięcie menu ZGŁASZA zmianę stanu przycisku",
+    ("quick_actions_btn", True) in _zdarzenia and ("quick_actions_btn", False) in _zdarzenia,
+    f"{_zdarzenia}")
+
+# --- 16. Mysz: fiolet trzyma się WŁĄCZONEGO trybu zaznaczania ------------------
+_zdarzenia.clear()
+tab._toggle_mouse_mode()          # claude -> select
+tab._toggle_mouse_mode()          # select -> claude
+spr(16, "przełącznik myszy zapala się przy trybie zaznaczania i gaśnie po powrocie",
+    _zdarzenia == [("mouse_mode_btn", True), ("mouse_mode_btn", False)],
+    f"{_zdarzenia}")
+
+# --- 17. Dodaj media: gaśnie TAKŻE po anulowaniu okna --------------------------
+# ⚠️ Tu jest realne ryzyko „przycisk zostaje fioletowy na zawsze": użytkownik
+# zamyka okno krzyżykiem albo Anuluj. Podstawiamy okno zwracające PUSTĄ listę.
+import gui.agent_tab as AT
+_zdarzenia.clear()
+_stare_okno = AT.styled_get_open_file_names
+AT.styled_get_open_file_names = lambda *a, **k: ([], "")
+try:
+    tab._add_media()
+finally:
+    AT.styled_get_open_file_names = _stare_okno
+spr(17, "dodawanie mediów gaśnie RÓWNIEŻ po anulowaniu (nie zostaje fioletowe)",
+    _zdarzenia == [("add_media_btn", True), ("add_media_btn", False)],
+    f"{_zdarzenia}")
+
 zle = wyniki.count(False)
 print(f"\n{'=' * 58}\nWYNIK: {wyniki.count(True)}/{len(wyniki)} OK, {zle} FAIL")
 sys.exit(1 if zle else 0)

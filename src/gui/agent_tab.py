@@ -258,6 +258,10 @@ class AgentTab(QWidget):
     terminal_ready = pyqtSignal()  # Emitted from activate() po stworzeniu QTermWidget
     request_terminal_repair = pyqtSignal()  # Napraw „rozstrzelony" terminal: zrzut dowodu + restart z --resume
     request_search = pyqtSignal()  # 🔍 Otwórz szukanie w rozmowie TEJ zakładki (lupa / Ctrl+F)
+    # Przycisk paska jest „W UŻYCIU" (otwarte menu / okno / włączony tryb) → MainWindow
+    # podświetla go akcentem. Nazwa atrybutu + stan; stylowanie NIE żyje w zakładce,
+    # bo kolory bierze się ze skórki, którą trzyma okno główne.
+    button_active_changed = pyqtSignal(str, bool)
 
     def __init__(self, agent_config: dict, parent=None):
         super().__init__(parent)
@@ -713,6 +717,21 @@ class AgentTab(QWidget):
         add_action.triggered.connect(self._add_quick_action)
         menu.addAction(add_action)
 
+        self._attach_quick_menu(menu)
+
+    def _attach_quick_menu(self, menu):
+        """JEDYNE miejsce, w którym menu szybkich akcji trafia do przycisku.
+
+        ⛔ To menu buduje DWÓCH autorów — ta klasa ORAZ `MainWindow._update_quick_actions_menu`
+        (druga droga przebudowuje je po zmianie listy akcji). Gdyby każdy wpinał sygnały
+        u siebie, jedna z dróg po cichu straciłaby podświetlenie „w użyciu" i wyszłoby to
+        dopiero u użytkownika, jako „czasem się podświetla, a czasem nie". Dlatego setMenu
+        wolno wołać WYŁĄCZNIE stąd. Pilnuje tego bramka `tools/test-bottom-bar-icons.py`.
+        """
+        menu.aboutToShow.connect(
+            lambda: self.button_active_changed.emit('quick_actions_btn', True))
+        menu.aboutToHide.connect(
+            lambda: self.button_active_changed.emit('quick_actions_btn', False))
         self.quick_actions_btn.setMenu(menu)
 
     def _insert_quick_action(self, command: str):
@@ -1198,6 +1217,8 @@ class AgentTab(QWidget):
             self.terminal_backend.set_mouse_mode(self._mouse_mode)
         self._update_mouse_mode_btn()
         sel = (self._mouse_mode == 'select')
+        # „W użyciu" = włączony tryb ZAZNACZANIA (tryb 'claude' jest domyślny).
+        self.button_active_changed.emit('mouse_mode_btn', sel)
         self.status_changed.emit(
             tr('status_mouse_select') if sel else tr('status_mouse_scroll'))
 
@@ -1225,9 +1246,17 @@ class AgentTab(QWidget):
             "Wszystkie pliki (*)"
         )
 
-        files, _ = styled_get_open_file_names(
-            self, "Dodaj pliki", str(Path.home()), file_filter
-        )
+        # Przycisk świeci akcentem, DOPÓKI okno wyboru pliku jest otwarte.
+        # `finally` jest tu konieczne: okno da się zamknąć „Anuluj" albo krzyżykiem,
+        # a przycisk musi wrócić do normy w KAŻDYM z tych przypadków - inaczej
+        # zostałby fioletowy na zawsze i wyglądałby na zepsuty.
+        self.button_active_changed.emit('add_media_btn', True)
+        try:
+            files, _ = styled_get_open_file_names(
+                self, "Dodaj pliki", str(Path.home()), file_filter
+            )
+        finally:
+            self.button_active_changed.emit('add_media_btn', False)
 
         if files:
             for file_path in files:
