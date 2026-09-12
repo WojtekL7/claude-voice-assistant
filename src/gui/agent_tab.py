@@ -262,6 +262,9 @@ class AgentTab(QWidget):
     # podświetla go akcentem. Nazwa atrybutu + stan; stylowanie NIE żyje w zakładce,
     # bo kolory bierze się ze skórki, którą trzyma okno główne.
     button_active_changed = pyqtSignal(str, bool)
+    # Akcja TRWAJĄCA UŁAMEK SEKUNDY (wyczyszczenie pola) — przycisk ma mrugnąć, a nie
+    # świecić. Barwę dobiera MainWindow (kolory sygnałów żyją w kodzie, nie w skórce).
+    request_button_flash = pyqtSignal(str)
 
     def __init__(self, agent_config: dict, parent=None):
         super().__init__(parent)
@@ -1233,6 +1236,9 @@ class AgentTab(QWidget):
         """Clear the input field."""
         self.input_field.clear()
         self._clear_attachments()
+        # Mrugnięcie „wyczyszczone" — jedyne potwierdzenie, jakie user dostaje,
+        # bo puste pole wygląda tak samo jak pole, w którym nic nie było.
+        self.request_button_flash.emit('clear_input_btn')
 
     def _add_media(self):
         """Open file dialog to add media attachments."""

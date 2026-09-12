@@ -35,6 +35,7 @@ WYNIKI SABOTAŻU — URUCHOMIONE I ZMIERZONE 2026-08-04:
 """
 import os
 import sys
+import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src"))
@@ -294,10 +295,25 @@ for _nr, _btn, _opis in (("12", tab.quick_actions_btn, "szybkie akcje"),
 _atrapa = Atrapa(tab)
 _atrapa._icon = lambda *a, **k: tab.copy_btn.icon()     # błysk podmienia też ikonę
 _atrapa._get_current_agent_tab = lambda: tab
-# Błysk planuje powrót przez QTimer — atrapa musi mieć tę metodę, żeby produkcyjny
-# kod przeszedł do końca. Timer i tak nie wystrzeli: w bramce nie ma pętli zdarzeń,
-# więc powrót wołamy niżej RĘCZNIE (i dzięki temu możemy go sprawdzić osobno).
-_atrapa._reset_copy_style = lambda: MainWindow._reset_copy_style(_atrapa)
+_atrapa._flash_button = lambda *a, **k: MainWindow._flash_button(_atrapa, *a, **k)
+_atrapa._BUTTON_COLOR_KEYS = MainWindow._BUTTON_COLOR_KEYS
+_atrapa._FLASH_COLORS = MainWindow._FLASH_COLORS
+
+
+def przeczekaj(sekundy):
+    """Przepuść PRAWDZIWY zegar Qt — bez tego `QTimer.singleShot` nigdy nie wystrzeli.
+
+    ⚠️ `time.sleep` SAM NIC NIE DA: bramka nie ma pętli zdarzeń, więc trzeba ją
+    kręcić ręcznie. Do 2026-09-12 powrót po błysku wołaliśmy tu RĘCZNIE — czyli
+    bramka sprawdzała, że „da się wrócić", a NIE że program wraca sam. Dokładnie
+    tę różnicę zgłosiłby user jako „przycisk został czerwony".
+    """
+    koniec = time.monotonic() + sekundy
+    while time.monotonic() < koniec:
+        _app.processEvents()
+        time.sleep(0.02)
+
+
 MainWindow._flash_copy_success(_atrapa)
 _blysk = reguly(tab.copy_btn)
 
@@ -310,8 +326,15 @@ spr("13b", "poza ramką błysk wygląda jak zwykły przycisk (tło, róg, wielko
     _bez_ramki(_blysk.get("", {})) == _bez_ramki(_sas.get("", {})),
     f"błysk={_bez_ramki(_blysk.get('', {}))} vs sąsiad={_bez_ramki(_sas.get('', {}))}")
 
-MainWindow._reset_copy_style(_atrapa)
-spr("13c", "KONTROLA ODWROTNA: po błysku przycisk wraca do wyglądu sąsiada",
+# Kontrola przytomności: PRZED upływem pół sekundy błysk ma jeszcze trwać —
+# inaczej asercja niżej przechodziłaby także nad błyskiem, którego nigdy nie było.
+przeczekaj(0.2)
+spr("13c", "po 0,2 s błysk JESZCZE trwa (miara odróżnia)",
+    theme.SUCCESS.lower() in reguly(tab.copy_btn).get("", {}).get("border", "").lower(),
+    f"{reguly(tab.copy_btn).get('', {}).get('border')}")
+
+przeczekaj(0.6)
+spr("13d", "po pół sekundy przycisk wraca SAM (prawdziwy zegar, nie ręczny reset)",
     _bez_ramki(reguly(tab.copy_btn).get("", {})) == _bez_ramki(_sas.get("", {}))
     and theme.SUCCESS.lower() not in reguly(tab.copy_btn).get("", {}).get("border", "").lower(),
     f"po powrocie={reguly(tab.copy_btn).get('', {})}")
@@ -329,7 +352,8 @@ def jasnosc_hex(h):
 
 _atrapa2 = Atrapa(tab)
 _atrapa2._set_button_active = lambda t, a, on: MainWindow._set_button_active(_atrapa2, t, a, on)
-_atrapa2._ACTIVE_BUTTON_COLOR_KEYS = MainWindow._ACTIVE_BUTTON_COLOR_KEYS
+_atrapa2._BUTTON_COLOR_KEYS = MainWindow._BUTTON_COLOR_KEYS
+_atrapa2._BUTTONS_WITH_ACTIVE_STATE = MainWindow._BUTTONS_WITH_ACTIVE_STATE
 
 MainWindow._set_button_active(_atrapa2, tab, "quick_actions_btn", True)
 _akt = reguly(tab.quick_actions_btn)
@@ -399,6 +423,43 @@ finally:
 spr(17, "dodawanie mediów gaśnie RÓWNIEŻ po anulowaniu (nie zostaje fioletowe)",
     _zdarzenia == [("add_media_btn", True), ("add_media_btn", False)],
     f"{_zdarzenia}")
+
+# ---- 18. WYCZYŚĆ POLE: czerwone mrugnięcie „wyczyszczone" --------------------
+# Życzenie właściciela 2026-09-12. Czerwień NIE znaczy tu „błąd", tylko
+# „wyczyszczone" — puste pole wygląda tak samo jak pole, w którym nic nie było,
+# więc mrugnięcie jest jedynym potwierdzeniem, jakie user dostaje.
+_mrugniecia = []
+tab.request_button_flash.connect(lambda a: _mrugniecia.append(a))
+tab.input_field.setText("cokolwiek do skasowania")
+tab._clear_input_field()
+spr(18, "wyczyszczenie pola ZGŁASZA mrugnięcie przycisku",
+    _mrugniecia == ["clear_input_btn"], f"{_mrugniecia}")
+
+# ⚠️ SZEW, o którym trzeba wiedzieć: powyżej sprawdzamy NADAWCĘ (zakładka zgłasza),
+# a niżej ODBIORCĘ (okno miga na czerwono). Sklejenie obu robi `_connect_agent_tab_signals`
+# i tego bramka NIE wykonuje (wymagałoby pełnego MainWindow), więc pytamy o nie źródłem —
+# inaczej obie połowy mogłyby być sprawne przy przerwanym kablu między nimi.
+spr("18b", "okno główne MA wpięty ten sygnał (inaczej nadawca woła w próżnię)",
+    "request_button_flash.connect" in _zrodlo_okna,
+    "wpięcie w main_window: %s" % (
+        "jest" if "request_button_flash.connect" in _zrodlo_okna else "BRAK"))
+
+MainWindow._flash_button(_atrapa, tab, "clear_input_btn",
+                         MainWindow._FLASH_COLORS["clear_input_btn"])
+_mrug = reguly(tab.clear_input_btn)
+spr("18c", 'mrugnięcie jest CZERWONE (nie zielone jak SKOPIOWANE)',
+    theme.DANGER.lower() in _mrug.get("", {}).get("border", "").lower()
+    and theme.SUCCESS.lower() not in _mrug.get("", {}).get("border", "").lower(),
+    f"{_mrug.get('', {}).get('border')}")
+
+spr("18d", "poza ramką wygląda jak zwykły przycisk",
+    _bez_ramki(_mrug.get("", {})) == _bez_ramki(_sas.get("", {})),
+    f"{_bez_ramki(_mrug.get('', {}))}")
+
+przeczekaj(0.6)
+spr("18e", "po pół sekundy wraca SAM — nie zostaje czerwony",
+    theme.DANGER.lower() not in reguly(tab.clear_input_btn).get("", {}).get("border", "").lower(),
+    f"po powrocie={reguly(tab.clear_input_btn).get('', {}).get('border')}")
 
 zle = wyniki.count(False)
 print(f"\n{'=' * 58}\nWYNIK: {wyniki.count(True)}/{len(wyniki)} OK, {zle} FAIL")

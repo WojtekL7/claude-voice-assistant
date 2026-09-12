@@ -1264,6 +1264,9 @@ class MainWindow(QMainWindow):
             lambda tab=agent_tab: self._repair_terminal_in_tab(tab))
         agent_tab.button_active_changed.connect(
             lambda attr, on, tab=agent_tab: self._set_button_active(tab, attr, on))
+        agent_tab.request_button_flash.connect(
+            lambda attr, tab=agent_tab: self._flash_button(
+                tab, attr, self._FLASH_COLORS.get(attr, theme.ACCENT)))
         agent_tab.request_search.connect(
             lambda tab=agent_tab: self._open_search_in_tab(tab))
         agent_tab.message_sent.connect(self._on_message_sent)
@@ -4374,28 +4377,45 @@ class MainWindow(QMainWindow):
 
         return chip
 
+    def _flash_button(self, tab, attr: str, color: str, ms: int = 500, po_powrocie=None):
+        """Rozświetl RAMKĘ przycisku na `ms` milisekund i wróć do normy.
+
+        JEDNO źródło migania dla całego paska: zielone „skopiowane" i czerwone
+        „wyczyszczone" chodzą tym samym kodem. Druga kopia tej logiki rozjechałaby
+        się przy najbliższej zmianie palety — dokładnie tak, jak rozjechały się
+        wcześniej trzy kopie wyglądu przycisku.
+
+        Migamy RAMKĄ, nie tłem: pełne wypełnienie akcentem znaczy „przycisk jest
+        W UŻYCIU" (patrz `_set_button_active`) i te dwa sygnały nie mogą się mylić.
+        """
+        button = getattr(tab, attr, None)
+        color_key = self._BUTTON_COLOR_KEYS.get(attr)
+        if button is None or color_key is None:
+            return
+        self._apply_button_icon_style(button, color_key, border_override=color)
+
+        def wroc_do_normy():
+            # ⚠️ Zakładkę można zamknąć W TRAKCIE błysku — wtedy widżet Qt już nie
+            # istnieje, a `singleShot` i tak wystrzeli. Bez tej osłony user dostaje
+            # wyjątek „wrapped C/C++ object has been deleted" za zamknięcie karty.
+            try:
+                self._apply_button_icon_style(button, color_key)
+                if po_powrocie is not None:
+                    po_powrocie()
+            except RuntimeError:
+                pass
+
+        QTimer.singleShot(ms, wroc_do_normy)
+
     def _flash_copy_success(self):
-        """Flash copy button green to indicate success."""
+        """Zielony błysk „SKOPIOWANE" — ptaszek + zielona ramka na pół sekundy."""
         tab = self._get_current_agent_tab()
         if not tab:
             return
-
-        # Zielony ptaszek + ZIELONA RAMKA na pół sekundy. Wygląd bierzemy ze
-        # wspólnego malarza i podmieniamy WYŁĄCZNIE barwę ramki — do 2026-09-12
-        # stał tu własny arkusz (przezroczyste tło, róg 12 px), czyli ten sam
-        # rozjazd co przy szybkich akcjach, tylko migający przez 500 ms.
         tab.copy_btn.setIcon(self._icon('copy', 'active'))
-        self._apply_button_icon_style(tab.copy_btn, 'icon_copy_color',
-                                      border_override=theme.SUCCESS)
-        # Reset after 500ms
-        QTimer.singleShot(500, self._reset_copy_style)
-
-    def _reset_copy_style(self):
-        """Reset copy button to default style."""
-        tab = self._get_current_agent_tab()
-        if tab:
-            tab.copy_btn.setIcon(self._icon('copy', 'normal'))
-            self._apply_button_icon_style(tab.copy_btn, 'icon_copy_color')
+        self._flash_button(
+            tab, 'copy_btn', theme.SUCCESS,
+            po_powrocie=lambda: tab.copy_btn.setIcon(self._icon('copy', 'normal')))
 
     def _toggle_pause(self):
         """Toggle TTS pause/resume."""
@@ -4628,22 +4648,36 @@ class MainWindow(QMainWindow):
         """Get icon for a button from skin_icons."""
         return self.skin_icons.get(button_name, {}).get(state, '?')
 
-    # Przyciski paska, które mają stan „W UŻYCIU" → klucz koloru ikony w skórce.
-    # Kopiuj NIE jest tu celowo: kopiowanie trwa ułamek sekundy, więc nie ma „podczas" —
-    # jego komunikatem zostaje zielony błysk („skopiowane"), niosący więcej niż „użyto".
-    _ACTIVE_BUTTON_COLOR_KEYS = {
+    # Przycisk paska → klucz koloru jego ikony w skórce. JEDNA mapa dla wszystkich
+    # mechanizmów (podświetlenie „w użyciu" i błyski), żeby nie rozjechały się dwie.
+    _BUTTON_COLOR_KEYS = {
+        'copy_btn': 'icon_copy_color',
+        'clear_input_btn': 'icon_clear_input_color',
         'add_media_btn': 'icon_add_media_color',
         'quick_actions_btn': 'icon_quick_actions_color',
         'mouse_mode_btn': 'icon_copy_color',
         'search_btn': 'icon_search_color',
     }
 
+    # Które przyciski mają STAN „w użyciu" (trwa tyle, ile używanie).
+    # ⛔ Kopiuj i Wyczyść pole są tu POMINIĘTE ŚWIADOMIE: obie akcje trwają ułamek
+    # sekundy, więc nie mają „podczas" — ich komunikatem jest BŁYSK, nie stan.
+    _BUTTONS_WITH_ACTIVE_STATE = frozenset({
+        'add_media_btn', 'quick_actions_btn', 'mouse_mode_btn', 'search_btn',
+    })
+
+    # Barwa błysku „zrobione" per przycisk. Czerwień przy czyszczeniu pola NIE znaczy
+    # „błąd" — znaczy „wyczyszczone"; nie zmieniaj jej na zieloną „dla spójności".
+    _FLASH_COLORS = {
+        'clear_input_btn': theme.DANGER,
+    }
+
     def _set_button_active(self, tab, attr: str, active: bool):
         """Podświetl przycisk paska na czas UŻYWANIA (albo zgaś po zakończeniu)."""
         button = getattr(tab, attr, None)
-        if button is None:
+        if button is None or attr not in self._BUTTONS_WITH_ACTIVE_STATE:
             return
-        color_key = self._ACTIVE_BUTTON_COLOR_KEYS.get(attr)
+        color_key = self._BUTTON_COLOR_KEYS.get(attr)
         if color_key is None:
             return
         self._apply_button_icon_style(button, color_key, active=active)

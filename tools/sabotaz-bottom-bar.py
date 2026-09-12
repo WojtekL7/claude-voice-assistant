@@ -16,7 +16,7 @@ Uzycie:  python3 tools/sabotaz-bottom-bar.py B1
          python3 tools/sabotaz-bottom-bar.py --kotwice
 
 SABOTAZ - WYNIKI ZMIERZONE (uruchomione 2026-09-12, NIE przewidziane).
-Zdrowy kod: 31 sprawdzen, 31 OK, 0 FAIL. Kazdy wariant: 31 WYKONANYCH (czyli
+Zdrowy kod: 37 sprawdzen, 37 OK, 0 FAIL. Kazdy wariant: 37 WYKONANYCH (czyli
 bramka ani razu nie urwala sie w polowie) i przywrocenie dowiedzione sha256.
   wariant | co popsute                                        | co padlo
   --------+---------------------------------------------------+--------------------
@@ -24,13 +24,17 @@ bramka ani razu nie urwala sie w polowie) i przywrocenie dowiedzione sha256.
   B2      | selektor wpisany na sztywno jako QPushButton       | 7, 10, 12
   B3      | zdjete ukrycie strzalki menu                       | 10
   B4      | zdjete wywolanie malarza dla szybkich akcji        | 7, 8, 9, 9b, 10, 12
-  B5      | powrot wlasnego arkusza zielonego blysku           | 13b
-  B6      | blysk gubi SYGNAL (ramka nie jest zielona)         | 13
+  B5      | powrot wlasnego arkusza zielonego blysku           | 13b, 13d
+  B6      | blysk gubi SYGNAL (ramka nie jest zielona)         | 13, 13c
   B7      | zdjety caly stan „w uzyciu"                        | 14, 14b
   B8      | ikona zostaje szara na fiolecie (znika)            | 14c
   B9      | mysz nie zglasza trybu zaznaczania                 | 16
   B10     | dodaj media nie gasnie po anulowaniu               | 17
   B11     | okno glowne znowu wpina menu wlasnym setMenu       | 15
+  B12     | wyczyszczenie pola nie zglasza mrugniecia          | 18
+  B13     | mrugniecie na ZIELONO zamiast czerwono            | 18c
+  B14     | blysk NIE WRACA sam (zostaje kolorowy na zawsze)  | 13d, 18e
+  B15     | zerwany kabel sygnalu mrugniecia (okno nie wpina) | 18b
 ⭐ B5 i B6 sa PARA i to jest celowe: B5 pilnuje, zeby stan chwilowy nie mial
    wlasnego wygladu, a B6 - zeby przy tym ujednoliceniu nie zgubic SYGNALU.
    Sam B5 przeszedlby tez nad blyskiem, ktory w ogole przestal byc zielony.
@@ -42,6 +46,15 @@ bramka ani razu nie urwala sie w polowie) i przywrocenie dowiedzione sha256.
    da sie zamknac „Anuluj" albo krzyzykiem, a bez `finally` przycisk zostalby
    fioletowy NA ZAWSZE i wygladalby na zepsuty. Dlatego bramka anuluje okno
    (podstawia puste okno), zamiast wybierac plik - sciezka „udalo sie" tego nie lapie.
+
+⭐ B14 pilnuje rzeczy, ktorej bramka do 2026-09-12 NIE SPRAWDZALA: powrot po blysku
+   wolala RECZNIE, wiec dowodzila, ze „da sie wrocic", a nie ze program wraca SAM.
+   Teraz bramka kreci prawdziwa petle zdarzen i czeka na zegar - dlatego B14
+   (zdjety `QTimer.singleShot`) zapala az dwie asercje, zielona i czerwona.
+
+⛔ KOTWICE B5 i B6 BYLY WIDMAMI przez jedna sesje - ich kod przeniesiono do
+   `_flash_button` i stary wzorzec przestal pasowac. Zglosil to tryb `--kotwice`,
+   nie czlowiek. Przy KAZDYM wyniesieniu kodu do wspolnej funkcji przelec kotwice.
 
 ⛔ CZEGO NAUCZYL SABOTAZ O SAMEJ BRAMCE (wart zapamietania):
    wariant B2 w PIERWSZYM przebiegu zapalil TYLKO [7] i [10] - asercje [8], [9]
@@ -63,7 +76,7 @@ REPO = Path(__file__).resolve().parent.parent
 OKNO = REPO / "src" / "gui" / "main_window.py"
 ZAKLADKA = REPO / "src" / "gui" / "agent_tab.py"
 BRAMKA = REPO / "tools" / "test-bottom-bar-icons.py"
-OCZEKIWANE = 31          # ile sprawdzen ma WYKONAC bramka na zdrowym kodzie
+OCZEKIWANE = 37          # ile sprawdzen ma WYKONAC bramka na zdrowym kodzie
 
 _VENV = REPO / "venv" / "bin" / "python"
 PYTHON = str(_VENV) if _VENV.exists() else sys.executable
@@ -107,9 +120,14 @@ WARIANTY = {
     "B4": (OKNO, "zdjete wywolanie malarza dla szybkich akcji (bialy kwadrat)",
            NOWE_WOLANIE,
            "            if False:\n                pass  # SABOTAZ"),
+    # ⚠️ B5 i B6 PRZECELOWANE 2026-09-12: po wyniesieniu migania do `_flash_button`
+    # ich stare kotwice przestaly pasowac i tryb `--kotwice` zglosil je jako WIDMA.
+    # Dokladnie po to ten tryb jest - wariant-widmo niczego nie psuje, wiec "nie
+    # wykryto" czytaloby sie jak dowod odpornosci kodu.
     "B5": (OKNO, "powrot wlasnego arkusza zielonego blysku (przezroczyste tlo, rog 12px)",
-           "        self._apply_button_icon_style(tab.copy_btn, 'icon_copy_color',\n"
-           "                                      border_override=theme.SUCCESS)",
+           "        self._flash_button(\n"
+           "            tab, 'copy_btn', theme.SUCCESS,\n"
+           "            po_powrocie=lambda: tab.copy_btn.setIcon(self._icon('copy', 'normal')))",
            '        tab.copy_btn.setStyleSheet(f"""\n'
            '            QPushButton {{\n'
            '                background-color: transparent;\n'
@@ -118,8 +136,8 @@ WARIANTY = {
            '            }}\n'
            '        """)'),
     "B6": (OKNO, "blysk gubi SYGNAL - ramka zwyczajna zamiast zielonej",
-           "                                      border_override=theme.SUCCESS)",
-           "                                      border_override=None)"),
+           "            tab, 'copy_btn', theme.SUCCESS,",
+           "            tab, 'copy_btn', theme.BORDER,"),
     # --- stan „W UZYCIU" (fiolet trwa tyle, ile trwa uzywanie) ---
     "B7": (OKNO, "zdjety caly stan aktywny - przycisk w uzyciu wyglada jak w spoczynku",
            "        if active:",
@@ -136,6 +154,19 @@ WARIANTY = {
     "B11": (OKNO, "okno glowne znowu wpina menu wlasnym setMenu (traci sygnaly)",
             "                tab._attach_quick_menu(menu)",
             "                tab.quick_actions_btn.setMenu(menu)"),
+    # --- blysk „zrobione" (zielony po skopiowaniu, czerwony po wyczyszczeniu) ---
+    "B12": (ZAKLADKA, "wyczyszczenie pola nie zglasza mrugniecia (brak potwierdzenia)",
+            "        self.request_button_flash.emit('clear_input_btn')",
+            "        pass  # SABOTAZ"),
+    "B13": (OKNO, "mrugniecie po wyczyszczeniu na ZIELONO zamiast czerwono",
+            "        'clear_input_btn': theme.DANGER,",
+            "        'clear_input_btn': theme.SUCCESS,"),
+    "B14": (OKNO, "blysk NIE WRACA sam - przycisk zostaje kolorowy na zawsze",
+            "        QTimer.singleShot(ms, wroc_do_normy)",
+            "        pass  # SABOTAZ"),
+    "B15": (OKNO, "zerwany kabel: okno nie wpina sygnalu mrugniecia",
+            "        agent_tab.request_button_flash.connect(",
+            "        _ = (lambda *a: None)("),
 }
 
 
