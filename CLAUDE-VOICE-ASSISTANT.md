@@ -426,15 +426,46 @@ Rozmowa z Claude idzie przez CLI (nie HTTP) → bramka jej nie łapie i nie musi
 ⚠️ NIE mylić z osobną apką „Voice Assistant" (repo `voice-assistant`) — inny projekt, inny klucz.
 ⭐ **Obie potrafią chodzić JEDNOCZEŚNIE i na liście procesów wyglądają identycznie** (`python3 src/main.py`). Rozstrzyga KATALOG ROBOCZY, nie nazwa: `readlink /proc/<pid>/cwd` — VCA ma `claude-voice-assistant`, tamta `Voice Assistant` (ze spacją). Przy diagnozie sprawdź też `tr "\0" "\n" < /proc/<pid>/environ | grep CVA_`, żeby wiedzieć, KTÓRY silnik terminala działa. (2026-09-11: wziąłem cudzy proces za betę VCA.)
 
-⏳ **DO ZROBIENIA — przepiąć dyktowanie na ZADANIE `task/transcribe` (zgłoszone przez AI Managera 2026-09-07).**
-Dziś `STT_MODEL = "groq/whisper-large-v3"` (`src/config.py:391`), czyli wołamy model **PO NAZWIE** — bramka
-rotuje wtedy wyłącznie między dwoma kontami **tego samego dostawcy**, więc awaria Groqa = dyktowanie martwe
-bez zejścia. `task/transcribe` daje trzy kroki u **dwóch** dostawców (groq → cloudflare → groq).
-Zmierzone u nich: **1361 z 1361 naszych wywołań poszło bez zadania**; to nie nasz błąd — podłączyliśmy się
-2026-07-13, a system zadań powstał 26.07. Zmiana to **jedna linia**, `STT_API_URL` zostaje bez zmian.
-📄 **Instrukcja krok po kroku — JEDNO ŹRÓDŁO, świadomie BEZ kopii tutaj (dwie kopie się rozjadą):**
-`~/Projekty/AI Manager/docs/KONTRAKT-VCA-ZADANIA.md`
-⚠️ Uczciwie: dziś nic nie pada (30 dni, 513 wywołań, wszystkie 200) — to ryzyko uśpione, nie awaria.
-⛔ Uwaga na jedną pułapkę z kontraktu: **żaden nasz test nie sprawdza dziś, jaki model wychodzi na sieć**
-(`tools/test-dictation.py` nie ma takiej asercji), więc po zmianie NIC się nie zaczerwieni — i nic nie obroni
-tej poprawki przed cofnięciem przy refaktorze. Asercję trzeba dopisać i potwierdzić sabotażem.
+✅ **ZROBIONE 2026-09-12 W KODZIE — dyktowanie woła ZADANIE `task/transcribe`** (`9b5729b`).
+Wcześniej wołaliśmy model PO NAZWIE, więc bramka rotowała tylko między dwoma kontami TEGO SAMEGO
+dostawcy — awaria Groqa = dyktowanie martwe bez zejścia. Zmiana to była jedna linia; `STT_API_URL`,
+brak pola `language`, klucz id=3 i zakaz własnego łańcucha zapasowego zostały BEZ ZMIAN (§4 kontraktu).
+📄 Kontrakt (ich źródło): `~/Projekty/AI Manager/docs/KONTRAKT-VCA-ZADANIA.md` ·
+📄 nasza zwrotka (nasze źródło): `docs/ZWROTKA-AI-MANAGER-TRANSCRIBE.md`
+
+⛔ **STAN JEST POŚREDNI — nie czytaj tego jako „działa u usera":**
+| gdzie | co woła |
+|---|---|
+| kod w repo | ✅ `task/transcribe` |
+| **beta na której pracuje właściciel** | ❌ stary proces, konfiguracja wczytana przy starcie — **do restartu nic się nie zmienia** |
+| **wydana paczka 1.0.29** | ❌ nadal `groq/whisper-large-v3` |
+
+🔴 **RESTART BETY WSTRZYMANY ŚWIADOMIE — to nie zaniedbanie, tylko decyzja.** Pomiar AI Managera
+(2026-09-12) obalił nasze własne, zbyt łagodne brzmienie („2,2 punktu na jednym nagraniu"):
+**VCA chodzi DZIŚ na PEŁNYM `whisper-large-v3`** (363 wywołania / 30 dni, 751 ms), a łańcuch ma
+na czele **turbo** — czyli przepięcie w dzisiejszym układzie to **zejście na gorszy model**, dokładnie
+w rzeczy, którą tydzień temu naprawialiśmy (nasz pomiar: pełny 97,4% vs turbo 95,2%).
+⏳ **Czekamy na decyzję właściciela AI Managera o kolejności kroków** (nasza prośba wysłana, ich
+rekomendacja POZYTYWNA; koszt przestawienia zmierzony u nich: +250–300 ms). ⚠️ `task/transcribe`
+ma DRUGIEGO konsumenta — CRM (klucz id=45) — więc to nie jest decyzja „tylko o nas".
+**Gdy odpowiedzą:** „przestawiamy" → restart bety daje siatkę BEZ utraty jakości · „zostaje turbo" →
+decyzja właściciela VCA: przyjąć gorsze rozpoznanie za siatkę, czy cofnąć jedną linię.
+
+⭐ **DOWÓD ZE SKUTKU (nie z kodu), zmierzony na żywej bramce — nie powtarzaj tej sondy:**
+`model=task/transcribe` → `200`, `x-aim-task: transcribe`, `x-aim-model: groq/whisper-large-v3-turbo`,
+treść kompletna · kontrola przeciwna `task/nie-istnieje` → **`400`** z listą zadań i zerem nagłówków
+`x-aim-*` (§5.4 kontraktu ZAMKNIĘTY: nie ma cichej podmiany). AI Manager potwierdził ten strzał
+u siebie co do znaku. Nagranie kontrolne robi się w 10 s przez edge-tts — nie trzeba prosić usera o dyktowanie.
+
+⛔ **ASERCJA „wysłany model == stała z konfiguracji" NIE CHRONI PRZED COFNIĘCIEM — potrzebne są DWIE.**
+Zmierzone sabotażem (`tools/sabotaz-dictation-fix.py S12`): cofnięcie przepięcia zapaliło **tylko F7**
+(„ma zaczynać się od `task/`"), a **F6 przeszło**, bo porównuje stałą samą ze sobą — przy cofnięciu
+konfiguracji obie strony porównania przesuwają się razem. F6 dowodzi wyłącznie, że wartość DOJEŻDŻA
+na sieć. **Nie kasuj żadnej jako duplikatu.** Wynik: 1 padło / **50 wykonanych** (tyle samo co na
+zdrowym kodzie, czyli bramka nie urwała się w połowie). Bramka: `tools/test-dictation.py` 50/50.
+
+⚠️ **Druga nasza droga na bramkę NADAL woła po nazwie modelu i tak MA ZOSTAĆ:**
+`STT_FIX_MODEL = "gemini/gemini-3.5-flash-lite"` (poprawianie transkrypcji, `/v1/chat/completions`).
+Model wybrany POMIAREM — inne kandydaty PRZEPISYWAŁY wypowiedź użytkownika, a bezpiecznik długości
+tego nie łapie (parafraza ma WYŻSZE podobieństwo niż wierny wynik). AI Manager przyjął to
+i **zapisał u siebie jako powód, nie jako dług**. Nie przepinaj bez zadania dobranego pod WIERNOŚĆ.
