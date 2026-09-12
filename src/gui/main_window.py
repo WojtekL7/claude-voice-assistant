@@ -4367,15 +4367,13 @@ class MainWindow(QMainWindow):
         if not tab:
             return
 
-        # Change to green checkmark icon + green border
+        # Zielony ptaszek + ZIELONA RAMKA na pół sekundy. Wygląd bierzemy ze
+        # wspólnego malarza i podmieniamy WYŁĄCZNIE barwę ramki — do 2026-09-12
+        # stał tu własny arkusz (przezroczyste tło, róg 12 px), czyli ten sam
+        # rozjazd co przy szybkich akcjach, tylko migający przez 500 ms.
         tab.copy_btn.setIcon(self._icon('copy', 'active'))
-        tab.copy_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: transparent;
-                border: 2px solid {theme.SUCCESS};
-                border-radius: 12px;
-            }}
-        """)
+        self._apply_button_icon_style(tab.copy_btn, 'icon_copy_color',
+                                      border_override=theme.SUCCESS)
         # Reset after 500ms
         QTimer.singleShot(500, self._reset_copy_style)
 
@@ -4617,7 +4615,8 @@ class MainWindow(QMainWindow):
         """Get icon for a button from skin_icons."""
         return self.skin_icons.get(button_name, {}).get(state, '?')
 
-    def _apply_button_icon_style(self, button, color_key: str, font_size: int = 22, with_disabled: bool = False):
+    def _apply_button_icon_style(self, button, color_key: str, font_size: int = 22,
+                                 with_disabled: bool = False, border_override: str = None):
         """Apply transparent style with colored icon to a button.
 
         Args:
@@ -4625,6 +4624,11 @@ class MainWindow(QMainWindow):
             color_key: Key in skin_colors for icon color (e.g., 'icon_dictate_color')
             font_size: Font size for the icon
             with_disabled: If True, add :disabled pseudo-selector styling
+            border_override: barwa ramki na czas SYGNAŁU (np. zielony błysk po
+                skopiowaniu). Reszta wyglądu zostaje wspólna — dzięki temu stan
+                chwilowy nie jest OSOBNYM arkuszem, który po cichu się rozjedzie.
+                Zgodnie z konwencją projektu: skórka rządzi SPOCZYNKIEM, kod niesie
+                STAN, więc barwa sygnału przychodzi z kodu, nie z klucza skórki.
 
         ⛔ SELEKTOR BIERZEMY Z KLASY WIDŻETU, NIE WPISUJEMY „QPushButton" NA SZTYWNO.
         Reguła `QPushButton {…}` na QToolButtonie NIE DOPASOWUJE SIĘ — Qt nie zgłasza
@@ -4640,7 +4644,7 @@ class MainWindow(QMainWindow):
         z SĄSIADEM, nie z wpisanymi na sztywno kolorami (kolory są pokrętłem skórki).
         """
         icon_color = self.skin_colors.get(color_key, theme.TEXT_DIM)
-        border_color = self.skin_colors.get('border_color', theme.BORDER)
+        border_color = border_override or self.skin_colors.get('border_color', theme.BORDER)
         surface = self.skin_colors.get('button_bg', theme.SURFACE)
 
         # „QPushButton" / „QToolButton" — nazwa klasy widżetu, tak jak widzi ją QSS.

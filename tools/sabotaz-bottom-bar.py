@@ -16,7 +16,7 @@ Uzycie:  python3 tools/sabotaz-bottom-bar.py B1
          python3 tools/sabotaz-bottom-bar.py --kotwice
 
 SABOTAZ - WYNIKI ZMIERZONE (uruchomione 2026-09-12, NIE przewidziane).
-Zdrowy kod: 20 sprawdzen, 20 OK, 0 FAIL. Kazdy wariant: 20 WYKONANYCH (czyli
+Zdrowy kod: 23 sprawdzen, 23 OK, 0 FAIL. Kazdy wariant: 23 WYKONANYCH (czyli
 bramka ani razu nie urwala sie w polowie) i przywrocenie dowiedzione sha256.
   wariant | co popsute                                        | co padlo
   --------+---------------------------------------------------+--------------------
@@ -24,6 +24,11 @@ bramka ani razu nie urwala sie w polowie) i przywrocenie dowiedzione sha256.
   B2      | selektor wpisany na sztywno jako QPushButton       | 7, 10, 12
   B3      | zdjete ukrycie strzalki menu                       | 10
   B4      | zdjete wywolanie malarza dla szybkich akcji        | 7, 8, 9, 9b, 10, 12
+  B5      | powrot wlasnego arkusza zielonego blysku           | 13b
+  B6      | blysk gubi SYGNAL (ramka nie jest zielona)         | 13
+⭐ B5 i B6 sa PARA i to jest celowe: B5 pilnuje, zeby stan chwilowy nie mial
+   wlasnego wygladu, a B6 - zeby przy tym ujednoliceniu nie zgubic SYGNALU.
+   Sam B5 przeszedlby tez nad blyskiem, ktory w ogole przestal byc zielony.
 
 ⛔ CZEGO NAUCZYL SABOTAZ O SAMEJ BRAMCE (wart zapamietania):
    wariant B2 w PIERWSZYM przebiegu zapalil TYLKO [7] i [10] - asercje [8], [9]
@@ -44,7 +49,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 OKNO = REPO / "src" / "gui" / "main_window.py"
 BRAMKA = REPO / "tools" / "test-bottom-bar-icons.py"
-OCZEKIWANE = 20          # ile sprawdzen ma WYKONAC bramka na zdrowym kodzie
+OCZEKIWANE = 23          # ile sprawdzen ma WYKONAC bramka na zdrowym kodzie
 
 _VENV = REPO / "venv" / "bin" / "python"
 PYTHON = str(_VENV) if _VENV.exists() else sys.executable
@@ -88,6 +93,19 @@ WARIANTY = {
     "B4": (OKNO, "zdjete wywolanie malarza dla szybkich akcji (bialy kwadrat)",
            NOWE_WOLANIE,
            "            if False:\n                pass  # SABOTAZ"),
+    "B5": (OKNO, "powrot wlasnego arkusza zielonego blysku (przezroczyste tlo, rog 12px)",
+           "        self._apply_button_icon_style(tab.copy_btn, 'icon_copy_color',\n"
+           "                                      border_override=theme.SUCCESS)",
+           '        tab.copy_btn.setStyleSheet(f"""\n'
+           '            QPushButton {{\n'
+           '                background-color: transparent;\n'
+           '                border: 2px solid {theme.SUCCESS};\n'
+           '                border-radius: 12px;\n'
+           '            }}\n'
+           '        """)'),
+    "B6": (OKNO, "blysk gubi SYGNAL - ramka zwyczajna zamiast zielonej",
+           "                                      border_override=theme.SUCCESS)",
+           "                                      border_override=None)"),
 }
 
 

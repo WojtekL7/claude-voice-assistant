@@ -286,6 +286,36 @@ for _nr, _btn, _opis in (("12", tab.quick_actions_btn, "szybkie akcje"),
         klasy_arkusza(_btn) == {_wlasna},
         f"w arkuszu {sorted(klasy_arkusza(_btn))}, widżet to {_wlasna}")
 
+# ---- 13. ZIELONY BŁYSK po skopiowaniu — sygnał TAK, własny wygląd NIE --------
+# Ten sam rozjazd co przy szybkich akcjach, tylko migał przez 500 ms: własny
+# arkusz z przezroczystym tłem i rogiem 12 px. Sygnał (zielona ramka) ZOSTAJE —
+# konwencja projektu mówi, że skórka rządzi spoczynkiem, a kod niesie stan.
+# Zmienia się tylko to, że reszta wyglądu pochodzi ze WSPÓLNEGO malarza.
+_atrapa = Atrapa(tab)
+_atrapa._icon = lambda *a, **k: tab.copy_btn.icon()     # błysk podmienia też ikonę
+_atrapa._get_current_agent_tab = lambda: tab
+# Błysk planuje powrót przez QTimer — atrapa musi mieć tę metodę, żeby produkcyjny
+# kod przeszedł do końca. Timer i tak nie wystrzeli: w bramce nie ma pętli zdarzeń,
+# więc powrót wołamy niżej RĘCZNIE (i dzięki temu możemy go sprawdzić osobno).
+_atrapa._reset_copy_style = lambda: MainWindow._reset_copy_style(_atrapa)
+MainWindow._flash_copy_success(_atrapa)
+_blysk = reguly(tab.copy_btn)
+
+spr(13, "błysk NIESIE SYGNAŁ: ramka jest zielona, nie zwyczajna",
+    theme.SUCCESS.lower() in _blysk.get("", {}).get("border", "").lower(),
+    f"{_blysk.get('', {}).get('border')}")
+
+_bez_ramki = lambda d: {k: v for k, v in d.items() if k not in ("border", "color")}
+spr("13b", "poza ramką błysk wygląda jak zwykły przycisk (tło, róg, wielkość)",
+    _bez_ramki(_blysk.get("", {})) == _bez_ramki(_sas.get("", {})),
+    f"błysk={_bez_ramki(_blysk.get('', {}))} vs sąsiad={_bez_ramki(_sas.get('', {}))}")
+
+MainWindow._reset_copy_style(_atrapa)
+spr("13c", "KONTROLA ODWROTNA: po błysku przycisk wraca do wyglądu sąsiada",
+    _bez_ramki(reguly(tab.copy_btn).get("", {})) == _bez_ramki(_sas.get("", {}))
+    and theme.SUCCESS.lower() not in reguly(tab.copy_btn).get("", {}).get("border", "").lower(),
+    f"po powrocie={reguly(tab.copy_btn).get('', {})}")
+
 zle = wyniki.count(False)
 print(f"\n{'=' * 58}\nWYNIK: {wyniki.count(True)}/{len(wyniki)} OK, {zle} FAIL")
 sys.exit(1 if zle else 0)
