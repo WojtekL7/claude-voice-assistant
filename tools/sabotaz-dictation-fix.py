@@ -24,7 +24,13 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 SILNIK = REPO / "src" / "core" / "stt_engine.py"
 OKNO = REPO / "src" / "gui" / "main_window.py"
+CONFIG = REPO / "src" / "config.py"
 BRAMKA = REPO / "tools" / "test-dictation-fix.py"
+BRAMKA_STT = REPO / "tools" / "test-dictation.py"
+# Ile sprawdzen ma WYKONAC domyslna bramka na zdrowym kodzie. Liczba jest tu po to,
+# zeby odroznic „nic nie padlo, bo kod odporny" od „bramka urwala sie w polowie" —
+# bez niej oba wygladaja identycznie po odfiltrowaniu wyjscia.
+OCZEKIWANE = 30
 
 _VENV = REPO / "venv" / "bin" / "python"
 PYTHON = str(_VENV) if _VENV.exists() else sys.executable
@@ -65,6 +71,13 @@ WARIANTY = {
                   "(sprawdza, czy asercja na zrodle wystarcza)",
             "            if cursor.hasSelection():",
             "            if False:"),
+    # Wariant psujacy INNA funkcje niz reszta pliku, wiec ma WLASNA bramke:
+    # przepiecie dyktowania na zadanie pilnuje `test-dictation.py`, nie `-fix`.
+    "S12": (CONFIG, "cofniete przepiecie na zadanie — wolanie po NAZWIE MODELU "
+                    "(bramka rotuje wtedy tylko miedzy kontami jednego dostawcy)",
+            'STT_MODEL = "task/transcribe"',
+            'STT_MODEL = "groq/whisper-large-v3"',
+            BRAMKA_STT, 50),
 }
 
 
@@ -82,7 +95,8 @@ def sprawdz_kotwice():
     CICHO — wariant-widmo niczego nie psuje, wiec 'nie wykryto' czyta sie jak dziura
     w tescie albo, gorzej, jak dowod odpornosci kodu."""
     zle = 0
-    for nazwa, (plik, opis, szukane, _) in sorted(WARIANTY.items(), key=lambda x: int(x[0][1:])):
+    for nazwa, dane in sorted(WARIANTY.items(), key=lambda x: int(x[0][1:])):
+        plik, opis, szukane = dane[0], dane[1], dane[2]
         n = plik.read_text(encoding="utf-8").count(szukane)
         if n != 1:
             zle += 1
@@ -93,7 +107,11 @@ def sprawdz_kotwice():
 
 
 def uruchom(wariant):
-    plik, opis, szukane, zamiennik = WARIANTY[wariant]
+    dane = WARIANTY[wariant]
+    plik, opis, szukane, zamiennik = dane[0], dane[1], dane[2], dane[3]
+    # Wariant moze wskazac WLASNA bramke (psuje inna funkcje niz reszta pliku).
+    bramka = dane[4] if len(dane) > 4 else BRAMKA
+    oczekiwane = dane[5] if len(dane) > 5 else OCZEKIWANE
     oryginal = plik.read_text(encoding="utf-8")
     sha_przed = sha(plik)
     if oryginal.count(szukane) != 1:
@@ -108,7 +126,8 @@ def uruchom(wariant):
         plik.write_text(zepsuty, encoding="utf-8")
         wyczysc_cache()
         print("=== SABOTAZ %s (%s): %s ===" % (wariant, plik.name, opis))
-        r = subprocess.run([PYTHON, "-B", str(BRAMKA)],
+        print("    bramka: %s" % bramka.name)
+        r = subprocess.run([PYTHON, "-B", str(bramka)],
                            capture_output=True, text=True, timeout=300, cwd=str(REPO))
         wyjscie = r.stdout + r.stderr
         padly = wyjscie.count("[FAIL]")
@@ -117,9 +136,9 @@ def uruchom(wariant):
                  for l in wyjscie.splitlines() if l.startswith("[FAIL]")]
         print("PADLYCH: %d  WYKONANYCH: %d  kod=%d  -> %s"
               % (padly, wykonane, r.returncode, ", ".join(nazwy) if nazwy else "(nic)"))
-        if wykonane != 30:
-            print(">>> UWAGA: bramka NIE DOBIEGLA DO KONCA (%d z 30) — "
-                  "wynik nie mowi nic o asercjach" % wykonane)
+        if wykonane != oczekiwane:
+            print(">>> UWAGA: bramka NIE DOBIEGLA DO KONCA (%d z %d) — "
+                  "wynik nie mowi nic o asercjach" % (wykonane, oczekiwane))
         if padly == 0:
             print(">>> UWAGA: bramka NIC nie wykryla — nie chroni przed tym bledem")
         return 0

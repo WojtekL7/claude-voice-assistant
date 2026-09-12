@@ -388,7 +388,15 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 # Klucz = klucz aplikacji „Voice Assistant" z panelu AI Managera (zaczyna się od
 # „aim-…"), wpisywany w Ustawieniach (przechowywany jak dotąd pod groq_api_key).
 STT_API_URL = "https://ai.srv1251441.hstgr.cloud/v1/audio/transcriptions"
-STT_MODEL = "groq/whisper-large-v3"          # bramka wymaga przedrostka „groq/"
+# ⛔ NIE zamieniaj tego z powrotem na nazwe modelu („groq/whisper-large-v3").
+# Wolanie po NAZWIE MODELU kaze bramce rotowac wylacznie miedzy kontami JEDNEGO
+# dostawcy — awaria Groqa = dyktowanie martwe, bez zejscia. ZADANIE „task/…" daje
+# lancuch u DWOCH dostawcow (groq → cloudflare → groq). Kontrakt i pomiary:
+# ~/Projekty/AI Manager/docs/KONTRAKT-VCA-ZADANIA.md (2026-09-07).
+# ⚠️ Sklad lancucha zmienia sie u NICH z panelu — nie wpisuj go tutaj na sztywno;
+#    aktualny stan czytaj z `GET /v1/tasks` (pole `chain`).
+# Pilnuje tego `tools/test-dictation.py` (sekcja F6/F7) — sabotaz potwierdzony.
+STT_MODEL = "task/transcribe"                # zadanie, NIE nazwa modelu (patrz wyzej)
 STT_LANGUAGE_DEFAULT = "auto"                # „auto" = nie wysyłaj pola language (bramka sama wykrywa)
 
 # ── POPRAWIANIE TRANSKRYPCJI PO FAKCIE (2026-09-11) ──────────────────────────

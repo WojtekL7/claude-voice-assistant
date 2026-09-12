@@ -21,8 +21,8 @@ CO SIĘ WTEDY STAŁO (ustalone pomiarem, nie domysłem):
 Uruchomienie:  python3 -B tools/test-dictation.py
 
 SABOTAZ - WYNIKI ZMIERZONE (uruchomione 2026-08-29, nie przewidziane).
-Zdrowy kod: 48 sprawdzen, 48 OK, 0 FAIL. Kazdy wariant przywracany z pamieci
-procesu, przywrocenie dowiedzione sha256.
+Zdrowy kod: 50 sprawdzen, 50 OK, 0 FAIL (48 do 2026-09-12, potem doszly F6/F7).
+Kazdy wariant przywracany z pamieci procesu, przywrocenie dowiedzione sha256.
 
   wariant                | co popsute                              | co padlo
   -----------------------+-----------------------------------------+---------------
@@ -35,6 +35,16 @@ procesu, przywrocenie dowiedzione sha256.
   zargon                 | surowy blad requests leci do usera       | G1, G2
   pusto-cisza            | pusta odpowiedz bramki znowu milczy      | G4
   nigdy-zakleszczone     | is_stuck() zawsze False                  | E2
+  S12 (2026-09-12)       | cofniete przepiecie na `task/transcribe`  | F7
+       ^ `tools/sabotaz-dictation-fix.py S12` — ZMIERZONE: 1 padlo, 50 WYKONANYCH
+         (tyle samo co na zdrowym kodzie, wiec bramka nie urwala sie w polowie).
+
+⚠️ DRUGA NAUKA SABOTAZU, swiezsza: wariant S12 NIE zapalil F6, tylko F7 — i tak
+   ma byc. F6 porownuje wyslany model z ta sama stala `config.STT_MODEL`, wiec
+   przy cofnieciu konfiguracji obie strony porownania przesuwaja sie RAZEM
+   i asercja przechodzi. Dowodzi ona wylacznie, ze wartosc DOJEZDZA na siec.
+   Cofniecie lapie dopiero F7, ktore pyta o REGULE („to ma byc zadanie").
+   Nie kasuj zadnej z nich jako „duplikatu" — pilnuja roznych rzeczy.
 
 ⚠️ CZEGO NAUCZYL SABOTAZ O TEJ BRAMCE: wariant 'wyciek-klucza' PIERWOTNIE nie
    zapalil C1, tylko przypadkiem B5 — bo C1 badal okno logu, w ktorym klucz nie
@@ -296,6 +306,23 @@ sprawdz("F4 wysylka idzie pod adres bramki z konfiguracji",
         zlapane.get("url") == config.STT_API_URL)
 sprawdz("F5 odpowiedz jest odnotowana w dzienniku (kod + czas)",
         "ODPOWIEDZ: kod=200" in tresc_logu())
+
+# ── PRZEPIECIE NA ZADANIE `task/transcribe` (2026-09-12) ─────────────────────
+# Do tego dnia ZADNA bramka nie sprawdzala, jaki model wychodzi na siec
+# (`grep STT_MODEL tools/` = 0 trafien) — wiec cofniecie przepiecia przy
+# refaktorze nie mialoby ZADNEGO objawu: dyktowanie dziala dalej, tylko bez
+# siatki u drugiego dostawcy. Potrzebne sa OBIE asercje ponizej:
+#   F6 sam w sobie NIE wystarcza — porownuje wyslana wartosc z ta sama stala,
+#      wiec przy cofnieciu konfiguracji obie strony przesuwaja sie razem i test
+#      przechodzi (klasyk „asercja porownuje stala sama ze soba");
+#   F7 pyta o REGULE („to ma byc zadanie, nie nazwa modelu") i to ona lapie
+#      cofniecie. Razem: F6 dowodzi, ze wartosc DOJEZDZA, F7 — ze jest wlasciwa.
+sprawdz("F6 model z konfiguracji DOJEZDZA do wysylki (nie ufamy stalej)",
+        (zlapane.get("data") or {}).get("model") == config.STT_MODEL,
+        f"wyslano={(zlapane.get('data') or {}).get('model')!r}")
+sprawdz("F7 dyktowanie woła ZADANIE, nie nazwe modelu (siatka u 2 dostawcow)",
+        str(config.STT_MODEL).startswith("task/"),
+        f"STT_MODEL={config.STT_MODEL!r}")
 
 # ============================================================================
 print("\n=== G. BLAD SIECI mowi po ludzku, nie zargonem biblioteki ===")
