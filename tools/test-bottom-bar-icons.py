@@ -201,6 +201,91 @@ spr(5, "tło lupy zgadza się z sąsiednim przyciskiem", abs(po - sasiad) <= 6,
 spr(6, "KONTROLA NEGATYWNA: bez stylowania tło JEST jasne (miara odróżnia)",
     przed > 200, f"jasność bez stylu={przed}")
 
+# ---- 7-11. SZYBKIE AKCJE wyglądają i ZACHOWUJĄ SIĘ jak sąsiedzi -------------
+# Zgłoszenie właściciela 2026-09-12: „jest inny niż pozostałe, inaczej się
+# zachowuje, jak na niego najadę". Przyczyna: to JEDYNY QToolButton na pasku
+# (rozwija menu), a wspólna reguła mówiła `QPushButton {…}` i po prostu go
+# OMIJAŁA — Qt nie zgłasza wtedy błędu. Dostał więc własny, ręczny arkusz,
+# który rozjechał się z resztą (tło przezroczyste, róg 12 zamiast 10, ikona 20
+# zamiast 22, a po najechaniu zalewało się tło zamiast rozświetlić ramkę).
+#
+# ⚠️ Porównujemy z SĄSIADEM, nie z wpisanymi na sztywno kolorami: paleta jest
+# pokrętłem właściciela w skórce, więc test pilnujący konkretnych hexów
+# zapaliłby się na czerwono w dniu, w którym zmieni sobie skórkę.
+
+
+def reguly(widget):
+    """Arkusz widżetu → {stan: {własność: wartość}}.
+
+    Nazwę klasy ZDEJMUJEMY (`QToolButton:hover` → `:hover`), bo zestawiamy ze
+    sobą dwa różne klocki Qt — pytamy o WYGLĄD, nie o nazwę klasy.
+    """
+    out = {}
+    for blok in _re.finditer(r'([A-Za-z]+Button(?:::?[a-z-]+)?)\s*\{([^}]*)\}',
+                             widget.styleSheet()):
+        stan = blok.group(1).split("Button", 1)[1]
+        out[stan] = {k.strip(): v.strip()
+                     for k, v in (l.split(":", 1) for l in blok.group(2).split(";")
+                                  if ":" in l)}
+    return out
+
+
+_qa = reguly(tab.quick_actions_btn)
+_sas = reguly(tab.add_media_btn)          # dowolny sąsiad z tego samego malarza
+
+jasn_qa = jasnosc_tla(tab.quick_actions_btn)
+print(f"jasność tła szybkich akcji={jasn_qa}, sąsiad (dodaj plik)={jasnosc_tla(tab.add_media_btn)}\n")
+
+spr(7, "tło szybkich akcji zgadza się z sąsiednim przyciskiem (piksele)",
+    abs(jasn_qa - jasnosc_tla(tab.add_media_btn)) <= 6,
+    f"szybkie={jasn_qa} sąsiad={jasnosc_tla(tab.add_media_btn)}")
+
+# `color` (barwa samej ikonki) MA prawo się różnić — każdy przycisk ma własny
+# klucz w skórce. Reszta wyglądu spoczynkowego ma być identyczna.
+_poza_ikona = lambda d: {k: v for k, v in d.items() if k != "color"}
+spr(8, "spoczynek: tło, ramka, zaokrąglenie i wielkość — jak u sąsiada",
+    _poza_ikona(_qa.get("", {})) == _poza_ikona(_sas.get("", {})),
+    f"szybkie={_poza_ikona(_qa.get('', {}))} vs sąsiad={_poza_ikona(_sas.get('', {}))}")
+
+spr(9, "po najechaniu zachowuje się jak sąsiad (to samo tło I ta sama ramka)",
+    _qa.get(":hover") == _sas.get(":hover") and _qa.get(":hover"),
+    f"szybkie={_qa.get(':hover')} vs sąsiad={_sas.get(':hover')}")
+
+# To jest DOKŁADNIE to, co widział właściciel: u sąsiadów ramka zapala się
+# akcentem, a szybkim akcjom zostawała martwa. Asercja trzyma REGUŁĘ (ramka
+# zmienia się po najechaniu), nie konkretny fiolet.
+spr("9b", "...czyli ramka po najechaniu JEST inna niż w spoczynku",
+    _qa.get(":hover", {}).get("border") not in (None, _qa.get("", {}).get("border")),
+    f"spoczynek={_qa.get('', {}).get('border')} hover={_qa.get(':hover', {}).get('border')}")
+
+spr(10, "strzałka rozwijania menu pozostaje UKRYTA (inaczej odstaje w drugą stronę)",
+    _qa.get("::menu-indicator", {}).get("image") == "none",
+    f"{_qa.get('::menu-indicator')}")
+
+spr(11, "KONTROLA ODWROTNA: sąsiad (QPushButton) NIE dostaje reguły menu",
+    "::menu-indicator" not in _sas,
+    f"{list(_sas.keys())}")
+
+
+# ⛔ ŚLEPA PLAMA ASERCJI 8 i 9, ZMIERZONA SABOTAŻEM — nie usuwaj tej asercji.
+# 8 i 9 porównują ZAPISANY arkusz i celowo zdejmują z selektora nazwę klasy
+# (żeby dało się zestawić QToolButton z QPushButtonem). Skutkiem ubocznym są
+# ŚLEPE na najgroźniejszy błąd z tej rodziny: arkusz napisany dla CUDZEJ klasy.
+# Qt taką regułę po prostu IGNORUJE — bez błędu, bez śladu — a 8/9/9b dalej
+# świecą na zielono, bo tekst się zgadza. Zmierzone: sabotaż wpisujący selektor
+# „QPushButton" na sztywno zapalił tylko [7] i [10]; [8], [9] i [9b] przeszły.
+def klasy_arkusza(widget):
+    return {m.group(1) for m in _re.finditer(r'([A-Za-z]+Button)(?:::?[a-z-]+)?\s*\{',
+                                             widget.styleSheet())}
+
+
+for _nr, _btn, _opis in (("12", tab.quick_actions_btn, "szybkie akcje"),
+                         ("12b", tab.add_media_btn, "sąsiad (kontrola odwrotna)")):
+    _wlasna = _btn.metaObject().className()
+    spr(_nr, f"arkusz {_opis} jest napisany dla JEGO klasy (inaczej Qt go zignoruje)",
+        klasy_arkusza(_btn) == {_wlasna},
+        f"w arkuszu {sorted(klasy_arkusza(_btn))}, widżet to {_wlasna}")
+
 zle = wyniki.count(False)
 print(f"\n{'=' * 58}\nWYNIK: {wyniki.count(True)}/{len(wyniki)} OK, {zle} FAIL")
 sys.exit(1 if zle else 0)

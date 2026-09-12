@@ -4621,41 +4621,66 @@ class MainWindow(QMainWindow):
         """Apply transparent style with colored icon to a button.
 
         Args:
-            button: QPushButton to style
+            button: QPushButton LUB QToolButton do ostylowania
             color_key: Key in skin_colors for icon color (e.g., 'icon_dictate_color')
             font_size: Font size for the icon
             with_disabled: If True, add :disabled pseudo-selector styling
+
+        ⛔ SELEKTOR BIERZEMY Z KLASY WIDŻETU, NIE WPISUJEMY „QPushButton" NA SZTYWNO.
+        Reguła `QPushButton {…}` na QToolButtonie NIE DOPASOWUJE SIĘ — Qt nie zgłasza
+        wtedy żadnego błędu, tylko rysuje przycisk stylem fabrycznym. Tak właśnie
+        rozjechał się przycisk szybkich akcji (jedyny QToolButton na pasku, bo rozwija
+        menu): dostał WŁASNY, ręcznie pisany arkusz obok wspólnego i z czasem różnił się
+        od sąsiadów tłem (przezroczyste zamiast #171221), zaokrągleniem (12 zamiast
+        RADIUS=10), wielkością ikony (20 zamiast 22) oraz — najbardziej widocznie —
+        ZACHOWANIEM PO NAJECHANIU: sąsiadom rozświetla się ramka w kolorze akcentu,
+        a jemu zalewało się tło i ramka zostawała martwa. Zgłosił to właściciel
+        2026-09-12 („wygląda inaczej i inaczej się zachowuje, jak na niego najadę").
+        ⚠️ Pilnuje tego `tools/test-bottom-bar-icons.py` — porównuje ten przycisk
+        z SĄSIADEM, nie z wpisanymi na sztywno kolorami (kolory są pokrętłem skórki).
         """
         icon_color = self.skin_colors.get(color_key, theme.TEXT_DIM)
         border_color = self.skin_colors.get('border_color', theme.BORDER)
         surface = self.skin_colors.get('button_bg', theme.SURFACE)
 
+        # „QPushButton" / „QToolButton" — nazwa klasy widżetu, tak jak widzi ją QSS.
+        sel = button.metaObject().className()
+
         disabled_style = ""
         if with_disabled:
             disabled_style = f"""
-            QPushButton:disabled {{
+            {sel}:disabled {{
                 background-color: {surface};
                 color: {theme.BORDER};
                 border: 1px solid {theme.BORDER_SUBTLE};
             }}"""
 
+        # QToolButton z menu dorysowuje strzałkę rozwijania OBOK ikony — bez tego
+        # przycisk znów odstawałby od sąsiadów, tyle że w drugą stronę.
+        menu_style = ""
+        if sel == "QToolButton":
+            menu_style = f"""
+            {sel}::menu-indicator {{
+                image: none;
+            }}"""
+
         # Miękki kwadrat na powierzchni wypukłej; po najechaniu rozświetla się
         # ramka w kolorze akcentu (jak w makiecie), a nie całe tło.
         button.setStyleSheet(f"""
-            QPushButton {{
+            {sel} {{
                 background-color: {surface};
                 color: {icon_color};
                 border: 1px solid {border_color};
                 border-radius: {theme.RADIUS}px;
                 font-size: {font_size}px;
             }}
-            QPushButton:hover {{
+            {sel}:hover {{
                 background-color: {theme.SURFACE_HOVER};
                 border: 1px solid {theme.ACCENT};
             }}
-            QPushButton:pressed {{
+            {sel}:pressed {{
                 background-color: {theme.BG_INPUT};
-            }}{disabled_style}
+            }}{disabled_style}{menu_style}
         """)
         # ⚠️ CELOWO BRAK reguły `QPushButton:checked` (usunięta 2026-07-16).
         # Jedynym „wciskanym" przyciskiem na tym arkuszu jest MIKROFON
@@ -4743,27 +4768,14 @@ class MainWindow(QMainWindow):
             if hasattr(tab, 'send_btn'):
                 self._apply_send_button_style(tab.send_btn)
 
-            # Quick actions button (QToolButton - needs different selector)
+            # Szybkie akcje — TEN SAM malarz co reszta paska. Do 2026-09-12 miał tu
+            # własny, ręcznie pisany arkusz, bo jest jedynym QToolButtonem (rozwija
+            # menu), a wspólna reguła mówiła „QPushButton" i po prostu go omijała.
+            # Ręczna kopia rozjechała się z oryginałem — powód i pomiary stoją przy
+            # `_apply_button_icon_style`. Nie odtwarzaj tu osobnego arkusza: malarz
+            # sam rozpoznaje klasę widżetu i sam ukrywa strzałkę menu.
             if hasattr(tab, 'quick_actions_btn'):
-                icon_color = self.skin_colors.get('icon_quick_actions_color', f'{theme.WARNING}')
-                border_color = self.skin_colors.get('border_color', f'{theme.BORDER}')
-                hover_color = self.skin_colors.get('hover_color', f'{theme.HOVER}')
-
-                tab.quick_actions_btn.setStyleSheet(f"""
-                    QToolButton {{
-                        background-color: transparent;
-                        color: {icon_color};
-                        border: 1px solid {border_color};
-                        border-radius: 12px;
-                        font-size: 20px;
-                    }}
-                    QToolButton:hover {{
-                        background-color: {hover_color};
-                    }}
-                    QToolButton::menu-indicator {{
-                        image: none;
-                    }}
-                """)
+                self._apply_button_icon_style(tab.quick_actions_btn, 'icon_quick_actions_color')
 
     def _apply_terminal_colors(self, colors: dict = None, terminal_backend=None):
         """Zastosuj kolory terminala przez backend (M2.3).
