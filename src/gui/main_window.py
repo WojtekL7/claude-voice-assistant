@@ -616,6 +616,12 @@ class ModelCatalogChecker(QObject):
 # zmiescic nawet po maksymalizacji (minimum blokuje zmniejszenie), a dol
 # programu zostaje pod krawedzia ekranu. Decyzja stoi tu jako CZYSTA FUNKCJA,
 # zeby dalo sie ja odpytac testem bez budowania okna.
+# Po ilu dniach bez UDANEGO sprawdzenia listy modeli mówimy o tym użytkownikowi.
+# Próg jest ŚWIADOMIE wysoki: cicha próba leci przy każdym starcie, a zwykła
+# przerwa w internecie nie jest warta okna. Dopiero miesiąc ciszy znaczy, że
+# zepsuło się coś trwałego (u nas: zmiana zapisu na stronie Anthropic, 27 dni).
+MODELS_STALE_WARN_DAYS = 30
+
 DEFAULT_WINDOW_SIZE = (1100, 750)     # rozmiar startowy na duzym ekranie
 DEFAULT_WINDOW_MINIMUM = (900, 650)   # najmniejszy sensowny rozmiar roboczy
 
@@ -2542,15 +2548,55 @@ class MainWindow(QMainWindow):
                                     tr('models_new_family').format(names=nazwy))
 
     def _on_models_check_failed(self, msg):
-        """Błąd pobierania — komunikat tylko przy ręcznym; przy cichym milczy.
+        """Błąd pobierania — komunikat przy ręcznym; przy cichym DOPIERO po N dniach.
 
         Brak internetu nie jest awarią apki: lista modeli po prostu zostaje taka,
-        jaka była."""
+        jaka była, i jednorazowa nieudana próba nie jest warta okna.
+
+        ⛔ ALE MILCZENIE BEZ KOŃCA JUŻ TAK — to jest naprawa zmierzonej usterki
+        (2026-09-14). Strona Anthropic zmieniła zapis identyfikatorów, parser
+        przestał cokolwiek zwracać, fail-open zadziałał prawidłowo i przez
+        27 DNI nikt się nie dowiedział, że lista modeli stoi w miejscu: apka
+        pisała „Fable 5", uruchamiając Fable 5.1 — model DWA RAZY droższy.
+        Dlatego cicha awaria ma teraz termin ważności: gdy dane są starsze niż
+        `MODELS_STALE_WARN_DAYS`, użytkownik dostaje o tym jedno okno."""
         self._update_status("")
         if self._manual_model_check:
             self._manual_model_check = False
             QMessageBox.warning(self, tr('menu_check_models'),
                                 tr('models_check_failed').format(error=msg))
+            return
+        self._maybe_warn_models_stale(msg)
+
+    def _maybe_warn_models_stale(self, reason):
+        """Powiedz o starych danych o modelach — raz na uruchomienie apki.
+
+        Okno NIEMODALNE (nie blokuje pracy) i dławione, bo cicha próba powtarza
+        się przy każdym starcie, a przy trwającej awarii strony Anthropic
+        sypałoby nim w kółko. Pasek stanu tu NIE wystarcza: jest kanałem
+        jednoszczelinowym i pierwsza następna wiadomość go nadpisze (ta sama
+        pułapka, przez którą błąd dyktowania był niewidzialny)."""
+        if getattr(self, '_models_stale_warned', False):
+            return
+        try:
+            from core.model_catalog import catalog_status
+            stan = catalog_status(MODEL_CATALOG_CACHE)
+        except Exception:
+            return
+        wiek = stan.get('age_days')
+        if wiek is None or wiek < MODELS_STALE_WARN_DAYS:
+            return
+        self._models_stale_warned = True
+        okno = QMessageBox(self)
+        okno.setIcon(QMessageBox.Warning)
+        okno.setWindowTitle(tr('models_stale_title'))
+        okno.setText(tr('models_stale_msg').format(days=int(wiek), reason=reason))
+        okno.setStandardButtons(QMessageBox.Ok)
+        okno.setWindowModality(Qt.NonModal)
+        # Referencja MUSI przeżyć wyjście z metody — bez niej Python sprząta
+        # obiekt i okno znika w tej samej klatce, w której się pojawiło.
+        self._models_stale_dialog = okno
+        okno.show()
 
     def _on_update_available(self, info):
         """Jest nowsza wersja. Zapalamy lampkę „nowa wersja" w pasku ORAZ

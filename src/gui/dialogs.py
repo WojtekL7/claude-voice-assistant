@@ -29,7 +29,7 @@ from config import (
     DEFAULT_AGENTS, DEFAULT_MEMORY_PROJECTS, ASSETS_DIR,
     CLAUDE_MODELS, CLAUDE_MODELS_SHORT, DEFAULT_AGENT_MODEL,
     NEW_AGENT_DEFAULT_MODEL, TTS_VOICE_CHOICES, tts_voice_label,
-    t as tr, model_label, model_label_short,
+    t as tr, model_label, model_label_short, model_cost_hint,
 )
 from gui import theme
 from core.skills_manager import SkillsManager, Skill, SkillInstallError
@@ -1177,6 +1177,16 @@ class AgentConfigDialog(QDialog):
         model_hint.setStyleSheet(f"color: {theme.TEXT_FAINT}; font-size: 11px;")
         form.addRow("", model_hint)
 
+        # Wybór modelu jest wyborem RACHUNKU, nie smaku: Fable 5.1 kosztuje
+        # dwa razy tyle co Opus 5. Dopóki tego nie było widać, agenci wędrowali
+        # na droższy model bez żadnej decyzji (zmierzone 2026-09-14: 2 z 16).
+        # Liczba bierze się z katalogu ze strony Anthropic, nie z kodu.
+        self.model_cost_label = QLabel()
+        self.model_cost_label.setStyleSheet(f"color: {theme.WARNING}; font-size: 11px;")
+        form.addRow("", self.model_cost_label)
+        self.model_combo.currentIndexChanged.connect(self._update_model_cost_label)
+        self._update_model_cost_label()
+
         layout.addLayout(form)
 
         # Checkboxes
@@ -1202,6 +1212,19 @@ class AgentConfigDialog(QDialog):
             _combo.setMinimumHeight(max(_combo.minimumHeight(),
                                         _combo.sizeHint().height()))
         return widget
+
+    def _update_model_cost_label(self):
+        """Pokaż przy wybranym modelu, ile kosztuje względem modelu odniesienia.
+
+        Pusty napis = brak danych o cenie albo model odniesienia (Opus 5) —
+        wtedy etykieta znika zamiast pokazywać „1× droższy niż on sam".
+        Nic tu nie może wywalić okna agenta: cena to informacja, nie warunek.
+        """
+        try:
+            key = self.model_combo.currentData() or DEFAULT_AGENT_MODEL
+            self.model_cost_label.setText(model_cost_hint(key))
+        except Exception:
+            self.model_cost_label.setText("")
 
     def _build_tab_memory(self) -> QWidget:
         """Tab 2: pliki pamięci."""

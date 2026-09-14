@@ -54,10 +54,16 @@ _ROW_ID = "Claude API ID"
 _ROW_CONTEXT = "Context window"
 _ROW_MAX_OUTPUT = "Max output"
 _ROW_DESCRIPTION = "Description"
+_ROW_PRICING = "Pricing"
+_ROW_EFFORT = "Default effort"
 
 _TOOLTIP_RE = re.compile(r"<Tooltip[^>]*>(.*?)</Tooltip>", re.S)
 _FAMILY_RE = re.compile(r"claude-([a-z]+)-[0-9]")
 _TOKENS_RE = re.compile(r"([\d.]+)\s*([kKmM])?\s*tokens")
+# „$10 / input MTok, $50 / output MTok" — cena za MILION tokenów, osobno
+# wejście i wyjście. Bierzemy ją ze strony, żeby ostrzeżenie o koszcie nie było
+# liczbą wpisaną kiedyś w kod (ta starzeje się tak samo cicho jak nazwa modelu).
+_PRICE_RE = re.compile(r"\$\s*([\d.]+)\s*/\s*(input|output)", re.I)
 
 
 class CatalogError(RuntimeError):
@@ -68,10 +74,19 @@ class CatalogError(RuntimeError):
 
 
 def _strip_cell(cell: str) -> str:
-    """Zdejmuje z komórki tabeli ozdobniki dokumentacji (Tooltip, gwiazdki, linki)."""
+    """Zdejmuje z komórki tabeli ozdobniki dokumentacji (Tooltip, gwiazdki, linki).
+
+    ⛔ ODWROTNY APOSTROF JEST OZDOBNIKIEM, NIE TREŚCIĄ — i to on nas uziemił.
+    Zmierzone 2026-09-14: Anthropic zaczął zapisywać identyfikatory jako
+    `` `claude-fable-5-1` `` zamiast gołego tekstu. Wzorzec rodziny dopasowuje
+    się od POCZĄTKU napisu (`re.match`), więc pierwszy apostrof kasował
+    dopasowanie dla KAŻDEGO modelu → 0 sparsowanych → `CatalogError` → fail-open
+    → apka przez 27 dni pokazywała „Fable 5", uruchamiając Fable 5.1.
+    Nic nie padło i nikt nie został o tym powiadomiony.
+    """
     text = _TOOLTIP_RE.sub(r"\1", cell)
     text = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", text)  # [tekst](link) → tekst
-    text = text.replace("**", "").replace("\\", "")
+    text = text.replace("**", "").replace("`", "").replace("\\", "")
     text = re.sub(r"<[^>]+>", "", text)  # resztki znaczników
     return text.strip()
 
@@ -91,6 +106,20 @@ def _parse_tokens(text: str) -> int | None:
     elif suffix == "m":
         value *= 1_000_000
     return int(value)
+
+
+def _parse_prices(text: str) -> dict[str, float]:
+    """'$10 / input MTok, $50 / output MTok' → {'input': 10.0, 'output': 50.0}.
+
+    Nierozpoznane → pusty słownik (wołający po prostu nie pokaże ceny).
+    """
+    out: dict[str, float] = {}
+    for value, kind in _PRICE_RE.findall(text or ""):
+        try:
+            out[kind.lower()] = float(value)
+        except ValueError:
+            continue
+    return out
 
 
 def _table_rows(markdown: str) -> list[list[str]]:
@@ -151,6 +180,8 @@ def parse_catalog(markdown: str) -> dict[str, dict]:
     ctx_row = row_for(_ROW_CONTEXT)
     out_row = row_for(_ROW_MAX_OUTPUT)
     desc_row = row_for(_ROW_DESCRIPTION)
+    price_row = row_for(_ROW_PRICING)
+    effort_row = row_for(_ROW_EFFORT)
 
     catalog: dict[str, dict] = {}
     for col in range(1, len(alias_row)):
@@ -175,6 +206,15 @@ def parse_catalog(markdown: str) -> dict[str, dict]:
                 entry["max_output"] = out
         if desc_row:
             entry["description"] = _strip_cell(desc_row[col])
+        if price_row:
+            prices = _parse_prices(_strip_cell(price_row[col]))
+            if prices.get("input") and prices.get("output"):
+                entry["price_input"] = prices["input"]
+                entry["price_output"] = prices["output"]
+        if effort_row:
+            effort = _strip_cell(effort_row[col]).lower()
+            if effort in ("low", "medium", "high"):
+                entry["default_effort"] = effort
         catalog[family] = entry
 
     # Kontrola przytomności: parser, który „przeszedł", ale nic sensownego nie
@@ -226,6 +266,59 @@ def cached_models(cache_file: Path) -> dict[str, dict]:
     return data.get("models", {}) if data else {}
 
 
+def catalog_status(cache_file: Path) -> dict:
+    """Stan czujki modeli — do POWIEDZENIA użytkownikowi, że dane się starzeją.
+
+    ⛔ POWÓD ISTNIENIA TEJ FUNKCJI (zmierzone 2026-09-14): fail-open jest
+    słuszny, ale sam w sobie jest CICHY. Strona Anthropic zmieniła zapis
+    identyfikatorów, parser przestał cokolwiek zwracać, apka spokojnie
+    pracowała na wartościach wbudowanych — i przez 27 dni nikt się nie
+    dowiedział, że lista modeli stoi w miejscu. Odtąd wiek danych i ostatni
+    błąd są ZAPISANE, więc da się o nich powiedzieć zamiast zgadywać.
+
+    Zwraca zawsze słownik (nigdy nie rzuca): `age_days` (None = brak danych),
+    `last_error`, `last_error_at`, `consecutive_failures`.
+    """
+    data = load_cached(cache_file) or {}
+    age_days = None
+    try:
+        fetched = float(data.get("fetched_at", 0))
+        if fetched > 0:
+            age_days = (time.time() - fetched) / 86400.0
+    except (TypeError, ValueError):
+        age_days = None
+    return {
+        "age_days": age_days,
+        "last_error": data.get("last_error") or "",
+        "last_error_at": data.get("last_error_at") or 0,
+        "consecutive_failures": int(data.get("consecutive_failures") or 0),
+    }
+
+
+def record_failure(cache_file: Path, message: str) -> None:
+    """Zapisz nieudaną próbę odświeżenia, NIE ruszając zapisanych modeli.
+
+    Dane modeli zostają nietknięte (fail-open) — dopisujemy wyłącznie ślad, że
+    próba się nie udała, żeby apka mogła o tym powiedzieć po N dniach ciszy.
+    Sam zapis nie może wywalić apki, więc cały jest w try/except.
+    """
+    try:
+        cache_file = Path(cache_file)
+        data = load_cached(cache_file)
+        if not data:
+            # Brak pliku z modelami — nie tworzymy atrapy katalogu, bo
+            # `load_cached` odrzuca wpis bez modeli i ślad i tak by przepadł.
+            return
+        data["last_error"] = str(message)[:300]
+        data["last_error_at"] = time.time()
+        data["consecutive_failures"] = int(data.get("consecutive_failures") or 0) + 1
+        tmp = cache_file.with_suffix(cache_file.suffix + ".tmp")
+        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(tmp, cache_file)
+    except Exception:
+        pass
+
+
 def is_stale(cache_file: Path, ttl: int = CACHE_TTL_SECONDS) -> bool:
     """Czy warto odpytać stronę (brak pliku albo starszy niż TTL)."""
     data = load_cached(cache_file)
@@ -275,10 +368,16 @@ def refresh(cache_file: Path, url: str = CATALOG_URL,
 
     Rzuca CatalogError; wołający MUSI to złapać i zostać na wbudowanych.
     """
-    markdown = fetch_markdown(url, timeout)
-    fresh = parse_catalog(markdown)
+    try:
+        markdown = fetch_markdown(url, timeout)
+        fresh = parse_catalog(markdown)
+    except CatalogError as exc:
+        # Ślad ZANIM wyjątek poleci dalej — wołający ma fail-open i pracuje
+        # dalej, więc bez zapisu nikt by się nie dowiedział, że czujka padła.
+        record_failure(cache_file, str(exc))
+        raise
     changes = diff_against(cached_models(cache_file), fresh)
-    _save_cache(cache_file, fresh, url)
+    _save_cache(cache_file, fresh, url)  # udane pobranie kasuje ślad porażki
     return fresh, changes
 
 

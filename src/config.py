@@ -301,7 +301,11 @@ except Exception:
 # przypięcie starszego Opusa — pełna nazwa, nie alias, więc wersja się nie zmieni.
 CLAUDE_MODELS = {
     "default": "Domyślny",
-    "fable": "Fable 5",
+    # ⚠️ „Fable 5" stało tu do 2026-09-14 i było NIEPRAWDĄ przez 27 dni: alias
+    # `fable` uruchamiał już Fable 5.1, a czujka katalogu milczała (patrz
+    # `model_catalog._strip_cell`). Wartość awaryjna starzeje się tak samo jak
+    # każda inna — poprawiaj ją razem z naprawą czujki, nie zamiast niej.
+    "fable": "Fable 5.1",
     "opus": "Opus 5",
     "sonnet": "Sonnet 5",
     "haiku": "Haiku 4.5",
@@ -326,6 +330,24 @@ CLAUDE_MODEL_CONTEXT_LIMITS = {
     "haiku":     200_000,
     "claude-opus-4-8": 1_000_000,
 }
+
+# Ceny modeli w dolarach za MILION tokenów (wejście / wyjście).
+# ⚠️ Też AWARYJNE — realne przychodzą z katalogu (wiersz „Pricing" na stronie
+# Anthropic). PO CO TO JEST: wybór modelu w oknie agenta wygląda jak wybór
+# smaku, a jest wyborem RACHUNKU — Fable 5.1 kosztuje dwa razy tyle co Opus 5.
+# Zmierzone 2026-09-14: dwóch agentów użytkownika chodziło na `fable`, czyli
+# już na Fable 5.1, przy etykiecie mówiącej „Fable 5" i bez słowa o cenie.
+CLAUDE_MODEL_PRICES = {
+    "fable":  {"input": 10.0, "output": 50.0},
+    "opus":   {"input": 5.0,  "output": 25.0},
+    "sonnet": {"input": 2.0,  "output": 10.0},
+    "haiku":  {"input": 1.0,  "output": 5.0},
+}
+
+# Model odniesienia dla podpowiedzi „ile razy drożej". Opus 5 jest w tym
+# ekosystemie domyślnym wyborem, więc porównanie do niego niesie sens dla
+# właściciela; przy nim samym podpowiedź się nie pokazuje.
+MODEL_PRICE_REFERENCE = "opus"
 
 # Mapa: TECHNICZNY identyfikator z dziennika sesji ("claude-opus-5") → klucz
 # z CLAUDE_MODELS ("opus"). Potrzebna, gdy agent ma ustawienie „Domyślny":
@@ -362,12 +384,45 @@ MODEL_CATALOG_CACHE = CONFIG_DIR / "models-cache.json"
 # ⛔ FAIL-OPEN: brak pliku, uszkodzony plik, brak modułu → zostajemy na
 # wartościach wbudowanych wyżej. Tu NIE MA sieci — pobieranie robi apka
 # w wątku tła (menu „Sprawdź nowe modele"), start nigdy nie czeka na internet.
+#
+# ⛔ PLIK PODRĘCZNY MA TERMIN WAŻNOŚCI (od 2026-09-14). Zmierzone: czujka
+# katalogu padła po zmianie strony Anthropic, plik został z 27-dniowymi danymi
+# i PRZYKRYWAŁ poprawioną wartość wbudowaną — apka nadal pisała „Fable 5",
+# choć nowa wersja programu wiedziała już o Fable 5.1. Kierunek jest jasny:
+# dane młodsze niż próg są ŚWIEŻSZE niż kod (i wygrywają), starsze są
+# demonstracyjnie nieaktualne, a wartość wbudowana przyjechała razem z wydaniem
+# programu, więc wtedy to ONA jest bliższa prawdy.
+MODEL_CACHE_TRUST_DAYS = 30
+
+
+def should_trust_model_cache(age_days, limit=None):
+    """Czy nałożyć dane z pliku podręcznego, czy zostać na wbudowanych?
+
+    Decyzja stoi tu jako CZYSTA FUNKCJA, bo warunek wpisany w środek importu
+    nie ma czego odpytać testem — a to właśnie taki cichy warunek kosztował nas
+    27 dni pokazywania nieistniejącej nazwy modelu.
+
+    Brak danych (None) → nie ufamy. Wiek ≤ próg → plik jest świeższy niż kod.
+    Wiek > próg → plik jest demonstracyjnie nieaktualny, a wartości wbudowane
+    przyjechały razem z wydaniem programu, więc są bliższe prawdy.
+    """
+    if age_days is None:
+        return False
+    try:
+        return float(age_days) <= float(MODEL_CACHE_TRUST_DAYS if limit is None else limit)
+    except (TypeError, ValueError):
+        return False
+
+
 _catalog = None
 try:
     from core.model_catalog import cached_models as _cached_models
+    from core.model_catalog import catalog_status as _catalog_status
     from core.model_catalog import merge_into as _merge_models
 
-    _catalog = _cached_models(MODEL_CATALOG_CACHE)
+    _wiek = (_catalog_status(MODEL_CATALOG_CACHE) or {}).get("age_days")
+    _catalog = (_cached_models(MODEL_CATALOG_CACHE)
+                if should_trust_model_cache(_wiek) else {})
     if _catalog:
         CLAUDE_MODELS, CLAUDE_MODEL_CONTEXT_LIMITS = _merge_models(
             CLAUDE_MODELS, CLAUDE_MODEL_CONTEXT_LIMITS, _catalog)
@@ -692,6 +747,15 @@ UI_TRANSLATIONS = {
         "status_checking_models": "Sprawdzam listę modeli...",
         "status_models_updated": "Zaktualizowano nazwy modeli: {changes}",
         "models_up_to_date": "Lista modeli jest aktualna.",
+        "model_cost_more": "⚠️ {ratio}× droższy niż {ref}",
+        "model_cost_less": "{ratio}× tańszy niż {ref}",
+        "model_cost_raw": "{inp} $ / {out} $ za milion tokenów",
+        "models_stale_title": "Lista modeli może być nieaktualna",
+        "models_stale_msg": ("Od {days} dni nie udaje się sprawdzić listy modeli "
+                             "na stronie Anthropic.\n\n"
+                             "Program działa normalnie i używa ostatnich znanych "
+                             "nazw, ale mogły się one zmienić — a razem z nimi "
+                             "ceny.\n\nPowód ostatniej próby: {reason}"),
         "models_new_family": ("Anthropic wypuścił nowy model: {names}.\n\n"
                               "Nie dodaję go automatycznie, bo nie wiem, czy "
                               "Twoja wersja Claude Code już go obsługuje — "
@@ -1533,6 +1597,15 @@ UI_TRANSLATIONS = {
         "status_checking_models": "Checking the model list...",
         "status_models_updated": "Model names updated: {changes}",
         "models_up_to_date": "The model list is up to date.",
+        "model_cost_more": "⚠️ {ratio}× pricier than {ref}",
+        "model_cost_less": "{ratio}× cheaper than {ref}",
+        "model_cost_raw": "${inp} / ${out} per million tokens",
+        "models_stale_title": "The model list may be out of date",
+        "models_stale_msg": ("For {days} days the model list on Anthropic's site "
+                             "could not be checked.\n\n"
+                             "The app works normally and uses the last known "
+                             "names, but they may have changed — and so may the "
+                             "prices.\n\nLast attempt failed with: {reason}"),
         "models_new_family": ("Anthropic released a new model: {names}.\n\n"
                               "It was not added automatically — your installed "
                               "Claude Code may not support it yet. Please report "
@@ -2355,7 +2428,63 @@ def apply_model_catalog(models: dict) -> None:
     CLAUDE_MODELS_SHORT.update(names)
     CLAUDE_MODEL_CONTEXT_LIMITS.clear()
     CLAUDE_MODEL_CONTEXT_LIMITS.update(limits)
+    # Ceny: nadpisujemy WYŁĄCZNIE rodziny, które apka zna i dla których strona
+    # podała KOMPLET (wejście i wyjście) — połowiczna cena byłaby gorsza niż
+    # żadna, bo podpowiedź „ile razy drożej" liczy się z obu liczb.
+    for family, info in (models or {}).items():
+        if family not in CLAUDE_MODELS or not isinstance(info, dict):
+            continue
+        cena_in = info.get("price_input")
+        cena_out = info.get("price_output")
+        if isinstance(cena_in, (int, float)) and isinstance(cena_out, (int, float)) \
+                and cena_in > 0 and cena_out > 0:
+            CLAUDE_MODEL_PRICES[family] = {"input": float(cena_in), "output": float(cena_out)}
     _rebuild_api_id_map(models or {})
+
+
+def model_cost_hint(key: str) -> str:
+    """Krótkie ostrzeżenie o koszcie modelu — albo pusty napis.
+
+    Zwraca np. „2× droższy niż Opus 5" / „2,5× tańszy niż Opus 5", a gdy obie
+    ceny nie skalują się tak samo (wejście i wyjście w różnych proporcjach) —
+    surowe stawki, bo jeden mnożnik byłby wtedy zmyśleniem.
+
+    ⛔ Liczby biorą się z KATALOGU (strona Anthropic), nie z wpisu w kodzie:
+    stawka wpisana raz na sztywno starzeje się dokładnie tak cicho jak nazwa
+    modelu — a przy cenie kosztuje to pieniądze, nie tylko etykietę.
+    """
+    if key == "default" or key == MODEL_PRICE_REFERENCE:
+        return ""
+    mine = CLAUDE_MODEL_PRICES.get(key)
+    ref = CLAUDE_MODEL_PRICES.get(MODEL_PRICE_REFERENCE)
+    if not mine or not ref:
+        return ""
+    try:
+        r_in = mine["input"] / ref["input"]
+        r_out = mine["output"] / ref["output"]
+    except (KeyError, TypeError, ZeroDivisionError):
+        return ""
+    ref_name = CLAUDE_MODELS_SHORT.get(MODEL_PRICE_REFERENCE, MODEL_PRICE_REFERENCE)
+    if abs(r_in - r_out) <= 0.05:  # obie stawki skalują się tak samo → jeden mnożnik
+        ratio = (r_in + r_out) / 2
+        if abs(ratio - 1.0) < 0.05:
+            return ""
+        if ratio > 1:
+            return t('model_cost_more').format(ratio=_format_ratio(ratio), ref=ref_name)
+        return t('model_cost_less').format(ratio=_format_ratio(1 / ratio), ref=ref_name)
+    return t('model_cost_raw').format(inp=_format_price(mine["input"]),
+                                      out=_format_price(mine["output"]))
+
+
+def _format_ratio(value: float) -> str:
+    """2.0 → '2', 2.5 → '2,5' (po polsku przecinek, po angielsku kropka)."""
+    text = f"{value:.1f}".rstrip("0").rstrip(".")
+    return text.replace(".", ",") if current_ui_language() == "pl-PL" else text
+
+
+def _format_price(value: float) -> str:
+    """10.0 → '10', 2.5 → '2,5' — stawka w dolarach, bez zbędnego zera."""
+    return _format_ratio(value)
 
 
 def _model_desc_key(key: str) -> str:
