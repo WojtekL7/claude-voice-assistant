@@ -8,6 +8,24 @@ w zeszły czwartek", na które `git log` odpowiada zbyt drobno. Wpis: 3–8 lini
 
 ---
 
+## 2026-09-14
+
+- **Cztery etapy przenoszenia nowości Claude Code do VCA, z maila „This week in Claude Code" (12.09).**
+  Właściciel poprosił najpierw o RAPORT z maila, potem kazał robić etapy po kolei; etap 5 (panel `/diff`)
+  świadomie odwołany jako niepotrzebny. Commity: `b24bb48`, `61c6ec2`, `84e6ddc`, `3943b38`.
+- **Po drodze wyszła najdroższa rzecz dnia:** czujka katalogu modeli nie działała od 27 dni i o tym
+  milczała — apka pokazywała „Fable 5", uruchamiając dwa razy droższy Fable 5.1, a dwaj agenci
+  właściciela już na nim chodzili. Znalezione przy okazji, nie było w zgłoszeniu.
+- **Zmiana wyglądu na życzenie** (`261a7d0`): wzmocnione dwa sygnały stanu (wybrana zakładka, panel
+  nieaktywnego okna). Właściciel dostał podgląd „teraz vs propozycja" jako obrazek i zdecydował
+  PRZED wdrożeniem — dzięki temu nie musiał restartować bety, żeby ocenić.
+- **Nic nie zostało przetestowane u właściciela** — pracował na becie przez cały dzień i nie mógł jej
+  restartować. Testy umówione na 2026-09-15, lista 12 punktów w żywym pliku pamięci.
+- Stan na koniec dnia: 5 commitów kodu + 2 pamięci, wszystko wypchnięte, 27 bramek zielonych,
+  repo czyste. Do COMMON poszło 6 nauk (zatwierdzone przez właściciela).
+
+---
+
 ## 2026-09-12
 
 - **Dyktowanie przepięte na zadanie `task/transcribe`** (`9b5729b`) — wcześniej wołaliśmy model po
