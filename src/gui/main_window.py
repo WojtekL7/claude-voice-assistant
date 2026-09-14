@@ -786,6 +786,10 @@ class MainWindow(QMainWindow):
         # zamiast surowego „command not found" w terminalu. Po rozruchu okna,
         # żeby dialog stanął NAD głównym oknem, nie przed nim.
         QTimer.singleShot(1500, self._maybe_show_claude_setup)
+        # Pytanie o wznowienie PO kreatorze instalacji — przy niesprawnej
+        # instalacji `claude` nie ma czego wznawiać, a dwa okna naraz przy
+        # starcie to najgorszy możliwy moment na wybór.
+        QTimer.singleShot(2500, self._maybe_offer_resume)
 
         # NOTE: Claude jest teraz uruchamiany w _create_agent_tab() dla każdej zakładki
         # Stare globalne wywołanie usunięte, bo powodowało podwójne uruchomienie
@@ -1644,6 +1648,7 @@ class MainWindow(QMainWindow):
         if not tabs:
             return
         active = self.tab_widget.currentWidget()
+        self._poll_hook_events()
 
         for tab in list(tabs.values()):
             if not isinstance(tab, AgentTab):
@@ -1736,6 +1741,52 @@ class MainWindow(QMainWindow):
                     if len(tab.pending_backlog) > 50:
                         tab.pending_backlog = tab.pending_backlog[-50:]
 
+    def _poll_hook_events(self):
+        """Przeczytaj nowe zdarzenia od Claude Code i zaktualizuj model zakładek.
+
+        PO CO, skoro model widać w dzienniku: dziennik mówi o modelu DOPIERO
+        przy odpowiedzi agenta. Po `/model ...` w środku rozmowy pasek i licznik
+        tokenów zostawały przy starym modelu aż do następnej wypowiedzi — a przy
+        „Domyślnym" apka nie wiedziała nic aż do pierwszej. Hook mówi o tym
+        w chwili przełączenia i podaje identyfikator wprost.
+
+        Fail-open i tani: gdy hooków nie ma (nie udało się ich przygotować,
+        starszy Claude Code), plik po prostu nie rośnie i pętla nic nie robi.
+        """
+        try:
+            from core import claude_hooks
+            zdarzenia, self._hook_offset = claude_hooks.read_events(
+                CONFIG_DIR, getattr(self, '_hook_offset', 0))
+        except Exception:
+            return
+        if not zdarzenia:
+            return
+        # Sesja → ostatni znany model. Bierzemy OSTATNIE zdarzenie w paczce,
+        # bo w jednej turze może być kilka przełączeń (np. opusplan).
+        modele = {}
+        for z in zdarzenia:
+            model = claude_hooks.model_from_event(z)
+            if model:
+                modele[z.get("session_id")] = claude_hooks.normalize_model_id(model)
+        if not modele:
+            return
+        active = self.tab_widget.currentWidget()
+        for tab in (getattr(self, 'agent_tabs', None) or {}).values():
+            sesja = getattr(tab, '_pinned_session_id', None)
+            model = modele.get(sesja)
+            if not model or model == getattr(tab, 'detected_model', None):
+                continue
+            tab.detected_model = model
+            # Znacznik pierwszeństwa: od tej chwili dziennik NIE nadpisuje tej
+            # wartości dla TEJ sesji. Hook mówi o przełączeniu w chwili, gdy
+            # ono zachodzi; dziennik odzwierciedla ostatnią wypowiedź, więc
+            # bywa starszy — bez tego znacznika pasek migałby tam i z powrotem.
+            # Wiąże się z KONKRETNĄ sesją, więc restart zakładki zeruje go sam.
+            tab._model_from_hook_session = sesja
+            if tab is active and hasattr(self, 'mcp_status_widget'):
+                self.mcp_status_widget.set_detected_model(model)
+                self._refresh_context_label()
+
     def _sync_detected_model(self, tab, reader, is_active: bool):
         """Zapamiętaj na zakładce model wykryty z dziennika; odśwież pasek.
 
@@ -1745,6 +1796,14 @@ class MainWindow(QMainWindow):
         uczciwe. Czytnik zapomina model przy zmianie pliku sesji, więc to samo
         w sobie nie miga — nieznane zostaje nieznane aż do pierwszej odpowiedzi.
         """
+        # ⛔ PIERWSZEŃSTWO HOOKA. Gdy o modelu TEJ sesji powiedział już hook,
+        # dziennik go nie nadpisuje: hook mówi w chwili przełączenia, dziennik
+        # dopiero przy następnej wypowiedzi (często `None` tuż po zmianie).
+        # Bez tego warunku pasek wracałby do starej nazwy na jeden tick.
+        if (getattr(tab, '_model_from_hook_session', None)
+                and getattr(tab, '_model_from_hook_session', None)
+                == getattr(tab, '_pinned_session_id', None)):
+            return
         try:
             detected = reader.active_model()
         except Exception:
@@ -2854,10 +2913,52 @@ class MainWindow(QMainWindow):
         model = getattr(agent_tab, 'model', 'default')
         if model and model != 'default':
             cmd = f"{cmd} --model {model}"
+
+        # Hooki TYLKO dla sesji uruchamianych przez apkę — własny plik ustawień
+        # dokłada się do ustawień użytkownika, zamiast je nadpisywać (zmierzone).
+        # Dzięki temu wiemy NA PEWNO, jaki model pracuje, i co żyło przy
+        # zamknięciu. Fail-open: gdy się nie uda, zakładka wstaje bez hooków.
+        cmd = f"{cmd} {self._hooks_argument()}".rstrip()
+
+        # Wznowienie POPRZEDNIEJ rozmowy tego agenta (decyzja użytkownika przy
+        # starcie) — `--resume` zachowuje TEN SAM identyfikator sesji, więc
+        # czytnik dziennika zostaje przypięty tak samo jak przy nowej.
+        wznow = getattr(agent_tab, '_resume_session_id', None)
+        if wznow:
+            agent_tab._resume_session_id = None
+            cmd = f"{cmd} --resume {wznow}"
+            self._pin_tab_session(agent_tab, wznow)
+            return cmd
+
         session_id = str(uuid.uuid4())
         cmd = f"{cmd} --session-id {session_id}"
         self._pin_tab_session(agent_tab, session_id)
+        try:
+            from core import session_registry
+            session_registry.record(
+                CONFIG_DIR, getattr(agent_tab, 'agent_id', ''), session_id,
+                getattr(agent_tab, 'working_directory', ''),
+                getattr(agent_tab, 'agent_name', ''))
+        except Exception:
+            pass          # rejestr to wygoda, nie warunek startu zakładki
         return cmd
+
+    def _hooks_argument(self) -> str:
+        """Fragment `--settings <plik z hookami>` albo pusty napis.
+
+        Przygotowanie hooków jest idempotentne, więc wołamy je przy każdym
+        starcie zakładki — dzięki temu plik odtwarza się sam, gdyby ktoś go
+        skasował, a ścieżka zawsze pasuje do bieżącego katalogu konfiguracji.
+        """
+        if getattr(self, '_hooks_failed', False):
+            return ""          # raz nie wyszło — nie próbujemy przy każdej zakładce
+        try:
+            from core import claude_hooks
+            claude_hooks.trim_events(CONFIG_DIR)
+            return claude_hooks.settings_argument(claude_hooks.ensure_hooks(CONFIG_DIR))
+        except Exception:
+            self._hooks_failed = True
+            return ""
 
     def _pin_tab_session(self, agent_tab, session_id: str):
         """Wskaż czytnikowi dziennika DOKŁADNY plik sesji (po --session-id).
@@ -5337,6 +5438,71 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
             self._save_settings()
             QMessageBox.information(self, tr('dlg_saved_title'),
                 tr('dlg_anthropic_key_saved'))
+
+    def _maybe_offer_resume(self):
+        """Zaproponuj wznowienie rozmów, które żyły przy poprzednim zamknięciu.
+
+        PO CO: VCA przypina każdej zakładce własny identyfikator sesji, ale do
+        tej pory nigdzie go nie zapisywała — po restarcie apki, po padzie
+        `claude` albo po restarcie komputera rozmowy zostawały w dzienniku
+        i nikt ich nie wznawiał. Teraz proponujemy to jednym pytaniem.
+
+        ⛔ Proponujemy WYŁĄCZNIE sesje z ISTNIEJĄCYM dziennikiem — wpis
+        w rejestrze jest obietnicą, dziennik dowodem. Wznowienie nieistniejącej
+        sesji kończy się błędem w terminalu, którego użytkownik nie ma jak
+        powiązać z przyczyną.
+        """
+        if getattr(self, '_resume_offered', False):
+            return
+        self._resume_offered = True
+        try:
+            from core import session_registry
+            kandydaci = session_registry.resumable(CONFIG_DIR)
+        except Exception:
+            return
+        # Interesują nas tylko agenci, którzy SĄ teraz otwarci w zakładkach
+        # i nie prowadzą już własnej rozmowy (świeżo wstali od zera).
+        zakladki = getattr(self, 'agent_tabs', None) or {}
+        do_wznowienia = []
+        for wpis in kandydaci:
+            tab = zakladki.get(wpis.get('agent_id'))
+            if tab is None:
+                continue
+            if getattr(tab, '_pinned_session_id', None) == wpis.get('session_id'):
+                continue          # ta sama rozmowa już trwa — nie ma co wznawiać
+            do_wznowienia.append((wpis, tab))
+        if not do_wznowienia:
+            return
+
+        nazwy = ", ".join(
+            (w.get('agent_name') or getattr(t, 'agent_name', '?')) for w, t in do_wznowienia)
+        odp = QMessageBox.question(
+            self, tr('dlg_resume_title'),
+            tr('dlg_resume_msg').format(count=len(do_wznowienia), names=nazwy),
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+        if odp != QMessageBox.Yes:
+            return
+        for wpis, tab in do_wznowienia:
+            tab._resume_session_id = wpis.get('session_id')
+            try:
+                self._restart_agent_tab(tab)
+            except Exception:
+                continue
+        self._update_status(tr('status_resumed').format(count=len(do_wznowienia)))
+
+    def _restart_agent_tab(self, agent_tab):
+        """Uruchom `claude` w istniejącej zakładce (wznowienie albo nowa rozmowa).
+
+        Świadomie NIE ubijamy niczego: zakładka po starcie apki ma powłokę bez
+        uruchomionego agenta (albo z agentem startowym), więc wystarczy wysłać
+        polecenie. Budowanie polecenia zna `_resume_session_id` i sam dokłada
+        `--resume`.
+        """
+        cmd = self._build_claude_command(agent_tab)
+        backend = getattr(agent_tab, 'terminal_backend', None)
+        if backend is None:
+            return
+        backend.send_text(cmd + "\n")
 
     def _show_skill_doctor_dialog(self):
         """Okno „Lekarz skilli" — co każdy skill kosztuje i czy ktoś go używa.

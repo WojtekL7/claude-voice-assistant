@@ -771,6 +771,13 @@ UI_TRANSLATIONS = {
         "status_checking_models": "Sprawdzam listę modeli...",
         "status_models_updated": "Zaktualizowano nazwy modeli: {changes}",
         "models_up_to_date": "Lista modeli jest aktualna.",
+        "dlg_resume_title": "Wznowić poprzednie rozmowy?",
+        "dlg_resume_msg": ("Znalazłem {count} rozmowy z poprzedniego uruchomienia "
+                           "({names}).\n\nWznowić je w otwartych zakładkach? "
+                           "Agent będzie pamiętał, o czym rozmawialiście.\n\n"
+                           "Na „Nie” zakładki zaczną od czystej rozmowy — "
+                           "poprzednie nic nie tracą, zostają w historii."),
+        "status_resumed": "Wznowiono rozmowy: {count}",
         "menu_skill_doctor": "Lekarz skilli",
         "dlg_skills_running": ("Sprawdzam skille…\n\nPytam o to Claude Code, "
                                "więc może to potrwać kilkadziesiąt sekund."),
@@ -1666,6 +1673,13 @@ UI_TRANSLATIONS = {
         "status_checking_models": "Checking the model list...",
         "status_models_updated": "Model names updated: {changes}",
         "models_up_to_date": "The model list is up to date.",
+        "dlg_resume_title": "Resume previous conversations?",
+        "dlg_resume_msg": ("Found {count} conversation(s) from the previous run "
+                           "({names}).\n\nResume them in the open tabs? The agent "
+                           "will remember what you were talking about.\n\n"
+                           "Choosing “No” starts fresh conversations — the previous "
+                           "ones lose nothing, they stay in history."),
+        "status_resumed": "Conversations resumed: {count}",
         "menu_skill_doctor": "Skill doctor",
         "dlg_skills_running": ("Checking your skills…\n\nThis asks Claude Code, "
                                "so it may take up to a minute."),
