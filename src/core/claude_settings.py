@@ -152,6 +152,63 @@ def set_effort(model_api_id: str, level: str | None, path: Path = None) -> bool:
     return True
 
 
+def get_skill_overrides(path: Path = None) -> dict:
+    """Mapa nazwa skilla → stan widoczności (`skillOverrides`).
+
+    Odczyt fail-open: uszkodzony plik nie może zablokować okna z raportem.
+    """
+    try:
+        dane = read_settings(path)
+    except SettingsError:
+        return {}
+    sekcja = dane.get("skillOverrides")
+    return {k: v for k, v in sekcja.items() if isinstance(v, str)} \
+        if isinstance(sekcja, dict) else {}
+
+
+def set_skill_override(skill_name: str, state: str | None, path: Path = None) -> bool:
+    """Ustaw stan widoczności skilla albo przywróć domyślny (`state=None`).
+
+    Stany opisane w `core/skill_doctor.OVERRIDE_STATES`. Zapis idzie przez tę
+    samą drogę co poziom wysiłku: MERGE, atomowo, z kopią — bo to CUDZY plik.
+    Zwraca True, gdy coś się realnie zmieniło.
+    """
+    from core.skill_doctor import OVERRIDE_STATES
+
+    skill_name = str(skill_name or "").strip()
+    if not skill_name:
+        raise SettingsError("brak nazwy skilla")
+    if state is not None and state not in OVERRIDE_STATES:
+        raise SettingsError(f"nieznany stan skilla: {state!r}")
+
+    p = Path(path or settings_path())
+    dane = read_settings(p)          # uszkodzony plik → wyjątek, zero zapisu
+
+    sekcja = dane.get("skillOverrides")
+    if not isinstance(sekcja, dict):
+        sekcja = {}
+    obecny = sekcja.get(skill_name)
+
+    # „on" to stan domyślny — zamiast wpisywać go jawnie, kasujemy wpis.
+    # Plik zostaje czysty, a zachowanie jest dokładnie takie samo.
+    if state is None or state == "on":
+        if obecny is None:
+            return False
+        sekcja.pop(skill_name, None)
+    else:
+        if obecny == state:
+            return False
+        sekcja[skill_name] = state
+
+    if sekcja:
+        dane["skillOverrides"] = sekcja
+    else:
+        dane.pop("skillOverrides", None)
+
+    _write_atomic(p, dane)
+    return True
+
+
 def _write_atomic(p: Path, dane: dict) -> None:
     """Zapis przez plik tymczasowy + podmiana, z jednorazową kopią zapasową."""
     p.parent.mkdir(parents=True, exist_ok=True)

@@ -771,6 +771,28 @@ UI_TRANSLATIONS = {
         "status_checking_models": "Sprawdzam listę modeli...",
         "status_models_updated": "Zaktualizowano nazwy modeli: {changes}",
         "models_up_to_date": "Lista modeli jest aktualna.",
+        "menu_skill_doctor": "Lekarz skilli",
+        "dlg_skills_running": ("Sprawdzam skille…\n\nPytam o to Claude Code, "
+                               "więc może to potrwać kilkadziesiąt sekund."),
+        "dlg_skills_failed": ("Nie udało się pobrać raportu o skillach.\n\n"
+                              "Powód: {error}"),
+        "dlg_skills_summary": ("Masz {total} skilli. {unused} z nich nie było użytych "
+                               "ani razu, a mimo to dokładają ok. {wasted} tokenów "
+                               "do KAŻDEJ tury rozmowy."),
+        "dlg_skills_col_off": "Wyłącz",
+        "dlg_skills_col_name": "Skill",
+        "dlg_skills_col_context": "Koszt/turę",
+        "dlg_skills_col_uses": "Użycia",
+        "dlg_skills_col_last": "Ostatnio",
+        "dlg_skills_never": "nigdy",
+        "dlg_skills_select_unused": "Zaznacz wszystkie nieużywane",
+        "dlg_skills_note": ("Wyłączony skill przestaje zajmować miejsce w kontekście, "
+                            "ale NIE ZNIKA — nadal wywołasz go ręcznie, wpisując "
+                            "/nazwa. Nic nie kasujemy z dysku. Zapisujemy to "
+                            "w ~/.claude/settings.json (pozostałe ustawienia "
+                            "zostają nietknięte); działa od następnego uruchomienia "
+                            "agenta."),
+        "status_skills_saved": "Zmieniono skille: {count} (oszczędność ok. {saved} tokenów/turę)",
         "menu_model_effort": "Poziom wysiłku modeli",
         "dlg_effort_desc": ("Wyższy wysiłek = model myśli dłużej i dokładniej, "
                             "ale zużywa więcej tokenów, czyli kosztuje więcej. "
@@ -1644,6 +1666,26 @@ UI_TRANSLATIONS = {
         "status_checking_models": "Checking the model list...",
         "status_models_updated": "Model names updated: {changes}",
         "models_up_to_date": "The model list is up to date.",
+        "menu_skill_doctor": "Skill doctor",
+        "dlg_skills_running": ("Checking your skills…\n\nThis asks Claude Code, "
+                               "so it may take up to a minute."),
+        "dlg_skills_failed": ("Could not get the skill report.\n\nReason: {error}"),
+        "dlg_skills_summary": ("You have {total} skills. {unused} of them were never "
+                               "used once, yet they still add about {wasted} tokens "
+                               "to EVERY turn of the conversation."),
+        "dlg_skills_col_off": "Turn off",
+        "dlg_skills_col_name": "Skill",
+        "dlg_skills_col_context": "Cost/turn",
+        "dlg_skills_col_uses": "Uses",
+        "dlg_skills_col_last": "Last used",
+        "dlg_skills_never": "never",
+        "dlg_skills_select_unused": "Select all unused",
+        "dlg_skills_note": ("A turned-off skill stops taking up context, but it does "
+                            "NOT disappear — you can still run it by typing /name. "
+                            "Nothing is deleted from disk. This is stored in "
+                            "~/.claude/settings.json (your other settings are left "
+                            "untouched) and takes effect the next time an agent starts."),
+        "status_skills_saved": "Skills changed: {count} (about {saved} tokens/turn saved)",
         "menu_model_effort": "Model effort levels",
         "dlg_effort_desc": ("Higher effort = the model thinks longer and more "
                             "carefully, but uses more tokens, so it costs more. "

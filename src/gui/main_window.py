@@ -2262,6 +2262,10 @@ class MainWindow(QMainWindow):
         effort_action.triggered.connect(self._show_model_effort_dialog)
         settings_menu.addAction(effort_action)
 
+        skill_doctor_action = QAction(tr('menu_skill_doctor'), self)
+        skill_doctor_action.triggered.connect(self._show_skill_doctor_dialog)
+        settings_menu.addAction(skill_doctor_action)
+
         settings_menu.addSeparator()
 
         cloud_action = QAction(tr('menu_cloud'), self)
@@ -5333,6 +5337,159 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
             self._save_settings()
             QMessageBox.information(self, tr('dlg_saved_title'),
                 tr('dlg_anthropic_key_saved'))
+
+    def _show_skill_doctor_dialog(self):
+        """Okno „Lekarz skilli" — co każdy skill kosztuje i czy ktoś go używa.
+
+        Raport liczy Claude Code (`/skill-doctor`), my go tylko uruchamiamy,
+        czytamy i pokazujemy — w terminalu nikt sam tego nie odpali.
+
+        ⛔ Wyłączamy przez `skillOverrides`, NIE przez `permissions.deny`.
+        Zmierzone 2026-09-14: wpis `Skill(pdf)` w `deny` zostawia skill na
+        liście z pełnym kosztem (~150 tokenów na turę) — blokuje uruchomienie,
+        nie płacenie. Szczegóły i pomiary w `core/skill_doctor`.
+        """
+        from core import skill_doctor as sd
+        from core import claude_settings as cs
+
+        biezacy = self._get_current_agent_tab()
+        katalog = getattr(biezacy, 'working_directory', None) if biezacy else None
+
+        czekanie = QMessageBox(self)
+        czekanie.setIcon(QMessageBox.Information)
+        czekanie.setWindowTitle(tr('menu_skill_doctor'))
+        czekanie.setText(tr('dlg_skills_running'))
+        czekanie.setStandardButtons(QMessageBox.NoButton)
+        czekanie.setWindowModality(Qt.NonModal)
+        czekanie.show()
+        QApplication.processEvents()
+        try:
+            raport = sd.parse_report(sd.run_report(self.claude_command, katalog))
+        except Exception as exc:
+            czekanie.close()
+            QMessageBox.warning(self, tr('menu_skill_doctor'),
+                                tr('dlg_skills_failed').format(error=str(exc)))
+            return
+        czekanie.close()
+
+        nadpisania = cs.get_skill_overrides()
+        marnowane = sd.wasted_context(raport)
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(tr('menu_skill_doctor'))
+        dialog.setMinimumSize(720, 520)
+        layout = QVBoxLayout(dialog)
+
+        naglowek = QLabel(tr('dlg_skills_summary').format(
+            total=len(raport['skills']),
+            unused=raport.get('never_used') or sum(
+                1 for s in raport['skills'] if s['uses'] == 0),
+            wasted=marnowane))
+        naglowek.setWordWrap(True)
+        layout.addWidget(naglowek)
+
+        tabela = QTableWidget(0, 5, dialog)
+        tabela.setHorizontalHeaderLabels([
+            tr('dlg_skills_col_off'), tr('dlg_skills_col_name'),
+            tr('dlg_skills_col_context'), tr('dlg_skills_col_uses'),
+            tr('dlg_skills_col_last')])
+        tabela.verticalHeader().setVisible(False)
+        tabela.setEditTriggers(QTableWidget.NoEditTriggers)
+        tabela.horizontalHeader().setStretchLastSection(True)
+
+        pola = {}
+        for s in sd.sort_for_review(raport['skills']):
+            r = tabela.rowCount()
+            tabela.insertRow(r)
+            pole = QCheckBox()
+            # Zaznaczamy z góry to, co JUŻ jest wyłączone — okno pokazuje stan
+            # faktyczny, a nie propozycję. Odznaczenie = włącz z powrotem.
+            juz = nadpisania.get(s['name'])
+            pole.setChecked(juz in ("user-invocable-only", "off"))
+            opakowanie = QWidget()
+            ukl = QHBoxLayout(opakowanie)
+            ukl.addWidget(pole)
+            ukl.setAlignment(Qt.AlignCenter)
+            ukl.setContentsMargins(0, 0, 0, 0)
+            tabela.setCellWidget(r, 0, opakowanie)
+            pola[s['name']] = (pole, juz)
+
+            koszt = "—" if s['context'] is None else f"~{s['context']}"
+            uzycia = tr('dlg_skills_never') if s['uses'] == 0 else f"{s['uses']}×"
+            for kol, tekst in ((1, s['name']), (2, koszt), (3, uzycia), (4, s['last_used'])):
+                tabela.setItem(r, kol, QTableWidgetItem(tekst))
+        tabela.resizeColumnsToContents()
+        layout.addWidget(tabela, stretch=1)
+
+        uwaga = QLabel(tr('dlg_skills_note'))
+        uwaga.setWordWrap(True)
+        uwaga.setStyleSheet(f"color: {theme.TEXT_DIM}; font-size: 11px;")
+        layout.addWidget(uwaga)
+
+        przyciski = QHBoxLayout()
+        zaznacz_btn = QPushButton(tr('dlg_skills_select_unused'))
+
+        def _zaznacz_nieuzywane():
+            for s in raport['skills']:
+                if s['uses'] == 0 and s['name'] in pola:
+                    pola[s['name']][0].setChecked(True)
+        zaznacz_btn.clicked.connect(_zaznacz_nieuzywane)
+        anuluj_btn = QPushButton(tr('dlg_cancel'))
+        anuluj_btn.clicked.connect(dialog.reject)
+        zapisz_btn = QPushButton(tr('dlg_save'))
+        zapisz_btn.clicked.connect(dialog.accept)
+        zapisz_btn.setDefault(True)
+        przyciski.addWidget(zaznacz_btn)
+        przyciski.addStretch()
+        przyciski.addWidget(anuluj_btn)
+        przyciski.addWidget(zapisz_btn)
+        layout.addLayout(przyciski)
+
+        dialog.setStyleSheet(f"""
+            QDialog {{ background-color: {theme.BG_WINDOW}; color: {theme.TEXT}; }}
+            QLabel {{ color: {theme.TEXT}; }}
+            QTableWidget {{
+                background-color: {theme.BG_INPUT}; color: {theme.TEXT};
+                gridline-color: {theme.BORDER}; border: 1px solid {theme.BORDER};
+            }}
+            QHeaderView::section {{
+                background-color: {theme.SURFACE}; color: {theme.TEXT_DIM};
+                border: none; padding: 6px;
+            }}
+            QPushButton {{
+                background-color: {theme.SURFACE}; color: {theme.TEXT};
+                border: 1px solid {theme.BORDER}; border-radius: 6px; padding: 8px 16px;
+            }}
+            QPushButton:hover {{ border-color: {theme.ACCENT}; }}
+        """)
+
+        if dialog.exec_() != QDialog.Accepted:
+            return
+
+        zmienione, bledy, zaoszczedzone = 0, [], 0
+        for nazwa, (pole, przed) in pola.items():
+            chce_wylaczyc = pole.isChecked()
+            bylo_wylaczone = przed in ("user-invocable-only", "off")
+            if chce_wylaczyc == bylo_wylaczone:
+                continue
+            # „off" ustawione wcześniej przez użytkownika ZOSTAWIAMY jego wyborem;
+            # sami proponujemy wyłącznie stan, który nic nie odbiera.
+            nowy = sd.DEFAULT_OFF_STATE if chce_wylaczyc else None
+            try:
+                if cs.set_skill_override(nazwa, nowy):
+                    zmienione += 1
+                    if chce_wylaczyc:
+                        koszt = next((s['context'] or 0) for s in raport['skills']
+                                     if s['name'] == nazwa)
+                        zaoszczedzone += koszt
+            except cs.SettingsError as exc:
+                bledy.append(str(exc))
+        if bledy:
+            QMessageBox.warning(self, tr('menu_skill_doctor'),
+                                tr('dlg_effort_unreadable').format(error="; ".join(bledy)))
+        elif zmienione:
+            self._update_status(tr('status_skills_saved').format(
+                count=zmienione, saved=zaoszczedzone))
 
     def _show_model_effort_dialog(self):
         """Okno „Poziom wysiłku modeli" — zapisuje do `~/.claude/settings.json`.

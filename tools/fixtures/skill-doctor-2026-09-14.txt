@@ -1,0 +1,32 @@
+Skills loaded this session
+
+  skill                       source        context  7d tokens   uses  last used
+  billing-automation          userSettings      ~80          -     0×  never
+  brand-guidelines            userSettings      ~90          -     0×  never
+  changelog                   userSettings        -          -     0×  never
+  creating-atomic-prs         userSettings     ~120          -     0×  never
+  doc-coauthoring             userSettings     ~150          -     0×  never
+  enforcing-strict-tdd-cycle  userSettings     ~100          -     0×  never
+  mcp-builder                 userSettings     ~100          -     0×  never
+  pptx                        userSettings     ~230          -     0×  never
+  qt-cpp-docs                 userSettings     ~220          -     0×  never
+  qt-cpp-review               userSettings     ~140          -     0×  never
+  qt-qml                      userSettings     ~120          -     0×  never
+  qt-qml-docs                 userSettings     ~230          -     0×  never
+  qt-qml-profiler             userSettings     ~150          -     0×  never
+  qt-qml-review               userSettings     ~150          -     0×  never
+  skill-creator               userSettings     ~110          -     0×  never
+  stripe-integration          userSettings      ~90          -     0×  never
+  test-driven-development     userSettings      ~40          -     0×  never
+  systematic-debugging        userSettings      ~40          -     1×  94 days
+  prd-taskmaster              userSettings     ~180          -     4×  80 days
+  docx                        userSettings     ~260          -     2×  61 days
+  writing-plans               userSettings      ~30          -     1×  60 days
+  webapp-testing              userSettings      ~70          -     9×  53 days
+  pdf                         userSettings     ~150          -     7×  7 days
+
+  context = this skill's one-line listing in the system prompt, included every turn
+  (dash = not in the current listing, costs nothing; full SKILL.md loads only when it runs)
+  7d tokens = tokens attributed to the skill over the last 7 days of sessions on this machine
+
+16 skills loaded but never invoked. Each one adds to the system prompt every turn. Disable in /skills, or remove from .claude/skills.
