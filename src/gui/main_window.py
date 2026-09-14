@@ -2258,6 +2258,10 @@ class MainWindow(QMainWindow):
         check_models_action.triggered.connect(self._check_models_manual)
         settings_menu.addAction(check_models_action)
 
+        effort_action = QAction(tr('menu_model_effort'), self)
+        effort_action.triggered.connect(self._show_model_effort_dialog)
+        settings_menu.addAction(effort_action)
+
         settings_menu.addSeparator()
 
         cloud_action = QAction(tr('menu_cloud'), self)
@@ -5329,6 +5333,114 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
             self._save_settings()
             QMessageBox.information(self, tr('dlg_saved_title'),
                 tr('dlg_anthropic_key_saved'))
+
+    def _show_model_effort_dialog(self):
+        """Okno „Poziom wysiłku modeli" — zapisuje do `~/.claude/settings.json`.
+
+        PO CO: Claude Code trzyma poziom wysiłku OSOBNO DLA KAŻDEGO MODELU
+        (sekcja `modelSettings`). Fable 5.1 startuje na `high`, jest gorliwszy
+        od poprzednika i kosztuje 2× tyle co Opus 5 — zejście na `medium` bywa
+        największą pojedynczą oszczędnością, jaką da się tu zrobić.
+
+        ⚠️ To ustawienie NIE jest per agent, tylko PER MODEL i wspólne dla całego
+        Claude Code — okno mówi o tym wprost, żeby nikt nie szukał go w agencie.
+        """
+        # Importy lokalne: `config` jako MODUŁ, bo nazwy modeli i ceny są
+        # mutowane w miejscu przy odświeżeniu katalogu — odczyt przez moduł
+        # zawsze widzi stan aktualny, a nie kopię z chwili importu okna.
+        import config
+        from config import CLAUDE_MODELS, model_label_short
+        from core import claude_settings as cs
+
+        # Uszkodzonego pliku nie ruszamy — mówimy o tym i wychodzimy.
+        try:
+            cs.read_settings()
+        except cs.SettingsError as exc:
+            QMessageBox.warning(self, tr('menu_model_effort'),
+                                tr('dlg_effort_unreadable').format(error=str(exc)))
+            return
+
+        biezace = cs.all_efforts()
+        dialog = QDialog(self)
+        dialog.setWindowTitle(tr('menu_model_effort'))
+        dialog.setMinimumWidth(560)
+        layout = QVBoxLayout(dialog)
+
+        opis = QLabel(tr('dlg_effort_desc'))
+        opis.setWordWrap(True)
+        layout.addWidget(opis)
+
+        etykiety = [tr('dlg_effort_model_default'), tr('dlg_effort_low'),
+                    tr('dlg_effort_medium'), tr('dlg_effort_high')]
+        wartosci = [None, "low", "medium", "high"]
+
+        combos = {}
+        form = QFormLayout()
+        for key in CLAUDE_MODELS.keys():
+            if key == 'default':
+                continue        # „Domyślny" nie jest modelem, tylko brakiem wyboru
+            api_id = config.model_api_id(key)
+            if not api_id:
+                continue
+            combo = QComboBox()
+            for etykieta in etykiety:
+                combo.addItem(etykieta)
+            biezacy = biezace.get(api_id)
+            combo.setCurrentIndex(wartosci.index(biezacy) if biezacy in wartosci else 0)
+            combos[api_id] = (combo, biezacy)
+            koszt = config.model_cost_hint(key)
+            podpis = model_label_short(key) + (f"   {koszt}" if koszt else "")
+            form.addRow(podpis, combo)
+        layout.addLayout(form)
+
+        uwaga = QLabel(tr('dlg_effort_note'))
+        uwaga.setWordWrap(True)
+        uwaga.setStyleSheet(f"color: {theme.TEXT_DIM}; font-size: 11px;")
+        layout.addWidget(uwaga)
+
+        button_layout = QHBoxLayout()
+        cancel_btn = QPushButton(tr('dlg_cancel'))
+        cancel_btn.clicked.connect(dialog.reject)
+        save_btn = QPushButton(tr('dlg_save'))
+        save_btn.clicked.connect(dialog.accept)
+        save_btn.setDefault(True)
+        button_layout.addStretch()
+        button_layout.addWidget(cancel_btn)
+        button_layout.addWidget(save_btn)
+        layout.addLayout(button_layout)
+
+        dialog.setStyleSheet(f"""
+            QDialog {{ background-color: {theme.BG_WINDOW}; color: {theme.TEXT}; }}
+            QLabel {{ color: {theme.TEXT}; }}
+            QComboBox {{
+                background-color: {theme.BG_INPUT}; color: {theme.TEXT};
+                border: 1px solid {theme.BORDER}; border-radius: 6px; padding: 6px;
+            }}
+            QPushButton {{
+                background-color: {theme.SURFACE}; color: {theme.TEXT};
+                border: 1px solid {theme.BORDER}; border-radius: 6px; padding: 8px 16px;
+            }}
+            QPushButton:hover {{ border-color: {theme.ACCENT}; }}
+        """)
+
+        if dialog.exec_() != QDialog.Accepted:
+            return
+
+        zmienione, bledy = 0, []
+        for api_id, (combo, przed) in combos.items():
+            nowy = wartosci[combo.currentIndex()]
+            if nowy == przed:
+                continue
+            try:
+                if cs.set_effort(api_id, nowy):
+                    zmienione += 1
+            except cs.SettingsError as exc:
+                bledy.append(str(exc))
+        if bledy:
+            QMessageBox.warning(self, tr('menu_model_effort'),
+                                tr('dlg_effort_unreadable').format(error="; ".join(bledy)))
+        elif zmienione:
+            self._update_status(tr('status_effort_saved').format(count=zmienione))
 
     def _show_claude_command_dialog(self):
         """Show dialog to configure Claude Code command."""

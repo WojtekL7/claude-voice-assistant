@@ -276,6 +276,9 @@ class AgentTab(QWidget):
         self.memory_files = agent_config.get('memory_files', [])  # list of file paths
         self.auto_start = agent_config.get('auto_start', True)
         self.model = agent_config.get('model', 'default')
+        # Model podagentow (zmienna CLAUDE_CODE_SUBAGENT_MODEL) — patrz
+        # config.subagent_env. Pusto = nie ustawiamy nic.
+        self.subagent_model = agent_config.get('subagent_model', '')
         self.splitter_sizes = agent_config.get(
             'splitter_sizes', list(DEFAULT_SPLITTER_SIZES))
 
@@ -441,11 +444,16 @@ class AgentTab(QWidget):
         # Fabryka tworzy i konfiguruje właściwy silnik. Cała konfiguracja
         # (czcionka, scrollbar, historia, flow control) żyje wewnątrz backendu
         # — patrz terminal_backend.py.
+        # Model podagentów jedzie ZMIENNĄ ŚRODOWISKOWĄ, więc musi być znany
+        # TERAZ — powłoka dostaje środowisko przy starcie i później się go nie
+        # podmienia. Zmiana ustawienia działa dopiero po restarcie zakładki.
+        from config import subagent_env
         self.terminal_backend = create_terminal_backend(
             working_directory=self.working_directory,
             shell=default_shell(),
             font_family=theme.mono_family(),
             font_size=13,
+            extra_env=subagent_env(getattr(self, 'subagent_model', '')),
         )
         self.terminal = self.terminal_backend.widget
         self.conversation_area = None
@@ -1461,6 +1469,7 @@ class AgentTab(QWidget):
             'memory_files': self.memory_files,
             'working_directory': self.working_directory,
             'model': self.model,
+            'subagent_model': self.subagent_model,
             'splitter_sizes': self.splitter_sizes,
         }
 
@@ -1476,6 +1485,7 @@ class AgentTab(QWidget):
         self.auto_start = config.get('auto_start', self.auto_start)
         self.memory_files = config.get('memory_files', [])
         self.model = config.get('model', self.model)
+        self.subagent_model = config.get('subagent_model', self.subagent_model)
 
         new_working_dir = config.get('working_directory', self.working_directory)
         if new_working_dir != self.working_directory:

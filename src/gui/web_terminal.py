@@ -135,6 +135,36 @@ class _Bridge(QObject):
 SELECTION_FRESH_SECS = 30.0
 
 
+def build_shell_env(extra_env: dict = None) -> dict:
+    """Środowisko dla powłoki zakładki — jako CZYSTA FUNKCJA, żeby dało się je
+    odpytać testem bez uruchamiania QtWebEngine i prawdziwego PTY.
+
+    Składa się z trzech warstw, w tej kolejności:
+      1. kopia środowiska procesu apki,
+      2. ustawienia terminala i łatka na UBOGI PATH — aplikacja uruchomiona
+         z Findera/menu nie widzi narzędzi z profilu (Homebrew, nvm, node),
+         więc `claude` nie znajdowałby `node`,
+      3. dokładki tej zakładki (`CLAUDE_CODE_SUBAGENT_MODEL`) — NA KOŃCU, żeby
+         świadome ustawienie agenta wygrywało z tym, co akurat stoi
+         w środowisku procesu apki.
+    """
+    env = dict(os.environ)
+    env["TERM"] = "xterm-256color"
+    env["COLORTERM"] = "truecolor"
+    # Na Windows te ścieżki nie istnieją, a PATH ustawia instalator — pomijamy.
+    if not is_windows():
+        for extra in ("/opt/homebrew/bin", "/usr/local/bin",
+                      str(Path.home() / ".local" / "bin"),
+                      str(Path.home() / ".npm-global" / "bin")):
+            parts = env.get("PATH", "").split(os.pathsep)
+            if extra not in parts:
+                env["PATH"] = (env.get("PATH", "") + os.pathsep + extra).strip(os.pathsep)
+    for klucz, wartosc in (extra_env or {}).items():
+        if wartosc:            # pusta wartość = NIE ustawiamy zmiennej wcale
+            env[str(klucz)] = str(wartosc)
+    return env
+
+
 class WebTerminal(QWidget):
     """Terminal oparty o xterm.js + QtWebEngine + PTY."""
 
@@ -151,6 +181,7 @@ class WebTerminal(QWidget):
         self._selection_ts = 0.0    # monotonic() ostatniego NIEPUSTEGO zaznaczenia
         self._shell = default_shell()
         self._cwd = None
+        self._extra_env = {}        # dokładki do środowiska powłoki (patrz set_extra_env)
         self._pending_size = (80, 24)
         # Motyw/czcionka mogą przyjść z Pythona ZANIM xterm.js się załaduje —
         # buforujemy i wysyłamy po frontend_ready (inaczej runJavaScript przepada).
@@ -221,6 +252,14 @@ class WebTerminal(QWidget):
         self.view.load(QUrl.fromLocalFile(str(url)))
 
     # ==================== API zbliżone do QTermWidget ====================
+
+    def set_extra_env(self, env: dict):
+        """Zmienne DOKŁADANE do środowiska powłoki tej zakładki.
+
+        ⚠️ Czytane w `_spawn`, czyli RAZ, przy uruchamianiu powłoki — wywołanie
+        po starcie nie zmieni już nic (proces ma własną kopię środowiska).
+        """
+        self._extra_env = {str(k): str(v) for k, v in (env or {}).items() if v}
 
     def set_shell_program(self, program: str):
         self._shell = program
@@ -524,20 +563,9 @@ class WebTerminal(QWidget):
             self._data_ready.emit(hint)
             return
         cols, rows = self._pending_size
-        env = dict(os.environ)
-        env["TERM"] = "xterm-256color"
-        env["COLORTERM"] = "truecolor"
-        # macOS/Linux: aplikacja z Findera/menu dostaje UBOGI PATH i nie widzi
-        # narzędzi z profilu (Homebrew, nvm, node) → `claude` nie znajduje `node`.
-        # Zaradczo: 1) login shell (-l), 2) dołożenie typowych lokalizacji do PATH.
-        # Na Windows te ścieżki nie istnieją i PATH ustawia instalator — pomijamy.
-        if not is_windows():
-            for extra in ("/opt/homebrew/bin", "/usr/local/bin",
-                          str(Path.home() / ".local" / "bin"),
-                          str(Path.home() / ".npm-global" / "bin")):
-                parts = env.get("PATH", "").split(os.pathsep)
-                if extra not in parts:
-                    env["PATH"] = (env.get("PATH", "") + os.pathsep + extra).strip(os.pathsep)
+        env = build_shell_env(getattr(self, "_extra_env", None))
+        if getattr(self, "_extra_env", None):
+            _log(f"spawn: dokładki środowiska: {sorted(self._extra_env)}")
         argv = [self._shell]
         if not is_windows():
             argv.append("-l")  # login shell (Unix); na Windows powłoka jest non-login

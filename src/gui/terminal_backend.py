@@ -243,13 +243,24 @@ class QTermWidgetBackend(TerminalBackend):
 
     def __init__(self, working_directory: str, shell: str,
                  font_family: str = "Ubuntu Mono", font_size: int = 13,
-                 parent=None):
+                 parent=None, extra_env: dict = None):
         super().__init__(parent)
         if not QTERMWIDGET_AVAILABLE:
             # Nie powinno się zdarzyć (fabryka pilnuje), ale chronimy się jawnie.
             raise RuntimeError("QTermWidget niedostępny na tym systemie")
 
         self._term = QTermWidget(0)
+        # ⛔ `setEnvironment` ZASTĘPUJE całe środowisko, nie dokłada do niego —
+        # podanie samej naszej zmiennej odebrałoby powłoce PATH i `claude`
+        # przestałby się znajdować. Dlatego przekazujemy KOMPLET: kopię
+        # środowiska procesu plus nasze dokładki.
+        if extra_env:
+            try:
+                pelne = dict(os.environ)
+                pelne.update({str(k): str(v) for k, v in extra_env.items()})
+                self._term.setEnvironment([f"{k}={v}" for k, v in pelne.items()])
+            except Exception:
+                pass  # starszy QTermWidget bez tej metody — zakładka ma działać
         self._term.setShellProgram(shell)
         self._term.setWorkingDirectory(working_directory)
 
@@ -433,11 +444,15 @@ class WebTerminalBackend(TerminalBackend):
 
     def __init__(self, working_directory: str, shell: str,
                  font_family: str = "Ubuntu Mono", font_size: int = 13,
-                 parent=None):
+                 parent=None, extra_env: dict = None):
         super().__init__(parent)
         from gui.web_terminal import WebTerminal  # lazy: nie ciągnij QtWebEngine bez potrzeby
 
         self._term = WebTerminal(parent)
+        # ⚠️ Środowisko MUSI być podane PRZED startem powłoki — `_spawn` czyta je
+        # raz, w chwili uruchomienia. Ustawienie po starcie nie zrobiłoby nic.
+        if extra_env:
+            self._term.set_extra_env(extra_env)
         if shell:
             self._term.set_shell_program(shell)
         if working_directory:
@@ -566,16 +581,24 @@ def webengine_required() -> bool:
 
 def create_terminal_backend(working_directory: str, shell: str = None,
                             font_family: str = "Ubuntu Mono", font_size: int = 13,
-                            parent=None) -> TerminalBackend:
+                            parent=None, extra_env: dict = None) -> TerminalBackend:
     """Stwórz właściwy backend terminala dla bieżącego systemu.
 
     Parametry odpowiadają temu, co AgentTab ustawia dziś na QTermWidget
     (katalog roboczy, powłoka, czcionka).
+
+    `extra_env` to zmienne DOKŁADANE do środowiska powłoki tej zakładki —
+    dziś `CLAUDE_CODE_SUBAGENT_MODEL` (na jakim modelu mają chodzić podagenci
+    tego agenta). Środowisko ustawia się przy URUCHAMIANIU powłoki, więc
+    zmiana ustawienia działa dopiero po restarcie zakładki — i tak ma być
+    napisane w oknie, żeby nikt nie szukał usterki tam, gdzie jej nie ma.
     """
     if shell is None:
         shell = default_shell()
 
     kind = selected_backend_kind()
     if kind == "qtermwidget":
-        return QTermWidgetBackend(working_directory, shell, font_family, font_size, parent)
-    return WebTerminalBackend(working_directory, shell, font_family, font_size, parent)
+        return QTermWidgetBackend(working_directory, shell, font_family, font_size,
+                                  parent, extra_env)
+    return WebTerminalBackend(working_directory, shell, font_family, font_size,
+                              parent, extra_env)

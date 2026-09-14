@@ -344,6 +344,30 @@ CLAUDE_MODEL_PRICES = {
     "haiku":  {"input": 1.0,  "output": 5.0},
 }
 
+# Model, na którym mają chodzić PODAGENCI (zadania w tle uruchamiane przez
+# Claude Code). Sterujemy tym zmienną `CLAUDE_CODE_SUBAGENT_MODEL`.
+# PO CO: Fable 5.1 lubi zlecać dużo pracy podagentom, a każdy z nich liczy się
+# po jego stawce — 2× Opus. Rozdzielenie „rozmowa na Fable, podagenci na
+# Opusie" to najtańsza oszczędność, jaką da się tu zrobić, i pochodzi wprost
+# z zaleceń zespołu Claude Code.
+# Pusty napis = NIE ustawiamy zmiennej (Claude Code decyduje sam) — to jest
+# stan domyślny i świadomie nie udajemy, że wiemy lepiej.
+DEFAULT_SUBAGENT_MODEL = ""
+SUBAGENT_MODEL_ENV = "CLAUDE_CODE_SUBAGENT_MODEL"
+
+
+def subagent_env(model_key: str) -> dict:
+    """Zmienne środowiskowe dla zakładki — puste, gdy trzymamy się domyślnego.
+
+    Do zmiennej idzie DOKŁADNIE to, co rozumie `claude` (alias rodziny albo
+    pełna nazwa modelu) — czyli ten sam napis, którym posługuje się `--model`.
+    """
+    key = (model_key or "").strip()
+    if not key or key == "default":
+        return {}
+    return {SUBAGENT_MODEL_ENV: key}
+
+
 # Model odniesienia dla podpowiedzi „ile razy drożej". Opus 5 jest w tym
 # ekosystemie domyślnym wyborem, więc porównanie do niego niesie sens dla
 # właściciela; przy nim samym podpowiedź się nie pokazuje.
@@ -747,6 +771,23 @@ UI_TRANSLATIONS = {
         "status_checking_models": "Sprawdzam listę modeli...",
         "status_models_updated": "Zaktualizowano nazwy modeli: {changes}",
         "models_up_to_date": "Lista modeli jest aktualna.",
+        "menu_model_effort": "Poziom wysiłku modeli",
+        "dlg_effort_desc": ("Wyższy wysiłek = model myśli dłużej i dokładniej, "
+                            "ale zużywa więcej tokenów, czyli kosztuje więcej. "
+                            "Zespół Claude Code zaleca dla Fable 5.1 poziom ŚREDNI "
+                            "tam, gdzie wcześniej wystarczał wysoki."),
+        "dlg_effort_model_default": "Domyślny modelu",
+        "dlg_effort_low": "Niski (najtaniej)",
+        "dlg_effort_medium": "Średni (zalecany dla Fable 5.1)",
+        "dlg_effort_high": "Wysoki (najdokładniej, najdrożej)",
+        "dlg_effort_note": ("Ustawienie jest WSPÓLNE dla całego Claude Code — dotyczy "
+                            "każdego agenta używającego danego modelu, nie tylko "
+                            "otwartej zakładki. Zapisujemy je w pliku ~/.claude/settings.json "
+                            "(pozostałe Twoje ustawienia zostają nietknięte). Działa "
+                            "od następnego uruchomienia agenta."),
+        "dlg_effort_unreadable": ("Nie mogę bezpiecznie zapisać ustawień Claude Code, "
+                                  "więc NIC nie zmieniłem.\n\nPowód: {error}"),
+        "status_effort_saved": "Zapisano poziom wysiłku ({count})",
         "model_cost_more": "⚠️ {ratio}× droższy niż {ref}",
         "model_cost_less": "{ratio}× tańszy niż {ref}",
         "model_cost_raw": "{inp} $ / {out} $ za milion tokenów",
@@ -968,6 +1009,12 @@ UI_TRANSLATIONS = {
         "dlg_agent_working_dir_label": "Katalog roboczy:",
         "dlg_agent_model_label": "Model Claude Code:",
         "dlg_agent_model_hint": "Zmiana modelu wymaga restartu agenta (Stop → Uruchom).",
+        "dlg_agent_subagent_label": "Model podagentów:",
+        "dlg_agent_subagent_default": "Taki jak model rozmowy",
+        "dlg_agent_subagent_hint": ("Claude Code zleca część pracy podagentom. "
+                                    "Ustawienie im tańszego modelu obniża rachunek, "
+                                    "a rozmowa zostaje na wybranym wyżej. "
+                                    "Działa po restarcie agenta (Stop → Uruchom)."),
         "dlg_agent_auto_start": "Uruchamiaj automatycznie przy starcie aplikacji",
         "dlg_agent_load_memory": "Wczytaj pliki pamięci po starcie Claude Code",
         "dlg_agent_icon_label": "Ikona zakładki",
@@ -1597,6 +1644,23 @@ UI_TRANSLATIONS = {
         "status_checking_models": "Checking the model list...",
         "status_models_updated": "Model names updated: {changes}",
         "models_up_to_date": "The model list is up to date.",
+        "menu_model_effort": "Model effort levels",
+        "dlg_effort_desc": ("Higher effort = the model thinks longer and more "
+                            "carefully, but uses more tokens, so it costs more. "
+                            "The Claude Code team recommends MEDIUM for Fable 5.1 "
+                            "where high used to be needed."),
+        "dlg_effort_model_default": "Model default",
+        "dlg_effort_low": "Low (cheapest)",
+        "dlg_effort_medium": "Medium (recommended for Fable 5.1)",
+        "dlg_effort_high": "High (most thorough, most expensive)",
+        "dlg_effort_note": ("This setting is SHARED across Claude Code — it applies to "
+                            "every agent using that model, not just the open tab. "
+                            "It is stored in ~/.claude/settings.json (your other "
+                            "settings are left untouched). Takes effect the next time "
+                            "an agent starts."),
+        "dlg_effort_unreadable": ("Claude Code settings cannot be written safely, "
+                                  "so NOTHING was changed.\n\nReason: {error}"),
+        "status_effort_saved": "Effort level saved ({count})",
         "model_cost_more": "⚠️ {ratio}× pricier than {ref}",
         "model_cost_less": "{ratio}× cheaper than {ref}",
         "model_cost_raw": "${inp} / ${out} per million tokens",
@@ -1813,6 +1877,12 @@ UI_TRANSLATIONS = {
         "dlg_agent_working_dir_label": "Working directory:",
         "dlg_agent_model_label": "Claude Code model:",
         "dlg_agent_model_hint": "Changing the model requires restarting the agent (Stop → Run).",
+        "dlg_agent_subagent_label": "Subagent model:",
+        "dlg_agent_subagent_default": "Same as the conversation model",
+        "dlg_agent_subagent_hint": ("Claude Code hands part of the work to subagents. "
+                                    "Giving them a cheaper model lowers the bill while "
+                                    "the conversation stays on the model chosen above. "
+                                    "Takes effect after restarting the agent (Stop → Run)."),
         "dlg_agent_auto_start": "Start automatically when the app launches",
         "dlg_agent_load_memory": "Load memory files after Claude Code starts",
         "dlg_agent_icon_label": "Tab icon",
@@ -2440,6 +2510,26 @@ def apply_model_catalog(models: dict) -> None:
                 and cena_in > 0 and cena_out > 0:
             CLAUDE_MODEL_PRICES[family] = {"input": float(cena_in), "output": float(cena_out)}
     _rebuild_api_id_map(models or {})
+
+
+def model_api_id(key: str) -> str:
+    """Nasz klucz („fable") → identyfikator, którym posługuje się Claude Code
+    („claude-fable-5-1"). Potrzebny do `~/.claude/settings.json`, bo tam poziom
+    wysiłku jest kluczowany PO MODELU, a nie po naszej etykiecie.
+
+    Źródłem jest mapa zbudowana z katalogu (`CLAUDE_MODEL_API_IDS`), więc po
+    wydaniu Fable 5.2 identyfikator zmieni się SAM. Gdy mapa nic nie wie —
+    zwracamy klucz bez zmian: dla pozycji wpisanych pełną nazwą
+    („claude-opus-4-8") to od razu poprawna odpowiedź.
+    """
+    key = (key or "").strip()
+    if not key or key == "default":
+        return ""
+    # Mapa idzie w drugą stronę (api_id → klucz), więc szukamy wpisu wskazującego
+    # na nasz klucz. Przy kilku wariantach (Haiku ma alias i wersję z datą)
+    # bierzemy NAJDŁUŻSZY, czyli pełny identyfikator — ten jest jednoznaczny.
+    kandydaci = [api for api, k in CLAUDE_MODEL_API_IDS.items() if k == key]
+    return max(kandydaci, key=len) if kandydaci else key
 
 
 def model_cost_hint(key: str) -> str:

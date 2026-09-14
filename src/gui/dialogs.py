@@ -1187,6 +1187,30 @@ class AgentConfigDialog(QDialog):
         self.model_combo.currentIndexChanged.connect(self._update_model_cost_label)
         self._update_model_cost_label()
 
+        # --- model PODAGENTÓW (CLAUDE_CODE_SUBAGENT_MODEL) ---
+        # Claude Code potrafi zlecać pracę podagentom; domyślnie chodzą na tym
+        # samym modelu co rozmowa. Przy Fable 5.1 (2× cena Opusa) to najdroższa
+        # część rachunku, a rozdzielenie jest darmowe.
+        self.subagent_combo = _StyledComboBox()
+        self.subagent_combo.setMinimumHeight(36)
+        self.subagent_combo.setStyleSheet(self.model_combo.styleSheet())
+        subagent_view = QListView()
+        self.subagent_combo.setView(subagent_view)
+        self.subagent_combo.addItem(tr('dlg_agent_subagent_default'), "")
+        for key in CLAUDE_MODELS.keys():
+            if key == "default":
+                continue          # „taki jak rozmowa" to już pierwsza pozycja
+            self.subagent_combo.addItem(model_label_short(key), key)
+        current_sub = "" if self.is_new_agent else (self.agent.get('subagent_model') or "")
+        idx_sub = self.subagent_combo.findData(current_sub)
+        self.subagent_combo.setCurrentIndex(idx_sub if idx_sub >= 0 else 0)
+        form.addRow(tr('dlg_agent_subagent_label'), self.subagent_combo)
+
+        subagent_hint = QLabel(tr('dlg_agent_subagent_hint'))
+        subagent_hint.setStyleSheet(f"color: {theme.TEXT_FAINT}; font-size: 11px;")
+        subagent_hint.setWordWrap(True)
+        form.addRow("", subagent_hint)
+
         layout.addLayout(form)
 
         # Checkboxes
@@ -1208,7 +1232,7 @@ class AgentConfigDialog(QDialog):
         # naturalna wysokość rośnie po nałożeniu arkusza stylów (padding), więc
         # policzona przy tworzeniu byłaby za mała i Qt ścisnęłoby listę o 1 px
         # (ogonek litery „j" w „Polski — Marek"). Minimum nigdy poniżej natury.
-        for _combo in (self.voice_combo, self.model_combo):
+        for _combo in (self.voice_combo, self.model_combo, self.subagent_combo):
             _combo.setMinimumHeight(max(_combo.minimumHeight(),
                                         _combo.sizeHint().height()))
         return widget
@@ -1730,6 +1754,7 @@ class AgentConfigDialog(QDialog):
             'auto_start': self.auto_start_checkbox.isChecked(),
             'send_memory_on_start': self.send_memory_checkbox.isChecked(),
             'model': self.model_combo.currentData() or DEFAULT_AGENT_MODEL,
+            'subagent_model': self.subagent_combo.currentData() or '',
             'icon': self.icon_spec,
             'tab_color': self.tab_color,
             'tts_voice': self.voice_combo.currentData(),
