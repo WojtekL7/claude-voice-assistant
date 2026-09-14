@@ -483,7 +483,12 @@ DEFAULT_SKIN_COLORS = theme.skin_colors()
 # i user nie zobaczyłby żadnej zmiany. Sprawdzone przed podbiciem: user miał
 # 40/40 kolorów identycznych z domyślnymi (zero własnych), więc nic nie ginie;
 # własne NAPISY na przyciskach (skin_icons) i tak nie podlegają migracji.
-SKIN_VERSION = 5
+# → 6 (2026-09-14): wzmocnione DWA sygnały stanu — panel dolny przy nieaktywnym
+# oknie (`inactive_panel_bg`) i wypełnienie wybranej zakładki. Bez podbicia
+# zmiana byłaby dla użytkownika NIEWIDOCZNA: `config.json` przykrywa paletę.
+# Sprawdzone PRZED podbiciem (ten sam przepis co przy v5): 40/40 kolorów
+# identycznych z domyślnymi, zero własnych — migracja nic nie kasuje.
+SKIN_VERSION = 6
 
 # Nazwy kolorów do wyświetlenia w UI (po polsku)
 SKIN_COLOR_NAMES = {

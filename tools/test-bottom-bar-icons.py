@@ -173,6 +173,45 @@ spr("3g", "gałka wyłączonego też jest widoczna na ciemnym torze (kontrola od
     abs(_jasnosc(_off_galka) - _jasnosc(_off_tor)) >= 20,
     f"różnica {abs(_jasnosc(_off_galka) - _jasnosc(_off_tor)):.0f}")
 
+# ---- 3h-3k. DWA SYGNAŁY STANU OKNA — próg WYŻSZY niż ogólne 20 ---------------
+# ⛔ POWÓD OSOBNEGO, WYŻSZEGO PROGU (zgłoszenie właściciela 2026-09-14): oba te
+# sygnały MIEŚCIŁY SIĘ w regule „≥20/255" — zakładka miała 26, panel nieaktywny
+# 31 — a mimo to zgłosił OBA naraz jako za słabe. Na tle o jasności 14/255
+# dwadzieścia punktów to za mało, żeby cokolwiek było widać. Ogólne 20 zostaje
+# podłogą dla wszystkich sygnałów; TE DWA mają własny, wyższy próg.
+PROG_SYGNALU_OKNA = 40
+
+_tlo_paska = _jasnosc(theme.BG_PANEL)
+_roznica_zakladki = _jasnosc(theme.TAB_ACTIVE) - _tlo_paska
+_roznica_panelu = _jasnosc(theme.SURFACE_INACTIVE) - _tlo_paska
+
+spr("3h", f"wybrana zakładka odcina się od pozostałych (≥{PROG_SYGNALU_OKNA}/255)",
+    _roznica_zakladki >= PROG_SYGNALU_OKNA,
+    f"{theme.TAB_ACTIVE}={_jasnosc(theme.TAB_ACTIVE):.0f} wobec paska "
+    f"{theme.BG_PANEL}={_tlo_paska:.0f}, różnica {_roznica_zakladki:.0f}")
+spr("3i", f"panel przy NIEAKTYWNYM oknie jest wyraźnie jaśniejszy (≥{PROG_SYGNALU_OKNA}/255)",
+    _roznica_panelu >= PROG_SYGNALU_OKNA,
+    f"{theme.SURFACE_INACTIVE}={_jasnosc(theme.SURFACE_INACTIVE):.0f} wobec "
+    f"{theme.BG_PANEL}={_tlo_paska:.0f}, różnica {_roznica_panelu:.0f}")
+# KONTROLE ODWROTNE — sygnał ma być JAŚNIEJSZY, nie ciemniejszy, i ma zostać
+# fioletem. Bez nich „mocniejszy kontrast" dałoby się spełnić czernią albo
+# szarością, czyli wypaść z rodziny kolorów całego programu.
+spr("3j", "oba sygnały są JAŚNIEJSZE od tła, nie ciemniejsze",
+    _roznica_zakladki > 0 and _roznica_panelu > 0,
+    f"zakładka {_roznica_zakladki:.0f}, panel {_roznica_panelu:.0f}")
+
+
+def _jest_fioletem(hexcol):
+    """Składowa niebieska wyraźnie nad czerwoną, a czerwona nad zieloną."""
+    h = hexcol.lstrip("#")
+    r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+    return b > r > g
+
+
+spr("3k", "oba sygnały zostają w rodzinie „Vibe Purple” (zmienia się JASNOŚĆ)",
+    _jest_fioletem(theme.TAB_ACTIVE) and _jest_fioletem(theme.SURFACE_INACTIVE),
+    f"{theme.TAB_ACTIVE}, {theme.SURFACE_INACTIVE}")
+
 
 # ---- 4-6. KOLOR — mierzony na pikselach --------------------------------------
 # ⚠️ Wołamy `_apply_button_icon_styles` (LICZBA MNOGA) — czyli tę samą metodę,

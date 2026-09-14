@@ -32,8 +32,16 @@ SURFACE_HOVER = '#1d1729'
 # Przywrócona różnica ~30/255 (12%), czyli poziom sprzed redesignu (było 39),
 # tyle że w fiolecie zamiast dawnej szarości. Zmiana wymagała podbicia
 # SKIN_VERSION → 4 (config.json usera przykrywa paletę).
-TAB_ACTIVE = '#251c37'        # wypełnienie AKTYWNEJ zakładki (kontra reszta paska)
-SURFACE_INACTIVE = '#2b2438'  # panel dolny, gdy okno straciło fokus
+# ⛔ PODNIESIONE 2026-09-14 NA ŻĄDANIE WŁAŚCICIELA — i to jest nauka o samym
+# progu, nie o kolorach. Oba sygnały MIEŚCIŁY SIĘ w regule „≥20/255": zakładka
+# miała 26, panel nieaktywny 31. A mimo to właściciel zgłosił oba naraz jako
+# „za mało widoczne". Wniosek: 20/255 to PODŁOGA, poniżej której sygnał na
+# pewno ginie — nie poziom, przy którym na pewno widać. Na bardzo ciemnym tle
+# (pasek ma jasność 14/255) trzeba wyraźnie więcej.
+# Zmierzone po zmianie: zakładka +49, panel nieaktywny +55 wobec tła paska.
+# Odcień zostaje w rodzinie „Vibe Purple" — zmienia się WYŁĄCZNIE jasność.
+TAB_ACTIVE = '#3a2d57'        # wypełnienie AKTYWNEJ zakładki (kontra reszta paska)
+SURFACE_INACTIVE = '#413659'  # panel dolny, gdy okno straciło fokus
 
 # === Akcent ===
 ACCENT = '#a855f7'         # fiolet wiodący

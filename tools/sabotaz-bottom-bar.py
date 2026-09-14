@@ -73,10 +73,11 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
+MOTYW = REPO / "src" / "gui" / "theme.py"
 OKNO = REPO / "src" / "gui" / "main_window.py"
 ZAKLADKA = REPO / "src" / "gui" / "agent_tab.py"
 BRAMKA = REPO / "tools" / "test-bottom-bar-icons.py"
-OCZEKIWANE = 37          # ile sprawdzen ma WYKONAC bramka na zdrowym kodzie
+OCZEKIWANE = 41          # ile sprawdzen ma WYKONAC bramka na zdrowym kodzie
 
 _VENV = REPO / "venv" / "bin" / "python"
 PYTHON = str(_VENV) if _VENV.exists() else sys.executable
@@ -167,6 +168,19 @@ WARIANTY = {
     "B15": (OKNO, "zerwany kabel: okno nie wpina sygnalu mrugniecia",
             "        agent_tab.request_button_flash.connect(",
             "        _ = (lambda *a: None)("),
+    # --- sygnaly stanu okna (zgloszenie wlasciciela 2026-09-14) ---
+    "B7": (MOTYW, "wybrana zakladka wraca do slabego kontrastu (26/255)",
+           "TAB_ACTIVE = '#3a2d57'",
+           "TAB_ACTIVE = '#251c37'"),
+    "B8": (MOTYW, "panel nieaktywny wraca do slabego kontrastu (31/255)",
+           "SURFACE_INACTIVE = '#413659'",
+           "SURFACE_INACTIVE = '#2b2438'"),
+    "B9": (MOTYW, "sygnal CIEMNIEJSZY od tla zamiast jasniejszego",
+           "SURFACE_INACTIVE = '#413659'",
+           "SURFACE_INACTIVE = '#050308'"),
+    "B10": (MOTYW, "sygnal wypada z rodziny Vibe Purple (szarosc)",
+            "TAB_ACTIVE = '#3a2d57'",
+            "TAB_ACTIVE = '#4a4a4a'"),
 }
 
 
