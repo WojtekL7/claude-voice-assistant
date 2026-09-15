@@ -4537,7 +4537,8 @@ class MainWindow(QMainWindow):
 
         return chip
 
-    def _flash_button(self, tab, attr: str, color: str, ms: int = 500, po_powrocie=None):
+    def _flash_button(self, tab, attr: str, color: str, ms: int = 500, po_powrocie=None,
+                      przemaluj_ikone: bool = True):
         """Rozświetl RAMKĘ przycisku na `ms` milisekund i wróć do normy.
 
         JEDNO źródło migania dla całego paska: zielone „skopiowane" i czerwone
@@ -4545,14 +4546,20 @@ class MainWindow(QMainWindow):
         się przy najbliższej zmianie palety — dokładnie tak, jak rozjechały się
         wcześniej trzy kopie wyglądu przycisku.
 
-        Migamy RAMKĄ, nie tłem: pełne wypełnienie akcentem znaczy „przycisk jest
-        W UŻYCIU" (patrz `_set_button_active`) i te dwa sygnały nie mogą się mylić.
+        Migamy IKONĄ i ramką, nigdy tłem — tło na pasku nie zmienia się wcale
+        (decyzja właściciela 2026-09-15).
+
+        `przemaluj_ikone=False` dla przycisku, który sygnał niesie już SAM obrazkiem
+        (kopiowanie podmienia ikonę na ptaszka) — inaczej przemalowanie zdjęłoby
+        mu tamtą informację.
         """
         button = getattr(tab, attr, None)
         color_key = self._BUTTON_COLOR_KEYS.get(attr)
         if button is None or color_key is None:
             return
         self._apply_button_icon_style(button, color_key, border_override=color)
+        if przemaluj_ikone:
+            self._repaint_button_icon(tab, attr, color)
 
         def wroc_do_normy():
             # ⚠️ Zakładkę można zamknąć W TRAKCIE błysku — wtedy widżet Qt już nie
@@ -4560,6 +4567,8 @@ class MainWindow(QMainWindow):
             # wyjątek „wrapped C/C++ object has been deleted" za zamknięcie karty.
             try:
                 self._apply_button_icon_style(button, color_key)
+                if przemaluj_ikone:
+                    self._repaint_button_icon(tab, attr, None)
                 if po_powrocie is not None:
                     po_powrocie()
             except RuntimeError:
@@ -4573,8 +4582,10 @@ class MainWindow(QMainWindow):
         if not tab:
             return
         tab.copy_btn.setIcon(self._icon('copy', 'active'))
+        # ⚠️ `przemaluj_ikone=False` — sygnał niesie tu PODMIANA obrazka na ptaszka;
+        # przemalowanie przywróciłoby zwykłą ikonę kopiowania i zjadło tę informację.
         self._flash_button(
-            tab, 'copy_btn', theme.SUCCESS,
+            tab, 'copy_btn', theme.SUCCESS, przemaluj_ikone=False,
             po_powrocie=lambda: tab.copy_btn.setIcon(self._icon('copy', 'normal')))
 
     def _toggle_pause(self):
@@ -4819,6 +4830,51 @@ class MainWindow(QMainWindow):
         'search_btn': 'icon_search_color',
     }
 
+    # Przycisk paska → klucz jego ikony SVG w `icon_set`. Potrzebne, bo sygnał
+    # („w użyciu", „zrobione") niesie IKONA, a ikona to obrazek: trzeba ją
+    # przemalować i podmienić, a nie opisać w arkuszu stylów.
+    # ⚠️ `mouse_mode_btn` NIE jest tu celowo — ma DWIE ikony (przewijanie/zaznaczanie)
+    # i obsługuje go osobna gałąź w `_repaint_button_icon`.
+    _BUTTON_ICON_KEYS = {
+        'clear_input_btn': 'clear_input',
+        'add_media_btn': 'add_media',
+        'quick_actions_btn': 'quick_actions',
+        'search_btn': 'search',
+    }
+
+    def _repaint_button_icon(self, tab, attr: str, color: str = None):
+        """Przemaluj IKONĘ przycisku paska (albo przywróć barwę ze skórki).
+
+        ⛔ To jest JEDYNE miejsce, w którym sygnał staje się widoczny na ikonie.
+        Nie da się tego zrobić arkuszem stylów: ikony paska są obrazkami SVG
+        (`QIcon`), a `color:` w QSS dotyczy TEKSTU przycisku. Do 2026-09-15 kod
+        ustawiał przy stanie „w użyciu" jasny `color:` i **nie robiło to NIC** —
+        ikona zostawała szara na fioletowym tle, co właściciel zgłosił jako
+        „tło fioletowe i szary obrys ikony". Żaden test tego nie widział, bo
+        sprawdzał zapisany arkusz, a nie to, co realnie jest na przycisku.
+
+        `color=None` = wróć do barwy ze skórki (to skórka rządzi SPOCZYNKIEM).
+        """
+        button = getattr(tab, attr, None)
+        if button is None:
+            return
+        color_key = self._BUTTON_COLOR_KEYS.get(attr)
+        spoczynek = self.skin_colors.get(color_key, theme.TEXT_DIM) if color_key else theme.TEXT_DIM
+
+        if attr == 'mouse_mode_btn':
+            # Ikona pokazuje AKTUALNY tryb, więc przemalowujemy tę, która akurat
+            # jest na wierzchu — inaczej przy włączonym zaznaczaniu fiolet trafiłby
+            # w obrazek, którego nikt nie widzi.
+            wybrany = getattr(tab, '_mouse_mode', None) == 'select'
+            nazwa = "mouse-select" if wybrany else "mouse-scroll"
+            button.setIcon(icon_set.icon_by_name(nazwa, color or spoczynek))
+            return
+
+        key = self._BUTTON_ICON_KEYS.get(attr)
+        if key is None:
+            return
+        button.setIcon(icon_set.button_icon(key, 'normal', color or spoczynek))
+
     # Które przyciski mają STAN „w użyciu" (trwa tyle, ile używanie).
     # ⛔ Kopiuj i Wyczyść pole są tu POMINIĘTE ŚWIADOMIE: obie akcje trwają ułamek
     # sekundy, więc nie mają „podczas" — ich komunikatem jest BŁYSK, nie stan.
@@ -4841,6 +4897,8 @@ class MainWindow(QMainWindow):
         if color_key is None:
             return
         self._apply_button_icon_style(button, color_key, active=active)
+        # Sedno sygnału: tło zostaje spoczynkowe, przemalowuje się IKONA.
+        self._repaint_button_icon(tab, attr, theme.ACCENT if active else None)
 
     def _apply_button_icon_style(self, button, color_key: str, font_size: int = 22,
                                  with_disabled: bool = False, border_override: str = None,
@@ -4883,15 +4941,25 @@ class MainWindow(QMainWindow):
         surface = self.skin_colors.get('button_bg', theme.SURFACE)
 
         if active:
-            # „W UŻYCIU" — otwarte menu/okno albo włączony tryb. Kolor z KODU, nie ze
-            # skórki: to sygnał stanu, a w skórce dałoby się ustawić fiolet na fiolecie.
-            # ⚠️ Ikona MUSI zejść z tonacji spoczynkowej na jasną: zmierzone na akcencie
-            # #a855f7 (jasność 167) szare #9b93a8 (155) daje różnicę 12, czyli PONIŻEJ
-            # progu 20, który projekt przyjął dla odcienia niosącego sygnał — ikona
-            # zlałaby się z tłem. Jasny tekst daje 68.
-            surface = theme.ACCENT
-            border_color = border_override or theme.ACCENT
-            icon_color = theme.TEXT
+            # „W UŻYCIU" — otwarte menu/okno albo włączony tryb.
+            # ⛔ TŁO ZOSTAJE SPOCZYNKOWE — sygnał niesie IKONA (decyzja właściciela
+            # 2026-09-15, odwrócenie ustalenia z 12.09: „tło się nie zmienia,
+            # a ikona robi się fioletowa").
+            # ⚠️ Sama ta linia NIE przemaluje ikony: ikony paska to obrazki SVG
+            # (`QIcon`), a `color:` w arkuszu dotyczy TEKSTU. Realne przemalowanie
+            # robi `_repaint_button_icon` wołane z `_set_button_active` — tutaj
+            # trzymamy tę wartość wyłącznie dla spójności arkusza.
+            # Zmierzone: akcent #a855f7 (jasność 167) na pasku #171221 (24) daje
+            # różnicę 143, czyli grubo powyżej progu 40 dla sygnału na ciemnym tle.
+            icon_color = theme.ACCENT
+
+        # ⛔ BŁYSK MUSI WYGRYWAĆ Z NAJECHANIEM MYSZĄ, inaczej jest NIEWIDOCZNY dokładnie
+        # wtedy, gdy ma coś powiedzieć: po kliknięciu kursor STOI na przycisku, więc
+        # reguła `:hover` przemalowuje ramkę na akcent i przykrywa barwę sygnału.
+        # Tak właśnie „ginął" czerwony błysk przy czyszczeniu pola — zgłoszone przez
+        # właściciela 2026-09-15 jako „X w ogóle się nie świeci". Przy kopiowaniu objaw
+        # był łagodniejszy tylko dlatego, że tam sygnał niesie DRUGA rzecz: ptaszek.
+        hover_border = border_override or theme.ACCENT
 
         # „QPushButton" / „QToolButton" — nazwa klasy widżetu, tak jak widzi ją QSS.
         sel = button.metaObject().className()
@@ -4926,7 +4994,7 @@ class MainWindow(QMainWindow):
             }}
             {sel}:hover {{
                 background-color: {theme.SURFACE_HOVER};
-                border: 1px solid {theme.ACCENT};
+                border: 1px solid {hover_border};
             }}
             {sel}:pressed {{
                 background-color: {theme.BG_INPUT};

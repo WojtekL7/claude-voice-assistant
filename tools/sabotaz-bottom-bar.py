@@ -15,26 +15,50 @@ Uklad przepisany z `sabotaz-dictation-fix.py` (sprawdzony):
 Uzycie:  python3 tools/sabotaz-bottom-bar.py B1
          python3 tools/sabotaz-bottom-bar.py --kotwice
 
-SABOTAZ - WYNIKI ZMIERZONE (uruchomione 2026-09-12, NIE przewidziane).
-Zdrowy kod: 37 sprawdzen, 37 OK, 0 FAIL. Kazdy wariant: 37 WYKONANYCH (czyli
-bramka ani razu nie urwala sie w polowie) i przywrocenie dowiedzione sha256.
+SABOTAZ - WYNIKI ZMIERZONE (uruchomione 2026-09-15, NIE przewidziane).
+Zdrowy kod: 48 sprawdzen, 48 OK, 0 FAIL. KAZDY wariant: 48 WYKONANYCH - czyli
+bramka ani razu nie urwala sie w polowie (to jedyny dowod, ze "N padlo" cokolwiek
+znaczy) - i przywrocenie dowiedzione sha256.
   wariant | co popsute                                        | co padlo
   --------+---------------------------------------------------+--------------------
-  B1      | przywrocony recznie pisany arkusz szybkich akcji   | 7, 8, 9, 9b
+  B1      | przywrocony recznie pisany arkusz szybkich akcji   | 7, 8, 9, 9b, 14b
   B2      | selektor wpisany na sztywno jako QPushButton       | 7, 10, 12
   B3      | zdjete ukrycie strzalki menu                       | 10
-  B4      | zdjete wywolanie malarza dla szybkich akcji        | 7, 8, 9, 9b, 10, 12
+  B4      | zdjete wywolanie malarza dla szybkich akcji        | 7, 8, 9, 9b, 10, 12, 14b
   B5      | powrot wlasnego arkusza zielonego blysku           | 13b, 13d
   B6      | blysk gubi SYGNAL (ramka nie jest zielona)         | 13, 13c
-  B7      | zdjety caly stan „w uzyciu"                        | 14, 14b
-  B8      | ikona zostaje szara na fiolecie (znika)            | 14c
+  B7      | pusty rejestr przyciskow ze stanem                 | 14, 14f
+  B8      | stan aktywny nie podaje AKCENTU ikonie             | 14, 14f
   B9      | mysz nie zglasza trybu zaznaczania                 | 16
   B10     | dodaj media nie gasnie po anulowaniu               | 17
   B11     | okno glowne znowu wpina menu wlasnym setMenu       | 15
   B12     | wyczyszczenie pola nie zglasza mrugniecia          | 18
-  B13     | mrugniecie na ZIELONO zamiast czerwono            | 18c
-  B14     | blysk NIE WRACA sam (zostaje kolorowy na zawsze)  | 13d, 18e
-  B15     | zerwany kabel sygnalu mrugniecia (okno nie wpina) | 18b
+  B13     | mrugniecie na ZIELONO zamiast czerwono             | 18c
+  B14     | blysk NIE WRACA sam (zostaje kolorowy na zawsze)   | 13d, 13h, 18e
+  B15     | zerwany kabel sygnalu mrugniecia (okno nie wpina)  | 18b
+  B16     | wybrana zakladka wraca do slabego kontrastu        | 3h
+  B17     | panel nieaktywny wraca do slabego kontrastu        | 3i
+  B18     | sygnal CIEMNIEJSZY od tla zamiast jasniejszego     | 3i, 3j
+  B19     | sygnal wypada z rodziny Vibe Purple (szarosc)      | 3k
+  B20     | stan W UZYCIU znowu maluje TLO na akcent           | 14b
+  B21     | ikona NIE jest przemalowywana (zostaje szara)      | 13e, 14
+  B22     | blysk przegrywa z najechaniem mysza                | 13f
+
+⛔ ZNALEZIONE 2026-09-15 PRZY OKAZJI - CZTERY WARIANTY BYLY MARTWE OD 2026-09-14:
+   dopisane wtedy warianty MOTYW dostaly klucze B7-B10, ktore JUZ ISTNIALY. Python
+   w literale slownika cicho zostawia OSTATNI wpis, wiec cztery starsze warianty
+   zniknely BEZ SLADU - a tabela wyzej opisywala, co "lapia", i bylo to nieprawda.
+   Tryb `--kotwice` tego NIE widzi (wariantu po prostu nie ma w slowniku). Dlatego
+   narzedzie sprawdza teraz wlasne zrodlo na starcie i ODMAWIA pracy przy duplikacie.
+   Rodzina ta sama co wariant-widmo: nic nie pada, a pokrycie jest pozorne.
+
+⛔ B7 PRZECELOWANY 2026-09-15 PO POMIARZE "0 PADLYCH". Jego stara kotwica (`if active:`
+   w malarzu) po przeniesieniu sygnalu do IKONY nie psula juz niczego widocznego:
+   ta galaz ustawia wylacznie `color:` w arkuszu, a arkusz NIE DOTYCZY obrazka QIcon.
+   Wynik "nic nie padlo" byl wiec prawdziwa informacja o kodzie (galaz jest dzis
+   ozdobna), a nie dowodem odpornosci - i dlatego wariant celuje teraz w rejestr
+   przyciskow. B7 i B8 zapalaja te same asercje, ale psuja DWA ROZNE mechanizmy
+   (prawo do stanu vs podawana barwa) - to celowe, nie duplikat.
 ⭐ B5 i B6 sa PARA i to jest celowe: B5 pilnuje, zeby stan chwilowy nie mial
    wlasnego wygladu, a B6 - zeby przy tym ujednoliceniu nie zgubic SYGNALU.
    Sam B5 przeszedlby tez nad blyskiem, ktory w ogole przestal byc zielony.
@@ -77,7 +101,7 @@ MOTYW = REPO / "src" / "gui" / "theme.py"
 OKNO = REPO / "src" / "gui" / "main_window.py"
 ZAKLADKA = REPO / "src" / "gui" / "agent_tab.py"
 BRAMKA = REPO / "tools" / "test-bottom-bar-icons.py"
-OCZEKIWANE = 41          # ile sprawdzen ma WYKONAC bramka na zdrowym kodzie
+OCZEKIWANE = 48          # ile sprawdzen ma WYKONAC bramka na zdrowym kodzie
 
 _VENV = REPO / "venv" / "bin" / "python"
 PYTHON = str(_VENV) if _VENV.exists() else sys.executable
@@ -127,7 +151,7 @@ WARIANTY = {
     # wykryto" czytaloby sie jak dowod odpornosci kodu.
     "B5": (OKNO, "powrot wlasnego arkusza zielonego blysku (przezroczyste tlo, rog 12px)",
            "        self._flash_button(\n"
-           "            tab, 'copy_btn', theme.SUCCESS,\n"
+           "            tab, 'copy_btn', theme.SUCCESS, przemaluj_ikone=False,\n"
            "            po_powrocie=lambda: tab.copy_btn.setIcon(self._icon('copy', 'normal')))",
            '        tab.copy_btn.setStyleSheet(f"""\n'
            '            QPushButton {{\n'
@@ -140,12 +164,18 @@ WARIANTY = {
            "            tab, 'copy_btn', theme.SUCCESS,",
            "            tab, 'copy_btn', theme.BORDER,"),
     # --- stan „W UZYCIU" (fiolet trwa tyle, ile trwa uzywanie) ---
-    "B7": (OKNO, "zdjety caly stan aktywny - przycisk w uzyciu wyglada jak w spoczynku",
-           "        if active:",
-           "        if False:"),
-    "B8": (OKNO, "ikona zostaje szara na fiolecie (znika - ponizej progu kontrastu)",
-           "            icon_color = theme.TEXT",
-           "            icon_color = theme.TEXT_DIM"),
+    # ⛔ B7 PRZECELOWANY 2026-09-15. Stara kotwica (`if active:` w malarzu) po
+    #    przeniesieniu sygnalu do IKONY zapalala ZERO asercji - i slusznie: ta
+    #    galaz ustawia juz tylko `color:` w arkuszu, a arkusz nie dotyczy obrazka
+    #    QIcon. Zostawiona jako kotwica dawalaby falszywe poczucie pokrycia.
+    #    Teraz celuje w REJESTR przyciskow ze stanem - inny mechanizm niz B8
+    #    (B8 psuje PODAWANA BARWE, B7 odbiera przyciskom prawo do stanu).
+    "B7": (OKNO, "pusty rejestr przyciskow ze stanem - nikt nie dostaje sygnalu w uzyciu",
+           "    _BUTTONS_WITH_ACTIVE_STATE = frozenset({",
+           "    _BUTTONS_WITH_ACTIVE_STATE = frozenset({}) or frozenset({\n        '_nikt',\n    }) or frozenset({"),
+    "B8": (OKNO, "stan aktywny nie podaje AKCENTU - ikona zostaje w barwie spoczynkowej",
+           "        self._repaint_button_icon(tab, attr, theme.ACCENT if active else None)",
+           "        self._repaint_button_icon(tab, attr, None)"),
     "B9": (ZAKLADKA, "przelacznik myszy nie zglasza wlaczonego trybu zaznaczania",
            "        self.button_active_changed.emit('mouse_mode_btn', sel)",
            "        pass  # SABOTAZ"),
@@ -169,19 +199,52 @@ WARIANTY = {
             "        agent_tab.request_button_flash.connect(",
             "        _ = (lambda *a: None)("),
     # --- sygnaly stanu okna (zgloszenie wlasciciela 2026-09-14) ---
-    "B7": (MOTYW, "wybrana zakladka wraca do slabego kontrastu (26/255)",
+    "B16": (MOTYW, "wybrana zakladka wraca do slabego kontrastu (26/255)",
            "TAB_ACTIVE = '#3a2d57'",
            "TAB_ACTIVE = '#251c37'"),
-    "B8": (MOTYW, "panel nieaktywny wraca do slabego kontrastu (31/255)",
+    "B17": (MOTYW, "panel nieaktywny wraca do slabego kontrastu (31/255)",
            "SURFACE_INACTIVE = '#413659'",
            "SURFACE_INACTIVE = '#2b2438'"),
-    "B9": (MOTYW, "sygnal CIEMNIEJSZY od tla zamiast jasniejszego",
+    "B18": (MOTYW, "sygnal CIEMNIEJSZY od tla zamiast jasniejszego",
            "SURFACE_INACTIVE = '#413659'",
            "SURFACE_INACTIVE = '#050308'"),
-    "B10": (MOTYW, "sygnal wypada z rodziny Vibe Purple (szarosc)",
+    "B19": (MOTYW, "sygnal wypada z rodziny Vibe Purple (szarosc)",
             "TAB_ACTIVE = '#3a2d57'",
             "TAB_ACTIVE = '#4a4a4a'"),
+    # --- sygnal przeniesiony do IKONY (zgloszenie wlasciciela 2026-09-15) ---
+    "B20": (OKNO, "stan W UZYCIU znowu maluje TLO na akcent (cofniecie zasady)",
+            "            icon_color = theme.ACCENT",
+            "            surface = theme.ACCENT\n            icon_color = theme.TEXT"),
+    "B21": (OKNO, "ikona NIE jest przemalowywana (arkusz mowi swoje, obrazek zostaje szary)",
+            "        button.setIcon(icon_set.button_icon(key, 'normal', color or spoczynek))",
+            "        pass  # SABOTAZ"),
+    "B22": (OKNO, "blysk przegrywa z najechaniem myszą (ramka :hover zawsze akcentowa)",
+            "        hover_border = border_override or theme.ACCENT",
+            "        hover_border = theme.ACCENT"),
 }
+
+
+
+def _sprawdz_zdublowane_klucze():
+    """ODMOW pracy, gdy w slowniku WARIANTOW sa dwa takie same klucze.
+
+    ⛔ Python w literale slownika CICHO zostawia OSTATNI wpis - bez ostrzezenia.
+    Zmierzone 2026-09-15: cztery warianty (B7-B10) byly martwe od 2026-09-14,
+    bo dopisane tego dnia warianty MOTYW mialy te same klucze. Naglowek tego
+    pliku opisywal, co B7/B8 „lapia", i bylo to NIEPRAWDA. Objaw zerowy:
+    `--kotwice` tez ich nie widzi, bo wariantu po prostu NIE MA w slowniku.
+    """
+    import re, collections
+    with open(__file__, encoding="utf-8") as f:
+        zrodlo = f.read()
+    blok = zrodlo[zrodlo.index("WARIANTY = {"):]
+    klucze = re.findall(r'^\s{4}"(B\d+)":', blok, re.M)
+    zdub = [k for k, n in collections.Counter(klucze).items() if n > 1]
+    if zdub:
+        raise SystemExit(
+            f"BLAD: zdublowane klucze wariantow {zdub} - Python zostawilby tylko "
+            f"OSTATNI, a reszta byla by martwa. Przemianuj je i uruchom ponownie.")
+    return len(klucze)
 
 
 def sha(p):
@@ -258,8 +321,12 @@ def uruchom(wariant):
 
 
 if __name__ == "__main__":
+    # ⛔ PIERWSZY krok, przed czymkolwiek innym: martwy wariant nie psuje niczego,
+    # wiec „nie wykryto" czytaloby sie jako dowod odpornosci kodu.
+    _ile = _sprawdz_zdublowane_klucze()
     if len(sys.argv) != 2:
         print(__doc__)
+        print(f"(wariantow w slowniku: {_ile}, zadnych zdublowanych kluczy)")
         sys.exit(2)
     if sys.argv[1] == "--kotwice":
         sys.exit(sprawdz_kotwice())

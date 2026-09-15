@@ -70,6 +70,47 @@ def jasnosc_tla(przycisk) -> int:
     return (px.red() + px.green() + px.blue()) // 3
 
 
+def barwa_ikony(przycisk) -> str:
+    """Dominująca barwa NIEPRZEZROCZYSTYCH pikseli ikony przycisku, jako `#rrggbb`.
+
+    ⛔ Ta miara istnieje, bo poprzednia wersja bramki pytała o ARKUSZ STYLÓW
+    (`color:`), a ikony paska to OBRAZKI (`QIcon`) — arkusz ich nie dotyczy.
+    Dzięki temu bramka świeciła na zielono nad stanem, w którym ikona zostawała
+    szara na fioletowym tle (zgłoszenie właściciela 2026-09-15). Pytaj o PIKSELE
+    ikony, nigdy o deklarację w arkuszu.
+    """
+    ikona = przycisk.icon()
+    if ikona.isNull():
+        return ""
+    obraz = ikona.pixmap(22, 22).toImage()
+    liczniki = {}
+    for y in range(obraz.height()):
+        for x in range(obraz.width()):
+            px = obraz.pixelColor(x, y)
+            if px.alpha() < 200:          # obrys jest cienki, tło przezroczyste
+                continue
+            klucz = "#%02x%02x%02x" % (px.red(), px.green(), px.blue())
+            liczniki[klucz] = liczniki.get(klucz, 0) + 1
+    if not liczniki:
+        return ""
+    return max(liczniki.items(), key=lambda kv: kv[1])[0]
+
+
+def podobna_barwa(a: str, b: str, tolerancja: int = 8) -> bool:
+    """Czy dwie barwy to ta sama barwa z dokładnością do rysowania?
+
+    ⚠️ Nie porównuj ikon dosłownie: renderer SVG wygładza krawędzie, więc
+    dominujący piksel bywa o 1-2 jednostki obok żądanej wartości (zmierzone:
+    prosiliśmy o #f0616d, na obrazku wyszło #f0606c). Tolerancja jest mała,
+    więc nadal odróżnia czerwień od szarości ikony spoczynkowej (#9b93a8).
+    """
+    if not a or not b:
+        return False
+    a, b = a.lstrip("#"), b.lstrip("#")
+    return all(abs(int(a[i:i + 2], 16) - int(b[i:i + 2], 16)) <= tolerancja
+               for i in (0, 2, 4))
+
+
 tab = AgentTab({"id": "test", "name": "Test", "working_directory": ROOT})
 
 # ---- 1-2. KOLEJNOŚĆ na pasku -------------------------------------------------
@@ -337,6 +378,8 @@ _atrapa._get_current_agent_tab = lambda: tab
 _atrapa._flash_button = lambda *a, **k: MainWindow._flash_button(_atrapa, *a, **k)
 _atrapa._BUTTON_COLOR_KEYS = MainWindow._BUTTON_COLOR_KEYS
 _atrapa._FLASH_COLORS = MainWindow._FLASH_COLORS
+_atrapa._BUTTON_ICON_KEYS = MainWindow._BUTTON_ICON_KEYS
+_atrapa._repaint_button_icon = lambda t, a, c=None: MainWindow._repaint_button_icon(_atrapa, t, a, c)
 
 
 def przeczekaj(sekundy):
@@ -378,11 +421,47 @@ spr("13d", "po pół sekundy przycisk wraca SAM (prawdziwy zegar, nie ręczny re
     and theme.SUCCESS.lower() not in reguly(tab.copy_btn).get("", {}).get("border", "").lower(),
     f"po powrocie={reguly(tab.copy_btn).get('', {})}")
 
+# ---- 13e-13h. BŁYSK MUSI BYĆ WIDOCZNY POD KURSOREM --------------------------
+# Zgłoszenie właściciela 2026-09-15: „X nie świeci się na czerwono". Błysk DZIAŁAŁ,
+# tylko malował samą ramkę — a zaraz po kliknięciu kursor STOI na przycisku, więc
+# reguła `:hover` przemalowywała ramkę na akcent i przykrywała czerwień. Sygnał
+# widoczny wyłącznie wtedy, gdy user zabierze mysz, jest sygnałem NIEISTNIEJĄCYM.
+_ikona_x_spoczynek = barwa_ikony(tab.clear_input_btn)
+MainWindow._flash_button(_atrapa, tab, "clear_input_btn", theme.DANGER)
+_blysk_x = reguly(tab.clear_input_btn)
+
+spr("13e", "błysk czyszczenia pola przemalowuje IKONĘ na czerwono (nie samą ramkę)",
+    podobna_barwa(barwa_ikony(tab.clear_input_btn), theme.DANGER),
+    f"ikona={barwa_ikony(tab.clear_input_btn)} oczekiwano={theme.DANGER}")
+
+spr("13f", "...i błysk WYGRYWA z najechaniem myszą (ramka :hover też niesie sygnał)",
+    theme.DANGER.lower() in _blysk_x.get(":hover", {}).get("border", "").lower(),
+    f"hover podczas błysku={_blysk_x.get(':hover', {}).get('border')}")
+
+spr("13g", "KONTROLA PRZYTOMNOŚCI: poza błyskiem ramka po najechaniu wraca do akcentu",
+    theme.ACCENT.lower() in _sas.get(":hover", {}).get("border", "").lower(),
+    f"sąsiad hover={_sas.get(':hover', {}).get('border')}")
+
+przeczekaj(0.6)
+spr("13h", "KONTROLA ODWROTNA: po pół sekundy ikona X wraca do barwy ze skórki",
+    barwa_ikony(tab.clear_input_btn) == _ikona_x_spoczynek
+    and not podobna_barwa(_ikona_x_spoczynek, theme.DANGER),
+    f"po powrocie={barwa_ikony(tab.clear_input_btn)} spoczynek={_ikona_x_spoczynek}")
+
 # ---- 14-17. „W UŻYCIU" — fiolet trwa tyle, ile trwa używanie ------------------
 # Życzenie właściciela 2026-09-12: przycisk ma ZOSTAĆ fioletowy podczas używania,
 # a nie mignąć po kliknięciu. Dotyczy: szybkich akcji (otwarte menu), lupy
 # (otwarte okno), myszy (włączony tryb zaznaczania) i dodawania mediów (otwarte
 # okno wyboru pliku). Kopiuj NIE ma stanu „podczas" — zostaje przy zielonym błysku.
+#
+# ⛔ PRZECELOWANE 2026-09-15 — WŁAŚCICIEL ODWRÓCIŁ WŁASNE USTALENIE: fiolet ma
+# nieść IKONA, a tło ma zostać spoczynkowe („tło się nie zmienia, a ikona robi się
+# fioletowa"). Asercji NIE kasujemy — pilnują teraz zasady ODWROTNEJ, bo bramka
+# zostawiona przy starej świeciłaby na czerwono nad stanem POPRAWNYM, a skasowana
+# zdjęłaby ochronę bez śladu.
+# ⭐ Sedno tej rundy: stara asercja [14c] mierzyła kontrast ikony z ARKUSZA STYLÓW
+# i była zielona przez cały czas trwania usterki, bo ikona jest OBRAZKIEM i arkusz
+# jej nie dotyczy. Dlatego nowe asercje pytają o PIKSELE ikony (`barwa_ikony`).
 
 def jasnosc_hex(h):
     h = h.lstrip("#")
@@ -393,30 +472,66 @@ _atrapa2 = Atrapa(tab)
 _atrapa2._set_button_active = lambda t, a, on: MainWindow._set_button_active(_atrapa2, t, a, on)
 _atrapa2._BUTTON_COLOR_KEYS = MainWindow._BUTTON_COLOR_KEYS
 _atrapa2._BUTTONS_WITH_ACTIVE_STATE = MainWindow._BUTTONS_WITH_ACTIVE_STATE
+_atrapa2._BUTTON_ICON_KEYS = MainWindow._BUTTON_ICON_KEYS
+_atrapa2._repaint_button_icon = lambda t, a, c=None: MainWindow._repaint_button_icon(_atrapa2, t, a, c)
+
+_ikona_qa_spoczynek = barwa_ikony(tab.quick_actions_btn)
+_tlo_qa_spoczynek = jasnosc_tla(tab.quick_actions_btn)
 
 MainWindow._set_button_active(_atrapa2, tab, "quick_actions_btn", True)
 _akt = reguly(tab.quick_actions_btn)
-spr(14, "przycisk W UŻYCIU wygląda INACZEJ niż w spoczynku",
-    _akt.get("", {}) != _qa.get("", {}),
-    f"aktywny={_akt.get('', {}).get('background-color')} spoczynek={_qa.get('', {}).get('background-color')}")
+_ikona_qa_akt = barwa_ikony(tab.quick_actions_btn)
+
+spr(14, "przycisk W UŻYCIU niesie sygnał IKONĄ: obrazek jest w kolorze akcentu",
+    podobna_barwa(_ikona_qa_akt, theme.ACCENT),
+    f"ikona={_ikona_qa_akt} oczekiwano={theme.ACCENT}")
 
 _tlo_akt = _akt.get("", {}).get("background-color", "")
-_ikona_akt = _akt.get("", {}).get("color", "")
-spr("14b", "tło W UŻYCIU to AKCENT (ten sam fiolet co ramka po najechaniu)",
-    _tlo_akt.lower() == theme.ACCENT.lower(),
-    f"{_tlo_akt} vs {theme.ACCENT}")
+spr("14b", "tło W UŻYCIU NIE ZMIENIA SIĘ (zasada odwrócona przez właściciela 15.09)",
+    _tlo_akt.lower() == _qa.get("", {}).get("background-color", "").lower()
+    and abs(jasnosc_tla(tab.quick_actions_btn) - _tlo_qa_spoczynek) <= 6,
+    f"arkusz: {_tlo_akt} vs {_qa.get('', {}).get('background-color')}; "
+    f"piksele: {jasnosc_tla(tab.quick_actions_btn)} vs {_tlo_qa_spoczynek}")
 
-# Sedno pomiaru: szara ikona na fiolecie ZNIKA. Próg 20/255 jest ten sam, którym
-# projekt mierzy każdy odcień niosący sygnał (patrz asercja 3f).
-spr("14c", "ikona na fiolecie zachowuje kontrast (≥20/255) — inaczej znika",
-    abs(jasnosc_hex(_ikona_akt) - jasnosc_hex(_tlo_akt)) >= 20,
-    f"ikona {_ikona_akt}={jasnosc_hex(_ikona_akt):.0f}, tło {_tlo_akt}={jasnosc_hex(_tlo_akt):.0f}, "
-    f"różnica {abs(jasnosc_hex(_ikona_akt) - jasnosc_hex(_tlo_akt)):.0f}")
+# Sedno pomiaru: sygnał na CIEMNYM tle potrzebuje własnego progu. Zmierzone 14.09
+# na dwóch sygnałach naraz: przy jasności tła poniżej ~30/255 próg 20 jest PODŁOGĄ,
+# poniżej której sygnał na pewno ginie — a nie poziomem, przy którym widać.
+spr("14c", "ikona w akcencie ma kontrast ≥40/255 wobec ciemnego tła paska",
+    abs(jasnosc_hex(_ikona_qa_akt) - _tlo_qa_spoczynek) >= 40,
+    f"ikona {_ikona_qa_akt}={jasnosc_hex(_ikona_qa_akt):.0f}, tło={_tlo_qa_spoczynek}, "
+    f"różnica {abs(jasnosc_hex(_ikona_qa_akt) - _tlo_qa_spoczynek):.0f}")
+
+spr("14e", "KONTROLA PRZYTOMNOŚCI: miernik barwy ikony ODRÓŻNIA stany",
+    _ikona_qa_spoczynek != "" and not podobna_barwa(_ikona_qa_spoczynek, theme.ACCENT),
+    f"spoczynek={_ikona_qa_spoczynek} akcent={theme.ACCENT}")
 
 MainWindow._set_button_active(_atrapa2, tab, "quick_actions_btn", False)
-spr("14d", "KONTROLA ODWROTNA: po zakończeniu wraca do wyglądu sąsiada",
-    _poza_ikona(reguly(tab.quick_actions_btn).get("", {})) == _poza_ikona(_sas.get("", {})),
-    f"{reguly(tab.quick_actions_btn).get('', {})}")
+spr("14d", "KONTROLA ODWROTNA: po zakończeniu wraca wygląd sąsiada I barwa ikony",
+    _poza_ikona(reguly(tab.quick_actions_btn).get("", {})) == _poza_ikona(_sas.get("", {}))
+    and barwa_ikony(tab.quick_actions_btn) == _ikona_qa_spoczynek,
+    f"styl={reguly(tab.quick_actions_btn).get('', {})} ikona={barwa_ikony(tab.quick_actions_btn)}")
+
+# Tryb myszy trzyma DWIE ikony (przewijanie/zaznaczanie) i jest jedynym przyciskiem
+# obsługiwanym osobną gałęzią — bez tej asercji przemalowanie mogłoby trafić
+# w obrazek, którego akurat nie widać.
+_tryb_myszy_przed = getattr(tab, '_mouse_mode', None)
+tab._mouse_mode = 'select'
+MainWindow._set_button_active(_atrapa2, tab, "mouse_mode_btn", True)
+spr("14f", "tryb myszy: przemalowana zostaje ikona AKTUALNEGO trybu",
+    podobna_barwa(barwa_ikony(tab.mouse_mode_btn), theme.ACCENT),
+    f"ikona={barwa_ikony(tab.mouse_mode_btn)}")
+MainWindow._set_button_active(_atrapa2, tab, "mouse_mode_btn", False)
+spr("14g", "...i wraca do barwy ze skórki po wyłączeniu trybu",
+    not podobna_barwa(barwa_ikony(tab.mouse_mode_btn), theme.ACCENT),
+    f"ikona={barwa_ikony(tab.mouse_mode_btn)}")
+
+# ⛔ PRZYWRÓĆ stan, w którym zastałeś zakładkę. Bez tego asercja [16] (dwa
+# przełączenia myszy) startuje z odwrotnego trybu i zgłasza kolejność
+# (False, True) — czyli MOJA sonda psuje CUDZĄ asercję, a wygląda to jak
+# regresja produktu. Zmierzone przy pisaniu tej rundy.
+if _tryb_myszy_przed is not None:
+    tab._mouse_mode = _tryb_myszy_przed
+    tab._update_mouse_mode_btn()
 
 # --- 15. Menu szybkich akcji: DWÓCH autorów, JEDNO wejście --------------------
 # Gdyby MainWindow wołało `setMenu` wprost, jego droga (przebudowa po zmianie listy
