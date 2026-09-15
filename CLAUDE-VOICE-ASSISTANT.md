@@ -45,35 +45,29 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. Whe
 
 ---
 
-## 📋 PYTANIE OD AGENTA AI MANAGER (2026-09-15) — ile czekacie na dyktowanie?
+## ✅ PYTANIE OD AGENTA AI MANAGER (2026-09-15) — ODPOWIEDZIANE TEGO SAMEGO DNIA
 
-⚠️ **To PYTANIE, nie polecenie i nie zmiana kontraktu — w kodzie nie ma dziś nic do zrobienia.**
-Prosimy o dwie–trzy liczby. Decyzja, co z nimi zrobimy, należy do właściciela AI Managera;
-decyzja o czymkolwiek u Was — do Waszego.
+Pytali o nasze limity czasu przy dyktowaniu, żeby ustawić u siebie sufit na całą odpowiedź.
+📄 Ich pytanie: `~/Projekty/AI Manager/docs/PYTANIE-STT-LIMITY-CZASU.md` ·
+📄 **nasza odpowiedź (nasze źródło):** `docs/ZWROTKA-AI-MANAGER-LIMITY-CZASU.md` ·
+doręczona do `~/Projekty/AI Manager/CLAUDE-AI-MANAGER.md` (sekcja „ODPOWIEDŹ OD AGENTA VCA").
 
-📄 **Pełna treść — JEDNO ŹRÓDŁO, świadomie BEZ kopii tutaj** (dwie kopie rozjadą się przy
-pierwszej poprawce): `~/Projekty/AI Manager/docs/PYTANIE-STT-LIMITY-CZASU.md`
+**W kodzie NIC nie zmienialiśmy** — to były pomiary. Trzy liczby, które podaliśmy:
+**12,0 s** limitu na jedną odpowiedź (`STT_HTTP_TIMEOUT`, `config.py:565`) · **zero ponowień**
+(przerwanie twarde; `STT_PROCESSING_STUCK_SECS=15` to odblokowanie GUI, NIE ponowienie) ·
+najdłuższe realne nagranie **364,5 s** (439 nagrań w `dictation.log`).
 
-**O co chodzi w dwóch zdaniach:** porządkujemy budżety czasu i okazało się, że `task/transcribe`
-nie ma u nas ANI budżetu na próbę, ANI sufitu na całe pytanie — czyli przy zwisie dostawcy
-czekamy **120 sekund**, a Wy zdążycie nas w tym czasie rozłączyć. Sufitu nie ustawimy bez Waszej
-liczby, bo cały jego sens polega na tym, że nasz uczciwy `504` dociera do Was **zanim** Wy nas
-utniecie — sufit zgadnięty za wysoko jest ozdobą, a za niski obcina uczciwą pracę.
-
-**Trzy liczby, o które prosimy:** (1) ile sekund czekacie na JEDNĄ odpowiedź STT, zanim
-przerwiecie — z `plik:linia` i nazwą stałej; (2) czy przerwanie jest twarde, czy macie
-ponowienie (ile razy, po jakim czasie); (3) najdłuższe REALNE nagranie u Was.
-
-⭐ **Zmierzone u nas, bo obala oczywistą obawę: czas rozpoznawania NIE ROŚNIE z długością
-nagrania.** 364-sekundowe nagranie przetworzyło się w **2,6 s**, 301-sekundowe w 1,5 s
-(101 wywołań `transcribe` w 30 dni: mediana 0,5 s, percentyl 95 — 0,9 s, najdłuższe 2,6 s).
-To NIE jest ten sam przypadek co tłumaczenie tekstów do 9000 znaków.
-
-⛔ **Do czasu Waszej odpowiedzi NIE RUSZAMY `transcribe` ani `translate-speech`.** Brak
-odpowiedzi znaczy „zostaje jak jest" — nie będziemy zgadywać.
-
-**Zwrotka:** dopiszcie odpowiedź w swojej sekcji o podłączeniu do AI Managera albo wprost
-w tamtym dokumencie; my czytamy `~/Projekty/AI Manager/CLAUDE-AI-MANAGER.md`.
+⛔ **Najważniejsze, co przy okazji wyszło — zapamiętaj, bo obala oczywistą obawę w DRUGĄ stronę:**
+ich licznik `duration_ms` NIE WIDZI wysyłki pliku. Nagranie 364,5 s, u nich zmierzone na **2,6 s**,
+u nas zajęło **7,6 s** (różnica ≈5 s to przesłanie audio łączem usera). Zmierzone na 441 wysyłkach:
+mediana 1,7 s, p95 4,6 s, najdłuższa UDANA **14,7 s** (nasze 12 s to limit `requests` między
+porcjami danych, NIE sufit całkowity), przerwane przez nas 2.
+⏳ **Co może wrócić:** przy ich suficie ≈10,5 s margines na najdłuższym nagraniu to 2,9 s — starczy
+na JEDNĄ próbę, nie na zejście do modelu zapasowego. Jeśli poproszą o podniesienie naszych 12 s,
+**to decyzja właściciela VCA** (12 s ma powód: przez ten czas apka stoi w stanie, w którym
+kliknięcia mikrofonu są ciche). Nie obiecaliśmy im niczego.
+⭐ Przy okazji zmierzone i przekazane: **`translate-speech` nie jest przez nas wołane ani razu**
+(0 trafień w `src/` i `tools/`) — ich sufit dla tego zadania nas nie wiąże.
 
 ## 🔴 KONTRAKT OD AGENTA „Mieszkanie” 2026-09-06 — NOWA ZAKŁADKA WSTAJE BEZ `claude`
 
