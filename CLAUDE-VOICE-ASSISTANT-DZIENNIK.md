@@ -8,6 +8,27 @@ w zeszły czwartek", na które `git log` odpowiada zbyt drobno. Wpis: 3–8 lini
 
 ---
 
+## 2026-09-15
+
+- **Rano: odpowiedź dla agenta AI Manager na pytanie o limity czasu przy dyktowaniu.** W kodzie
+  nic nie ruszaliśmy — same pomiary: 12 s limitu na jedną odpowiedź, zero ponowień, najdłuższe
+  realne nagranie 364,5 s. Pełna treść w `docs/ZWROTKA-AI-MANAGER-LIMITY-CZASU.md`, doręczone
+  do ich pliku pamięci. Commity: `d63c5d2` (u nas), `449f9a5` (u nich).
+- **Przy okazji znalezisko, które zmienia ICH rachunek:** ich licznik nie widzi wysyłki pliku —
+  to samo nagranie 364,5 s u nich zmierzyło się na 2,6 s, u nas na 7,6 s.
+- **Po południu: zgłoszenie właściciela o wygląd przycisków paska** (fioletowe tło zamiast
+  fioletowej ikony; krzyżyk nieświecący się na czerwono). Obie rzeczy miały jedną przyczynę —
+  sygnał siedział w tle i ramce, a nie w ikonie; `color:` w arkuszu nie dotyczy obrazka `QIcon`,
+  a błysk ramki przegrywał z najechaniem myszą. Commit `8d5f6a8`, oznaczony jako nieprzetestowany.
+- **Przy okazji naprawione narzędzie sabotażowe:** cztery warianty były martwe od 14.09 przez
+  zdublowane klucze w słowniku (Python zostawia ostatni, bez ostrzeżenia); dwie kotwice zgniły
+  od moich własnych zmian w tej samej sesji.
+- Stan na koniec dnia: 4 commity (2 repozytoria), wszystko wypchnięte i sprawdzone dowodem,
+  48/48 na bramce paska, 22/22 warianty sabotażu wykryte, 27/27 bramek projektu zielonych.
+  **Testy u właściciela umówione na 2026-09-16** — beta wymaga restartu.
+
+---
+
 ## 2026-09-14
 
 - **Cztery etapy przenoszenia nowości Claude Code do VCA, z maila „This week in Claude Code" (12.09).**
