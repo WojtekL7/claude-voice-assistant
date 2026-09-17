@@ -579,6 +579,74 @@ TTS_DEFAULT_VOICE = "pl-PL-ZofiaNeural"
 TTS_DEFAULT_RATE = "+0%"
 TTS_DEFAULT_VOLUME = "+0%"
 
+# --- TEMPO CZYTANIA (funkcja „przyspieszenie lektora", 2026-09-17) ---------
+# JEDYNE zrodlo prawdy o poziomach tempa. Przycisk na pasku, zapis w config.json
+# i silnik TTS czytaja WYLACZNIE stad — dwie kopie tej listy rozjechalyby sie
+# przy pierwszej zmianie (COMMON: „DWA RENDERY TEJ SAMEJ RZECZY ROZJADA SIE ZAWSZE").
+#
+# Para: (wartosc wysylana do edge-tts, mnoznik tempa do pokazania czlowiekowi).
+# ⭐ ZMIERZONE NA ZYWO 2026-09-17 (to samo zdanie, glos pl-PL-ZofiaNeural,
+# porownanie rozmiaru mp3 — przy stalym bitrate rozmiar jest proporcjonalny
+# do czasu trwania):
+#     "+0%"   ->  46080 B  (1,00x — punkt odniesienia)
+#     "+25%"  ->  36864 B  (0,80x)
+#     "+50%"  ->  30816 B  (0,67x = dokladnie 1,5x szybciej)
+#     "+100%" ->  23184 B  (0,50x = dokladnie 2x szybciej)
+# Mapowanie „+N%” -> tempo (1 + N/100)x zgadza sie co do grosza.
+# ⚠️ Przy pomiarze JEDNA proba "+50%" padla `NoAudioReceived` i przeszla
+# 4/4 przy powtorce — to AWARIA PRZEJSCIOWA uslugi, nie wada parametru
+# (COMMON: „za pierwszym razem zle, za drugim dobrze ⇒ szukaj w czasie,
+# nie w danych"). Ponowienia ma juz `_generate_audio` (TTS_GEN_ATTEMPTS).
+#
+# ⛔ Kolejnosc listy JEST kolejnoscia cyklu przycisku. Zaczynamy od 1x
+# (zachowanie dotychczasowe), potem przyspieszenia. Spowolnienia NIE MA —
+# swiadoma decyzja wlasciciela 2026-09-17 („zrob to bez 0,5”). Gdyby kiedys
+# wrocilo, edge-tts przyjmuje wartosci ujemne ("-50%" = 0,5x, zmierzone).
+TTS_RATE_LEVELS = [
+    ("+0%",   1.0),
+    ("+25%",  1.25),
+    ("+50%",  1.5),
+    ("+100%", 2.0),
+]
+
+
+def tts_rate_label(multiplier: float) -> str:
+    """Etykieta tempa dla czlowieka, np. 1,25x po polsku / 1.25x po angielsku.
+
+    Separator dziesietny idzie za jezykiem interfejsu — po polsku przecinek.
+    Liczby calkowite bez czesci ulamkowej (1x, 2x), zeby przycisk byl krotki.
+    """
+    if float(multiplier).is_integer():
+        tekst = str(int(multiplier))
+    else:
+        tekst = f"{multiplier:.2f}".rstrip("0").rstrip(".")
+        if current_ui_language().startswith("pl"):
+            tekst = tekst.replace(".", ",")
+    return f"{tekst}\u00d7"
+
+
+def tts_rate_next(current_rate: str) -> str:
+    """Nastepny poziom w cyklu; nieznana wartosc wraca na poczatek listy.
+
+    Fail-safe jest tu celowy: gdyby w config.json siedziala wartosc spoza listy
+    (recznie wpisana, po zmianie listy w nowszej wersji), przycisk ma dzialac,
+    a nie wywalac sie ani milczec.
+    """
+    wartosci = [r for r, _ in TTS_RATE_LEVELS]
+    try:
+        i = wartosci.index(current_rate)
+    except ValueError:
+        return wartosci[0]
+    return wartosci[(i + 1) % len(wartosci)]
+
+
+def tts_rate_multiplier(rate: str) -> float:
+    """Mnoznik dla zadanej wartosci edge-tts; nieznana -> 1.0."""
+    for r, m in TTS_RATE_LEVELS:
+        if r == rate:
+            return m
+    return 1.0
+
 # Funkcja #3 (głos per-agent) — wbudowana lista głosów edge-tts do dropdowna.
 # ZGODNIE z obecnymi językami aplikacji: TYLKO polskie i angielskie. Polski ma
 # w edge-tts maksymalnie 2 głosy (Marek/Zofia — więcej nie istnieje). Angielski
@@ -695,6 +763,7 @@ UI_TRANSLATIONS = {
         "dictate_tooltip": "Dyktuj (nagrywanie głosu)",
         "read_tooltip": "Czytaj zaznaczony tekst lub ostatnią odpowiedź (zaznacz z Shift, gdy Claude używa myszy)",
         "pause_tooltip": "Pauza / Wznów",
+        "tts_speed_tooltip": "Tempo czytania: {tempo}. Kliknij, aby przyspieszyć.",
         "stop_tooltip": "Zatrzymaj wszystko",
         "copy_tooltip": "Kopiuj zaznaczony tekst (zaznacz z Shift, gdy Claude używa myszy)",
         "mouse_mode_scroll": "Mysz: przewijanie",
@@ -1597,6 +1666,7 @@ UI_TRANSLATIONS = {
         "dictate_tooltip": "Dictate (voice recording)",
         "read_tooltip": "Read selected text or last response (hold Shift to select when Claude uses the mouse)",
         "pause_tooltip": "Pause / Resume",
+        "tts_speed_tooltip": "Reading speed: {tempo}. Click to speed up.",
         "stop_tooltip": "Stop everything",
         "copy_tooltip": "Copy selected text (hold Shift to select when Claude uses the mouse)",
         "mouse_mode_scroll": "Mouse: scroll",

@@ -423,6 +423,8 @@ from config import (
     UPDATE_APPCAST_URL, UPDATE_PUBLIC_KEY, UPDATE_DOWNLOAD_DIR,
     MAX_ACTIVE_AGENTS, RAM_PER_AGENT_GB, RAM_SYSTEM_RESERVE_GB,
     tts_should_catch_up,
+    TTS_DEFAULT_RATE, TTS_RATE_LEVELS,
+    tts_rate_label, tts_rate_next, tts_rate_multiplier,
     LOGIN_EVENT_LOG, LOGIN_EVENT_LOG_MAX_BYTES,
     LOGIN_VERDICT_INTERVAL_SECS, LOGIN_VERDICT_MAX_CHECKS,
     READ_LAST_BUSY_SECS, READ_LAST_WAIT_POLL_MS, READ_LAST_WAIT_TIMEOUT_SECS,
@@ -718,6 +720,8 @@ class MainWindow(QMainWindow):
         self.current_language = "pl-PL"
         self.auto_read_responses = False
         self.auto_check_updates = True  # nadpisywane przez _load_settings
+        # Tempo czytania (wspolne dla calego okna — lektor jest jeden).
+        self.tts_rate = TTS_DEFAULT_RATE  # nadpisywane przez _load_settings
         # Kreator dyktowania: user zaznaczył „nie przypominaj" → nie wymuszaj okna
         # z powodu braku klucza Groq (nadpisywane przez _load_settings).
         self.dictation_reminder_dismissed = False
@@ -749,6 +753,13 @@ class MainWindow(QMainWindow):
 
         # Load settings
         self._load_settings()
+        # Tempo czytania wpuszczamy do lektora OD RAZU po wczytaniu ustawien —
+        # inaczej pierwsza wypowiedz po starcie poszlaby w tempie domyslnym,
+        # mimo ze przycisk pokazuje zapisana wartosc (rozjazd ekranu ze stanem).
+        try:
+            self.tts.set_rate(self.tts_rate)
+        except Exception:
+            pass
 
         # Setup UI
         self._setup_ui()
@@ -1273,6 +1284,7 @@ class MainWindow(QMainWindow):
         agent_tab.request_tts.connect(self._handle_tts_request)
         agent_tab.request_tts_stop.connect(self._stop_all)
         agent_tab.request_pause.connect(self._toggle_pause)
+        agent_tab.request_tts_speed.connect(self._cycle_tts_speed)
         agent_tab.request_read_last.connect(self._read_last_response)
         agent_tab.request_dictation.connect(self._handle_dictation_request)
         agent_tab.request_terminal_repair.connect(
@@ -2743,6 +2755,15 @@ class MainWindow(QMainWindow):
                     settings = json.load(f)
                     self.current_language = settings.get('language', self.current_language)
                     self.auto_read_responses = settings.get('auto_read', False)
+                    # Tempo czytania. ODCZYT LAGODNY: wartosc spoza listy
+                    # (recznie wpisana, pozostalosc po innej wersji) NIE moze
+                    # dojechac do lektora — edge-tts odrzucilby ja, a objawem
+                    # byloby ciche milczenie czytania, nie czytelny blad.
+                    _zapisane_tempo = settings.get('tts_rate', TTS_DEFAULT_RATE)
+                    if _zapisane_tempo in [r for r, _ in TTS_RATE_LEVELS]:
+                        self.tts_rate = _zapisane_tempo
+                    else:
+                        self.tts_rate = TTS_DEFAULT_RATE
 
                     # Skórka: wczytaj zapisaną TYLKO gdy pochodzi z bieżącego
                     # schematu. Starsza (np. motyw Ubuntu sprzed redesignu)
@@ -2826,6 +2847,7 @@ class MainWindow(QMainWindow):
         settings = {
             'language': self.current_language,
             'auto_read': self.auto_read_responses,
+            'tts_rate': getattr(self, 'tts_rate', TTS_DEFAULT_RATE),
             'groq_api_key': self.stt.api_key,
             'stt_fix_enabled': self.stt.fix_enabled,
             'anthropic_api_key': getattr(self, 'anthropic_api_key', ''),
@@ -3165,6 +3187,11 @@ class MainWindow(QMainWindow):
             tab.read_btn.setToolTip(tr('read_tooltip'))
             tab.pause_btn.setToolTip(tr('pause_tooltip'))
             tab.stop_btn.setToolTip(tr('stop_tooltip'))
+            # Tempo: po zmianie jezyka zmienia sie NIE TYLKO podpowiedz, ale i
+            # sama etykieta — po polsku „1,25×", po angielsku „1.25×".
+            if hasattr(tab, 'set_tts_speed_label'):
+                _et = tts_rate_label(tts_rate_multiplier(getattr(self, 'tts_rate', TTS_DEFAULT_RATE)))
+                tab.set_tts_speed_label(_et, tr('tts_speed_tooltip').format(tempo=_et))
             tab.copy_btn.setToolTip(tr('copy_tooltip'))
             tab.clear_input_btn.setToolTip(tr('clear_input_tooltip'))
             tab.add_media_btn.setToolTip(tr('add_media_tooltip'))
@@ -4588,6 +4615,45 @@ class MainWindow(QMainWindow):
             tab, 'copy_btn', theme.SUCCESS, przemaluj_ikone=False,
             po_powrocie=lambda: tab.copy_btn.setIcon(self._icon('copy', 'normal')))
 
+    def _apply_tts_rate(self):
+        """Wpusc wybrane tempo do lektora i odswiez napis na WSZYSTKICH zakladkach.
+
+        Lektor jest JEDEN na cale okno, wiec tempo tez jest jedno — przycisk
+        w kazdej zakladce musi pokazywac te sama wartosc. Odswiezanie jedna
+        petla jest tu cala pointa: gdyby kazda zakladka trzymala wlasny stan,
+        rozjechalyby sie przy pierwszym przelaczeniu (rodzina „DWA RENDERY
+        TEJ SAMEJ RZECZY ROZJADA SIE ZAWSZE").
+
+        ⚠️ Tempo lapie od NASTEPNEGO zdania, nie w polowie biezacego: audio
+        powstaje na serwerze z „wypieczonym" tempem, a lektor pobiera kilka
+        zdan do przodu (prefetch), zeby czytac bez zaciec. Zdania trwaja
+        1-3 s, wiec opoznienie jest ledwo zauwazalne. Przyspieszanie juz
+        pobranego nagrania na miejscu podnioslby glos (efekt Myszki Miki).
+        """
+        try:
+            self.tts.set_rate(self.tts_rate)
+        except Exception:
+            pass
+        etykieta = tts_rate_label(tts_rate_multiplier(self.tts_rate))
+        try:
+            tooltip = tr('tts_speed_tooltip').format(tempo=etykieta)
+        except Exception:
+            tooltip = etykieta
+        for tab in self.agent_tabs.values():
+            if hasattr(tab, 'set_tts_speed_label'):
+                tab.set_tts_speed_label(etykieta, tooltip)
+
+    def _cycle_tts_speed(self):
+        """Klik w przycisk tempa — kolejny poziom z listy, w kolko.
+
+        Wzorzec z odtwarzaczy podcastow: jeden przycisk, klik przeskakuje na
+        nastepna wartosc i wraca na poczatek. Zapisujemy od razu, bo nie ma
+        tu zadnego „Zapisz" do klikniecia — wybor ma przezyc zamkniecie okna.
+        """
+        self.tts_rate = tts_rate_next(self.tts_rate)
+        self._apply_tts_rate()
+        self._save_settings()
+
     def _toggle_pause(self):
         """Toggle TTS pause/resume."""
         self.tts.toggle_pause()
@@ -5081,6 +5147,18 @@ class MainWindow(QMainWindow):
             if hasattr(tab, 'pause_btn'):
                 self._apply_button_icon_style(tab.pause_btn, 'icon_pause_color', with_disabled=True)
 
+            # Tempo czytania — CZWARTY przycisk tej rodziny. Bez tej linijki Qt
+            # zostawia fabryczny BIALY kwadrat na ciemnym pasku (zlapalo juz
+            # mouse_mode_btn, repair_terminal_btn i search_btn). Rozni sie od
+            # sasiadow tym, ze niesie NAPIS, a nie ikone — dlatego mniejsza
+            # czcionka (22 px to rozmiar glifu ikony, napis „1,25×" by sie nie
+            # zmiescil) i dlatego `color:` z arkusza realnie go maluje: to jedyny
+            # przycisk paska, dla ktorego ta wlasciwosc cokolwiek znaczy.
+            # Klucz koloru pozyczamy od glosnika — tempo NALEZY do lektora,
+            # a nowy klucz skorki wymusilby migracje ustawien uzytkownika.
+            if hasattr(tab, 'speed_btn'):
+                self._apply_button_icon_style(tab.speed_btn, 'icon_read_color', font_size=14)
+
             # Wyślij — jedyny przycisk „pierwszoplanowy": gradient akcentu z
             # poświatą, biały napis (kolor ze skórki byłby nieczytelny na fiolecie).
             if hasattr(tab, 'send_btn'):
@@ -5094,6 +5172,19 @@ class MainWindow(QMainWindow):
             # sam rozpoznaje klasę widżetu i sam ukrywa strzałkę menu.
             if hasattr(tab, 'quick_actions_btn'):
                 self._apply_button_icon_style(tab.quick_actions_btn, 'icon_quick_actions_color')
+
+        # Napis na przycisku tempa ustawiamy DOPIERO TERAZ, na koncu malarza —
+        # i to jest jedyne miejsce, z ktorego go wolamy. Powody, oba zmierzone:
+        #  (1) szerokosc liczy sie z `fontMetrics()`, a ta zna docelowy rozmiar
+        #      liter dopiero PO nalozeniu arkusza (wczesniej wyszlaby za waska);
+        #  (2) malarz biegnie przy tworzeniu KAZDEJ zakladki i przy zmianie
+        #      skorki, wiec nowa zakladka dostaje zapisane tempo bez zadnej
+        #      dodatkowej linijki w dwoch sciezkach tworzenia zakladek.
+        # Dopisanie tego wywolania w tamtych sciezkach osobno byloby DRUGA KOPIA,
+        # ktora rozjedzie sie przy pierwszej zmianie (patrz `_connect_agent_tab_signals`
+        # i historia „zgubionego kabelka" przy zakladkach z przycisku +).
+        if hasattr(self, '_apply_tts_rate'):
+            self._apply_tts_rate()
 
     def _apply_terminal_colors(self, colors: dict = None, terminal_backend=None):
         """Zastosuj kolory terminala przez backend (M2.3).

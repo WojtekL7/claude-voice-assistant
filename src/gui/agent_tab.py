@@ -38,6 +38,7 @@ from config import (
     MEMORY_READY_MARKER, MEMORY_READY_QUIET_SECS, MEMORY_READY_POLL_MS,
     MEMORY_READY_TIMEOUT_SECS, MEMORY_ENTER_DELAY_MS,
     READ_LAST_STREAM_WINDOW_SECS,
+    TTS_RATE_LEVELS, TTS_DEFAULT_RATE, tts_rate_label,
     t as tr,
 )
 from core.platform_utils import default_shell
@@ -265,6 +266,10 @@ class AgentTab(QWidget):
     # Akcja TRWAJĄCA UŁAMEK SEKUNDY (wyczyszczenie pola) — przycisk ma mrugnąć, a nie
     # świecić. Barwę dobiera MainWindow (kolory sygnałów żyją w kodzie, nie w skórce).
     request_button_flash = pyqtSignal(str)
+    # Klik w przycisk tempa czytania. Zakladka NIE zna kolejnego poziomu ani
+    # nie zapisuje niczego: lektor jest JEDEN na cale okno, wiec stan trzyma
+    # MainWindow i on odswieza etykiete we WSZYSTKICH zakladkach naraz.
+    request_tts_speed = pyqtSignal()
 
     def __init__(self, agent_config: dict, parent=None):
         super().__init__(parent)
@@ -592,6 +597,24 @@ class AgentTab(QWidget):
         self.stop_btn.clicked.connect(self._stop_all)
         self.stop_btn.setVisible(False)
         layout.addWidget(self.stop_btn)
+
+        # Tempo czytania — JEDEN przycisk z napisem, klik przeskakuje na kolejny
+        # poziom (wzorzec Spotify/Audible/podcastow: etykieta JEST odpowiedzia na
+        # pytanie „jakie mam teraz tempo", wiec nie trzeba osobnego okna ani podpisu.
+        # Menu jak w YouTube odpada — pasek jest ciasny i ma same ikony 48 px).
+        # ⛔ To jedyny przycisk paska z NAPISEM zamiast ikony, wiec:
+        #   · szerokosc MIERZYMY (patrz set_tts_speed_label) — „1,25×" jest dluzsze
+        #     niz „2×", a sztywna liczba ucielaby napis;
+        #   · w `_apply_skin_icons` go NIE MA i byc nie moze (nie ma ikony do
+        #     przemalowania) — barwe napisu niesie `color:` ze wspolnego arkusza.
+        self.speed_btn = QPushButton()
+        self.speed_btn.setObjectName('ttsSpeedButton')
+        self.speed_btn.setFixedHeight(btn_size)
+        self.speed_btn.setMinimumWidth(btn_size)
+        self.speed_btn.setText(tts_rate_label(1.0))
+        self.speed_btn.setToolTip(tr('tts_speed_tooltip').format(tempo=tts_rate_label(1.0)))
+        self.speed_btn.clicked.connect(self.request_tts_speed.emit)
+        layout.addWidget(self.speed_btn)
 
         # Copy button
         self.copy_btn = QPushButton()
@@ -1194,6 +1217,36 @@ class AgentTab(QWidget):
         (filtering out UI frames, spinners, user prompts) and handles selected text.
         """
         self.request_read_last.emit()
+
+    def set_tts_speed_label(self, text: str, tooltip: str = "") -> None:
+        """Pokaz aktualne tempo czytania na przycisku paska.
+
+        Szerokosc LICZYMY z metryki czcionki, bo etykiety maja rozna dlugosc
+        („1×" wobec „1,25×"), a sztywna liczba ucielaby najdluzsza — to ta sama
+        rodzina bledow co „sztywne wysokosci + wyzsze czcionki = uciete glify".
+        Pomiar robimy TUTAJ, a nie przy tworzeniu przycisku, bo dopiero po
+        nalozeniu arkusza (MainWindow._apply_button_icon_styles) `fontMetrics()`
+        zna DOCELOWY rozmiar liter; mierzone wczesniej wyszloby za waskie.
+
+        Szerokosc dobieramy pod NAJDLUZSZA etykiete z listy, nie pod biezaca —
+        inaczej przycisk skakalby przy kazdej zmianie tempa i rozpychal sasiadow.
+        """
+        btn = getattr(self, 'speed_btn', None)
+        if btn is None:
+            return
+        btn.setText(text)
+        if tooltip:
+            btn.setToolTip(tooltip)
+        try:
+            fm = btn.fontMetrics()
+            najszerszy = max(
+                fm.horizontalAdvance(tts_rate_label(m)) for _, m in TTS_RATE_LEVELS
+            )
+            btn.setFixedWidth(max(btn.height(), najszerszy + 16))
+        except Exception:
+            # Pomiar to wygoda, nie warunek dzialania — przy dziwnej czcionce
+            # zostaje minimum szerokosci i przycisk dalej dziala.
+            pass
 
     def _toggle_pause(self):
         """Pauza/wznów czytania (TTS). Obsługę wykonuje MainWindow na silniku TTS."""
