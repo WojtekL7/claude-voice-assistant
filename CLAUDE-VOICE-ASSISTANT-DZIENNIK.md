@@ -8,6 +8,27 @@ w zeszły czwartek", na które `git log` odpowiada zbyt drobno. Wpis: 3–8 lini
 
 ---
 
+## 2026-09-17
+
+- **Nowa funkcja na prośbę właściciela: tempo czytania na dolnym pasku** — jeden przycisk
+  z napisem, klik przeskakuje 1× → 1,25× → 1,5× → 2× i wraca. Decyzja właściciela: bez
+  spowolnienia 0,5×. Połowa mechanizmu leżała w kodzie od zawsze (`set_rate` → edge-tts)
+  i nikt jej nie wołał, więc zmiana to raptem 214 linii w `src/`. Commit `720339d`,
+  oznaczony **NIEPRZETESTOWANE** — właściciel nie mógł testować, sprawdza 18.09 przy pracy.
+  Dowody: nowa bramka 24/24, sabotażysta 14/14 wykrytych, regresja 28/28.
+- **Konsolidacja pamięci projektu do budżetu** (`c7d80b3`): 599 → 351 linii, 123 → 77 kB.
+  Nic nie skasowane — powstały dwa pliki tematyczne (`-PULAPKI.md`, `-WYDANIA.md`),
+  historia domknięta poszła do archiwum. Bramka złapała przy tym jedną pozycję OTWARTĄ,
+  która wyjechała do archiwum razem z sekcją historyczną; wciągnięta z powrotem.
+- **Nauki dnia poszły do pamięci wspólnej** (repo `claude-memory`, commity `b29e6fe`
+  i `fa1f7cc`): Qt/`QApplication` i odśmiecacz, edge-tts i przejściowe `NoAudioReceived`,
+  ślepa asercja na martwym kodzie, grep z wzorcem wieloliniowym. Przy okazji naprawione
+  narzędzie `narzedzia/przenies-sekcje.py`, które generowało nagłówek kłamiący o pochodzeniu.
+- ⚠️ **Równolegle inny agent odchudzał `CLAUDE-COMMON.md`** (1558 → 735 linii). Przez część
+  sesji jego praca była niezacommitowana, więc wpisy do plików wspólnych czekały; po jego
+  commitach (`31e73ad`, `56b05fb`) kotwice pobrano świeżo — dwa pliki docelowe rano
+  jeszcze nie istniały.
+
 ## 2026-09-15
 
 - **Rano: odpowiedź dla agenta AI Manager na pytanie o limity czasu przy dyktowaniu.** W kodzie
