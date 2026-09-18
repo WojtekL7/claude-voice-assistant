@@ -295,6 +295,41 @@ Plan: `docs/PLAN-CHMURA-SYNC.md` (sekcja 9 = szyfrowanie). Pamięć: `chmura-syn
 | Zawieszanie przy 2+ zakładkach | RAM — patrz sekcja „Pamięć/RAM" w tym pliku |
 | Kopiowanie/odczyt zaznaczenia zwraca pustkę | Claude (TUI) przejmuje mysz → zaznaczaj z **Shift** (nie błąd kodu) |
 
+### 📋 KONTRAKT OD AGENTA AI MANAGERA (2026-09-18) — `STT_FIX_MODEL` na `task/fix-transcript`
+
+📄 **Pełny dokument (u nich): `~/Projekty/AI Manager/docs/KONTRAKT-VCA-FIX-TRANSCRIPT.md`**
+⚠️ **To PROPOZYCJA do decyzji właściciela, nie polecenie.** Świadomie bez kopii treści.
+
+⛔ **ODWRACA ich własne stanowisko z 2026-09-12** („`STT_FIX_MODEL` na nazwie modelu ZOSTAJE,
+nie liczymy tego jako zaległości"). Powód leży po ICH stronie: właściciel AI Managera postanowił,
+że cały ruch ma iść przez zadania, a oni zbudowali zadanie dobrane pod WIERNOŚĆ — czego wtedy
+nie było. **Zmiana u nas to jedna linia:** `src/config.py:510` → `STT_FIX_MODEL = "task/fix-transcript"`.
+Prompt, `temperature: 0`, bezpiecznik długości, widełki 0,80–1,30 i limit 12 s **zostają bez zmian**.
+
+🔴 **ZNALEZISKO, KTÓRE DOTYCZY NAS NIEZALEŻNIE OD DECYZJI: zmierzyli nasz ruch i najdłuższe
+wywołanie tej warstwy w 7 dni trwało 70 291 ms.** Rozłączamy się po 12 s, więc **takie poprawki
+nigdy nie docierają do użytkownika** — oni liczą je jako sukces (`200`), a człowiek dostaje tekst
+surowy i nie wie dlaczego. Zadanie ma budżet **5 s na próbę i sufit 10 s**, więc zwis jest ucinany
+i próbę dostaje model zapasowy. ⚠️ Ich sufit 10 s jest **wyprowadzony z naszego `STT_FIX_HTTP_TIMEOUT`
+= 12 s** (`config.py:517`) — **zmieniając tę stałą, trzeba im powiedzieć**.
+
+⭐ **Nasz wybór modelu z 11.09 potwierdzony niezależnie, nie podmieniony:** krok 1 łańcucha to
+dokładnie `gemini-3.5-flash-lite`, który mamy dziś. Krok 2 to `qwen/qwen3.8-27b` **u Groqa**, czyli
+pierwsza prawdziwa siatka (dziś awaria Gemini ucisza poprawianie bez objawu).
+⛔ **Wynik ich kanarka wart zapamiętania także u nas: przy tym zadaniu „mądrzejszy" NIE znaczy
+lepszy.** Tekst dyktowania bywa zdaniem brzmiącym jak polecenie — **3 z 6 modeli wykonały je
+zamiast poprawić zapis** (`llama-3.3-70b` zaczął poprawiać funkcję, `ministral-8b` dopisał
+„Poprawiona wersja:" i rozwlekł tekst 18×, `granite` wymyślił listę zadań). Sprawdzali też agenta
+`claude-code`: jakość wzorowa, ale ma jednoczesność 1, więc **świadomie go tam NIE stawiają**.
+
+⚠️ Co ma u nas zostać nietknięte: **oddawanie tekstu SUROWEGO przy każdej wątpliwości** (zadanie
+tego nie zastępuje), bezpiecznik długości i widełki, `STT_FIX_ENABLED_DEFAULT`, oraz `STT_MODEL =
+"task/transcribe"` — to INNE zadanie, nie pomylić przy zmianie.
+⛔ Nie asertować nazwy modelu ani `x-aim-model` — wykonawcę wybierają oni i zmieniają bez uprzedzenia.
+
+**Zwrotka:** ta sekcja albo `docs/ZWROTKA-AI-MANAGER-TRANSCRIBE.md`; oni zmierzą przepięcie u siebie
+(kolumna `task` dla klucza id=3 na endpoincie `chat`) i dadzą znać — nie musimy nic raportować.
+
 ## PODŁĄCZENIE DO AI MANAGERA — ✅ działa, ⏳ JEDNA RZECZ OTWARTA (przepięcie na zadania)
 
 Rozmowa z Claude idzie przez CLI (nie HTTP) → bramka jej nie łapie i nie musi; zużycie liczy osobno kolektor Claude Code AI Managera z lokalnych `.jsonl`.
