@@ -972,14 +972,34 @@ _EMOJI_SYMBOLS = re.compile(
 )
 
 # Emotikony TEKSTOWE (zwykłe znaki ASCII, nie emoji) — np. :) :-( ;) :D xD :/ <3.
-# Żaden filtr emoji ich nie łapie (to dwukropek/nawias/itd.), a lektor je wymawia.
-# Ograniczenia (?<!\w)/(?!\w) chronią zwykły tekst i liczby (np. „10:30", „(x)").
+# Żaden filtr emoji ich nie łapie (to dwukropek/nawias/itd.), a lektor je WYMAWIA:
+# zmierzone na edge-tts pl-PL-ZofiaNeural — samo ":(" daje 12 816 B audio (≈1,3 s
+# mowy) przy ciszy 0 B, czyli głos czyta je jako słowa („emotikon smutek").
+#
+# DWA wzorce, bo ryzyko jest różne po obu stronach emotikony (zgłoszenie 2026-09-18:
+# „czyta emotikon smutek, kiedy widzi nawias i dwukropek"):
+#
+# 1) WOLNOSTOJĄCE — pełna lista. Ograniczenia (?<!\w)/(?!\w) chronią zwykły tekst
+#    i liczby („10:30", „(x)", „art. 28)").
+# 2) PRZYKLEJONE DO SŁOWA („Gotowe:(") — WĄSKA lista. Stary wzorzec ich NIE łapał,
+#    bo (?<!\w) wymaga, by przed dwukropkiem nie było litery; to była zmierzona
+#    dziura. Tu świadomie NIE ma: „8)" (139 kolizji z „art. 28)", „wersja 1.0.28)"),
+#    „:/" i „:\\" (ścieżki „log:/tmp", adresy „https://"), „:3" i „:|" (godziny
+#    „10:30", tabele markdown) ani „:*" (13 kolizji z pogrubieniem „Powód:**…**").
+#    (?<!\d) dokłada ochronę liczb, (?<![:/\\]) chroni „::(" i „://".
+#
+# ⛔ Zmiana KAŻDEGO z tych wzorców wymaga zmiany BLIŹNIACZEJ kopii w
+# src/core/tts_engine.py (jest tam świadomie, bo silnik TTS jest współdzielony
+# między projektami). Pilnuje tego tools/test-emoticon-speech.py — nie rozjeżdżaj.
 _EMOTICONS = re.compile(
     r"(?<!\w)(?:"
-    r"[:;=][-~^']?[)(\]\[DPpOo|/\\3<>]"   # :) :-( ;D =| :/ :3 :> :| :o …
+    r"[:;=][-~^']?[)(\]\[DPpOo|/\\3<>*]"  # :) :-( ;D =| :/ :3 :> :| :o :* …
     r"|[xX][DdPp]"                          # xD XD xP
     r"|<3|</3|\^\^|\^_\^|-_-|>_<|[Tt]_[Tt]|;_;|[oO]_[oO]"
     r")(?!\w)",
+)
+_EMOTICONS_GLUED = re.compile(
+    r"(?<!\d)(?<![:/\\])[:;][-~^']?[)(\]\[DdPp](?!\w)"
 )
 
 
@@ -992,6 +1012,9 @@ def strip_emoji_and_emoticons(text: str) -> str:
         return text
     text = _EMOJI_SYMBOLS.sub(" ", text)
     text = _EMOTICONS.sub(" ", text)
+    # Druga runda: emotikony PRZYKLEJONE do słowa („Gotowe:("), których wzorzec
+    # wolnostojący nie może złapać bez rozbrojenia ochrony godzin i ścieżek.
+    text = _EMOTICONS_GLUED.sub(" ", text)
     return text
 
 

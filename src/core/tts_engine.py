@@ -43,12 +43,31 @@ _SPEECH_EMOJI_RE = re.compile(
     "]",
     flags=re.UNICODE,
 )
+# ⛔ BLIŹNIACZA KOPIA wzorców z src/core/text_cleaner.py (_EMOTICONS
+# i _EMOTICONS_GLUED). Kopia jest ŚWIADOMA — patrz komentarz wyżej: ten silnik
+# bywa współdzielony między projektami, więc nie może zależeć od text_cleaner.
+# Cena kopii: musi być zmieniana RAZEM z oryginałem. Pilnuje tego bramka
+# tools/test-emoticon-speech.py (porównuje oba wzorce na wspólnym zestawie).
+#
+# Drugi wzorzec łapie emotikonę PRZYKLEJONĄ do słowa („Gotowe:("), której
+# pierwszy nie widzi, bo (?<!\w) wymaga braku litery przed dwukropkiem.
 _SPEECH_EMOTICON_RE = re.compile(
     r"(?<!\w)(?:"
-    r"[:;=][-~^']?[)(\]\[DPpOo|/\\3<>]"
+    r"[:;=][-~^']?[)(\]\[DPpOo|/\\3<>*]"
     r"|[xX][DdPp]"
     r"|<3|</3|\^\^|\^_\^|-_-|>_<|[Tt]_[Tt]|;_;|[oO]_[oO]"
     r")(?!\w)",
+)
+_SPEECH_EMOTICON_GLUED_RE = re.compile(
+    r"(?<!\d)(?<![:/\\])[:;][-~^']?[)(\]\[DdPp](?!\w)"
+)
+
+# CZUJKA (nie filtr!) — co POZOSTAŁO w tekście, a głos potrafi wymówić jako
+# emotikonę. Celowo SZERSZA niż filtry: ma zgłaszać także kształty, których
+# świadomie NIE wycinamy („8)", „:/"), żeby następne zgłoszenie „lektor czyta
+# emotikonę" miało dowód co do znaku zamiast zgadywania. Sama niczego nie usuwa.
+_SPEECH_EMOTICON_AUDIT_RE = re.compile(
+    r"[:;=8][-~^']?[)(\]\[DPpOo|/\\3<>*]|[xX][DdPp]|<3|\^\^|-_-|>_<|;_;"
 )
 
 
@@ -58,6 +77,7 @@ def _sanitize_for_speech(text: str) -> str:
         return text
     text = _SPEECH_EMOJI_RE.sub(" ", text)
     text = _SPEECH_EMOTICON_RE.sub(" ", text)
+    text = _SPEECH_EMOTICON_GLUED_RE.sub(" ", text)
     return text
 
 
@@ -204,6 +224,11 @@ class TTSEngine:
         text = _sanitize_for_speech(text)
         if not text.strip():
             return
+
+        # Ślad diagnostyczny: jeśli MIMO bramki w tekście został kształt, który
+        # głos wymawia jako emotikonę, zapisz to. Nie blokujemy czytania —
+        # fałszywe oskarżenie tekstu byłoby gorsze niż jedno dziwne słowo.
+        self._audit_emoticons(text)
 
         # Bez urządzenia audio nie kolejkujemy (workery i tak nie zagrają);
         # zgłoś czytelny błąd zamiast cicho mielić tekst.
@@ -616,6 +641,32 @@ class TTSEngine:
                     os.remove(path)
             except Exception:
                 pass
+
+    def _audit_emoticons(self, text: str):
+        """Zanotuj kształty, które głos może wymówić jako emotikonę (diagnostyka).
+
+        Powód: zgłoszenie 2026-09-18 („lektor mówi «emotikon smutek»"). Filtry
+        zostały uszczelnione, ale w 8000 wypowiedzi z dzienników nie było ani
+        jednego takiego przypadku — czyli źródło może leżeć poza dziennikiem
+        (tekst z ekranu, zaznaczenie). Bez zapisu następna diagnoza znów byłaby
+        zgadywaniem. Zapisujemy SAM KSZTAŁT i wąski kontekst, nie całą wypowiedź.
+        """
+        try:
+            trafienia = _SPEECH_EMOTICON_AUDIT_RE.findall(text)
+            if not trafienia:
+                return
+            fragmenty = []
+            for m in _SPEECH_EMOTICON_AUDIT_RE.finditer(text):
+                i = m.start()
+                fragmenty.append(repr(text[max(0, i - 25):i + len(m.group(0)) + 15]))
+                if len(fragmenty) >= 3:
+                    break
+            self._log_error(
+                "AUDYT EMOTIKON: do lektora poszlo "
+                f"{len(trafienia)} ksztaltow {sorted(set(trafienia))} | " + " ".join(fragmenty)
+            )
+        except Exception:
+            pass
 
     def _log_error(self, msg: str):
         """Dopisz błąd TTS do pliku log (diagnostyka).
