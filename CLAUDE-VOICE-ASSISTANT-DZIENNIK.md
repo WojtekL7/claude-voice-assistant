@@ -8,6 +8,17 @@ w zeszły czwartek", na które `git log` odpowiada zbyt drobno. Wpis: 3–8 lini
 
 ---
 
+## 2026-09-18
+
+- **Tempo czytania POTWIERDZONE przez właściciela na żywo** („tempo działa") — pozycja wisiała od 17.09 jako `NIEPRZETESTOWANE`; status przestawiony w żywej pamięci, lista 7 punktów testowych usunięta jako wykonana.
+- **Naprawiony lektor czytający emotikony na głos** (`27955e3`). Zgłoszenie: „czyta emotikon smutek, kiedy widzi nawias i dwukropek". Czyścik istniał i działał — dziurą był jego strażnik, przepuszczający emotikonę PRZYKLEJONĄ do słowa (`Gotowe:(`). Doszedł drugi, wąski wzorzec + `:*` wolnostojące; `8)` świadomie NIE dodane (139 kolizji z „art. 28)").
+- **Dołożona czujka `_audit_emoticons`** pisząca do `tts.log` — bo źródła NIE znaleziono w dziennikach (0 na 8162 wypowiedziach), więc może leżeć poza nimi (ekran, zaznaczenie). Przy nawrocie czyta się log, nie zgaduje.
+- Nowe narzędzia: `tools/test-emoticon-speech.py` (84/84) + `tools/sabotaz-emoticon-speech.py` (12/12 wykrytych). Regresja projektu **29/29**.
+- Pamięć wspólna: 5 nauk do `CLAUDE-COMMON.md` (2), `-TESTY.md`, `-DESKTOP.md`, `-PROGRAMOWANIE.md` (`8541dd7` w repo `claude-memory`).
+- Commity: `27955e3` (poprawka), `8337436` (pamięć projektu). ⏳ **Zostaje: test emotikon u właściciela 19.09** (wymaga restartu bety — 18.09 pracował na programie).
+
+---
+
 ## 2026-09-17
 
 - **Nowa funkcja na prośbę właściciela: tempo czytania na dolnym pasku** — jeden przycisk
