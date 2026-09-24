@@ -14,6 +14,18 @@ Wzorowane na `sabotaz-window-geometry.py` — ten sam sprawdzony uklad:
 
 Uzycie:  python3 tools/sabotaz-dictation-fix.py S1
          python3 tools/sabotaz-dictation-fix.py --kotwice
+
+WYNIKI ZMIERZONE 2026-09-24 (po dolozeniu bezpiecznika SLOW i zejsciu z Gemini),
+wpisane PO przebiegu. Zdrowy kod: 46/46 (S12: 50/50 w test-dictation.py).
+Kazdy wariant wykonal komplet sprawdzen, przywrocenie potwierdzone sha256.
+  S1 A1 · S2 A2 · S3 G12,G13 · S4 A4 · S5 B2 · S6 B5 · S7 B9,D2 · S8 F1 · S9 E1
+  S10 D1 · S11 E2 · S12 F7 · S13 G1,G2,G3,G9 · S14 G3 · S15 G5 · S16 G3
+  S17 G10 · S18 G11 · S19 G2,G3                         → 19/19 wykrytych
+⚠️ Pierwszy przebieg: S3 (zdjete widelki dlugosci) NIE ZAPALIL NICZEGO — nowy
+bezpiecznik slow przejal A6/A7, wiec stara warstwa przestala byc badana.
+Dolozone G12/G13: sprawdzaja widelki z WYLACZONYM bezpiecznikiem slow.
+Drugie znalezisko przy pisaniu bramki: limit dopisanych slow liczony od
+ODPOWIEDZI przepuszczal „…, zrob to teraz" (3 slowa do 12) — poprawione, S14.
 """
 import hashlib
 import shutil
@@ -30,7 +42,7 @@ BRAMKA_STT = REPO / "tools" / "test-dictation.py"
 # Ile sprawdzen ma WYKONAC domyslna bramka na zdrowym kodzie. Liczba jest tu po to,
 # zeby odroznic „nic nie padlo, bo kod odporny" od „bramka urwala sie w polowie" —
 # bez niej oba wygladaja identycznie po odfiltrowaniu wyjscia.
-OCZEKIWANE = 30
+OCZEKIWANE = 46
 
 _VENV = REPO / "venv" / "bin" / "python"
 PYTHON = str(_VENV) if _VENV.exists() else sys.executable
@@ -78,6 +90,28 @@ WARIANTY = {
             'STT_MODEL = "task/transcribe"',
             'STT_MODEL = "groq/whisper-large-v3"',
             BRAMKA_STT, 50),
+    # --- 2026-09-24: bezpiecznik SLOW + zejscie z Gemini (awaria 21-24.09) ---
+    "S13": (SILNIK, "zdjety bezpiecznik SLOW (tlumaczenie/parafraza wchodza do pola)",
+            "        ok, zgubione, dopisane, ile = ocena_slow(surowy, poprawiony)\n        if not ok:",
+            "        ok, zgubione, dopisane, ile = ocena_slow(surowy, poprawiony)\n        if False:"),
+    "S14": (SILNIK, "limit dopisanych slow liczony znow od ODPOWIEDZI (luka z pisania G3)",
+            "    ok = n_a > 0 and zgubione <= limit and dopisane <= limit",
+            "    ok = n_a > 0 and zgubione <= limit and dopisane <= max(1, int(STT_FIX_MAX_LOST_SHARE * n_b))"),
+    "S15": (SILNIK, "ogonki NIE zdejmowane — bezpiecznik odrzuca kazda prawdziwa poprawke",
+            '    t = "".join(ch for ch in t if not unicodedata.combining(ch))',
+            '    t = t  # SABOTAZ'),
+    "S16": (SILNIK, "bezpiecznik ignoruje DOPISANE slowa",
+            "    ok = n_a > 0 and zgubione <= limit and dopisane <= limit",
+            "    ok = n_a > 0 and zgubione <= limit"),
+    "S17": (CONFIG, "poprawka z powrotem przez task/fix-transcript (6/8 wykonane)",
+            'STT_FIX_MODEL = "groq/qwen/qwen3.8-27b"',
+            'STT_FIX_MODEL = "task/fix-transcript"'),
+    "S18": (CONFIG, "czekanie na poprawke z powrotem 12 s",
+            "STT_FIX_HTTP_TIMEOUT = 5.0",
+            "STT_FIX_HTTP_TIMEOUT = 12.0"),
+    "S19": (CONFIG, "prog bezpiecznika poluzowany 20% -> 25% (parafraza przechodzi)",
+            "STT_FIX_MAX_LOST_SHARE = 0.20",
+            "STT_FIX_MAX_LOST_SHARE = 0.25"),
 }
 
 

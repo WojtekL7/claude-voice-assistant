@@ -558,14 +558,38 @@ STT_FIX_API_URL = "https://ai.srv1251441.hstgr.cloud/v1/chat/completions"
 #   gpt-oss-120b           → szybkie (1,7–2,8 s), ale PRZEPISUJE wypowiedz
 #                            („daj mi"→„pokaz", „wyrzuc mi"→„usun") = niedopuszczalne
 #   gpt-oss-20b            → oddaje PUSTA tresc
-STT_FIX_MODEL = "gemini/gemini-3.5-flash-lite"
+#
+# ⛔ ZMIANA 2026-09-24 — gemini-3.5-flash-lite ZDJETY. Od 2026-09-21 Google oddaje
+# na nim 503 i wisi 10–120 s (baza bramki, klucz VCA id=3: 16–19.09 = 103/103
+# udanych w 0,7–1,3 s; 24.09 = 39 odmow na 58, srednio 10–15 s), a bramka zjezdza
+# na inne modele Gemini, rownie wolne. Dyktowanie czekalo przez to ~12 s i i tak
+# wstawialo tekst SUROWY. Pomiar sonda `tools/sonda-wiernosc-poprawki.py`
+# (8 zdan brzmiacych jak POLECENIA):
+#   groq/qwen/qwen3.8-27b  → mediana 0,9 s, max 2,9 s, 7/8 wierne   ← WYBRANY
+#                            (8. „przetlumacz to na angielski" → PRZETLUMACZYL;
+#                            lapie to bezpiecznik SLOW nizej, nie wybor modelu)
+#   task/fix-transcript    → ⛔ 6/8 WYKONANE zamiast zapisane (napisal program,
+#                            „nie mam dostepu do serwera"). Ten sam qwen, ale bramka
+#                            dokleja do zadania zakaz zmyslania (`x-aim-guard:
+#                            added-facts`), ktory pcha model w tryb ODPOWIADANIA.
+#                            ⭐ AI Manager zdjal to 24.09 (`e69a8a8`, etykieta
+#                            `przepisuje_tekst`; ich pomiar 14/16 wiernych). Powrot
+#                            na zadanie = decyzja wlasciciela + uzgodnienie limitu
+#                            (nasze 5 s vs ich sufit 10 s) — NIE przelaczac samemu.
+#   gemini-3.5-flash-lite  → 4/8 padlo po 12 s, a odpowiadal za niego 3.6-flash.
+STT_FIX_MODEL = "groq/qwen/qwen3.8-27b"
 
 # Limit czasu na poprawke. To krok DODATKOWY: lepiej oddac tekst surowy niz
 # kazac czekac. ⛔ PROG DOBRANY NA LADUNKU PRODUKCYJNYM, nie na probce — pierwsza
 # wersja miala 8 s z pomiaru na krotkim zdaniu i ODCINALA uczciwa prace: prawdziwy
 # tekst uzytkownika (524 znaki) konczyl sie `ReadTimeout` i po cichu wracal surowy.
 # Zmierzone na 524 i 1244 znakach: mediana 1,7 s, najgorszy przypadek 8,8 s.
-STT_FIX_HTTP_TIMEOUT = 12.0
+# ⭐ 12 s → 5 s (2026-09-24): tamte 8,8 s dotyczyly GEMINI; qwen u Groqa robi to
+# samo w 0,9 s (max 2,9 s). Poprawka to premia — przy awarii modelu czlowiek ma
+# czekac najwyzej kilka sekund na tekst surowy, a nie 12 s (dokladnie tak wygladala
+# awaria z 21–24.09). Wolajac po NAZWIE modelu nie mamy kontraktu z sufitem bramki
+# (on dotyczyl `task/fix-transcript`) — nikomu tej liczby nie obiecalismy.
+STT_FIX_HTTP_TIMEOUT = 5.0
 
 # Powyzej tylu znakow nie poprawiamy — dlugie dyktowanie i tak jest zwykle
 # dzielone przez uzytkownika, a koszt i czas rosna liniowo.
@@ -584,6 +608,19 @@ STT_FIX_MAX_CHARS = 6000
 # oceniac jakosc polszczyzny.
 STT_FIX_MIN_RATIO = 0.80
 STT_FIX_MAX_RATIO = 1.30
+
+# ⛔ BEZPIECZNIK SLOW (2026-09-24) — domyka luke opisana wyzej („parafrazy nie
+# lapiemy"). Porownujemy SLOWA po zdjeciu ogonkow, interpunkcji i wielkosci liter,
+# czyli dokladnie tego, co poprawka MA prawo zmienic. Zmierzone: qwen zamienil
+# „przetlumacz to na angielski prosze" na „Please translate this into English."
+# — stosunek dlugosci 1,03, czyli bezpiecznik dlugosci PRZEPUSCILBY angielski
+# tekst do pola. Ten go odrzuca (zachowane 0 z 5 slow).
+# Regula: poprawka przechodzi, gdy zniknelo najwyzej STT_FIX_MAX_LOST_SHARE slow
+# LUB najwyzej jedno (krotkie zdanie z jednym przeslyszeniem, np. „kruc"→„klucz",
+# nie moze przez to tracic poprawki) — i tak samo z dopisanymi slowami.
+# Kalibracja: parafraza z 2026-09-11 („daj mi liste…" → „pokaz liste…",
+# 9 slow, 2 zmienione = 22%) ma byc ODRZUCONA; stad 20%, nie 25%.
+STT_FIX_MAX_LOST_SHARE = 0.20
 
 # Polecenie dla modelu. Bez cudzyslowow typograficznych — patrz CLAUDE-COMMON,
 # „polski cudzyslow zamykajacy bywa zwyklym ASCII i urywa lancuch".

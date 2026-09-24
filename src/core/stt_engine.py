@@ -3,7 +3,10 @@ Vibe Coding Assistant - Speech-to-Text Engine
 Uses Groq Whisper API for fast, accurate transcription.
 """
 import io
+import re
+import unicodedata
 import wave
+from collections import Counter
 import tempfile
 import threading
 import os
@@ -21,7 +24,7 @@ from config import (
     STT_HTTP_TIMEOUT, STT_PROCESSING_STUCK_SECS,
     STT_FIX_ENABLED_DEFAULT, STT_FIX_API_URL, STT_FIX_MODEL,
     STT_FIX_HTTP_TIMEOUT, STT_FIX_MAX_CHARS, STT_FIX_MIN_RATIO,
-    STT_FIX_MAX_RATIO, STT_FIX_PROMPT,
+    STT_FIX_MAX_RATIO, STT_FIX_MAX_LOST_SHARE, STT_FIX_PROMPT,
     DICTATION_LOG, DICTATION_LOG_MAX_BYTES,
     t as tr,
 )
@@ -90,6 +93,33 @@ def decide_mic_click(is_recording: bool, is_processing: bool,
     if is_processing and is_stuck:
         return KLIK_ODBLOKUJ
     return KLIK_NAGRYWAJ
+
+
+def _slowa(tekst: str) -> list:
+    """Slowa tekstu BEZ tego, co poprawka ma prawo zmienic: ogonkow, interpunkcji,
+    wielkosci liter. „Usuń plik." i „usun plik" daja to samo."""
+    t = unicodedata.normalize("NFKD", (tekst or "").lower().replace("ł", "l"))
+    t = "".join(ch for ch in t if not unicodedata.combining(ch))
+    return re.findall(r"[a-z0-9]+", t)
+
+
+def ocena_slow(surowy: str, poprawiony: str):
+    """Czy poprawka zostawila SLOWA czlowieka? → (ok, zgubione, dopisane, ile_slow).
+
+    Czysta funkcja, zeby dalo sie ja odpytac testem (patrz STT_FIX_MAX_LOST_SHARE
+    w config.py). Liczymy na WIELOZBIORACH, bez kolejnosci — przestawienie slow przy
+    poprawce interpunkcji nie jest zmiana tresci.
+    """
+    a, b = Counter(_slowa(surowy)), Counter(_slowa(poprawiony))
+    n_a, n_b = sum(a.values()), sum(b.values())
+    zgubione = sum((a - b).values())
+    dopisane = sum((b - a).values())
+    # Oba limity liczone od slow CZLOWIEKA (n_a), nie od odpowiedzi: liczony od
+    # odpowiedzi rosl razem z dopiskiem, wiec „…, zrob to teraz" (3 slowa do 12)
+    # przechodzilo — zmierzone przy pisaniu bramki (G3).
+    limit = max(1, int(STT_FIX_MAX_LOST_SHARE * n_a))
+    ok = n_a > 0 and zgubione <= limit and dopisane <= limit
+    return ok, zgubione, dopisane, n_a
 
 
 def _zdejmij_ramke_kodu(tekst: str) -> str:
@@ -369,6 +399,14 @@ class STTEngine:
         if not (STT_FIX_MIN_RATIO <= stosunek <= STT_FIX_MAX_RATIO):
             dictation_log(f"POPRAWKA ODRZUCONA: {len(surowy)}->{len(poprawiony)} znakow "
                           f"(stosunek {stosunek:.2f}) poza widelkami — oddaje tekst surowy")
+            return text
+
+        # Bezpiecznik SLOW — lapie to, czego nie widzi dlugosc: tlumaczenie,
+        # odpowiedz zamiast zapisu, przepisanie innymi slowami.
+        ok, zgubione, dopisane, ile = ocena_slow(surowy, poprawiony)
+        if not ok:
+            dictation_log(f"POPRAWKA ODRZUCONA: zmienione slowa (zgubione={zgubione} "
+                          f"dopisane={dopisane} z {ile}) po {dt:.1f}s — oddaje tekst surowy")
             return text
 
         dictation_log(f"POPRAWKA: {len(surowy)}->{len(poprawiony)} znakow po {dt:.1f}s")

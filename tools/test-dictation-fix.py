@@ -241,5 +241,85 @@ sprawdz('F1 po poprawce sprawdzamy PONOWNIE, czy podejscie nadal aktualne',
 sprawdz('F2 poprawka wolana PRZED oddaniem tekstu do pola',
         zrodlo_stt.index('_popraw_transkrypcje(text)') < zrodlo_stt.index('self.on_transcription(text)'))
 
+# ── G. BEZPIECZNIK SLOW (2026-09-24) ─────────────────────────────────────────
+# Przypadki DOSLOWNIE z sondy `tools/sonda-wiernosc-poprawki.py` z 2026-09-24.
+# Kazdy „ma odrzucic" ma pare „ma przepuscic" — inaczej bezpiecznik, ktory
+# odrzuca WSZYSTKO, bylby tu zielony, a czlowiek tracilby kazda poprawke.
+from core.stt_engine import ocena_slow
+
+def przez_silnik(surowy, odpowiedz):
+    s, _ = silnik_z(OdpowiedzAtrapa(200, odpowiedz))
+    return s._popraw_transkrypcje(surowy)
+
+_T_SUR = 'przetlumacz to na angielski prosze'
+_T_ANG = 'Please translate this into English.'
+sprawdz('G0 przytomnosc: tlumaczenie MIESCI SIE w widelkach dlugosci (czyli tylko G1 moze je zlapac)',
+        config.STT_FIX_MIN_RATIO <= len(_T_ANG) / len(_T_SUR) <= config.STT_FIX_MAX_RATIO,
+        f'stosunek={len(_T_ANG) / len(_T_SUR):.2f}')
+sprawdz('G1 PRZETLUMACZONE zamiast poprawione -> tekst surowy',
+        przez_silnik(_T_SUR, _T_ANG) == _T_SUR)
+
+_P_SUR = 'daj mi liste klientow ktorzy nie odpowiedzieli od tygodnia'
+_P_PAR = 'Pokaż listę klientów, którzy nie odpowiedzieli od tygodnia.'
+sprawdz('G2a przytomnosc: parafraza MIESCI SIE w widelkach dlugosci',
+        config.STT_FIX_MIN_RATIO <= len(_P_PAR) / len(_P_SUR) <= config.STT_FIX_MAX_RATIO,
+        f'stosunek={len(_P_PAR) / len(_P_SUR):.2f}')
+sprawdz('G2 PRZEPISANE innymi slowami (parafraza z 2026-09-11) -> tekst surowy',
+        przez_silnik(_P_SUR, _P_PAR) == _P_SUR)
+
+_D_SUR = 'popraw blad w pliku config py bo aplikacja sie wywala przy starcie'
+_D_DOP = 'Popraw błąd w pliku config.py, bo aplikacja się wywala przy starcie, zrób to teraz.'
+# Pierwsza wersja G3 miala dopisek DLUZSZY (stosunek 1,36) — lapal go stary
+# bezpiecznik dlugosci, wiec G3 byl zielony niezaleznie od bezpiecznika slow.
+sprawdz('G3a przytomnosc: dopisek MIESCI SIE w widelkach dlugosci',
+        config.STT_FIX_MIN_RATIO <= len(_D_DOP) / len(_D_SUR) <= config.STT_FIX_MAX_RATIO,
+        f'stosunek={len(_D_DOP) / len(_D_SUR):.2f}')
+sprawdz('G3 DOPISANE slowa w widelkach dlugosci -> tekst surowy',
+        przez_silnik(_D_SUR, _D_DOP) == _D_SUR)
+
+# KONTROLE ODWROTNE — to, co poprawka MA prawo zrobic, ma przejsc.
+_W = 'Popraw błąd w pliku config.py, bo aplikacja się wywala przy starcie.'
+sprawdz('G4 ogonki + interpunkcja + „config py"->„config.py" -> PRZEPUSZCZONE',
+        przez_silnik(_D_SUR, _W) == _W)
+_K = 'Odchudź plik pamięci.'
+sprawdz('G5 krotkie zdanie z JEDNYM przeslyszeniem -> PRZEPUSZCZONE',
+        przez_silnik('Odchódź plik pamięci.', _K) == _K)
+_L = 'Wyrzuć mi wszystkie stare logi z serwera.'
+sprawdz('G6 polecenie zapisane wiernie (sonda: qwen) -> PRZEPUSZCZONE',
+        przez_silnik('wyrzuc mi wszystkie stare logi z serwera', _L) == _L)
+
+sprawdz('G7 ocena_slow: pusty tekst surowy -> nie ufamy',
+        ocena_slow('', 'cokolwiek')[0] is False)
+sprawdz('G8 ocena_slow: przestawienie slow NIE jest zmiana tresci',
+        ocena_slow('plik ten usun', 'Usuń ten plik.')[0] is True)
+
+dziennik = config.DICTATION_LOG.read_text(encoding='utf-8') if config.DICTATION_LOG.exists() else ''
+sprawdz('G9 odrzucenie za SLOWA jest widoczne w dzienniku (inaczej nie odroznisz go od awarii)',
+        'POPRAWKA ODRZUCONA: zmienione slowa' in dziennik)
+
+# Decyzja z 2026-09-24 zapisana jako asercja, bo wraca jako „oczywiste ulepszenie":
+# zadanie AI Managera dokleja zakaz zmyslania i model zaczyna ODPOWIADAC (6/8).
+# ⚠️ 24.09 AI Manager zdjal doklejany zakaz — powrot na zadanie jest mozliwy, ale
+# to decyzja wlasciciela z uzgodnieniem limitu czasu; wtedy zmien TE asercje swiadomie.
+sprawdz('G10 poprawka NIE idzie przez task/fix-transcript (decyzja z 2026-09-24)',
+        not config.STT_FIX_MODEL.startswith('task/'), config.STT_FIX_MODEL)
+sprawdz('G11 czekanie na poprawke najwyzej 5 s (awaria 21-24.09 kosztowala 12 s na dyktowanie)',
+        config.STT_FIX_HTTP_TIMEOUT <= 5.0, str(config.STT_FIX_HTTP_TIMEOUT))
+
+# Druga linia obrony pod lupa OSOBNO. Sabotaz S3 (zdjete widelki dlugosci) po
+# dolozeniu bezpiecznika slow NIE ZAPALIL NICZEGO — A6/A7 lapal juz nowy
+# bezpiecznik, wiec stara warstwa przestala byc sprawdzana. Tu wylaczamy slowa
+# (atrapa „zawsze OK") i pytamy, czy dlugosc SAMA dalej odrzuca.
+_prawdziwa_ocena = silnik.ocena_slow
+silnik.ocena_slow = lambda a, b: (True, 0, 0, 1)
+try:
+    sprawdz('G12 widelki dlugosci dzialaja SAME (bez bezpiecznika slow): za dluga -> surowy',
+            przez_silnik(SUROWY, SUROWY + ' A oto moj komentarz. ' * 20) == SUROWY)
+    sprawdz('G13 widelki dlugosci dzialaja SAME: za krotka -> surowy',
+            przez_silnik(SUROWY, 'Klucz API.') == SUROWY)
+finally:
+    silnik.ocena_slow = _prawdziwa_ocena
+
+silnik.requests = PRAWDZIWE_REQUESTS
 print(f'\nWYKONANYCH SPRAWDZEN: {OK + FAIL}   OK: {OK}   FAIL: {FAIL}')
 sys.exit(1 if FAIL else 0)
