@@ -52,6 +52,11 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. Whe
 
 ## ⏳ CZEKA NA TEST NA ŻYWO
 
+- 🎤 **DYKTOWANIE WOLNE (~12 s) — poprawianie przeniesione z Gemini na qwen u Groqa** (`7e91775`, 2026-09-24, **NIEPRZETESTOWANE u usera** — restart bety zamyka rozmowę). Przyczyna ZMIERZONA w bazie bramki (klucz id=3): Gemini 3.x od 21.09 oddaje `503` i wisi 10–120 s; rozpoznawanie mowy zdrowe (1,4–3,2 s). Lek: `STT_FIX_MODEL = "groq/qwen/qwen3.8-27b"` po nazwie (mediana 0,9 s, 7/8 wierne), bezpiecznik SŁÓW `ocena_slow()` (>20% słów zgubionych/dopisanych → surowy), limit 12 → 5 s. Bramka `test-dictation-fix` 46/46, sabotaż 19/19, sonda `tools/sonda-wiernosc-poprawki.py`.
+  - **Do testu po restarcie:** (a) tekst ~2–4 s po „stop"; (b) podyktowane polecenie („napisz mi funkcję…") wpisuje się jako ZDANIE; (c) „przetłumacz to na angielski" zostaje po polsku; (d) zaznaczenie w polu nie znika. **Sprawdzenie bez usera:** `grep "POPRAWKA" ~/.vibe-coding-assistant/dictation.log | tail` — ma być `POPRAWKA: … po 0.xs`, nie `ReadTimeout`.
+  - ⏳ **DECYZJA WŁAŚCICIELA (nie pilna):** powrót na `task/fix-transcript` (AI Manager zdjął doklejany zakaz, ich pomiar 14/16 wiernych) daje siatkę u drugiego dostawcy, ale WYMAGA uzgodnienia limitu (nasze 5 s vs ich sufit 10 s). Rekomendacja 24.09: zostać, wrócić do tematu, gdy Groq zacznie zawodzić.
+- ✅ **OPUS 5.5 — POTWIERDZONE PRZEZ WŁAŚCICIELA 2026-09-24** („działa"; `6f42268`): ceny z katalogu nakładane przy STARCIE (było tylko przy odświeżeniu z sieci → „Fable 2×" zamiast 2,5×), awaryjne „Opus 5.5" 4/20, okno wysiłku pokazuje „Domyślny modelu (średni/wysoki)". Bramka `test-model-catalog` 139/0, sabotaż 15/15.
+
 - 🔊 **EMOTIKONA PRZYKLEJONA DO SŁOWA BYŁA CZYTANA NA GŁOS** (`27955e3`, 2026-09-18, **NIEPRZETESTOWANE u usera** — pracował na becie, testuje 19.09). Zgłoszenie: „czyta emotikon smutek, kiedy widzi nawias i dwukropek"; polecenie objęło DWA kształty — `Gotowe :(` (działało) i `Gotowe:(` (**dziura**).
   - ⛔ **Czyścik emotikon ISTNIAŁ i działał — winny był jego strażnik `(?<!\w)`**, który wymaga braku litery przed dwukropkiem. Rozluźnić go NIE WOLNO (chroni `10:30`, `log:/tmp`), więc doszedł DRUGI, wąski wzorzec `_EMOTICONS_GLUED` tylko na przypadek przyklejony. **Nie scalaj tego w jeden wzorzec.**
   - ⭐ **DLACZEGO to boli — zmierzone u źródła** (edge-tts `pl-PL-ZofiaNeural`, rozmiar mp3 ∝ czas): cisza `0 B` · samo `:(` **12 816 B ≈ 1,3 s MOWY**. Emotikona to nie znaczek, tylko sekunda wypowiadanego tekstu. Technika reużywalna z tempa czytania.
@@ -281,6 +286,11 @@ Plan: `docs/PLAN-CHMURA-SYNC.md` (sekcja 9 = szyfrowanie). Pamięć: `chmura-syn
 - [ ] 🔴 **Kreator „Program setup — what's still left" NIE uprzedza, że Claude Code wymaga PŁATNEGO planu.** Wymienia wyłącznie kroki techniczne (zainstalowane / zalogowane / klucz Groq), więc user przechodzi całą instalację i logowanie, żeby dowiedzieć się na końcu, że darmowe konto nie wystarcza (zmierzone 2026-09-03: ~godzina straconej pracy). Dopisać pozycję o planie **na początku** listy.
 - [ ] ⚠️ **Nasza strona instalacji Windows uczy złej drogi:** `packaging/web/instrukcja-instalacja.html` każe `npm install -g @anthropic-ai/claude-code`, a **zero wzmianki** o blokadzie skryptów PowerShella i o instalatorze natywnym (`grep`: 0 trafień `install.ps1`, 0 `ExecutionPolicy`). To ona wprowadziła współpracownika w ścianę. Przestawić instalator natywny na pierwsze miejsce, npm zostawić jako wariant zapasowy.
 - [ ] ⚠️ **Język: na POLSKIM Windowsie okna wyszły po ANGIELSKU** (zrzut 2026-09-03) — `detect_system_language` na Windows zachowuje się inaczej, niż zakładaliśmy. Zmierzyć, zanim ruszysz kod.
+
+## Pułapki bramek testowych (2026-09-24)
+
+- ⛔ **CZERWONA BRAMKA W DNIU PREMIERY MODELU = zwykle PRZESTARZAŁA PREMISA, nie regresja.** `test-detected-model` [10a/11a] i `test-hooks-resume` miały wpisane `claude-opus-5`; po wydaniu Opusa 5.5 katalog go nie zna, więc padły nad działającym kodem. Identyfikator bieżącego modelu bierz z katalogu: `config.model_api_id("opus")`. Rozstrzyga `git stash` + ten sam test na starym kodzie (padał tak samo = nie my).
+- ⚠️ **Testy uruchamiane Z WNĘTRZA zakładki VCA dziedziczą jej `CLAUDE_CODE_SUBAGENT_MODEL`** → `test-subagent-effort` daje 3 fałszywe FAIL (`ZNACZNIK=[opus]`). Uruchamiaj bramki przez `env -u CLAUDE_CODE_SUBAGENT_MODEL -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH QT_QPA_PLATFORM=offscreen venv/bin/python -B tools/<bramka>.py` (czysto: 73/0).
 
 ## Częste problemy
 

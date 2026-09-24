@@ -8,6 +8,14 @@ w zeszły czwartek", na które `git log` odpowiada zbyt drobno. Wpis: 3–8 lini
 
 ---
 
+## 2026-09-24
+
+- Mail „Opus 5.5": model już w apce (katalog sam pobrał); naprawione ceny przy starcie, wartości awaryjne, podpis domyślnego wysiłku w oknie (`6f42268`, potwierdzone przez właściciela).
+- Dyktowanie ~12 s: przyczyna = awaria Gemini u Google od 21.09 (baza bramki). Poprawianie przeniesione na qwen u Groqa + bezpiecznik słów + limit 5 s (`7e91775`, NIEPRZETESTOWANE u usera).
+- Zadanie AI Managera `fix-transcript` wykonywało polecenia (6/8) — zwrotka do nich (`401dd7c` w ich repo); odpowiedzieli tego samego dnia i zdjęli doklejany zakaz (`e69a8a8`).
+- Dwie bramki (`test-detected-model`, `test-hooks-resume`) czerwone przez premierę modelu — poprawione na identyfikator z katalogu.
+- Zostaje: test dyktowania po restarcie; decyzja o powrocie na `task/fix-transcript`; plik pamięci 417+ linii > budżet 350 (konsolidacja w osobnej sesji).
+
 ## 2026-09-18
 
 - **Tempo czytania POTWIERDZONE przez właściciela na żywo** („tempo działa") — pozycja wisiała od 17.09 jako `NIEPRZETESTOWANE`; status przestawiony w żywej pamięci, lista 7 punktów testowych usunięta jako wykonana.
