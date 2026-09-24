@@ -35,6 +35,18 @@ Zdrowy kod: 111 sprawdzen, 111 OK, 0 FAIL. Kazdy wariant: 111 WYKONANYCH
   S8      | etykieta kosztu nie odswieza sie przy zmianie       | 1
   S9      | stary plik podreczny przykrywa wartosc wbudowana    | 1
 
+PONOWIONE 2026-09-24 (premiera Opusa 5.5, bramka 111 -> 139 sprawdzen).
+Zdrowy kod: 139 OK, 0 FAIL. Kazdy wariant: 139 WYKONANYCH, przywrocenie sha256.
+  S1 16 · S2 5 · S3 1 · S4 1 · S5 5 · S6 1 · S7 1 · S8 1 · S9 1   (stare)
+  S10     | start z pliku podrecznego NIE naklada cen/wysilku   | 2
+  S11     | katalog nie przenosi domyslnego wysilku             | 2
+  S12     | smiec zamiast poziomu wysilku wchodzi bez kontroli  | 1
+  S13     | domyslny wysilek zgadywany dla kazdego modelu       | 4
+  S14     | wbudowana cena Opusa wraca do 5/25                  | 2
+  S15     | okno wysilku pokazuje gole „Domyslny modelu"        | 2
+⚠️ Pierwszy przebieg S1 znow URWAL bramke (92 z 138) — nowa sekcja parsowala
+strone z 2026-09-24 bez oslony. Ta sama pulapka co nizej, osmy raz; oslonieta.
+
 ⛔ NAUKA Z PISANIA TEJ BRAMKI (7. wystapienie tej rodziny w projekcie):
 pierwszy przebieg S1 NIE dal „9 padlo", tylko WYWALIL bramke — `parse_catalog`
 stalo w niej goles, poza oslona, wiec badany blad zabijal ja w polowie, a
@@ -63,7 +75,7 @@ DIALOGI = REPO / "src" / "gui" / "dialogs.py"
 
 # Liczba sprawdzen na ZDROWYM kodzie. Rozna liczba przy sabotazu = bramka
 # urwala sie w polowie i jej wynik nie mowi nic o asercjach.
-OCZEKIWANE = 111
+OCZEKIWANE = 139
 
 # (plik, opis, szukane, zamiennik) - kotwice UNIKALNE dla badanego miejsca
 WARIANTY = {
@@ -96,6 +108,27 @@ WARIANTY = {
     "S9": (KONFIG, "stary plik podreczny znowu przykrywa wartosc wbudowana",
            "    if age_days is None:\n        return False",
            "    if age_days is None:\n        return True  # SABOTAZ"),
+    # --- 2026-09-24, premiera Opusa 5.5: ceny i wysilek przy STARCIE apki ---
+    # PRZYCZYNA ZRODLOWA tej usterki: start z pliku podrecznego nakladal same
+    # nazwy, ceny wracaly z kodu ("Fable 2x drozszy" zamiast 2,5x).
+    "S10": (KONFIG, "start z pliku podrecznego znowu NIE naklada cen/wysilku",
+            "        _apply_catalog_extras(_catalog)\n",
+            ""),
+    "S11": (KONFIG, "katalog nie przenosi domyslnego wysilku",
+            "            CLAUDE_MODEL_DEFAULT_EFFORT[family] = wysilek",
+            "            pass  # SABOTAZ"),
+    "S12": (KONFIG, "wysilek z katalogu przyjmowany bez sprawdzenia (smiec wchodzi)",
+            '        if wysilek in ("low", "medium", "high"):',
+            "        if wysilek:"),
+    "S13": (KONFIG, "domyslny wysilek zgadywany dla KAZDEGO modelu",
+            "    return CLAUDE_MODEL_DEFAULT_EFFORT.get((key or \"\").strip())",
+            "    return CLAUDE_MODEL_DEFAULT_EFFORT.get((key or \"\").strip(), \"medium\")"),
+    "S14": (KONFIG, "wbudowana cena Opusa wraca do 5/25 (sprzed premiery 5.5)",
+            '    "opus":   {"input": 4.0,  "output": 20.0},',
+            '    "opus":   {"input": 5.0,  "output": 25.0},'),
+    "S15": (OKNO, "okno wysilku znowu pokazuje gole 'Domyslny modelu'",
+            "            if domyslny:\n                combo.setItemText",
+            "            if False:\n                combo.setItemText"),
 }
 
 

@@ -112,8 +112,12 @@ import config as cfg  # noqa: E402
 check("identyfikator z hooka mapuje się na klucz modelu apki",
       cfg.CLAUDE_MODEL_API_IDS.get("claude-haiku-4-5-20251001") == "haiku",
       cfg.CLAUDE_MODEL_API_IDS.get("claude-haiku-4-5-20251001"))
+# Identyfikator bieżącego Opusa bierzemy z KATALOGU i doklejamy dopisek okna,
+# jak robi to hook. Do 2026-09-24 stało tu na sztywno "claude-opus-5[1m]" —
+# w dniu premiery Opusa 5.5 test poczerwieniał, choć kod działał.
+_opus_hook = (cfg.model_api_id("opus") or "claude-opus-5-5") + "[1m]"
 check("identyfikator sprzed przełączenia też się mapuje",
-      cfg.CLAUDE_MODEL_API_IDS.get(ch.normalize_model_id("claude-opus-5[1m]")) == "opus")
+      cfg.CLAUDE_MODEL_API_IDS.get(ch.normalize_model_id(_opus_hook)) == "opus", _opus_hook)
 
 # ===================== 2. przygotowanie hooków i limit =====================
 with tempfile.TemporaryDirectory() as tmp:

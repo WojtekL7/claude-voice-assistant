@@ -5826,7 +5826,7 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
 
         PO CO: Claude Code trzyma poziom wysiłku OSOBNO DLA KAŻDEGO MODELU
         (sekcja `modelSettings`). Fable 5.1 startuje na `high`, jest gorliwszy
-        od poprzednika i kosztuje 2× tyle co Opus 5 — zejście na `medium` bywa
+        od poprzednika i kosztuje 2,5× tyle co Opus 5.5 — zejście na `medium` bywa
         największą pojedynczą oszczędnością, jaką da się tu zrobić.
 
         ⚠️ To ustawienie NIE jest per agent, tylko PER MODEL i wspólne dla całego
@@ -5872,6 +5872,13 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
             combo = QComboBox()
             for etykieta in etykiety:
                 combo.addItem(etykieta)
+            # „Domyślny modelu" bez nazwy poziomu to wybór w ciemno — Opus 5.5
+            # startuje na `medium`, Fable i Sonnet na `high`. Pokazujemy to
+            # w samej pozycji, żeby było widać, co się wybiera (z katalogu).
+            domyslny = config.model_default_effort(key)
+            if domyslny:
+                combo.setItemText(0, tr('dlg_effort_model_default_is').format(
+                    level=tr(f'effort_word_{domyslny}')))
             biezacy = biezace.get(api_id)
             combo.setCurrentIndex(wartosci.index(biezacy) if biezacy in wartosci else 0)
             combos[api_id] = (combo, biezacy)

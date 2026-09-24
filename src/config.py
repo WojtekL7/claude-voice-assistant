@@ -297,7 +297,7 @@ except Exception:
 # żeby numer wersji NIE był powielony w słowniku i w dwóch językach naraz.
 #
 # Aliasy (fable/opus/sonnet/haiku) oznaczają ZAWSZE NAJNOWSZY model rodziny:
-# `claude --model opus` to dziś Opus 5. Wpis `claude-opus-4-8` to świadome
+# `claude --model opus` to dziś Opus 5.5 (od 2026-09-24). Wpis `claude-opus-4-8` to świadome
 # przypięcie starszego Opusa — pełna nazwa, nie alias, więc wersja się nie zmieni.
 CLAUDE_MODELS = {
     "default": "Domyślny",
@@ -306,7 +306,10 @@ CLAUDE_MODELS = {
     # `model_catalog._strip_cell`). Wartość awaryjna starzeje się tak samo jak
     # każda inna — poprawiaj ją razem z naprawą czujki, nie zamiast niej.
     "fable": "Fable 5.1",
-    "opus": "Opus 5",
+    # „Opus 5" → „Opus 5.5" 2026-09-24 (premiera; zmierzone: `claude --model
+    # opus` oddaje `claude-opus-5-5`). Działająca apka i tak bierze nazwę
+    # z katalogu — ta wartość chroni tylko start bez sieci / ze starym plikiem.
+    "opus": "Opus 5.5",
     "sonnet": "Sonnet 5",
     "haiku": "Haiku 4.5",
     "claude-opus-4-8": "Opus 4.8",
@@ -334,14 +337,26 @@ CLAUDE_MODEL_CONTEXT_LIMITS = {
 # Ceny modeli w dolarach za MILION tokenów (wejście / wyjście).
 # ⚠️ Też AWARYJNE — realne przychodzą z katalogu (wiersz „Pricing" na stronie
 # Anthropic). PO CO TO JEST: wybór modelu w oknie agenta wygląda jak wybór
-# smaku, a jest wyborem RACHUNKU — Fable 5.1 kosztuje dwa razy tyle co Opus 5.
+# smaku, a jest wyborem RACHUNKU — Fable 5.1 kosztuje 2,5× tyle co Opus 5.5
+# (przy Opusie 5 było to 2×; Opus 5.5 potaniał do 4 / 20).
 # Zmierzone 2026-09-14: dwóch agentów użytkownika chodziło na `fable`, czyli
 # już na Fable 5.1, przy etykiecie mówiącej „Fable 5" i bez słowa o cenie.
 CLAUDE_MODEL_PRICES = {
     "fable":  {"input": 10.0, "output": 50.0},
-    "opus":   {"input": 5.0,  "output": 25.0},
+    "opus":   {"input": 4.0,  "output": 20.0},
     "sonnet": {"input": 2.0,  "output": 10.0},
     "haiku":  {"input": 1.0,  "output": 5.0},
+}
+
+# Domyślny poziom wysiłku, z jakim Claude Code uruchamia dany model (wiersz
+# „Default effort" na stronie Anthropic). PO CO: okno „Poziom wysiłku modeli"
+# ma pozycję „Domyślny modelu" — bez tej wiedzy człowiek nie wie, CO wybiera.
+# ⚠️ Też AWARYJNE — nadpisywane z katalogu. Stan strony z 2026-09-23. Haiku
+# na stronie tego wiersza nie ma, więc tu też go nie ma (nie zgadujemy).
+CLAUDE_MODEL_DEFAULT_EFFORT = {
+    "fable":  "high",
+    "opus":   "medium",
+    "sonnet": "high",
 }
 
 # Model, na którym mają chodzić PODAGENCI (zadania w tle uruchamiane przez
@@ -368,7 +383,7 @@ def subagent_env(model_key: str) -> dict:
     return {SUBAGENT_MODEL_ENV: key}
 
 
-# Model odniesienia dla podpowiedzi „ile razy drożej". Opus 5 jest w tym
+# Model odniesienia dla podpowiedzi „ile razy drożej". Opus jest w tym
 # ekosystemie domyślnym wyborem, więc porównanie do niego niesie sens dla
 # właściciela; przy nim samym podpowiedź się nie pokazuje.
 MODEL_PRICE_REFERENCE = "opus"
@@ -399,6 +414,41 @@ def _rebuild_api_id_map(catalog=None):
             value = str(info.get(field) or "").strip()
             if value:
                 CLAUDE_MODEL_API_IDS[value] = key
+
+
+def _apply_catalog_extras(models) -> None:
+    """Nałóż z katalogu CENY i DOMYŚLNY WYSIŁEK na żywe słowniki.
+
+    Wołane z OBU dróg wczytania katalogu: przy imporcie (plik podręczny)
+    i po odświeżeniu z sieci (`apply_model_catalog`).
+    ⛔ Do 2026-09-24 ceny nakładała WYŁĄCZNIE druga droga — więc po każdym
+    starcie apki wracały ceny wpisane w kod, a podpowiedź mówiła „Fable 2×
+    droższy", gdy po premierze Opusa 5.5 był 2,5× droższy.
+
+    Ruszamy tylko rodziny, które apka zna. Cenę nadpisujemy wyłącznie przy
+    KOMPLECIE (wejście i wyjście) — połowiczna byłaby gorsza niż żadna, bo
+    podpowiedź „ile razy drożej" liczy się z obu liczb.
+    """
+    for family, info in (models or {}).items():
+        if family not in CLAUDE_MODELS or not isinstance(info, dict):
+            continue
+        cena_in = info.get("price_input")
+        cena_out = info.get("price_output")
+        if isinstance(cena_in, (int, float)) and isinstance(cena_out, (int, float)) \
+                and cena_in > 0 and cena_out > 0:
+            CLAUDE_MODEL_PRICES[family] = {"input": float(cena_in), "output": float(cena_out)}
+        wysilek = info.get("default_effort")
+        if wysilek in ("low", "medium", "high"):
+            CLAUDE_MODEL_DEFAULT_EFFORT[family] = wysilek
+
+
+def model_default_effort(key: str):
+    """Poziom wysiłku, z jakim Claude Code sam uruchamia model — albo None.
+
+    None znaczy „nie wiemy" (np. Haiku, przypięty Opus 4.8) — okno pokazuje
+    wtedy samo „Domyślny modelu", bez zgadywania.
+    """
+    return CLAUDE_MODEL_DEFAULT_EFFORT.get((key or "").strip())
 
 
 # Plik podręczny katalogu modeli (nazwy + okna kontekstu ze strony Anthropic).
@@ -451,6 +501,7 @@ try:
         CLAUDE_MODELS, CLAUDE_MODEL_CONTEXT_LIMITS = _merge_models(
             CLAUDE_MODELS, CLAUDE_MODEL_CONTEXT_LIMITS, _catalog)
         CLAUDE_MODELS_SHORT = dict(CLAUDE_MODELS)
+        _apply_catalog_extras(_catalog)
 except Exception:
     pass
 # Także przy braku katalogu — mapa niesie wtedy same wpisy wbudowane.
@@ -875,6 +926,10 @@ UI_TRANSLATIONS = {
                             "Zespół Claude Code zaleca dla Fable 5.1 poziom ŚREDNI "
                             "tam, gdzie wcześniej wystarczał wysoki."),
         "dlg_effort_model_default": "Domyślny modelu",
+        "dlg_effort_model_default_is": "Domyślny modelu ({level})",
+        "effort_word_low": "niski",
+        "effort_word_medium": "średni",
+        "effort_word_high": "wysoki",
         "dlg_effort_low": "Niski (najtaniej)",
         "dlg_effort_medium": "Średni (zalecany dla Fable 5.1)",
         "dlg_effort_high": "Wysoki (najdokładniej, najdrożej)",
@@ -1776,6 +1831,10 @@ UI_TRANSLATIONS = {
                             "The Claude Code team recommends MEDIUM for Fable 5.1 "
                             "where high used to be needed."),
         "dlg_effort_model_default": "Model default",
+        "dlg_effort_model_default_is": "Model default ({level})",
+        "effort_word_low": "low",
+        "effort_word_medium": "medium",
+        "effort_word_high": "high",
         "dlg_effort_low": "Low (cheapest)",
         "dlg_effort_medium": "Medium (recommended for Fable 5.1)",
         "dlg_effort_high": "High (most thorough, most expensive)",
@@ -2624,17 +2683,7 @@ def apply_model_catalog(models: dict) -> None:
     CLAUDE_MODELS_SHORT.update(names)
     CLAUDE_MODEL_CONTEXT_LIMITS.clear()
     CLAUDE_MODEL_CONTEXT_LIMITS.update(limits)
-    # Ceny: nadpisujemy WYŁĄCZNIE rodziny, które apka zna i dla których strona
-    # podała KOMPLET (wejście i wyjście) — połowiczna cena byłaby gorsza niż
-    # żadna, bo podpowiedź „ile razy drożej" liczy się z obu liczb.
-    for family, info in (models or {}).items():
-        if family not in CLAUDE_MODELS or not isinstance(info, dict):
-            continue
-        cena_in = info.get("price_input")
-        cena_out = info.get("price_output")
-        if isinstance(cena_in, (int, float)) and isinstance(cena_out, (int, float)) \
-                and cena_in > 0 and cena_out > 0:
-            CLAUDE_MODEL_PRICES[family] = {"input": float(cena_in), "output": float(cena_out)}
+    _apply_catalog_extras(models)
     _rebuild_api_id_map(models or {})
 
 
@@ -2661,7 +2710,7 @@ def model_api_id(key: str) -> str:
 def model_cost_hint(key: str) -> str:
     """Krótkie ostrzeżenie o koszcie modelu — albo pusty napis.
 
-    Zwraca np. „2× droższy niż Opus 5" / „2,5× tańszy niż Opus 5", a gdy obie
+    Zwraca np. „2,5× droższy niż Opus 5.5" / „2× tańszy niż Opus 5.5", a gdy obie
     ceny nie skalują się tak samo (wejście i wyjście w różnych proporcjach) —
     surowe stawki, bo jeden mnożnik byłby wtedy zmyśleniem.
 

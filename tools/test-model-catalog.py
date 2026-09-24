@@ -321,6 +321,115 @@ for _klucz in ("model_cost_more", "model_cost_less", "model_cost_raw",
     check(f"napis '{_klucz}' istnieje w OBU językach",
           _klucz in cfg.UI_TRANSLATIONS["pl-PL"] and _klucz in cfg.UI_TRANSLATIONS["en-US"])
 
+# ------------------ 7c. premiera Opusa 5.5 (2026-09-24): ceny i wysiłek przy STARCIE
+# Usterka, którą to pilnuje: ceny z katalogu nakładała WYŁĄCZNIE droga „odśwież
+# z sieci", a nie start apki z pliku podręcznego — więc po restarcie wracały
+# ceny wpisane w kod i podpowiedź mówiła „Fable 2× droższy" zamiast 2,5×.
+# Import w PODPROCESIE z atrapą HOME, bo w tym procesie `config` już siedzi.
+import json as _json  # noqa: E402
+import subprocess as _sp  # noqa: E402
+import tempfile as _tf  # noqa: E402
+import time as _time  # noqa: E402
+
+# ⛔ Osłonięte: parser zepsuty przez badany błąd nie może WYWALIĆ bramki
+# w połowie (sabotaż S1 tak ją urwał: 92 z 138) — ma dać czerwone, nie ciszę.
+try:
+    cat_0924 = mc.parse_catalog(
+        (ROOT / "tools" / "fixtures" / "models-overview-2026-09-24.md").read_text(encoding="utf-8"))
+except Exception as _exc:
+    cat_0924 = {}
+    print(f"       (parser padł na stronie z 2026-09-24: {_exc!r})")
+check("strona z 2026-09-24 w ogóle się parsuje (4 rodziny)",
+      set(cat_0924) == {"fable", "opus", "sonnet", "haiku"}, sorted(cat_0924))
+cat_0924 = cat_0924 or {k: {} for k in ("fable", "opus", "sonnet", "haiku")}
+check("strona z 2026-09-24: Opus nazywa się Opus 5.5",
+      cat_0924.get("opus", {}).get("name") == "Opus 5.5", cat_0924.get("opus"))
+check("strona z 2026-09-24: cena Opusa 5.5 = 4 / 20",
+      (cat_0924["opus"].get("price_input"), cat_0924["opus"].get("price_output")) == (4.0, 20.0))
+check("strona z 2026-09-24: Opus 5.5 startuje na medium, Fable na high",
+      cat_0924["opus"].get("default_effort") == "medium"
+      and cat_0924["fable"].get("default_effort") == "high")
+check("strona z 2026-09-24: Haiku nie ma domyślnego wysiłku (nie zgadujemy)",
+      "default_effort" not in cat_0924["haiku"])
+
+_PROBE = r"""
+import json, sys
+sys.path.insert(0, sys.argv[1])
+import config as c
+print(json.dumps({"prices": c.CLAUDE_MODEL_PRICES, "effort": c.CLAUDE_MODEL_DEFAULT_EFFORT,
+                  "names": c.CLAUDE_MODELS, "hint": c.model_cost_hint("fable")},
+                 ensure_ascii=False))
+"""
+
+
+def _start_with_cache(models, age_days):
+    """Uruchom świeży import `config` z plikiem podręcznym w podanym wieku."""
+    with _tf.TemporaryDirectory() as home:
+        d = Path(home) / ".vibe-coding-assistant"
+        d.mkdir()
+        (d / "models-cache.json").write_text(_json.dumps({
+            "fetched_at": _time.time() - age_days * 86400,
+            "source": "test", "models": models}), encoding="utf-8")
+        env = {k: v for k, v in __import__("os").environ.items()}
+        env["HOME"] = home
+        out = _sp.run([sys.executable, "-B", "-c", _PROBE, str(ROOT / "src")],
+                      env=env, capture_output=True, text=True, timeout=60)
+        if out.returncode != 0:
+            return {"_err": out.stderr[-400:]}
+        return _json.loads(out.stdout.strip().splitlines()[-1])
+
+
+# Wartości CELOWO nietypowe (8/40, „low") — różne i od wpisanych w kod, i od
+# strony, więc trafienie nie może być przypadkiem.
+_dziwny = {k: dict(v) for k, v in cat_0924.items()}
+_dziwny["opus"].update(price_input=8.0, price_output=40.0, default_effort="low")
+_swiezy = _start_with_cache(_dziwny, age_days=1)
+check("START z plikiem podręcznym NAKŁADA ceny (nie tylko nazwy)",
+      _swiezy.get("prices", {}).get("opus") == {"input": 8.0, "output": 40.0}, _swiezy)
+check("START z plikiem podręcznym NAKŁADA domyślny wysiłek",
+      _swiezy.get("effort", {}).get("opus") == "low", _swiezy.get("effort"))
+
+_prawdziwy = _start_with_cache(cat_0924, age_days=1)
+check("po starcie z dzisiejszym katalogiem: Fable 2,5× droższy niż Opus 5.5",
+      "2,5×" in _prawdziwy.get("hint", "") and "Opus 5.5" in _prawdziwy.get("hint", ""),
+      _prawdziwy.get("hint"))
+
+# KONTROLA ODWROTNA: plik starszy niż próg zaufania NIE może wnieść cen.
+_stary_plik = _start_with_cache(_dziwny, age_days=cfg.MODEL_CACHE_TRUST_DAYS + 5)
+check("stary plik podręczny NIE nakłada cen (zostają wbudowane)",
+      _stary_plik.get("prices", {}).get("opus") == {"input": 4.0, "output": 20.0},
+      _stary_plik.get("prices"))
+check("stary plik podręczny NIE nakłada wysiłku",
+      _stary_plik.get("effort", {}).get("opus") == "medium", _stary_plik.get("effort"))
+check("start BEZ katalogu (stary plik) pokazuje nazwę wbudowaną Opus 5.5",
+      _stary_plik.get("names", {}).get("opus") == "Opus 5.5", _stary_plik.get("names"))
+
+# Droga „odśwież z sieci" nakłada wysiłek tak samo jak start.
+cfg.apply_model_catalog(_dziwny)
+check("odświeżenie z sieci nakłada domyślny wysiłek", cfg.model_default_effort("opus") == "low")
+cfg.apply_model_catalog(cat_0924)
+check("model_default_effort: Opus 5.5 → medium", cfg.model_default_effort("opus") == "medium")
+check("model_default_effort: Haiku → None (nie wiemy, nie zgadujemy)",
+      cfg.model_default_effort("haiku") is None)
+check("model_default_effort: przypięty Opus 4.8 → None",
+      cfg.model_default_effort("claude-opus-4-8") is None)
+check("model_default_effort: śmieć → None zamiast wyjątku",
+      cfg.model_default_effort(None) is None and cfg.model_default_effort("xyz") is None)
+_zly = {k: dict(v) for k, v in cat_0924.items()}
+_zly["sonnet"]["default_effort"] = "turbo"
+cfg.apply_model_catalog(_zly)
+check("nieznany poziom z katalogu NIE nadpisuje dobrego",
+      cfg.model_default_effort("sonnet") == "high")
+cfg.apply_model_catalog(cat_0924)
+
+check("wbudowana nazwa opus jest AKTUALNA (Opus 5.5)", '"opus": "Opus 5.5"' in _cfg_txt)
+check("wbudowana cena Opusa 5.5 = 4 / 20",
+      '"opus":   {"input": 4.0,  "output": 20.0}' in _cfg_txt)
+for _klucz in ("dlg_effort_model_default_is", "effort_word_low",
+               "effort_word_medium", "effort_word_high"):
+    check(f"napis '{_klucz}' istnieje w OBU językach",
+          _klucz in cfg.UI_TRANSLATIONS["pl-PL"] and _klucz in cfg.UI_TRANSLATIONS["en-US"])
+
 # --------------------------------------------- 8. wpięcie w okno główne (AST)
 # Świadomie NIE budujemy MainWindow — terminal w trybie bezokienkowym potrafi
 # wywalić proces. Sprawdzamy strukturę pliku, co wystarcza, by wyłapać literówkę
@@ -373,6 +482,61 @@ _agent_methods = ({n.name for n in ast.walk(_agent_dlg) if isinstance(n, ast.Fun
                   if _agent_dlg else set())
 check("okno agenta ma metodę odświeżającą koszt",
       "_update_model_cost_label" in _agent_methods)
+
+# --- okno „Poziom wysiłku" pokazuje, CO znaczy „Domyślny modelu" (2026-09-24) ---
+check("okno wysiłku pyta o domyślny wysiłek modelu",
+      "config.model_default_effort(key)" in src_txt)
+check("okno wysiłku wpisuje poziom w pozycję 0 (Domyślny modelu)",
+      "combo.setItemText(0, tr('dlg_effort_model_default_is')" in src_txt)
+
+# POMIAR SKUTKU: prawdziwa metoda okna na atrapie `self`; exec_ podmieniony tak,
+# żeby odczytać listy i ODRZUCIĆ okno — odrzucenie nie zapisuje niczego
+# (metoda zapisuje WYŁĄCZNIE po „Zapisz"), więc prawdziwy plik ustawień
+# Claude Code jest tu tylko CZYTANY.
+try:
+    import os as _os
+    _os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt5.QtWidgets import QApplication, QDialog, QComboBox, QFormLayout, QLabel  # noqa: E402
+    _qapp = QApplication.instance() or QApplication([])
+    from gui import main_window as _mw  # noqa: E402
+
+    _zlapane = {}
+
+    def _exec_podglad(dlg):
+        for form in dlg.findChildren(QFormLayout):
+            for r in range(form.rowCount()):
+                lab = form.itemAt(r, QFormLayout.LabelRole)
+                fld = form.itemAt(r, QFormLayout.FieldRole)
+                if lab and fld and isinstance(fld.widget(), QComboBox):
+                    _zlapane[lab.widget().text().split("   ")[0]] = fld.widget().itemText(0)
+        return QDialog.Rejected
+
+    _stare_exec = QDialog.exec_
+    QDialog.exec_ = _exec_podglad
+    try:
+        from PyQt5.QtWidgets import QWidget  # noqa: E402
+
+        class _Atrapa(QWidget):     # QDialog wymaga prawdziwego rodzica
+            def _update_status(self, *_a):
+                pass
+        cfg.apply_model_catalog(cat_0924)
+        _mw.MainWindow._show_model_effort_dialog(_Atrapa())
+    finally:
+        QDialog.exec_ = _stare_exec
+    _opus = next((v for k, v in _zlapane.items() if k.startswith("Opus 5.5")), None)
+    _fable = next((v for k, v in _zlapane.items() if k.startswith("Fable")), None)
+    _haiku = next((v for k, v in _zlapane.items() if k.startswith("Haiku")), None)
+    _t = cfg.t
+    check("OKNO: Opus 5.5 pokazuje 'Domyślny modelu (średni/medium)'",
+          _opus == _t("dlg_effort_model_default_is").format(level=_t("effort_word_medium")),
+          _zlapane)
+    check("OKNO: Fable pokazuje domyślny poziom wysoki/high",
+          _fable == _t("dlg_effort_model_default_is").format(level=_t("effort_word_high")),
+          _fable)
+    check("OKNO (kontrola odwrotna): Haiku zostaje przy gołym 'Domyślny modelu'",
+          _haiku == _t("dlg_effort_model_default"), _haiku)
+except Exception as _exc:  # brak Qt w środowisku = jawny FAIL, nie cisza
+    check("OKNO: pomiar skutku wykonany", False, repr(_exc))
 
 print(f"\n=== {_passed} OK / {_failed} FAIL ===")
 sys.exit(1 if _failed else 0)

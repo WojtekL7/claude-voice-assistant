@@ -220,8 +220,14 @@ def t9_no_session_file(fx):
 
 # ---------- testy nazewnictwa (config) ----------
 
+# Identyfikator ZNANEGO modelu bierzemy z katalogu, nie z głowy: do 2026-09-24
+# stało tu na sztywno "claude-opus-5" i test poczerwieniał w dniu premiery
+# Opusa 5.5, choć kod działał — pilnował wersji modelu, nie mapowania.
+_OPUS_ID = config.model_api_id("opus") or "claude-opus-5-5"
+
+
 def t10_names():
-    known = config.model_name_for_api_id("claude-opus-5")
+    known = config.model_name_for_api_id(_OPUS_ID)
     check("[10a] znany identyfikator → nazwa z katalogu",
           known, config.CLAUDE_MODELS_SHORT.get("opus"))
     check("[10b] pusty identyfikator → pusto (nic nie twierdzimy)",
@@ -233,7 +239,7 @@ def t10_names():
 
 
 def t11_limits():
-    limit = config.context_limit_for_api_id("claude-opus-5")
+    limit = config.context_limit_for_api_id(_OPUS_ID)
     check("[11a] znany identyfikator → okno kontekstu z katalogu",
           isinstance(limit, int) and limit > 0, True)
     check("[11b] nieznany identyfikator → None (licznik nie zgaduje)",
