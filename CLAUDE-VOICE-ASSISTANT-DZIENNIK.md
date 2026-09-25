@@ -8,6 +8,14 @@ w zeszły czwartek", na które `git log` odpowiada zbyt drobno. Wpis: 3–8 lini
 
 ---
 
+## 2026-09-25
+
+- Start sesji: wczytana pamięć, lista „co wisi” zmierzona (wykryty zombi: poprawka crashu Maca JEST w 1.0.29).
+- ✅ Test dyktowania na qwen potwierdzony przez właściciela: 9 dyktowań, 8 poprawek ≤1,0 s, 1 odrzucona przez bezpiecznik słów, 0 timeoutów (`913c26b`).
+- ✅ Test emotikon przyklejonych do słowa potwierdzony: zero `:(` w lektorze, kontrola odwrotna czytana (`d526268`).
+- Push na GitHuba raz zawisł (port 22 chwilowo nieosiągalny) — ponowienie przeszło.
+- Zostaje: #4 zakładka bez `claude` (decyzja), #7 lupa w skórce, #11 sprzątanie diagnostyki 🔊, konsolidacja pliku pamięci (429 > 350).
+
 ## 2026-09-24
 
 - Mail „Opus 5.5": model już w apce (katalog sam pobrał); naprawione ceny przy starcie, wartości awaryjne, podpis domyślnego wysiłku w oknie (`6f42268`, potwierdzone przez właściciela).
