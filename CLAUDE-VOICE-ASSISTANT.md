@@ -50,6 +50,12 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. Whe
 
 ---
 
+## 🚩 DO ZROBIENIA JAKO PIERWSZE (wpis z zamknięcia 2026-09-29)
+
+1. **Przepięcie `STT_FIX_MODEL` na `task/fix-transcript` — prosi o to WŁAŚCICIEL** (przez sesję AI Managera). Ich część wdrożona 2026-09-29 11:11 (sufit 3 s < nasze 5 s, więc nasz `STT_FIX_HTTP_TIMEOUT` ZOSTAJE). U nas: `src/config.py` (linia z `STT_FIX_MODEL =`) + kotwica w `tools/sabotaz-dictation-fix.py`. Szczegóły i lista „nietknięte" → sekcja „KONTRAKT OD AGENTA AI MANAGERA (2026-09-29)" niżej. Sprawdzenie: `grep -c 'task/fix-transcript' src/config.py` → 1. Procedura zwykła: plan → zgoda → zmiana → bramki `test-dictation-fix` + sabotaż.
+2. **Odchudzenie tego pliku: 457 linii przy budżecie ~350** (rośnie też od kontraktów sąsiadów). Przepis: COMMON „ODCHUDZANIE…", bramka `sprawdz-konsolidacje.py` (uruchamiana z `~/Projekty`).
+3. Szybkie: lupa w `_apply_skin_icons` · dwie usterki planu B lektora (sekcja „Inne otwarte TODO").
+
 ## ⏳ CZEKA NA TEST NA ŻYWO
 
 - ✅ **POTWIERDZONE PRZEZ WŁAŚCICIELA 2026-09-25** („wszystko działa, jest szybko”) + dziennik z dnia (beta od 08:52, po commicie): **9 dyktowań, 8× `POPRAWKA`, 1× `POPRAWKA ODRZUCONA` przez bezpiecznik słów (tekst surowy wstawiony), 0× `ReadTimeout`, najdłuższa poprawka 1,0 s** (wczoraj na starym kodzie: `ReadTimeout` po ~12 s). „Napisz mi funkcję…” wpisało się jako zdanie. ⚠️ Scenariusz (c) „przetłumacz to na angielski” NIE był dyktowany na żywo — pokrywa go tylko bramka/sonda.

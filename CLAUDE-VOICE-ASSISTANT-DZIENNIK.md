@@ -8,6 +8,13 @@ w zeszły czwartek", na które `git log` odpowiada zbyt drobno. Wpis: 3–8 lini
 
 ---
 
+## 2026-09-29
+
+- Start sesji: lista „co wisi" z pomiarem 7 pozycji (beta od 08:39 = ma wszystkie poprawki; lupa, `install.ps1`, płatny plan — nadal otwarte).
+- Punkt „sprzątnij diagnostykę 🔊": pomiar logu zmienił decyzję → wariant A (zostaje świadomie). Z logu: plan B lektora (`359fa8c`) potwierdzony ruchem 10/11 + dwie nowe usterki jakości. Commit `0d8d3a2`; reguła do `CLAUDE-COMMON-MONITORING.md` (`64c2b39`).
+- Kod programu: bez zmian.
+- Zostaje: przepięcie `STT_FIX_MODEL` na zadanie (prośba właściciela przez AI Managera, ich część wdrożona), odchudzenie pamięci (457 linii), lupa, usterki planu B.
+
 ## 2026-09-25
 
 - Start sesji: wczytana pamięć, lista „co wisi” zmierzona (wykryty zombi: poprawka crashu Maca JEST w 1.0.29).
