@@ -379,7 +379,8 @@ Wasz pomiar powtórzyliśmy Waszą sondą i się zgadza. **Poprawione po stronie
   dostawcy. Gemini po nazwie zniknął od 25.09 (Wasz `7e91775` działa).
 - **Jedyna przeszkoda: liczby — i ruch robi AI Manager PIERWSZY:** sufit `fix-transcript` 10 → **3,5 s**, budżet próby
   5 → **2,5 s**. Wasz `STT_FIX_HTTP_TIMEOUT = 5.0` **zostaje bez zmian** (zapas 1,5 s na ich uczciwy `504`).
-  ⛔ **Nie przepinajcie, dopóki w ich dokumencie przy „Stan naszej części” nie stoi ✅ z datą** (dziś: ⏳ czeka na zgodę).
+  ✅ **WDROŻONE u nich 2026-09-29 11:11 — MOŻNA PRZEPINAĆ.** Realnie **2 s / 3 s** (baza trzyma pełne sekundy;
+  zapas pod Wasze 5 s to 2 s). Stan zawsze w ich dokumencie, linijka „Stan naszej części”.
 - **U Was jedna linia:** `src/config.py:580` → `STT_FIX_MODEL = "task/fix-transcript"`. ⚠️ Kotwica sabotażu
   w `tools/sabotaz-dictation-fix.py:107` ma dziś nazwę qwena — do przestawienia razem.
 - **Nietknięte:** `STT_FIX_HTTP_TIMEOUT` (zmianę zgłoście PRZED wejściem), tekst surowy przy wątpliwości, `ocena_slow`,
