@@ -52,7 +52,7 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. Whe
 
 ## 🚩 DO ZROBIENIA JAKO PIERWSZE (wpis z zamknięcia 2026-09-29)
 
-1. **Przepięcie `STT_FIX_MODEL` na `task/fix-transcript` — prosi o to WŁAŚCICIEL** (przez sesję AI Managera). Ich część wdrożona 2026-09-29 11:11 (sufit 3 s < nasze 5 s, więc nasz `STT_FIX_HTTP_TIMEOUT` ZOSTAJE). U nas: `src/config.py` (linia z `STT_FIX_MODEL =`) + kotwica w `tools/sabotaz-dictation-fix.py`. Szczegóły i lista „nietknięte" → sekcja „KONTRAKT OD AGENTA AI MANAGERA (2026-09-29)" niżej. Sprawdzenie: `grep -c 'task/fix-transcript' src/config.py` → 1. Procedura zwykła: plan → zgoda → zmiana → bramki `test-dictation-fix` + sabotaż.
+1. ✅ **ZROBIONE 2026-10-05 w kodzie: `STT_FIX_MODEL = "task/fix-transcript"`** (zgoda właściciela). Bramka `test-dictation-fix` 46/46 (G10 odwrócona: pilnuje zadania), sabotaż S17→G10 i S5→B2 wykryte, `test-dictation` 50/50, sonda na żywo przez zadanie 14 wiernych / 1 zmienione (odrzucone bezpiecznikiem) / 1× `504` po 2,5 s, mediana 0,7 s. ⏳ **W becie u usera NIEPRZETESTOWANE** — beta działała od 08:08, sprzed zmiany; „działa” z 05.10 dotyczył starej drogi. Sprawdzenie po restarcie: `ps -o lstart= -p $(pgrep -f '[s]rc/main.py')` późniejsze niż commit + `grep POPRAWKA ~/.vibe-coding-assistant/dictation.log | tail`. Limit 5 s jest teraz CZĘŚCIĄ KONTRAKTU (ich sufit 3 s dobrany pod niego).
 2. **Odchudzenie tego pliku: 457 linii przy budżecie ~350** (rośnie też od kontraktów sąsiadów). Przepis: COMMON „ODCHUDZANIE…", bramka `sprawdz-konsolidacje.py` (uruchamiana z `~/Projekty`).
 3. Szybkie: lupa w `_apply_skin_icons` · dwie usterki planu B lektora (sekcja „Inne otwarte TODO").
 
@@ -453,7 +453,8 @@ konfiguracji obie strony porównania przesuwają się razem. F6 dowodzi wyłącz
 na sieć. **Nie kasuj żadnej jako duplikatu.** Wynik: 1 padło / **50 wykonanych** (tyle samo co na
 zdrowym kodzie, czyli bramka nie urwała się w połowie). Bramka: `tools/test-dictation.py` 50/50.
 
-⚠️ **Druga nasza droga na bramkę NADAL woła po nazwie modelu i tak MA ZOSTAĆ:**
+➡️ **NIEAKTUALNE od 2026-10-05 — `STT_FIX_MODEL` przepięty na `task/fix-transcript` (patrz „DO ZROBIENIA JAKO PIERWSZE”, pkt 1). Akapit niżej = historia.**
+⚠️ **Druga nasza droga na bramkę wołała (do 05.10) po nazwie modelu :**
 `STT_FIX_MODEL = "groq/qwen/qwen3.8-27b"` (od 2026-09-24; wcześniej `gemini-3.5-flash-lite`, zdjęty po awarii
 Gemini z 21–24.09). Model wybierany POMIAREM WIERNOŚCI (`tools/sonda-wiernosc-poprawki.py`) — kandydaci
 bywają PRZEPISUJĄCY albo WYKONUJĄCY polecenia. Od 24.09 parafrazę/tłumaczenie łapie też bezpiecznik SŁÓW

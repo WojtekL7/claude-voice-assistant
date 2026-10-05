@@ -297,12 +297,13 @@ dziennik = config.DICTATION_LOG.read_text(encoding='utf-8') if config.DICTATION_
 sprawdz('G9 odrzucenie za SLOWA jest widoczne w dzienniku (inaczej nie odroznisz go od awarii)',
         'POPRAWKA ODRZUCONA: zmienione slowa' in dziennik)
 
-# Decyzja z 2026-09-24 zapisana jako asercja, bo wraca jako „oczywiste ulepszenie":
-# zadanie AI Managera dokleja zakaz zmyslania i model zaczyna ODPOWIADAC (6/8).
-# ⚠️ 24.09 AI Manager zdjal doklejany zakaz — powrot na zadanie jest mozliwy, ale
-# to decyzja wlasciciela z uzgodnieniem limitu czasu; wtedy zmien TE asercje swiadomie.
-sprawdz('G10 poprawka NIE idzie przez task/fix-transcript (decyzja z 2026-09-24)',
-        not config.STT_FIX_MODEL.startswith('task/'), config.STT_FIX_MODEL)
+# Decyzja wlasciciela z 2026-10-05 zapisana jako asercja (odwraca te z 2026-09-24):
+# poprawka idzie przez ZADANIE, bo wolanie po nazwie nie ma zapasu (28.09: `429`
+# i tekst surowy bez slowa). Pytamy o nazwe ZADANIA, nie o nazwe wykonawcy — wykonawce
+# wybiera AI Manager i zmienia go bez uprzedzenia. Uzupelnia B2 (B2 porownuje stala
+# sama ze soba, wiec cofniecia konfiguracji NIE wykryje — wykrywa je ta asercja).
+sprawdz('G10 poprawka idzie przez task/fix-transcript (decyzja z 2026-10-05)',
+        config.STT_FIX_MODEL == 'task/fix-transcript', config.STT_FIX_MODEL)
 sprawdz('G11 czekanie na poprawke najwyzej 5 s (awaria 21-24.09 kosztowala 12 s na dyktowanie)',
         config.STT_FIX_HTTP_TIMEOUT <= 5.0, str(config.STT_FIX_HTTP_TIMEOUT))
 

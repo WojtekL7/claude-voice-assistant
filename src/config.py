@@ -573,11 +573,17 @@ STT_FIX_API_URL = "https://ai.srv1251441.hstgr.cloud/v1/chat/completions"
 #                            dokleja do zadania zakaz zmyslania (`x-aim-guard:
 #                            added-facts`), ktory pcha model w tryb ODPOWIADANIA.
 #                            ⭐ AI Manager zdjal to 24.09 (`e69a8a8`, etykieta
-#                            `przepisuje_tekst`; ich pomiar 14/16 wiernych). Powrot
-#                            na zadanie = decyzja wlasciciela + uzgodnienie limitu
-#                            (nasze 5 s vs ich sufit 10 s) — NIE przelaczac samemu.
+#                            `przepisuje_tekst`; ich pomiar 14/16 wiernych).
 #   gemini-3.5-flash-lite  → 4/8 padlo po 12 s, a odpowiadal za niego 3.6-flash.
-STT_FIX_MODEL = "groq/qwen/qwen3.8-27b"
+#
+# ⛔ ZMIANA 2026-10-05 — POWROT NA ZADANIE `task/fix-transcript` (decyzja wlasciciela).
+# Powod: 28.09 qwen wolany po NAZWIE dostal `429` w 110 ms i NIE MIAL DOKAD ZEJSC —
+# poprawka przepadla po cichu. Zadanie ma ten sam qwen na czele i zapas u drugiego
+# dostawcy (lancuch czytaj z `GET /v1/tasks`, nie z tego komentarza). Limit uzgodniony:
+# sufit zadania po ich stronie 3 s < nasze STT_FIX_HTTP_TIMEOUT 5 s, wiec ich uczciwy
+# `504` dociera, zanim sie rozlaczymy. Kontrakt: `~/Projekty/AI Manager/docs/
+# KONTRAKT-VCA-POWROT-NA-ZADANIE.md`. ⛔ Nie asertuj nazwy wykonawcy ani `x-aim-model`.
+STT_FIX_MODEL = "task/fix-transcript"
 
 # Limit czasu na poprawke. To krok DODATKOWY: lepiej oddac tekst surowy niz
 # kazac czekac. ⛔ PROG DOBRANY NA LADUNKU PRODUKCYJNYM, nie na probce — pierwsza
@@ -587,8 +593,8 @@ STT_FIX_MODEL = "groq/qwen/qwen3.8-27b"
 # ⭐ 12 s → 5 s (2026-09-24): tamte 8,8 s dotyczyly GEMINI; qwen u Groqa robi to
 # samo w 0,9 s (max 2,9 s). Poprawka to premia — przy awarii modelu czlowiek ma
 # czekac najwyzej kilka sekund na tekst surowy, a nie 12 s (dokladnie tak wygladala
-# awaria z 21–24.09). Wolajac po NAZWIE modelu nie mamy kontraktu z sufitem bramki
-# (on dotyczyl `task/fix-transcript`) — nikomu tej liczby nie obiecalismy.
+# awaria z 21–24.09). ⛔ Od 2026-10-05 ta liczba JEST CZESCIA KONTRAKTU z AI Managerem:
+# ich sufit `task/fix-transcript` (3 s) jest dobrany POD nia — zmiane zglos im PRZED wejsciem.
 STT_FIX_HTTP_TIMEOUT = 5.0
 
 # Powyzej tylu znakow nie poprawiamy — dlugie dyktowanie i tak jest zwykle
