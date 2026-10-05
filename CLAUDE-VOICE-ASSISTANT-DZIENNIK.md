@@ -8,6 +8,13 @@ w zeszły czwartek", na które `git log` odpowiada zbyt drobno. Wpis: 3–8 lini
 
 ---
 
+## 2026-10-05
+
+- Start sesji: lista „co wisi” z pomiarem 8 pozycji (beta od 08:08 = ma wszystkie wcześniejsze poprawki; lupa, `install.ps1` — nadal otwarte; stan AI Managera zmierzony w ich dokumencie i na żywo w `GET /v1/tasks`).
+- Przepięcie `STT_FIX_MODEL` na `task/fix-transcript` (kontrakt AI Managera z 29.09): `test-dictation-fix` 46/46 z odwróconą G10, sabotaż S17/S5 wykryte, `test-dictation` 50/50, sonda na żywo 14/1/1, mediana 0,7 s. Commit `94ffef5`.
+- „Działa” od usera dotyczył bety sprzed zmiany — test w apce po restarcie zostaje otwarty.
+- Zostaje: potwierdzenie po restarcie, odchudzenie pamięci (463 linie), lupa, usterki planu B lektora.
+
 ## 2026-09-29
 
 - Start sesji: lista „co wisi" z pomiarem 7 pozycji (beta od 08:39 = ma wszystkie poprawki; lupa, `install.ps1`, płatny plan — nadal otwarte).
