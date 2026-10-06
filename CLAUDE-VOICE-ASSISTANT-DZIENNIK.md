@@ -8,6 +8,13 @@ w zeszły czwartek", na które `git log` odpowiada zbyt drobno. Wpis: 3–8 lini
 
 ---
 
+## 2026-10-06
+
+- Start sesji: przeczytane w całości COMMON (193 kB) i pamięć VCA (94 kB), lista „co wisi” z pomiarem (lupa, `install.ps1`, płatny plan — nadal otwarte; beta od 09:04 = ma `94ffef5`).
+- Potwierdzenie ruchem przepięcia `STT_FIX_MODEL` na `task/fix-transcript`: 23 dyktowania, 21 poprawek w 0,4–1,0 s, 1× `504` po 2,5 s (najdłuższy tekst, 722 zn.), 1× zerwana sieć.
+- Kod bez zmian; tylko pamięć VCA. Notka dla AI Managera odłożona — ich plik miał niezacommitowaną pracę.
+- Zostaje: odchudzenie pamięci (465 linii), lupa, usterki planu B lektora, celowy test zaznaczenia przy dyktowaniu, obserwacja `504` przy długich dyktowaniach.
+
 ## 2026-10-05
 
 - Start sesji: lista „co wisi” z pomiarem 8 pozycji (beta od 08:08 = ma wszystkie wcześniejsze poprawki; lupa, `install.ps1` — nadal otwarte; stan AI Managera zmierzony w ich dokumencie i na żywo w `GET /v1/tasks`).
