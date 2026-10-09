@@ -8,6 +8,15 @@ w zeszły czwartek", na które `git log` odpowiada zbyt drobno. Wpis: 3–8 lini
 
 ---
 
+## 2026-10-09
+
+- **Długie dyktowanie (504):** zmierzone na bramce — do ~2200 zn. OK, od 2500 zn. zawsze `504` (sufit AI Managera 3 s). U nas nic nie ginie. Nasz limit 5 → 12 s, bezpiecznik zawieszenia 15 → 30 s; prośba do AI Managera o 10 s (kontrakt + wpis u nich `af3c108`).
+- **Zły język przy krótkim dyktowaniu** (zgłoszenie właściciela, a jego „Tak" przyszło jako „Так"): `language=pl` na sztywno odrzucone pomiarem (tłumaczy angielski); zamiast tego wykryty język spoza PL/EN → ponowienie jako polski. Na żywo „Tak, zrób commit" → Czech → ponowione.
+- **Pusty pas w zakładce:** powiązany z „※ recap" Claude Code; strażnik odmalowania + dowód w `webterminal.log` (A rysowanie / B Claude).
+- **Commity:** `2989e2f` (dyktowanie), `a36a437` (strażnik) — oba NIEPRZETESTOWANE u usera, testy 2026-10-10. Bramki: test-dictation 61/61, test-dictation-fix 46/46, test-terminal-repaint 4/4, test-terminal-grid 8/8.
+
+**Zostaje otwarte:** testy po restarcie bety; zwrotka AI Managera; odchudzenie pliku pamięci (468 linii).
+
 ## 2026-10-06
 
 - Start sesji: przeczytane w całości COMMON (193 kB) i pamięć VCA (94 kB), lista „co wisi” z pomiarem (lupa, `install.ps1`, płatny plan — nadal otwarte; beta od 09:04 = ma `94ffef5`).

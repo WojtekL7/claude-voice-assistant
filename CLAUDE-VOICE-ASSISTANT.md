@@ -50,14 +50,17 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. Whe
 
 ---
 
-## 🚩 DO ZROBIENIA JAKO PIERWSZE (wpis z zamknięcia 2026-10-06)
+## 🚩 DO ZROBIENIA JAKO PIERWSZE (wpis z zamknięcia 2026-10-09)
 
-1. **Odchudzenie tego pliku: 465 linii (2026-10-06) przy budżecie ~350** (rośnie też od kontraktów sąsiadów). Przepis: COMMON „ODCHUDZANIE…", bramka `sprawdz-konsolidacje.py` (uruchamiana z `~/Projekty`).
+0. ⏳ **TESTY PO RESTARCIE BETY (oba commity NIEPRZETESTOWANE u usera; najpierw sprawdź start bety vs data commita):**
+   - **Dyktowanie** (`2989e2f`): krótko po polsku („Tak") → nie cyrylica; „Yes, go ahead" → po angielsku, NIE przetłumaczone; zwykłe zdanie bez spowolnienia. Dowód w `dictation.log`: linie `ODPOWIEDZ: … jezyk='Polish'` i `JEZYK: wykryto … ponawiam jako 'pl'` (ile ponowień na ile dyktowań).
+   - **Pusty pas** (`a36a437`): przy dziurze po „※ recap" user ma NIE klikać w terminal, tylko przełączyć zakładkę i wrócić. Dowód w `webterminal.log`: `odmalowanie[okno|zakladka] roznic_pamiec_vs_ekran=N` (wina rysowania, strażnik leczy) albo `dziura_w_pamieci=N` przy `roznic=0` (wina Claude → następny krok: wysłać mu focus-in `\x1b[I` przy powrocie do okna). Brak wpisów + brak dziur = zamknąć. Diagnoza: `CLAUDE-VOICE-ASSISTANT-PULAPKI.md`, „Architektura terminala".
+1. **Odchudzenie tego pliku: 468 linii (2026-10-09; 465 → 2026-10-06) przy budżecie ~350** (rośnie też od kontraktów sąsiadów). Przepis: COMMON „ODCHUDZANIE…", bramka `sprawdz-konsolidacje.py` (uruchamiana z `~/Projekty`).
 2. Szybkie: lupa w `_apply_skin_icons` · dwie usterki planu B lektora (sekcja „Inne otwarte TODO").
 3. Celowy test ochrony ZAZNACZENIA przy dyktowaniu (zaznacz tekst w polu → podyktuj → zaznaczenie ma zostać). Stan 2026-10-06: ~355 dyktowań w `dictation.log`, **wszystkie `zaznaczone=0`** — samo z ruchu się nie sprawdzi.
 
 - ✅ **`STT_FIX_MODEL = "task/fix-transcript"` (`94ffef5`) POTWIERDZONE RUCHEM 2026-10-06** (beta od 09:04, po commicie z 05.10 18:14): **23 dyktowania → 21× `POPRAWKA` w 0,4–1,0 s**, 1× `POPRAWKA NIEUDANA: kod=504 po 2.5s` (tekst surowy wstawiony — bezpiecznik działa), 1× `ConnectionError` przy wysyłce nagrania (sieć, nie poprawianie). Bramki z 05.10: `test-dictation-fix` 46/46, `test-dictation` 50/50.
-- ⏳ **OBSERWACJA (bez działania): długie dyktowania mogą wracać BEZ poprawki.** Jedyny `504` dotyczył NAJDŁUŻSZEGO tekstu dnia (722 zn., 135 s nagrania) — budżet próby u AI Managera to 2,5 s (sufit 3 s), a stara droga po nazwie miała nasze 5 s. 1 na 23 to za mało na zmianę. Sprawdzenie: `grep -n "POPRAWKA NIEUDANA\|ROZPOZNANO" ~/.vibe-coding-assistant/dictation.log | grep -B1 NIEUDANA`. **Próg powrotu do tematu:** ≥3 `504` tygodniowo albo `504` przy tekstach <500 zn. → rozmowa z AI Managerem o budżecie (NASZ limit 5 s zostaje; zmianę zgłosić im PRZED wejściem — kontrakt). ⏳ **Informacji do nich NIE zostawiono** — 2026-10-06 ich sesja miała niezacommitowane zmiany w `CLAUDE-AI-MANAGER.md` (ryzyko zgarnięcia cudzej pracy). Do zrobienia przy następnej okazji (decyzja właściciela: „wszystkie” z listy zamknięcia), sekcja „KORESPONDENCJA Z SĄSIADAMI”, jako INFORMACJA, nie prośba.
+- ✅ **504 PRZY DŁUGICH DYKTOWANIACH — ROZSTRZYGNIĘTE POMIAREM 2026-10-09** (zastępuje obserwację z 06.10): błąd jest u AI Managera, nie u nas — tekst surowy zawsze trafia do pola. Seria na ich bramce (teksty BEZ powtórzeń): do ~2200 zn. `200` w 1–2,5 s; **od 2500 zn. `504` za każdym razem** („1 próba w 2,1 s", sufit 3 s); 700 zn. raz 2,4 s (stąd 504 z 08.10 przy 686 zn.). Wykonane: nasz `STT_FIX_HTTP_TIMEOUT` 5 → 12 s, `STT_PROCESSING_STUCK_SECS` 15 → 30 s (`2989e2f`); prośba o sufit 10 s / próba 6 s wysłana (`docs/KONTRAKT-AI-MANAGER-FIX-TRANSCRIPT-SUFIT.md`, wpis u nich `af3c108`). ⏳ Czeka na decyzję ich właściciela — zwrotka przyjdzie tutaj albo do „PODŁĄCZENIE DO AI MANAGERA".
 3. Szybkie: lupa w `_apply_skin_icons` · dwie usterki planu B lektora (sekcja „Inne otwarte TODO").
 
 ## ⏳ CZEKA NA TEST NA ŻYWO
@@ -402,6 +405,7 @@ Wasz pomiar powtórzyliśmy Waszą sondą i się zgadza. **Poprawione po stronie
 ## PODŁĄCZENIE DO AI MANAGERA — ✅ działa, OBIE drogi na zadaniach (`task/transcribe` + `task/fix-transcript`, potwierdzone 2026-10-06)
 
 Rozmowa z Claude idzie przez CLI (nie HTTP) → bramka jej nie łapie i nie musi; zużycie liczy osobno kolektor Claude Code AI Managera z lokalnych `.jsonl`.
+⏳ **KONTRAKT DO AI MANAGERA (2026-10-09) — sufit `fix-transcript` 3 → 10 s** (`docs/KONTRAKT-AI-MANAGER-FIX-TRANSCRIPT-SUFIT.md`). Nasz limit PODNIESIONY PIERWSZY (12 s) — od teraz to wartość umowna: zmianę `STT_FIX_HTTP_TIMEOUT` zgłoś im (ich `LIMITY_KONSUMENTOW`). Uprzedzeni też, że `transcribe` w trybie auto idzie z `verbose_json` i bywa wołany 2× (ponowienie języka).
 **STT (dyktowanie) na bramce** (potwierdzone 2026-07-13): `POST https://ai.srv1251441.hstgr.cloud/v1/audio/transcriptions`, `Authorization: Bearer aim-…` (klucz aplikacji **„VCA" (id=3)**), model z prefiksem `groq/…`; język auto = NIE wysyłaj pola `language`; kody: `401` zły klucz · `429` limit · `503` brak wolnego konta. → `stt-bramka-ai-manager.md`
 ⚠️ NIE mylić z osobną apką „Voice Assistant" (repo `voice-assistant`) — inny projekt, inny klucz.
 ⭐ **Obie potrafią chodzić JEDNOCZEŚNIE i na liście procesów wyglądają identycznie** (`python3 src/main.py`). Rozstrzyga KATALOG ROBOCZY, nie nazwa: `readlink /proc/<pid>/cwd` — VCA ma `claude-voice-assistant`, tamta `Voice Assistant` (ze spacją). Przy diagnozie sprawdź też `tr "\0" "\n" < /proc/<pid>/environ | grep CVA_`, żeby wiedzieć, KTÓRY silnik terminala działa. (2026-09-11: wziąłem cudzy proces za betę VCA.)
