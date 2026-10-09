@@ -336,6 +336,57 @@
       } catch (e) { return null; }
     };
 
+    // 🩹 STRAŻNIK ODMALOWANIA (2026-10-09). Objaw u właściciela: w środku ekranu
+    // zakładki PUSTY PAS (~30 wierszy), który znika dopiero po kliknięciu w okno.
+    // Zmierzone: pas powstał w chwili, gdy Claude Code sam dopisał „※ recap"
+    // (away_summary 12:01:50, zakładka CRM). Kliknięcie robi naraz DWIE rzeczy —
+    // odmalowuje nasz ekran i wysyła Claude „wróciłem" (tryb 1004, Claude go
+    // włącza), a on rysuje wszystko od nowa — więc z objawu nie wiadomo, czyja wina:
+    //   A) xterm MA treść w pamięci, ale jej nie narysował   → log „roznic>0"
+    //   B) Claude wyczyścił te wiersze i ich nie narysował   → log „dziura_w_pamieci"
+    // Funkcja najpierw ZAPISUJE dowód (tylko gdy jest co zapisać — w zdrowym
+    // przypadku milczy), potem odmalowuje cały widok, co leczy przypadek A.
+    var DZIURA_PROG = 8;   // tyle pustych wierszy MIĘDZY treścią = podejrzana dziura
+    function _bezOgona(s) { return String(s || '').replace(/ /g, ' ').replace(/\s+$/, ''); }
+    window.__termRepaintCheck = function (tag) {
+      try {
+        var buf = term.buffer.active;
+        var wPamieci = [];
+        for (var y = 0; y < term.rows; y++) {
+          var line = buf.getLine(buf.viewportY + y);
+          wPamieci.push(line ? _bezOgona(line.translateToString(true)) : '');
+        }
+        // A: pamięć vs to, co renderer DOM faktycznie wstawił do strony.
+        var rozne = [];
+        var rowsEl = document.querySelector('#terminal .xterm-rows');
+        if (rowsEl) {
+          for (var r = 0; r < term.rows && r < rowsEl.children.length; r++) {
+            if (_bezOgona(rowsEl.children[r].textContent) !== wPamieci[r]) rozne.push(r);
+          }
+        }
+        // B: najdłuższy pas pustych wierszy MIĘDZY treścią w samej pamięci.
+        var pierwszy = -1, ostatni = -1;
+        for (var i = 0; i < wPamieci.length; i++) {
+          if (wPamieci[i]) { if (pierwszy < 0) pierwszy = i; ostatni = i; }
+        }
+        var dziura = 0, biezaca = 0, dziuraOd = -1;
+        for (var j = Math.max(0, pierwszy); j <= ostatni; j++) {
+          if (wPamieci[j]) { biezaca = 0; continue; }
+          biezaca++;
+          if (biezaca > dziura) { dziura = biezaca; dziuraOd = j - biezaca + 1; }
+        }
+        if (rozne.length || dziura >= DZIURA_PROG) {
+          console.log('odmalowanie[' + tag + '] roznic_pamiec_vs_ekran=' + rozne.length +
+            (rozne.length ? ' wiersze=' + rozne.slice(0, 40).join(',') : '') +
+            ' dziura_w_pamieci=' + dziura + (dziura ? ' od_wiersza=' + dziuraOd : '') +
+            ' rows=' + term.rows + ' ekran=' + (buf.type || '?'));
+        }
+      } catch (e) {
+        console.log('odmalowanie[' + tag + '] blad: ' + e);
+      }
+      try { term.refresh(0, term.rows - 1); } catch (e) {}
+    };
+
     // Pełny motyw xterm: tło, tekst, kursor, zaznaczenie + 16 kolorów ANSI.
     // Przyjmuje obiekt ITheme (z Pythona idzie jako literał JSON). Brak pola =
     // xterm użyje swojego domyślnego.

@@ -6463,6 +6463,13 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
                 super().changeEvent(event)
                 return
             if self.isActiveWindow():
+                # Powrót do okna → sprawdź i odmaluj terminal bieżącej zakładki
+                # (objaw „pusty pas do pierwszego kliknięcia", 2026-10-09).
+                if self.terminal_backend is not None:
+                    try:
+                        self.terminal_backend.repaint_check("okno")
+                    except Exception:
+                        pass
                 # Window is active - use custom bottom panel color
                 self.bottom_panel.setStyleSheet(f"""
                     QFrame {{

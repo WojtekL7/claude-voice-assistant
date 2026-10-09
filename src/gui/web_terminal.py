@@ -451,6 +451,8 @@ class WebTerminal(QWidget):
         # liter" zniknie sam, bez wiedzy użytkownika.
         QTimer.singleShot(0, self._refit_grid)
         self._watch_screen_changes()
+        # Po dopasowaniu siatki (dwie klatki) — sprawdź i odmaluj ekran (pusty pas).
+        QTimer.singleShot(150, lambda: self.repaint_check("zakladka"))
 
     # ==================== Siatka terminala ====================
 
@@ -465,6 +467,17 @@ class WebTerminal(QWidget):
             return
         self.view.page().runJavaScript(
             "window.__termRefit && window.__termRefit();")
+
+    def repaint_check(self, reason: str):
+        """Zapisz dowód „pustego pasa" (jeśli jest) i odmaluj cały widok terminala.
+
+        Wołane przy powrocie do zakładki i do okna. Dlaczego i co trafia do
+        webterminal.log — patrz `__termRepaintCheck` w terminal.html.
+        """
+        if not self._frontend_ready:
+            return
+        self.view.page().runJavaScript(
+            f"window.__termRepaintCheck && window.__termRepaintCheck({json.dumps(reason)});")
 
     def _watch_screen_changes(self):
         """Przeniesienie okna na INNY EKRAN → przemierz siatkę.

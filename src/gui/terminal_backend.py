@@ -220,6 +220,11 @@ class TerminalBackend(QObject):
     def focus_terminal(self):
         raise NotImplementedError
 
+    def repaint_check(self, reason: str):
+        """Sprawdź i odmaluj widok terminala (powrót do okna/zakładki). Domyślnie
+        no-op — dotyczy WebTerminala (objaw „pusty pas", 2026-10-09)."""
+        pass
+
     def set_mouse_mode(self, mode: str):
         """Tryb myszy: 'claude' (kółko przewija rozmowę, zaznaczanie z Shift) albo
         'select' (zaznaczanie/kopiowanie bez Shift). Domyślnie no-op — dotyczy
@@ -539,6 +544,9 @@ class WebTerminalBackend(TerminalBackend):
 
     def focus_terminal(self):
         self._term.focus_terminal()
+
+    def repaint_check(self, reason: str):
+        self._term.repaint_check(reason)
 
     def set_mouse_mode(self, mode: str):
         self._term.set_mouse_mode(mode)
