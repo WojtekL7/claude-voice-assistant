@@ -529,6 +529,21 @@ STT_API_URL = "https://ai.srv1251441.hstgr.cloud/v1/audio/transcriptions"
 STT_MODEL = "task/transcribe"                # zadanie, NIE nazwa modelu (patrz wyzej)
 STT_LANGUAGE_DEFAULT = "auto"                # „auto" = nie wysyłaj pola language (bramka sama wykrywa)
 
+# ── JEZYK SPOZA LISTY → PONOW JAKO POLSKI (2026-10-09) ───────────────────────
+# Zgloszenie wlasciciela: przy KROTKIM dyktowaniu rozpoznawanie „praktycznie
+# zawsze" zgaduje zly jezyk (dziennik 09.10: „Robimy tak, jak proponujesz" →
+# „Робимо так, як пропонуєш"; samo „Tak" przyszlo jako „Так"). Wlasciciel mowi
+# w 99% po polsku, w 1% po angielsku.
+# ⛔ „language=pl NA SZTYWNO" ODRZUCONE POMIAREM: Whisper z wymuszonym polskim
+# NIE ZAPISUJE angielskiego, tylko go TLUMACZY, i to zle — „Please check the build
+# and push the changes" → „Prosze sprawdzic budowe i wkrecic zmiany", „Yes, go
+# ahead" → „Tak, idzcie". Dlatego: pytamy w trybie auto o `verbose_json` (podaje
+# wykryty jezyk — sprawdzone na bramce: 'Polish'/'English'), a gdy wykryty jezyk
+# jest SPOZA listy, wysylamy TO SAMO nagranie drugi raz z language=pl.
+# Koszt: ~1 s tylko przy zlym zgadnieciu; przy dobrym — zero.
+STT_ALLOWED_LANGUAGES = ("polish", "english", "pl", "en")
+STT_RETRY_LANGUAGE = "pl"
+
 # ── POPRAWIANIE TRANSKRYPCJI PO FAKCIE (2026-09-11) ──────────────────────────
 # Zgloszenie wlasciciela: „dziurawe dyktowanie, tekst nie jest tym, co dyktuje".
 # ZMIERZONE tego dnia, zanim cokolwiek zmieniono (cala droga tekstu jest zdrowa):
@@ -595,7 +610,14 @@ STT_FIX_MODEL = "task/fix-transcript"
 # czekac najwyzej kilka sekund na tekst surowy, a nie 12 s (dokladnie tak wygladala
 # awaria z 21–24.09). ⛔ Od 2026-10-05 ta liczba JEST CZESCIA KONTRAKTU z AI Managerem:
 # ich sufit `task/fix-transcript` (3 s) jest dobrany POD nia — zmiane zglos im PRZED wejsciem.
-STT_FIX_HTTP_TIMEOUT = 5.0
+# ⭐ 5 s → 12 s (2026-10-09, decyzja wlasciciela): ich sufit 3 s (2 s na probe)
+# ODCINA dlugie teksty — zmierzone tego dnia: do ~2200 znakow 200 w 1–2,5 s,
+# od 2500 znakow 504 ZA KAZDYM RAZEM („Wykonano 1 prob w 2,1 s"), a nawet 700
+# znakow raz trwalo 2,4 s. Prosimy ich o sufit 10 s (6 s na probe), kontrakt:
+# `docs/KONTRAKT-AI-MANAGER-FIX-TRANSCRIPT-SUFIT.md`. NASZ limit podniesiony
+# PIERWSZY (regula COMMON: konsument najpierw) — dopoki oni maja 3 s, ta zmiana
+# nic nie robi, bo ich uczciwy 504 przychodzi wczesniej.
+STT_FIX_HTTP_TIMEOUT = 12.0
 
 # Powyzej tylu znakow nie poprawiamy — dlugie dyktowanie i tak jest zwykle
 # dzielone przez uzytkownika, a koszt i czas rosna liniowo.
@@ -666,7 +688,11 @@ STT_HTTP_TIMEOUT = 12.0
 # reagować całkowicie (ikona NIE pulsowała), bo `start_recording()` wychodzi po
 # cichu, gdy stan ≠ spoczynek. Wartość > STT_HTTP_TIMEOUT, żeby nie przerwać
 # uczciwie trwającej wysyłki.
-STT_PROCESSING_STUCK_SECS = 15.0
+# ⚠️ 15 s → 30 s (2026-10-09): stan „przetwarzam" obejmuje CALOSC — rozpoznanie
+# (do STT_HTTP_TIMEOUT), ewentualne ponowienie jezyka i poprawke (do
+# STT_FIX_HTTP_TIMEOUT). 15 s bylo mniejsze juz od 12+5, wiec klikniecie
+# mikrofonu w trakcie uczciwej poprawki wyrzucalo tekst. Bramka F2b pilnuje sumy.
+STT_PROCESSING_STUCK_SECS = 30.0
 
 # TTS Settings
 TTS_DEFAULT_VOICE = "pl-PL-ZofiaNeural"

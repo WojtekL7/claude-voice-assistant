@@ -53,6 +53,7 @@ Kazdy wariant przywracany z pamieci procesu, przywrocenie dowiedzione sha256.
    w bramce i wygladalaby na pokrycie.
 """
 import os
+import json
 import sys
 import shutil
 import tempfile
@@ -323,6 +324,79 @@ sprawdz("F6 model z konfiguracji DOJEZDZA do wysylki (nie ufamy stalej)",
 sprawdz("F7 dyktowanie woła ZADANIE, nie nazwe modelu (siatka u 2 dostawcow)",
         str(config.STT_MODEL).startswith("task/"),
         f"STT_MODEL={config.STT_MODEL!r}")
+
+sprawdz("F2b prog zakleszczenia obejmuje rozpoznanie + poprawke (klik nie wyrzuca tekstu)",
+        config.STT_PROCESSING_STUCK_SECS > config.STT_HTTP_TIMEOUT + config.STT_FIX_HTTP_TIMEOUT,
+        f"{config.STT_PROCESSING_STUCK_SECS} vs {config.STT_HTTP_TIMEOUT}+{config.STT_FIX_HTTP_TIMEOUT}")
+sprawdz("F8 tryb auto pyta o WYKRYTY jezyk (verbose_json)",
+        (zlapane.get("data") or {}).get("response_format") == "verbose_json"
+        and "language" not in (zlapane.get("data") or {}),
+        f"data={zlapane.get('data')}")
+
+# ============================================================================
+print("\n=== L. JEZYK SPOZA LISTY → ponowienie jako polski (2026-10-09) ===")
+# ============================================================================
+# Zmierzone u wlasciciela: krotkie polskie zdania wracaly jako ukrainski.
+# ⛔ „language=pl na sztywno" odrzucone pomiarem — tlumaczy angielski.
+sprawdz("L1 polski i angielski zostaja bez ponawiania",
+        SE.jezyk_dozwolony("Polish") and SE.jezyk_dozwolony("english")
+        and SE.jezyk_dozwolony("pl") and SE.jezyk_dozwolony("en"))
+sprawdz("L2 ukrainski / rosyjski / czeski → ponawiamy",
+        not SE.jezyk_dozwolony("Ukrainian") and not SE.jezyk_dozwolony("Russian")
+        and not SE.jezyk_dozwolony("czech"))
+sprawdz("L3 nieznany jezyk (brak pola) → NIE ponawiamy na slepo",
+        SE.jezyk_dozwolony(None) and SE.jezyk_dozwolony(""))
+
+
+class _OdpL:
+    def __init__(self, text, code=200):
+        self.text, self.status_code, self.headers = text, code, {}
+
+
+def _scenariusz(odpowiedzi):
+    """Podstaw kolejne odpowiedzi bramki; zwroc (wynik, lista wyslanych data)."""
+    wyslane, kolejka = [], list(odpowiedzi)
+
+    def _post(url, **kw):
+        wyslane.append(dict(kw.get("data") or {}))
+        o = kolejka.pop(0)
+        if isinstance(o, Exception):
+            raise o
+        return o
+    stary = SE.requests.post
+    SE.requests.post = _post
+    try:
+        return STTEngine(api_key="aim-x")._send_to_groq(plik_do_skasowania()), wyslane
+    finally:
+        SE.requests.post = stary
+
+
+UKR = json.dumps({"text": " Робимо так, як пропонуєш.", "language": "Ukrainian"})
+wynik, wyslane = _scenariusz([_OdpL(UKR), _OdpL("Robimy tak, jak proponujesz.")])
+sprawdz("L4 ukrainski wynik → drugie podejscie z language=pl i JEGO tekst w polu",
+        wynik == "Robimy tak, jak proponujesz." and len(wyslane) == 2
+        and wyslane[1].get("language") == config.STT_RETRY_LANGUAGE
+        and wyslane[1].get("response_format") == "text",
+        f"wynik={wynik!r} wyslane={wyslane}")
+sprawdz("L5 ponowienie odnotowane w dzienniku", "JEZYK: wykryto 'Ukrainian'" in tresc_logu())
+
+PL = json.dumps({"text": " Dobra, wyslij.", "language": "Polish"})
+wynik, wyslane = _scenariusz([_OdpL(PL)])
+sprawdz("L6 polski wynik → JEDNA wysylka, tekst bez spacji na brzegach",
+        wynik == "Dobra, wyslij." and len(wyslane) == 1, f"{wynik!r} {len(wyslane)}")
+
+EN = json.dumps({"text": "Yes, go ahead.", "language": "English"})
+wynik, wyslane = _scenariusz([_OdpL(EN)])
+sprawdz("L7 angielski NIE jest tlumaczony (jedna wysylka, oryginal)",
+        wynik == "Yes, go ahead." and len(wyslane) == 1)
+
+wynik, wyslane = _scenariusz([_OdpL(UKR), SE.requests.exceptions.ConnectionError("x")])
+sprawdz("L8 ponowienie padlo → zostaje PIERWSZY wynik, nic nie ginie",
+        wynik == "Робимо так, як пропонуєш." and len(wyslane) == 2, f"{wynik!r}")
+
+wynik, wyslane = _scenariusz([_OdpL("zwykly tekst bez JSON-a")])
+sprawdz("L9 odpowiedz nie-JSON (zapasowy dostawca) → brana jako tekst, bez ponawiania",
+        wynik == "zwykly tekst bez JSON-a" and len(wyslane) == 1)
 
 # ============================================================================
 print("\n=== G. BLAD SIECI mowi po ludzku, nie zargonem biblioteki ===")

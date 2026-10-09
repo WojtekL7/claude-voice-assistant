@@ -3,6 +3,7 @@ Vibe Coding Assistant - Speech-to-Text Engine
 Uses Groq Whisper API for fast, accurate transcription.
 """
 import io
+import json
 import re
 import unicodedata
 import wave
@@ -22,6 +23,7 @@ import requests
 from config import (
     STT_API_URL, STT_MODEL, STT_LANGUAGE_DEFAULT,
     STT_HTTP_TIMEOUT, STT_PROCESSING_STUCK_SECS,
+    STT_ALLOWED_LANGUAGES, STT_RETRY_LANGUAGE,
     STT_FIX_ENABLED_DEFAULT, STT_FIX_API_URL, STT_FIX_MODEL,
     STT_FIX_HTTP_TIMEOUT, STT_FIX_MAX_CHARS, STT_FIX_MIN_RATIO,
     STT_FIX_MAX_RATIO, STT_FIX_MAX_LOST_SHARE, STT_FIX_PROMPT,
@@ -120,6 +122,26 @@ def ocena_slow(surowy: str, poprawiony: str):
     limit = max(1, int(STT_FIX_MAX_LOST_SHARE * n_a))
     ok = n_a > 0 and zgubione <= limit and dopisane <= limit
     return ok, zgubione, dopisane, n_a
+
+
+def jezyk_dozwolony(jezyk) -> bool:
+    """Czy wykryty język zostawiamy bez ponawiania? Nieznany (None) — tak:
+    nie zgadujemy za rozpoznawanie, gdy nic nie powiedziało."""
+    if not jezyk:
+        return True
+    return str(jezyk).strip().lower() in STT_ALLOWED_LANGUAGES
+
+
+def _czytaj_odpowiedz(surowa: str, szczegoly: bool):
+    """Treść odpowiedzi bramki → (tekst, wykryty_jezyk albo None)."""
+    if szczegoly:
+        try:
+            j = json.loads(surowa)
+            if isinstance(j, dict) and isinstance(j.get("text"), str):
+                return j["text"].strip(), j.get("language")
+        except ValueError:
+            pass
+    return surowa.strip(), None
 
 
 def _zdejmij_ramke_kodu(tekst: str) -> str:
@@ -496,7 +518,38 @@ class STTEngine:
         return temp_path
 
     def _send_to_groq(self, audio_path: str) -> str:
-        """Wyślij nagranie do bramki AI Managera i odbierz transkrypcję."""
+        """Wyślij nagranie do bramki AI Managera i odbierz transkrypcję.
+
+        W trybie „auto" pytamy też o WYKRYTY język. Gdy jest spoza
+        STT_ALLOWED_LANGUAGES (krótkie polskie zdanie rozpoznane jako ukraiński),
+        wysyłamy to samo nagranie drugi raz z językiem polskim — powód i pomiar
+        przy STT_ALLOWED_LANGUAGES w config.py.
+        """
+        if self.language and self.language != "auto":
+            return self._wyslij_nagranie(audio_path, self.language)[0]
+
+        tekst, jezyk = self._wyslij_nagranie(audio_path, None, szczegoly=True)
+        if jezyk_dozwolony(jezyk) or not tekst:
+            return tekst
+        dictation_log(f"JEZYK: wykryto {jezyk!r} spoza listy — ponawiam jako "
+                      f"{STT_RETRY_LANGUAGE!r} (bylo: {tekst[:40]!r})")
+        try:
+            ponowiony = self._wyslij_nagranie(audio_path, STT_RETRY_LANGUAGE)[0]
+        except Exception as e:
+            # Pierwszy wynik mamy w ręku — lepszy tekst w złym języku niż żaden.
+            dictation_log(f"JEZYK: ponowienie nieudane ({str(e)[:80]}) — zostaje pierwszy wynik")
+            return tekst
+        return ponowiony or tekst
+
+    def _wyslij_nagranie(self, audio_path: str, jezyk: Optional[str],
+                         szczegoly: bool = False):
+        """Jedna wysyłka nagrania → (tekst, wykryty_jezyk albo None).
+
+        `jezyk` = None → nie wysyłamy pola language (bramka sama wykrywa).
+        `szczegoly` = True → prosimy o `verbose_json`, żeby poznać wykryty język.
+        Odpowiedź, która nie jest JSON-em (np. zapasowy dostawca oddał sam tekst),
+        jest brana jako tekst — wtedy języka nie znamy i niczego nie ponawiamy.
+        """
         headers = {
             "Authorization": f"Bearer {self.api_key}"
         }
@@ -507,15 +560,16 @@ class STTEngine:
             }
             data = {
                 'model': self.model,
-                'response_format': 'text'
+                'response_format': 'verbose_json' if szczegoly else 'text'
             }
-            # „auto" (lub brak) → NIE wysyłamy pola language; bramka sama
+            # Brak języka → NIE wysyłamy pola language; bramka sama
             # wykrywa. Pusty/„auto" w polu potrafi wywalić walidację dostawcy.
-            if self.language and self.language != "auto":
-                data['language'] = self.language
+            if jezyk:
+                data['language'] = jezyk
 
             t0 = time.monotonic()
-            dictation_log(f"WYSYLKA -> {self.api_url} (limit {STT_HTTP_TIMEOUT:.0f}s)")
+            dictation_log(f"WYSYLKA -> {self.api_url} (limit {STT_HTTP_TIMEOUT:.0f}s"
+                          f"{', jezyk=' + jezyk if jezyk else ''})")
             try:
                 response = requests.post(
                     self.api_url,
@@ -537,12 +591,15 @@ class STTEngine:
                 raise Exception(tr('stt_err_network'))
 
             dt = time.monotonic() - t0
-            dictation_log(f"ODPOWIEDZ: kod={response.status_code} po {dt:.1f}s "
-                          f"znakow={len(response.text or '')}")
 
             if response.status_code == 200:
-                return response.text.strip()
+                tekst, wykryty = _czytaj_odpowiedz(response.text or "", szczegoly)
+                dictation_log(f"ODPOWIEDZ: kod=200 po {dt:.1f}s znakow={len(tekst)}"
+                              f"{' jezyk=' + repr(wykryty) if szczegoly else ''}")
+                return tekst, wykryty
 
+            dictation_log(f"ODPOWIEDZ: kod={response.status_code} po {dt:.1f}s "
+                          f"znakow={len(response.text or '')}")
             # Czytelne komunikaty dla usera zamiast surowego kodu HTTP.
             if response.status_code == 401:
                 raise Exception(tr('stt_err_bad_key'))

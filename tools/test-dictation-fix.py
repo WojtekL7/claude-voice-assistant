@@ -304,8 +304,12 @@ sprawdz('G9 odrzucenie za SLOWA jest widoczne w dzienniku (inaczej nie odroznisz
 # sama ze soba, wiec cofniecia konfiguracji NIE wykryje — wykrywa je ta asercja).
 sprawdz('G10 poprawka idzie przez task/fix-transcript (decyzja z 2026-10-05)',
         config.STT_FIX_MODEL == 'task/fix-transcript', config.STT_FIX_MODEL)
-sprawdz('G11 czekanie na poprawke najwyzej 5 s (awaria 21-24.09 kosztowala 12 s na dyktowanie)',
-        config.STT_FIX_HTTP_TIMEOUT <= 5.0, str(config.STT_FIX_HTTP_TIMEOUT))
+# ⭐ 2026-10-09: 5 s → 12 s. Ochrone przed zwisem modelu (awaria 21-24.09) daje od
+# 2026-10-05 SUFIT ZADANIA u AI Managera — prosimy o 10 s, bo 3 s odcinalo teksty
+# od ~2500 znakow (zmierzone). Nasz limit ma lezec NAD ich sufitem (ich uczciwy
+# 504 przychodzi pierwszy), ale nie dalej niz 12 s — czlowiek czeka na tekst.
+sprawdz('G11 czekanie na poprawke: nad sufitem AI Managera (10 s), najwyzej 12 s',
+        10.0 < config.STT_FIX_HTTP_TIMEOUT <= 12.0, str(config.STT_FIX_HTTP_TIMEOUT))
 
 # Druga linia obrony pod lupa OSOBNO. Sabotaz S3 (zdjete widelki dlugosci) po
 # dolozeniu bezpiecznika slow NIE ZAPALIL NICZEGO — A6/A7 lapal juz nowy

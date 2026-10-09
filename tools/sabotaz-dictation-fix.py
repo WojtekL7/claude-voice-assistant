@@ -21,6 +21,8 @@ Kazdy wariant wykonal komplet sprawdzen, przywrocenie potwierdzone sha256.
   S1 A1 · S2 A2 · S3 G12,G13 · S4 A4 · S5 B2 · S6 B5 · S7 B9,D2 · S8 F1 · S9 E1
   S10 D1 · S11 E2 · S12 F7 · S13 G1,G2,G3,G9 · S14 G3 · S15 G5 · S16 G3
   S17 G10 · S18 G11 · S19 G2,G3                         → 19/19 wykrytych
+2026-10-09 (jezyk spoza listy + poprawka 12 s; test-dictation.py ma 61 sprawdzen):
+  S12 F7 · S18 B7,G11 · S20 F2b · S21 L2,L4,L5,L8 · S22 F8,L4..L8 → wszystkie wykryte
 ⚠️ Pierwszy przebieg: S3 (zdjete widelki dlugosci) NIE ZAPALIL NICZEGO — nowy
 bezpiecznik slow przejal A6/A7, wiec stara warstwa przestala byc badana.
 Dolozone G12/G13: sprawdzaja widelki z WYLACZONYM bezpiecznikiem slow.
@@ -89,7 +91,7 @@ WARIANTY = {
                     "(bramka rotuje wtedy tylko miedzy kontami jednego dostawcy)",
             'STT_MODEL = "task/transcribe"',
             'STT_MODEL = "groq/whisper-large-v3"',
-            BRAMKA_STT, 50),
+            BRAMKA_STT, 61),
     # --- 2026-09-24: bezpiecznik SLOW + zejscie z Gemini (awaria 21-24.09) ---
     "S13": (SILNIK, "zdjety bezpiecznik SLOW (tlumaczenie/parafraza wchodza do pola)",
             "        ok, zgubione, dopisane, ile = ocena_slow(surowy, poprawiony)\n        if not ok:",
@@ -106,12 +108,25 @@ WARIANTY = {
     "S17": (CONFIG, "poprawka z powrotem po NAZWIE modelu (brak zapasu przy 429)",
             'STT_FIX_MODEL = "task/fix-transcript"',
             'STT_FIX_MODEL = "groq/qwen/qwen3.8-27b"'),
-    "S18": (CONFIG, "czekanie na poprawke z powrotem 12 s",
-            "STT_FIX_HTTP_TIMEOUT = 5.0",
-            "STT_FIX_HTTP_TIMEOUT = 12.0"),
+    "S18": (CONFIG, "czekanie na poprawke 30 s (czlowiek czeka na tekst surowy)",
+            "STT_FIX_HTTP_TIMEOUT = 12.0",
+            "STT_FIX_HTTP_TIMEOUT = 30.0"),
     "S19": (CONFIG, "prog bezpiecznika poluzowany 20% -> 25% (parafraza przechodzi)",
             "STT_FIX_MAX_LOST_SHARE = 0.20",
             "STT_FIX_MAX_LOST_SHARE = 0.25"),
+    # --- 2026-10-09: jezyk spoza listy + dluzsza poprawka (bramka test-dictation.py) ---
+    "S20": (CONFIG, "prog zakleszczenia z powrotem 15 s (klik w trakcie poprawki wyrzuca tekst)",
+            "STT_PROCESSING_STUCK_SECS = 30.0",
+            "STT_PROCESSING_STUCK_SECS = 15.0",
+            BRAMKA_STT, 61),
+    "S21": (SILNIK, "kazdy wykryty jezyk przepuszczany (ukrainski zostaje w polu)",
+            "    return str(jezyk).strip().lower() in STT_ALLOWED_LANGUAGES",
+            "    return True",
+            BRAMKA_STT, 61),
+    "S22": (SILNIK, "ponowienie zgubione — tryb auto nie pyta o wykryty jezyk",
+            "        tekst, jezyk = self._wyslij_nagranie(audio_path, None, szczegoly=True)",
+            "        tekst, jezyk = self._wyslij_nagranie(audio_path, None)",
+            BRAMKA_STT, 61),
 }
 
 
