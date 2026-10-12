@@ -544,5 +544,52 @@ check("powtórka + agent BEZCZYNNY → DOZWOLONA (życzenie usera, nie usterka)"
 check("NOWA wypowiedź nigdy nie uchodzi za powtórkę (kontrola negatywna)",
       w._should_skip_repeat(tab, TURN_TOOL_PENDING, "Inna wypowiedź") is False)
 
+# ============================================================================
+# 12. SKRÓCENIE ROZMOWY (2026-10-12) — zgłoszenie usera z zakładki VCA:
+#     „przeczytał mi lektor jakieś bzdury, a nie ostatnią wypowiedź".
+#     Claude Code skrócił bezczynną rozmowę („Compacted while idle") i dopisał
+#     streszczenie jako wpis roli `user` z `isCompactSummary: true`. Czytnik
+#     liczył je jak wiadomość usera → „agent winien odpowiedź" → dziennik
+#     „zamrożony" → plan B czytał z ekranu „Brewed for · done 9:11 AM
+#     Referenced file Compacted while idle…". Fixture = PRAWDZIWE wpisy z tego
+#     dziennika (treść skrócona, kształt i znaczniki nietknięte).
+# ============================================================================
+FIX_COMPACT = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           'fixtures', 'vca-compact-idle.jsonl')
+if not os.path.exists(FIX_COMPACT):
+    check("fixture z prawdziwego skrócenia rozmowy istnieje", False, FIX_COMPACT)
+else:
+    with open(FIX_COMPACT, encoding='utf-8') as f:
+        crows = [json.loads(line) for line in f if line.strip()]
+    tmp = os.path.join(os.path.dirname(FIX_COMPACT), '_tmp-compact.jsonl')
+    check("fixture naprawdę zawiera streszczenie po skróceniu",
+          any(r.get('isCompactSummary') for r in crows))
+
+    text, state = snapshot_of(crows, tmp)
+    check("PRZYPADEK VCA: po skróceniu rozmowy agent jest BEZCZYNNY",
+          state == TURN_IDLE, f"stan={state}")
+    check("PRZYPADEK VCA: do przeczytania jest ostatnia wypowiedź agenta",
+          text is not None and "Co wisi" in text, f"tekst={str(text)[:60]!r}")
+
+    r = FileReader(tmp)
+    check("streszczenie nie trafia do wyszukiwarki jako wiadomość usera",
+          not any(e['role'] == 'user' and 'continued' in e['text']
+                  for e in r.conversation_entries()))
+    check("ostatnia granica rozmowy to wypowiedź agenta, nie streszczenie",
+          r._last_entry_role(skip_agent_turns=True) == 'assistant',
+          f"rola={r._last_entry_role(skip_agent_turns=True)}")
+
+    # Kontrola negatywna: ten sam wpis BEZ znacznika = prawdziwa wiadomość
+    # usera → agent JEST winien odpowiedź. Bez tego zielony wynik wyżej
+    # mógłby znaczyć tylko, że czytnik w ogóle nie widzi wpisów `user`.
+    plain = [dict(r, isCompactSummary=False) if r.get('isCompactSummary') else r
+             for r in crows]
+    _, state = snapshot_of(plain, tmp)
+    check("ta sama wiadomość BEZ znacznika streszczenia → agent winien odpowiedź "
+          "(kontrola negatywna)", state == TURN_OWES_TEXT, f"stan={state}")
+
+    if os.path.exists(tmp):
+        os.remove(tmp)
+
 print(f"\nWynik: {PASS} OK / {FAIL} FAIL")
 sys.exit(1 if FAIL else 0)

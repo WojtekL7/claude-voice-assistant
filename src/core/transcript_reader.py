@@ -690,6 +690,8 @@ class TranscriptReader:
             return None
         if TranscriptReader._is_agent_turn_userentry(obj):
             return None            # tool_result / „Request interrupted" = tura agenta
+        if TranscriptReader._is_compact_summary(obj):
+            return None            # streszczenie po skróceniu rozmowy ≠ wiadomość usera
         content = (obj.get("message") or {}).get("content")
         if isinstance(content, str):
             return content
@@ -735,7 +737,23 @@ class TranscriptReader:
         """
         if obj.get("isSidechain") or obj.get("isMeta"):
             return False
+        if TranscriptReader._is_compact_summary(obj):
+            return False
         return obj.get("type") in ("assistant", "user")
+
+    @staticmethod
+    def _is_compact_summary(obj: dict) -> bool:
+        """Czy to STRESZCZENIE, które Claude Code wkleja po skróceniu rozmowy?
+
+        Przy auto-kompakcji (także „Compacted while idle" — bez udziału usera)
+        Claude Code dopisuje wpis roli `user` z `isCompactSummary: true`
+        („This session is being continued…"). To notatka techniczna, nie
+        wiadomość człowieka: nikt na nią nie odpowiada. Liczona jako rozmowa
+        robiła z bezczynnego agenta „winnego odpowiedź" → 🔊 uznawał dziennik
+        za zamrożony i czytał z ekranu śmieci („Brewed for · done 9:11 AM
+        Referenced file Compacted while idle…" — zmierzone 2026-10-12, 2×).
+        """
+        return bool(obj.get("isCompactSummary"))
 
     @staticmethod
     def _track_tools(obj: dict, pending: set):
@@ -865,6 +883,8 @@ class TranscriptReader:
             role = msg.get("role") if isinstance(msg, dict) else None
             if role == "user" and skip_agent_turns and self._is_agent_turn_userentry(obj):
                 continue   # wynik narzędzia / przerwanie — nie granica użytkownika
+            if role == "user" and skip_agent_turns and self._is_compact_summary(obj):
+                continue   # streszczenie po skróceniu rozmowy — nie granica użytkownika
             if role in ("assistant", "user"):
                 return role
             # wpis bez roli (snapshot itp.) — szukaj dalej wstecz
