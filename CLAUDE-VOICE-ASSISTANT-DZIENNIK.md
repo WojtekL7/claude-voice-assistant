@@ -8,6 +8,13 @@ w zeszły czwartek", na które `git log` odpowiada zbyt drobno. Wpis: 3–8 lini
 
 ---
 
+## 2026-10-12
+
+- **Start:** lista „co wisi" zmierzona — beta od 09:04 ma oba commity z 09.10; 0 dyktowań od restartu; w `webterminal.log` 2× strażnik pustego pasa (`roznic=0`, dziura w pamięci — nie wiadomo, czy user widział dziurę); kontrakt sufitu AI Managera domknięty ich zwrotką (`e4c1145`).
+- **🔊 czytał śmieci z ekranu:** przyczyna = streszczenie po auto-kompakcji („Compacted while idle") brane za wiadomość usera. Poprawka `520580a` (stan tury + 🔍 + ostatnia granica), bramka 59/0, sabotaż 3 FAIL, oba dzisiejsze przypadki na kopiach dzienników OK.
+
+**Zostaje otwarte:** test 🔊 na żywo 2026-10-13; testy z 09.10 (dyktowanie, pusty pas); dwa starsze odczyty śmieci (jeden z „※ recap") niesprawdzone; odchudzenie pliku pamięci.
+
 ## 2026-10-09
 
 - **Długie dyktowanie (504):** zmierzone na bramce — do ~2200 zn. OK, od 2500 zn. zawsze `504` (sufit AI Managera 3 s). U nas nic nie ginie. Nasz limit 5 → 12 s, bezpiecznik zawieszenia 15 → 30 s; prośba do AI Managera o 10 s (kontrakt + wpis u nich `af3c108`).
