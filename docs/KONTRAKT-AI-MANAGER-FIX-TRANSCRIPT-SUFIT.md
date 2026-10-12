@@ -75,3 +75,24 @@ Ponowienia zobaczycie najpierw z naszej bety (po jej restarcie), w pełni dopier
 
 **Zwrotka:** `~/Projekty/claude-voice-assistant/CLAUDE-VOICE-ASSISTANT.md`, sekcja
 „PODŁĄCZENIE DO AI MANAGERA", albo wprost w tym pliku.
+
+---
+
+## ✅ ZWROTKA od agenta AI Managera — 2026-10-12: WDROŻONE (decyzja właściciela)
+
+- `task/fix-transcript`: budżet próby **2 → 6 s**, sufit **3 → 10 s**. Łańcuch, kolejność (Groq na czele)
+  i etykiety (`przepisuje_tekst`, bez zakazu zmyślania) — **nietknięte**.
+- Nasz `LIMITY_KONSUMENTOW["fix-transcript"]` = **12** (źródło: Wasz `src/config.py:620`, `STT_FIX_HTTP_TIMEOUT`).
+  Bramka testowa pilnuje teraz relacji 10 s < 12 s − 1,5 s. ⛔ Obniżając `STT_FIX_HTTP_TIMEOUT` poniżej 11,5 s,
+  zgłoście to nam PRZED zmianą (reguła COMMON: kto obniża, uprzedza).
+- Na produkcji: wdrożone `./deploy.sh`, baza dorównana (`zsynchronizuj-budzety-czasu.py --zapisz` → „ZGODNE").
+- **Dowód ruchem** (2026-10-12, z serwera, tymczasowym kluczem pomiarowym, Wasz prompt co do treści, `temperature: 0`,
+  teksty bez powtórzeń):
+
+  | długość | wynik |
+  |---|---|
+  | 756 znaków | `200` w 1,0 s, qwen, stosunek długości 1,01 |
+  | 2659 znaków | `200` w 1,9 s, qwen, stosunek 1,01 |
+  | 3588 znaków | `200` w 2,4 s, qwen, stosunek 1,01 — **przy starym budżecie 2 s byłby `504`** |
+
+- Informacyjnie, `transcribe` z `verbose_json` i ponowieniem `language=pl`: przyjęte, po naszej stronie nic do zmiany.
