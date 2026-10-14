@@ -1635,6 +1635,11 @@ UI_TRANSLATIONS = {
         "dlg_stt_failed_title": "Dyktowanie nie doszło",
         "dlg_stt_failed_msg": ("Nagranie nie zostało rozpoznane, więc nic nie wpisałem w pole poleceń.\n\n"
                                "Powód: {reason}\n\nPowiedz to jeszcze raz."),
+        # Lektor — sieć nie wróciła, reszta wypowiedzi NIE została przeczytana (2026-10-14).
+        "dlg_tts_net_lost_title": "Czytanie przerwane",
+        "dlg_tts_net_lost_msg": ("Lektor przerwał czytanie w połowie, bo przez {secs} s nie było internetu.\n\n"
+                                 "Reszta wypowiedzi NIE została przeczytana. Gdy internet wróci, "
+                                 "kliknij 🔊, żeby przeczytać ją jeszcze raz."),
         "dlg_anthropic_key_title": "Klucz API Anthropic",
         "dlg_anthropic_key_prompt": "Podaj klucz API Anthropic (Claude):\n\nAktualny: {key}",
         "dlg_anthropic_key_saved": "Klucz API Anthropic został zapisany.",
@@ -2535,6 +2540,11 @@ UI_TRANSLATIONS = {
         "dlg_stt_failed_title": "Dictation did not arrive",
         "dlg_stt_failed_msg": ("The recording was not recognised, so nothing was typed into the command field.\n\n"
                                "Reason: {reason}\n\nPlease say it again."),
+        # Reader — the network did not come back, the rest was NOT read (2026-10-14).
+        "dlg_tts_net_lost_title": "Reading interrupted",
+        "dlg_tts_net_lost_msg": ("The reader stopped halfway because there was no internet for {secs} s.\n\n"
+                                 "The rest of the reply was NOT read. When the internet is back, "
+                                 "click 🔊 to read it again."),
         "dlg_anthropic_key_title": "Anthropic API key",
         "dlg_anthropic_key_prompt": "Enter your Anthropic (Claude) API key:\n\nCurrent: {key}",
         "dlg_anthropic_key_saved": "The Anthropic API key has been saved.",

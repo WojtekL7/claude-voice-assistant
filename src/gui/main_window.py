@@ -171,6 +171,7 @@ class SignalBridge(QObject):
     error_received = pyqtSignal(str)
     tts_state_changed = pyqtSignal(object)
     tts_finished = pyqtSignal()
+    tts_network_lost = pyqtSignal(float)
     stt_state_changed = pyqtSignal(object)
     stt_transcription = pyqtSignal(str)
     stt_error = pyqtSignal(str)
@@ -2395,6 +2396,7 @@ class MainWindow(QMainWindow):
         self.signals.error_received.connect(self._on_claude_error)
         self.signals.tts_state_changed.connect(self._on_tts_state_changed)
         self.signals.tts_finished.connect(self._on_tts_finished)
+        self.signals.tts_network_lost.connect(self._on_tts_network_lost)
         self.signals.stt_state_changed.connect(self._on_stt_state_changed)
         self.signals.stt_transcription.connect(self._on_transcription)
         self.signals.stt_error.connect(self._on_stt_error)
@@ -2407,6 +2409,7 @@ class MainWindow(QMainWindow):
         # TTS - emit signals instead of direct callbacks
         self.tts.on_state_changed = lambda s: self.signals.tts_state_changed.emit(s)
         self.tts.on_finished = lambda: self.signals.tts_finished.emit()
+        self.tts.on_network_lost = lambda secs: self.signals.tts_network_lost.emit(secs)
 
         # STT - emit signals instead of direct callbacks
         self.stt.on_state_changed = lambda s: self.signals.stt_state_changed.emit(s)
@@ -3355,6 +3358,30 @@ class MainWindow(QMainWindow):
         self._speaker_anim_timer.stop()
         tab.read_btn.setIcon(self._icon('read', 'normal'))
         self._update_status(tr('status_ready'))
+
+    def _on_tts_network_lost(self, secs: float):
+        """Lektor przerwał czytanie, bo sieć nie wróciła — POWIEDZ to wprost.
+
+        Dawniej (do 2026-10-14) brak sieci kończył się CISZĄ: silnik wyrzucał
+        resztę zdań w ułamku sekundy, a jego dzwonek błędów (`on_error`) nie był
+        nigdzie podłączony. Pasek stanu tu nie wystarcza — zaraz po przerwaniu
+        lektor wchodzi w spoczynek i ten sam pasek dostaje „Gotowy" (ta sama
+        pułapka co przy dyktowaniu, patrz `_on_stt_error`). Stąd okno:
+        NIEMODALNE (nie blokuje pracy) i najwyżej raz na 5 minut.
+        """
+        ostatnie = getattr(self, '_tts_net_dialog_at', 0.0)
+        if time.monotonic() - ostatnie < 300:
+            return
+        self._tts_net_dialog_at = time.monotonic()
+        okno = QMessageBox(self)
+        okno.setIcon(QMessageBox.Warning)
+        okno.setWindowTitle(tr('dlg_tts_net_lost_title'))
+        okno.setText(tr('dlg_tts_net_lost_msg').format(secs=int(round(secs))))
+        okno.setStandardButtons(QMessageBox.Ok)
+        okno.setWindowModality(Qt.NonModal)
+        # Referencja MUSI przeżyć wyjście z metody (inaczej okno znika od razu).
+        self._tts_net_dialog = okno
+        okno.show()
 
     def _on_stt_state_changed(self, state: STTState):
         """Handle STT state change."""

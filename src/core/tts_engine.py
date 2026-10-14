@@ -14,6 +14,7 @@ import queue
 import re
 import tempfile
 import threading
+import time
 import os
 from typing import Optional, Callable
 from enum import Enum
@@ -101,6 +102,53 @@ TTS_GEN_TIMEOUT = 12
 # Ile razy łącznie próbować pobrać jedno zdanie, zanim je pominiemy.
 TTS_GEN_ATTEMPTS = 2
 
+# Ile sekund czekać, aż wróci SIEĆ, zanim przerwiemy czytanie (licząc od
+# pierwszej nieudanej próby). ZMIERZONE 2026-10-14: Wi-Fi zerwało się na 3 s
+# (15:28:55 → 15:28:58), a bez internetu każda próba pada w ułamku sekundy
+# (nie da się znaleźć serwera) — więc „2 próby i następne zdanie" wyrzuciło
+# 11 pozostałych zdań w JEDNEJ sekundzie i czytanie urwało się w pół
+# wypowiedzi, bez żadnego komunikatu. Brak sieci to nie wada zdania: czekamy
+# na nią i czytamy dalej OD TEGO SAMEGO zdania.
+TTS_NET_WAIT_SECS = 30
+# Odstępy między próbami podczas czekania na sieć (ostatni się powtarza).
+TTS_NET_RETRY_DELAYS = (1, 2, 4, 8)
+
+
+def is_network_error(exc: BaseException) -> bool:
+    """Czy błąd znaczy „brak połączenia", a nie „serwer odrzucił zdanie"?
+
+    Sieć: nie da się znaleźć serwera (DNS), połączyć ani utrzymać połączenia.
+    NIE sieć (stare zachowanie — pomiń zdanie): serwer ODPOWIEDZIAŁ odmową
+    (np. 403 po zmianie tokenu Microsoftu), brak dźwięku w odpowiedzi,
+    przekroczenie czasu (już kosztowało 12 s na próbę — czekanie dalej
+    zamieniłoby zatkany serwer w minuty ciszy na każdym zdaniu).
+
+    ⚠️ KOLEJNOŚĆ SPRAWDZEŃ MA ZNACZENIE: w Pythonie TimeoutError jest
+    podklasą OSError, więc limit czasu wykluczamy NAJPIERW.
+    ⚠️ Nie zastępuj ClientConnectionError szerszym aiohttp.ClientError —
+    złapałby odmowy serwera (ClientResponseError, np. 403) i lektor czekałby
+    30 s na KAŻDYM zdaniu, którego serwer i tak nie przyjmie. (Osobnego
+    wykluczenia odmów nie ma, bo w aiohttp nie są one ani OSError, ani
+    błędem połączenia — zmierzone 2026-10-14; pilnuje tego bramka, A5.)
+    """
+    if isinstance(exc, (asyncio.TimeoutError, TimeoutError)):
+        return False
+    try:
+        import aiohttp
+        if isinstance(exc, aiohttp.ClientConnectionError):
+            return True
+    except ImportError:
+        pass
+    return isinstance(exc, OSError)
+
+
+class _NetworkGaveUp(Exception):
+    """Sieć nie wróciła w TTS_NET_WAIT_SECS — przerwij czytanie całej reszty."""
+
+    def __init__(self, waited: float):
+        super().__init__(f"brak sieci od {waited:.0f} s")
+        self.waited = waited
+
 # Maksymalna długość JEDNEGO kawałka wysyłanego do edge-tts (znaki).
 # Krótkie kawałki pobierają się szybko → twardy limit czasu (TTS_GEN_TIMEOUT)
 # praktycznie nigdy nie strzela → brak „dziur" i przeskoków w czytaniu. Tekst
@@ -154,6 +202,10 @@ class TTSEngine:
         self.on_progress: Optional[Callable[[int, int], None]] = None
         self.on_finished: Optional[Callable[[], None]] = None
         self.on_error: Optional[Callable[[str], None]] = None
+        # Czytanie PRZERWANE, bo sieć nie wróciła (argument: ile sekund
+        # czekaliśmy). Osobno od on_error, bo to jedyny błąd, o którym
+        # użytkownik MUSI się dowiedzieć — reszta wypowiedzi przepadła.
+        self.on_network_lost: Optional[Callable[[float], None]] = None
 
         # Initialize pygame mixer — defensywnie: na komputerze BEZ urządzenia
         # audio (brak głośników/sterownika, pulpit zdalny, maszyna CI) init()
@@ -476,7 +528,23 @@ class TTSEngine:
             if stop_event.is_set():
                 break
 
-            path = self._generate_audio(sentence)
+            try:
+                path = self._generate_audio(sentence, stop_event)
+            except _NetworkGaveUp as e:
+                # Sieć nie wróciła: NIE mielimy reszty kolejki po cichu (każde
+                # zdanie padłoby w ułamku sekundy). Wyrzucamy ją JAWNIE i mówimy
+                # o tym użytkownikowi; to, co już pobrane, odtwarzacz dogra.
+                left = self._drain_queue(pending)
+                self._log_error(
+                    f"BRAK SIECI od {e.waited:.0f}s — przerywam czytanie, "
+                    f"nieprzeczytanych zdan: {len(left) + 1}"
+                )
+                if self.on_network_lost and not stop_event.is_set():
+                    try:
+                        self.on_network_lost(e.waited)
+                    except Exception:
+                        pass
+                continue
             if stop_event.is_set():
                 break
             if not path:
@@ -548,14 +616,26 @@ class TTSEngine:
                 except Exception:
                     pass
 
-    def _generate_audio(self, text: str) -> Optional[str]:
+    def _generate_audio(self, text: str,
+                        stop_event: Optional[threading.Event] = None) -> Optional[str]:
         """Generate audio file for text using edge-tts.
 
         Pobranie JEDNEGO zdania ma twardy limit czasu (TTS_GEN_TIMEOUT) i jest
         ponawiane do TTS_GEN_ATTEMPTS razy. Gdy wszystkie próby zawiodą,
         zwracamy None — wątek-generator pominie to zdanie i pójdzie dalej,
         zamiast wisieć w nieskończoność na zatkanym serwerze/sieci.
+
+        WYJĄTEK — brak SIECI (is_network_error): to nie wada zdania, więc nie
+        zużywa prób. Czekamy na sieć (TTS_NET_RETRY_DELAYS) i ponawiamy TO SAMO
+        zdanie; po TTS_NET_WAIT_SECS rzucamy _NetworkGaveUp, a wątek-generator
+        przerywa czytanie i zgłasza to użytkownikowi.
+
+        `stop_event` = event TEJ sesji czytania (z _gen_loop). self._stop_event
+        bywa podmieniany przez stop(), więc czekanie na nim mogłoby nie
+        zauważyć „Stop" klikniętego w trakcie czekania na sieć.
         """
+        if stop_event is None:
+            stop_event = self._stop_event
         try:
             temp_file = tempfile.NamedTemporaryFile(
                 suffix='.mp3', delete=False, prefix='claude_tts_'
@@ -569,14 +649,42 @@ class TTSEngine:
         with self._lock:
             self._temp_files.add(temp_path)
 
-        for attempt in range(1, TTS_GEN_ATTEMPTS + 1):
-            if self._stop_event.is_set():
+        attempt = 0
+        net_down_since = None
+        net_tries = 0
+        while attempt < TTS_GEN_ATTEMPTS:
+            if stop_event.is_set():
                 self._safe_remove(temp_path)
                 return None
             try:
                 asyncio.run(self._async_generate(text, temp_path))
+                if net_down_since is not None:
+                    self._log_error(
+                        f"siec wrocila po {time.monotonic() - net_down_since:.1f}s "
+                        f"({net_tries} prob) — czytam dalej od tego samego zdania"
+                    )
                 return temp_path
             except Exception as e:
+                if is_network_error(e):
+                    now = time.monotonic()
+                    if net_down_since is None:
+                        net_down_since = now
+                        self._log_error(
+                            f"BRAK SIECI: {type(e).__name__}: {e} — czekam do "
+                            f"{TTS_NET_WAIT_SECS}s, zdanie NIE jest pomijane"
+                        )
+                    waited = now - net_down_since
+                    if waited >= TTS_NET_WAIT_SECS:
+                        self._safe_remove(temp_path)
+                        raise _NetworkGaveUp(waited)
+                    delay = TTS_NET_RETRY_DELAYS[min(net_tries, len(TTS_NET_RETRY_DELAYS) - 1)]
+                    net_tries += 1
+                    # Event.wait zamiast sleep: „Stop" w trakcie czekania działa od razu.
+                    if stop_event.wait(min(delay, TTS_NET_WAIT_SECS - waited)):
+                        self._safe_remove(temp_path)
+                        return None
+                    continue
+                attempt += 1
                 self._log_error(
                     f"próba {attempt}/{TTS_GEN_ATTEMPTS} nie powiodła się "
                     f"(limit={TTS_GEN_TIMEOUT}s): {type(e).__name__}: {e}"
