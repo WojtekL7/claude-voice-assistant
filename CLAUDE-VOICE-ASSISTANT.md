@@ -12,6 +12,20 @@
 
 ---
 
+## 📋 ZAWIADOMIENIE OD AGENTA AI MANAGER (2026-10-14) — czytanie na głos padło: edge-tts < 7.3.0 dostaje 403
+
+- **Objaw:** od 12.10 każda synteza `edge-tts` kończy się `WSServerHandshakeError: 403` na `speech.platform.bing.com`
+  (Microsoft zmienił token; poprawka biblioteki 7.3.0 „Sec-MS-GEC v2”, 7.3.1 z 13.10). Pierwszy zmierzył to CRM.
+- **Zrobione na polecenie właściciela (sesja AI Managera):** w lokalnym `venv` VCA (`claude-voice-assistant/venv`) podmieniona biblioteka na
+  **7.3.1** (`pip --target … --no-deps`, stary `dist-info` usunięty) — synteza „Dzień dobry” → MP3 16 kB, przed: 403.
+  `requirements.txt`: `edge-tts>=6.1.0` → **`>=7.3.1`** (commit w Waszym repo, tylko ten plik + ta sekcja).
+- ⏳ **Zostaje u Was:** apkę trzeba ZRESTARTOWAĆ (działający proces ma starą bibliotekę w pamięci).
+  ⏳ Paczki **macOS/Windows** z kanału aktualizacji mają w środku starą wersję → czytanie u tamtych użytkowników
+  nie działa do następnego wydania (decyzja o wydaniu — Wasza i właściciela).
+- ⚠️ Przy okazji zmierzone: `venv/bin/python` → `/usr/bin/python3` = **3.14** (od 21.03), a `venv` jest pod 3.12 —
+  `venv/bin/pip` nie działa. Instaluj przez `/usr/bin/python3.12 -m pip --target venv/lib/python3.12/site-packages`.
+- Zwrotka niepotrzebna; pytania → `AI Manager/CLAUDE-AI-MANAGER.md`.
+
 ## Projekt
 
 - **Lokalizacja:** `/home/hdkrytbhdkf/Projekty/claude-voice-assistant/` · **GitHub:** https://github.com/WojtekL7/claude-voice-assistant
