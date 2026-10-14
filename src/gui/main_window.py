@@ -2094,6 +2094,8 @@ class MainWindow(QMainWindow):
             self.bottom_panel = current_tab.bottom_panel
             self.input_field = current_tab.input_field
             self._terminal_output_buffer = current_tab._terminal_output_buffer
+            # Kolor panelu według stanu okna (patrz _paint_bottom_panels).
+            self._paint_bottom_panels()
 
     def _get_current_agent_tab(self) -> Optional[AgentTab]:
         """Get current agent tab."""
@@ -5592,8 +5594,11 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         # Button icon styles (transparent with colored icons)
         self._apply_button_icon_styles()
 
-        # Store inactive panel color for changeEvent
-        self._inactive_panel_bg = colors['inactive_panel_bg']
+        # Kolory paneli zapamiętane dla changeEvent i zmiany zakładki;
+        # `apply_styles` wyżej pomalował panele na „aktywny" nawet przy
+        # nieaktywnym oknie — popraw według stanu okna.
+        self._panel_colors = colors
+        self._paint_bottom_panels(colors, force=True)
 
         # Apply terminal colors to all tabs
         self._apply_terminal_colors(colors)
@@ -6497,25 +6502,51 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
                         self.terminal_backend.repaint_check("okno")
                     except Exception:
                         pass
-                # Window is active - use custom bottom panel color
-                self.bottom_panel.setStyleSheet(f"""
-                    QFrame {{
-                        background-color: {self.skin_colors['bottom_panel_bg']};
-                        border-radius: 10px;
-                        padding: 5px;
-                    }}
-                """)
-            else:
-                # Window is inactive - use custom inactive color
-                inactive_bg = getattr(self, '_inactive_panel_bg', self.skin_colors.get('inactive_panel_bg', f'{theme.SURFACE_INACTIVE}'))
-                self.bottom_panel.setStyleSheet(f"""
-                    QFrame {{
-                        background-color: {inactive_bg};
-                        border-radius: 10px;
-                        padding: 5px;
-                    }}
-                """)
+            self._paint_bottom_panels()
         super().changeEvent(event)
+
+    def _paint_bottom_panels(self, colors: dict = None, force: bool = False):
+        """Pomaluj dolne panele WSZYSTKICH zakładek według stanu okna W TEJ CHWILI.
+
+        Panel bieżącej zakładki: kolor „nieaktywny" tylko, gdy okno nie ma
+        fokusu. Panele pozostałych zakładek: zawsze kolor zwykły — są ukryte,
+        a gdy któraś wróci na wierzch, ta funkcja i tak przemaluje ją od nowa.
+
+        PO CO (zgłoszenie 2026-10-14, zrzut 16:52): każda zakładka ma WŁASNY
+        panel, a kolor zmieniało tylko `changeEvent` i tylko na panelu bieżącej
+        zakładki. Gdy zakładka zmieniła się przy nieaktywnym oknie (klik
+        w zakładkę obcego okna dociera PRZED sygnałem aktywacji), panel
+        poprzedniej zostawał „nieaktywny" na stałe — po powrocie do niej przy
+        aktywnym oknie nikt go nie przemalowywał. Dlatego wołamy to i przy
+        aktywacji, i przy KAŻDEJ zmianie zakładki: wynik nie zależy od
+        kolejności zdarzeń.
+
+        `force` — po `apply_styles` (zmiana skórki) arkusz panelu został
+        nadpisany bez wiedzy pamięci podręcznej, więc malujemy bez sprawdzania.
+        """
+        if colors is None:
+            colors = getattr(self, '_panel_colors', None) or self.skin_colors
+        active_bg = colors.get('bottom_panel_bg', theme.BG_PANEL)
+        inactive_bg = colors.get('inactive_panel_bg', theme.SURFACE_INACTIVE)
+        okno_aktywne = self.isActiveWindow()
+        for tab in list(getattr(self, 'agent_tabs', {}).values()):
+            panel = getattr(tab, 'bottom_panel', None)
+            if panel is None:
+                continue
+            nieaktywny = panel is getattr(self, 'bottom_panel', None) and not okno_aktywne
+            bg = inactive_bg if nieaktywny else active_bg
+            # setStyleSheet przestylowuje wszystkie przyciski panelu — przy
+            # przełączaniu zakładek nie rób tego, gdy kolor już się zgadza.
+            if not force and panel.property('_vca_panel_bg') == bg:
+                continue
+            panel.setStyleSheet(f"""
+                QFrame {{
+                    background-color: {bg};
+                    border-radius: 10px;
+                    padding: 5px;
+                }}
+            """)
+            panel.setProperty('_vca_panel_bg', bg)
 
 
 def _fit_icon_button(btn, width: int, min_height: int):
