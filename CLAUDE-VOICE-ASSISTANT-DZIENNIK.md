@@ -8,6 +8,12 @@ w zeszły czwartek", na które `git log` odpowiada zbyt drobno. Wpis: 3–8 lini
 
 ---
 
+## 2026-10-14
+
+- **Naprawa VCA po upgrade Ubuntu 24.04 → 26.04:** Python 3.12 → 3.14, stare venv zepsute.
+- **Odtworzenie venv:** `rm -rf venv && python3 -m venv venv && pip install -r requirements.txt` + `apt install python3.14-venv libsdl2-dev libfreetype6-dev`.
+- **Bug naprawiony (`59e63bb`):** `prefer_webengine_terminal()` zwracało False na Linuksie, mimo że WebTerminal domyślny wszędzie od 2026-07-11 → brak `Qt.AA_ShareOpenGLContexts` → crash.
+
 ## 2026-10-12
 
 - **Start:** lista „co wisi" zmierzona — beta od 09:04 ma oba commity z 09.10; 0 dyktowań od restartu; w `webterminal.log` 2× strażnik pustego pasa (`roznic=0`, dziura w pamięci — nie wiadomo, czy user widział dziurę); kontrakt sufitu AI Managera domknięty ich zwrotką (`e4c1145`).

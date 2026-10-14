@@ -22,14 +22,17 @@
 - ⏳ **Zostaje u Was:** apkę trzeba ZRESTARTOWAĆ (działający proces ma starą bibliotekę w pamięci).
   ⏳ Paczki **macOS/Windows** z kanału aktualizacji mają w środku starą wersję → czytanie u tamtych użytkowników
   nie działa do następnego wydania (decyzja o wydaniu — Wasza i właściciela).
-- ⚠️ Przy okazji zmierzone: `venv/bin/python` → `/usr/bin/python3` = **3.14** (od 21.03), a `venv` jest pod 3.12 —
-  `venv/bin/pip` nie działa. Instaluj przez `/usr/bin/python3.12 -m pip --target venv/lib/python3.12/site-packages`.
+- ✅ **venv ODTWORZONE POD PYTHON 3.14 (2026-10-14):** po upgrade Ubuntu 24.04 → 26.04 stare venv (3.12)
+  przestało działać. Naprawione: `rm -rf venv && python3 -m venv venv && pip install -r requirements.txt`.
+  Wymagało też `sudo apt install python3.14-venv libsdl2-dev libfreetype6-dev` (pygame).
+- ✅ **Bug naprawiony (`59e63bb`):** `prefer_webengine_terminal()` zwracało False na Linuksie, mimo że
+  WebTerminal jest domyślny wszędzie od 2026-07-11. Efekt: brak `Qt.AA_ShareOpenGLContexts` → crash.
 - Zwrotka niepotrzebna; pytania → `AI Manager/CLAUDE-AI-MANAGER.md`.
 
 ## Projekt
 
 - **Lokalizacja:** `/home/hdkrytbhdkf/Projekty/claude-voice-assistant/` · **GitHub:** https://github.com/WojtekL7/claude-voice-assistant
-- **Tech:** Python 3.12, PyQt5, QTermWidget (Linux), WebTerminal = xterm.js+QtWebEngine+PTY (Mac/Win), edge-tts, Groq Whisper, pygame
+- **Tech:** Python 3.14, PyQt5, QTermWidget (Linux), WebTerminal = xterm.js+QtWebEngine+PTY (Mac/Win), edge-tts, Groq Whisper, pygame
 - **Czym jest:** „pilot" nad CLI **Claude Code** — uruchamia `claude` w terminalu, dokłada głos (TTS/STT), zakładki agentów, MCP/Skills, skórki, auto-aktualizację. **Apka NIE hostuje modelu ani nie zawiera CLI** — konto/logowanie siedzi u usera (`~/.claude`).
 
 ```bash
