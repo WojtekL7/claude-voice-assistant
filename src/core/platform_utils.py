@@ -166,14 +166,11 @@ def prefer_webengine_terminal() -> bool:
     QtWebEngine). Celowo LEKKA — nie importuje QTermWidget ani WebTerminala,
     by main.py mógł ją wywołać u samego startu.
 
-    Reguła: macOS/Windows → zawsze (tam terminalem jest WebTerminal);
-    Linux → tylko gdy CVA_WEBTERMINAL=1 (tryb testowy). Pełną, dokładną decyzję
-    (z uwzględnieniem braku QTermWidget) podejmuje
-    terminal_backend.selected_backend_kind() już po starcie QApplication.
+    ZMIANA 2026-10-14: WebTerminal domyślny WSZĘDZIE (od 2026-07-11, decyzja
+    w terminal_backend.selected_backend_kind()). QTermWidget tylko gdy
+    CVA_QTERMWIDGET=1 — wtedy NIE potrzebujemy QtWebEngine.
     """
-    if is_macos() or is_windows():
-        return True
-    return os.environ.get("CVA_WEBTERMINAL") == "1"
+    return os.environ.get("CVA_QTERMWIDGET") != "1"
 
 
 # ==================== Powłoka / proces ====================
