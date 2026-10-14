@@ -13,6 +13,12 @@ w zeszły czwartek", na które `git log` odpowiada zbyt drobno. Wpis: 3–8 lini
 - **Naprawa VCA po upgrade Ubuntu 24.04 → 26.04:** Python 3.12 → 3.14, stare venv zepsute.
 - **Odtworzenie venv:** `rm -rf venv && python3 -m venv venv && pip install -r requirements.txt` + `apt install python3.14-venv libsdl2-dev libfreetype6-dev`.
 - **Bug naprawiony (`59e63bb`):** `prefer_webengine_terminal()` zwracało False na Linuksie, mimo że WebTerminal domyślny wszędzie od 2026-07-11 → brak `Qt.AA_ShareOpenGLContexts` → crash.
+- **Start po naprawie:** lista „co wisi" zmierzona — lektor po edge-tts 7.3.1 bez 403, dyktowanie OK (poprawki 0,6–1,4 s), 🔊 5× `ŹRÓDŁO=DZIENNIK`, pusty pas 3× rysowanie / 1× wina Claude.
+- **Lektor urywał czytanie (`e544499`):** zmierzone — Wi-Fi zerwało się na 3 s, silnik w tej samej sekundzie wyrzucił 11 zdań bez komunikatu. Teraz czeka do 30 s na sieć i czyta dalej; potem okno „Czytanie przerwane". Bramka 27/27, sabotaż 9/9.
+- **Dolny panel „nieaktywny" przy aktywnym oknie (`f2c289d`):** panel per zakładka malowany tylko przy aktywacji okna → teraz też przy każdej zmianie zakładki i skórce. Bramka 10/10, sabotaż 5/5.
+- **Regresja:** 28 bramek zielonych, 4 czerwone niezależne od zmian (niezbadane).
+
+**Zostaje otwarte:** test obu poprawek na żywo 2026-10-15 po restarcie bety; wydanie 1.0.30 (Mac/Win bez czytania przez starą edge-tts); 4 czerwone bramki; odchudzenie pliku pamięci (~506 linii).
 
 ## 2026-10-12
 
