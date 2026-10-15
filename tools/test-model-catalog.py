@@ -18,6 +18,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+# ⛔ ATRAPA HOME (od 2026-10-15). `config` przy imporcie nakłada PRAWDZIWY plik
+# podręczny katalogu modeli użytkownika (~/.vibe-coding-assistant/models-cache.json).
+# Zmierzone: 12.10 apka pobrała Haiku 5.5 i test, który miał sprawdzać KOD, zaczął
+# sprawdzać to, co akurat przyszło z internetu — czerwony, choć program działał.
+# Test ma widzieć wartości wbudowane + katalogi, które sam jawnie nałoży.
+import os as _os_home  # noqa: E402
+import tempfile as _tf_home  # noqa: E402
+_ATRAPA_HOME = _tf_home.TemporaryDirectory(prefix="vca-test-home-")
+_os_home.environ["HOME"] = _ATRAPA_HOME.name
+
 from core import model_catalog as mc  # noqa: E402
 
 FIXTURE = ROOT / "tools" / "fixtures" / "models-overview-2026-07-26.md"
@@ -537,6 +547,48 @@ try:
           _haiku == _t("dlg_effort_model_default"), _haiku)
 except Exception as _exc:  # brak Qt w środowisku = jawny FAIL, nie cisza
     check("OKNO: pomiar skutku wykonany", False, repr(_exc))
+
+# ------------------------------------------------ Haiku 5.5 (strona z 2026-10-15)
+# Premiera Haiku 5.5: apka pobrała go 12.10, wartość wbudowana stała na „Haiku 4.5"
+# do 15.10. Testy sprawdzają (a) stronę z tego dnia, (b) wartości wbudowane —
+# dzięki atrapie HOME widzimy KOD, nie plik użytkownika.
+cat_1015 = mc.parse_catalog(
+    (ROOT / "tools" / "fixtures" / "models-overview-2026-10-15.md").read_text(encoding="utf-8"))
+check("strona z 2026-10-15: Haiku 5.5, cena 0,10 / 0,50, wysiłek medium, 1 mln",
+      (cat_1015["haiku"].get("name"), cat_1015["haiku"].get("price_input"),
+       cat_1015["haiku"].get("price_output"), cat_1015["haiku"].get("default_effort"),
+       cat_1015["haiku"].get("context_window")) == ("Haiku 5.5", 0.1, 0.5, "medium", 1_000_000),
+      cat_1015.get("haiku"))
+_wb = _sp.run(
+    [sys.executable, "-B", "-c",
+     "import json,sys; sys.path.insert(0,sys.argv[1]); import config as c; "
+     "print(json.dumps([c.CLAUDE_MODELS['haiku'], c.CLAUDE_MODEL_PRICES['haiku'], "
+     "c.CLAUDE_MODEL_DEFAULT_EFFORT.get('haiku'), c.CLAUDE_MODEL_CONTEXT_LIMITS['haiku']]))",
+     str(ROOT / "src")],
+    capture_output=True, text=True, timeout=60,
+    env={**_os_home.environ, "HOME": _tf_home.mkdtemp(prefix="vca-test-home-")})
+try:
+    _wb = _json.loads(_wb.stdout.strip().splitlines()[-1])
+except Exception:
+    _wb = _wb.stderr[-300:]
+_sn = _sp.run([sys.executable, "-B", "-c",
+               "import sys; sys.path.insert(0,sys.argv[1]); import config as c; print(c.CLAUDE_MODELS['sonnet'])",
+               str(ROOT / "src")], capture_output=True, text=True, timeout=60,
+              env={**_os_home.environ, "HOME": _tf_home.mkdtemp(prefix="vca-test-home-")}).stdout.strip()
+check("WBUDOWANE (bez pliku podręcznego): Sonnet 5.5 — zgodnie ze stroną z 2026-10-15",
+      _sn == "Sonnet 5.5" == cat_1015["sonnet"].get("name"), (_sn, cat_1015["sonnet"].get("name")))
+check("WBUDOWANE (bez pliku podręcznego): Haiku 5.5 / 0,1–0,5 / medium / 1 mln",
+      _wb == ["Haiku 5.5", {"input": 0.1, "output": 0.5}, "medium", 1_000_000], _wb)
+# Strona bez wiersza wysiłku W OGÓLE (zmiana formatu) NIE kasuje wbudowanego.
+cfg.apply_model_catalog(cat_1015)
+cfg.apply_model_catalog({k: {kk: vv for kk, vv in v.items() if kk != "default_effort"}
+                         for k, v in cat_1015.items()})
+check("strona bez wiersza wysiłku nigdzie → wysiłek zostaje (to format, nie wiedza)",
+      cfg.model_default_effort("haiku") == "medium", cfg.model_default_effort("haiku"))
+# Kontrola odwrotna: starsza strona (Haiku 4.5 bez wysiłku, inne z nim) KASUJE go.
+cfg.apply_model_catalog(cat_0924)
+check("kontrola odwrotna: Haiku 4.5 po Haiku 5.5 → wysiłek skasowany, nie zgadnięty",
+      cfg.model_default_effort("haiku") is None, cfg.model_default_effort("haiku"))
 
 print(f"\n=== {_passed} OK / {_failed} FAIL ===")
 sys.exit(1 if _failed else 0)

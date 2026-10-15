@@ -28,6 +28,16 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+# ⛔ ATRAPA HOME (od 2026-10-15). `config` przy imporcie nakłada PRAWDZIWY plik
+# podręczny katalogu modeli użytkownika (~/.vibe-coding-assistant/models-cache.json).
+# Zmierzone: 12.10 apka pobrała Haiku 5.5 i test, który miał sprawdzać KOD, zaczął
+# sprawdzać to, co akurat przyszło z internetu — czerwony, choć program działał.
+# Test ma widzieć wartości wbudowane + katalogi, które sam jawnie nałoży.
+import os as _os_home  # noqa: E402
+import tempfile as _tf_home  # noqa: E402
+_ATRAPA_HOME = _tf_home.TemporaryDirectory(prefix="vca-test-home-")
+_os_home.environ["HOME"] = _ATRAPA_HOME.name
+
 FIX = ROOT / "tools" / "fixtures" / "hook-events-2026-09-14.jsonl"
 
 _passed = 0
@@ -109,6 +119,12 @@ check("śmieć zamiast zdarzenia → None zamiast wyjątku",
 # Model z hooka MUSI dać się przełożyć na naszą nazwę — inaczej pasek
 # pokazałby surowy identyfikator zamiast „Haiku 4.5".
 import config as cfg  # noqa: E402
+from core import model_catalog as mc  # noqa: E402
+# Zdarzenia nagrano 2026-09-14 (sesja na Haiku 4.5), więc mapujemy je katalogiem
+# z TEGO SAMEGO dnia — para zgodna w czasie. Do 2026-10-15 test brał katalog
+# z pliku użytkownika i poczerwieniał, gdy ten przeszedł na Haiku 5.5.
+cfg.apply_model_catalog(mc.parse_catalog(
+    (ROOT / "tools" / "fixtures" / "models-overview-2026-09-14.md").read_text(encoding="utf-8")))
 check("identyfikator z hooka mapuje się na klucz modelu apki",
       cfg.CLAUDE_MODEL_API_IDS.get("claude-haiku-4-5-20251001") == "haiku",
       cfg.CLAUDE_MODEL_API_IDS.get("claude-haiku-4-5-20251001"))

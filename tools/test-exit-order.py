@@ -14,6 +14,14 @@ ZMIERZONE WYNIKI (2026-08-07, PyQt5 na Linuksie, `offscreen`):
   • wzorzec NOWY  (`del window` + `gc.collect()`) → WINDOW ginie przed APP   [dobra]
 Kontrola negatywna JEST wbudowana: stary wzorzec MUSI wypaść źle. Gdyby oba wychodziły
 tak samo, test niczego nie dowodzi i jest zepsuty.
+
+⛔ ZMIERZONE 2026-10-15: na Pythonie 3.14 STARY wzorzec też niszczy okno pierwsze
+(['WINDOW', 'APP']) — sam interpreter zmienił kolejność sprzątania. Na 3.12 dalej
+wypada źle (['APP', 'WINDOW']), a paczki Mac/Windows budujemy na 3.12, więc poprawka
+w src/main.py jest nadal potrzebna. Dlatego kontrola negatywna NIE opiera się już na
+starym wzorcu: wzorzec „zly" CELOWO niszczy aplikację przed oknem i MUSI to zostać
+wykryte na każdym Pythonie (dowód, że pomiar widzi złą kolejność). Wynik starego
+wzorca zostaje w raporcie jako informacja.
 """
 import os
 import subprocess
@@ -44,6 +52,13 @@ def main():
 
     if WZORZEC == "stary":
         sys.exit(app.exec_())               # <- anty-wzorzec, przyczyna crashu
+    elif WZORZEC == "zly":
+        rc = app.exec_()                    # <- kontrola negatywna: zła kolejność NA PEWNO
+        del app
+        gc.collect()
+        del window
+        gc.collect()
+        sys.exit(rc)
     else:
         rc = app.exec_()                    # <- poprawka z src/main.py
         del window
@@ -66,7 +81,7 @@ def main() -> int:
     bledy = 0
     wyniki = {}
 
-    for wzorzec in ("stary", "nowy"):
+    for wzorzec in ("stary", "nowy", "zly"):
         kolejnosc, rc, err = zmierz(wzorzec)
         wyniki[wzorzec] = kolejnosc
         print(f"wzorzec {wzorzec:6} -> kolejnosc={kolejnosc or '(nic nie zmierzono)'} kod_wyjscia={rc}")
@@ -89,16 +104,23 @@ def main() -> int:
         print(f"[FAIL] nowy wzorzec ma zla kolejnosc: {nowy}")
         bledy += 1
 
-    # Kontrola negatywna: gdyby stary wzorzec tez byl poprawny, test nic nie rozroznia.
-    stary = wyniki.get("stary", [])
-    if stary[:2] == ["APP", "WINDOW"]:
-        print("[OK]   kontrola negatywna: stary wzorzec faktycznie ginie w ZLEJ kolejnosci")
-    elif stary == nowy:
-        print("[FAIL] stary i nowy daja TEN SAM wynik — test nie rozroznia, jest bezwartosciowy")
-        bledy += 1
+    # Kontrola negatywna: wzorzec „zly" niszczy aplikację PRZED oknem z premedytacją.
+    # Gdyby pomiar tego nie zobaczył, test niczego nie rozróżnia.
+    zly = wyniki.get("zly", [])
+    if zly[:2] == ["APP", "WINDOW"]:
+        print("[OK]   kontrola negatywna: pomiar WIDZI zla kolejnosc (wzorzec 'zly')")
     else:
-        print(f"[UWAGA] stary wzorzec dal nieoczekiwane {stary} — sprawdz recznie przed zaufaniem")
+        print(f"[FAIL] kontrola negatywna: wzorzec 'zly' dal {zly} — pomiar nie rozroznia, test bezwartosciowy")
         bledy += 1
+
+    # Informacja (nie bramka): zachowanie starego wzorca zależy od wersji Pythona.
+    stary = wyniki.get("stary", [])
+    wer = f"{sys.version_info.major}.{sys.version_info.minor}"
+    if stary[:2] == ["APP", "WINDOW"]:
+        print(f"[INFO] Python {wer}: stary wzorzec ginie w ZLEJ kolejnosci (jak na 3.12, na ktorym budujemy paczki)")
+    else:
+        print(f"[INFO] Python {wer}: stary wzorzec dal {stary} — ten interpreter sam sprzata w dobrej "
+              "kolejnosci; paczki Mac/Windows (Python 3.12) nadal potrzebuja poprawki")
 
     print()
     print("WYNIK:", "OK" if bledy == 0 else f"{bledy} BLEDOW")

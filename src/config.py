@@ -310,8 +310,12 @@ CLAUDE_MODELS = {
     # opus` oddaje `claude-opus-5-5`). Działająca apka i tak bierze nazwę
     # z katalogu — ta wartość chroni tylko start bez sieci / ze starym plikiem.
     "opus": "Opus 5.5",
-    "sonnet": "Sonnet 5",
-    "haiku": "Haiku 4.5",
+    # „Sonnet 5" → „Sonnet 5.5" 2026-10-15 (strona Anthropic; cena 2 / 10 i wysiłek
+    # `high` bez zmian). Ta sama usterka co Haiku: katalog wiedział, wbudowane nie.
+    "sonnet": "Sonnet 5.5",
+    # „Haiku 4.5" → „Haiku 5.5" 2026-10-15 (zmierzone na stronie Anthropic; apka
+    # pobrała go do katalogu już 12.10, a wartość awaryjna została w tyle).
+    "haiku": "Haiku 5.5",
     "claude-opus-4-8": "Opus 4.8",
 }
 # Krótka etykieta (pasek statusu, panel agentów) = sama nazwa modelu.
@@ -330,7 +334,7 @@ CLAUDE_MODEL_CONTEXT_LIMITS = {
     "fable":   1_000_000,
     "opus":    1_000_000,
     "sonnet":  1_000_000,   # Sonnet 5 ma 1 mln (do 2026-07 było tu 200 tys.)
-    "haiku":     200_000,
+    "haiku":   1_000_000,   # Haiku 5.5 ma 1 mln (Haiku 4.5 miał 200 tys.)
     "claude-opus-4-8": 1_000_000,
 }
 
@@ -345,18 +349,21 @@ CLAUDE_MODEL_PRICES = {
     "fable":  {"input": 10.0, "output": 50.0},
     "opus":   {"input": 4.0,  "output": 20.0},
     "sonnet": {"input": 2.0,  "output": 10.0},
-    "haiku":  {"input": 1.0,  "output": 5.0},
+    # Haiku 5.5: strona podaje „From $0.10 / From $0.50" (2026-10-15) — 10× taniej
+    # niż Haiku 4.5 (1 / 5). „From" = cena bazowa; parser katalogu bierze tę samą.
+    "haiku":  {"input": 0.1,  "output": 0.5},
 }
 
 # Domyślny poziom wysiłku, z jakim Claude Code uruchamia dany model (wiersz
 # „Default effort" na stronie Anthropic). PO CO: okno „Poziom wysiłku modeli"
 # ma pozycję „Domyślny modelu" — bez tej wiedzy człowiek nie wie, CO wybiera.
-# ⚠️ Też AWARYJNE — nadpisywane z katalogu. Stan strony z 2026-09-23. Haiku
-# na stronie tego wiersza nie ma, więc tu też go nie ma (nie zgadujemy).
+# ⚠️ Też AWARYJNE — nadpisywane z katalogu. Stan strony z 2026-10-15. Haiku 4.5
+# tego wiersza nie miał (nie zgadywaliśmy); Haiku 5.5 ma `medium`.
 CLAUDE_MODEL_DEFAULT_EFFORT = {
     "fable":  "high",
     "opus":   "medium",
     "sonnet": "high",
+    "haiku":  "medium",
 }
 
 # Model, na którym mają chodzić PODAGENCI (zadania w tle uruchamiane przez
@@ -428,7 +435,16 @@ def _apply_catalog_extras(models) -> None:
     Ruszamy tylko rodziny, które apka zna. Cenę nadpisujemy wyłącznie przy
     KOMPLECIE (wejście i wyjście) — połowiczna byłaby gorsza niż żadna, bo
     podpowiedź „ile razy drożej" liczy się z obu liczb.
+
+    Wysiłek: brak pola przy rodzinie, gdy INNE rodziny je mają, znaczy „strona
+    nie podaje wysiłku dla tego modelu" — wtedy KASUJEMY wartość wbudowaną
+    (do 2026-10-15 zostawała: katalog z Haiku 4.5 bez wysiłku + wbudowane
+    „haiku: medium" dla Haiku 5.5 = okno zgadywałoby „średni" przy Haiku 4.5).
+    Gdy pola nie ma NIGDZIE, to raczej zmiana formatu strony niż wiedza —
+    zostawiamy wbudowane. Śmieciowy poziom też niczego nie nadpisuje.
     """
+    wiersz_wysilku = any(isinstance(i, dict) and "default_effort" in i
+                         for i in (models or {}).values())
     for family, info in (models or {}).items():
         if family not in CLAUDE_MODELS or not isinstance(info, dict):
             continue
@@ -440,12 +456,14 @@ def _apply_catalog_extras(models) -> None:
         wysilek = info.get("default_effort")
         if wysilek in ("low", "medium", "high"):
             CLAUDE_MODEL_DEFAULT_EFFORT[family] = wysilek
+        elif wiersz_wysilku and "default_effort" not in info:
+            CLAUDE_MODEL_DEFAULT_EFFORT.pop(family, None)
 
 
 def model_default_effort(key: str):
     """Poziom wysiłku, z jakim Claude Code sam uruchamia model — albo None.
 
-    None znaczy „nie wiemy" (np. Haiku, przypięty Opus 4.8) — okno pokazuje
+    None znaczy „nie wiemy" (np. Haiku 4.5, przypięty Opus 4.8) — okno pokazuje
     wtedy samo „Domyślny modelu", bez zgadywania.
     """
     return CLAUDE_MODEL_DEFAULT_EFFORT.get((key or "").strip())

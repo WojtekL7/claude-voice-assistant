@@ -104,9 +104,16 @@ try:
             p.terminate(force=True)
         except Exception:
             pass
+        # Szukamy WYNIKU, nie linii zaczynającej się od niego: systemd (zmierzone 2026-10-15)
+        # (/etc/profile.d/80-systemd-osc-context.sh) dokleja przed wynikiem każdej
+        # komendy niewidoczną sekwencję `ESC ] 3008;...ESC \`, więc `startswith`
+        # przestał trafiać, choć powłoka widziała zmienną. Echo samej komendy
+        # (`...[$CLAUDE_CODE_SUBAGENT_MODEL]`) nie pasuje do wzorca — nie myli.
+        import re
         for line in out.decode("utf-8", "replace").splitlines():
-            if line.startswith("ZNACZNIK=["):
-                return line.strip()
+            m = re.search(r"ZNACZNIK=\[[^\]$]*\]", line)
+            if m:
+                return m.group(0)
         return ""
 
     _wynik = _echo_w_powloce({"CLAUDE_CODE_SUBAGENT_MODEL": "opus"})
