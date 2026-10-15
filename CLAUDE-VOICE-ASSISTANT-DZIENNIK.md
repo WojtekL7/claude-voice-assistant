@@ -8,6 +8,15 @@ w zeszły czwartek", na które `git log` odpowiada zbyt drobno. Wpis: 3–8 lini
 
 ---
 
+## 2026-10-15
+
+- **Start:** lista „co wisi" zmierzona — beta wstała 07:11 (po wszystkich commitach z 14.10), od restartu 0 użyć lektora/dyktowania; kanał aktualizacji nadal 1.0.29.
+- **4 czerwone bramki naprawione (`1be8d80`) — wszystkie to błędy TESTÓW, nie programu:** Python 3.14 sprząta okno w dobrej kolejności (kontrola negatywna `test-exit-order` przestała rozróżniać → teraz psuje kolejność celowo; zielono na 3.14 i 3.12); dwa testy czytały prawdziwy katalog modeli usera z Haiku 5.5 (→ atrapa HOME); systemd dokleja niewidoczny znacznik OSC 3008 przed wynikiem komendy (→ szukanie wyniku w linii).
+- **Modele we wbudowanych:** Haiku 4.5 → Haiku 5.5 (0,10/0,50, 1 mln, `medium`), Sonnet 5 → Sonnet 5.5 — zmierzone na stronie Anthropic (przeniesionej pod nowy adres; apka podąża za przekierowaniem). Katalog bez wysiłku dla rodziny kasuje wbudowany. Nowy wzorzec strony 10-15 + 6 kontroli, sabotaż łapany. **32/32 bramek zielonych.**
+- **Pamięć wspólna:** pułapka OSC 3008 (`573ca5a`).
+
+**Zostaje otwarte:** test lektora przy zerwanej sieci i dolnego panelu (nadal nie zrobione); test okna modeli przy restarcie; wydanie 1.0.30; `CATALOG_URL` na nowy adres; `server/.venv` na Pythonie 3.14; odchudzenie pliku pamięci (512 linii).
+
 ## 2026-10-14
 
 - **Naprawa VCA po upgrade Ubuntu 24.04 → 26.04:** Python 3.12 → 3.14, stare venv zepsute.

@@ -33,6 +33,7 @@
 
 - **Lokalizacja:** `/home/hdkrytbhdkf/Projekty/claude-voice-assistant/` · **GitHub:** https://github.com/WojtekL7/claude-voice-assistant
 - **Tech:** Python 3.14, PyQt5, QTermWidget (Linux), WebTerminal = xterm.js+QtWebEngine+PTY (Mac/Win), edge-tts, Groq Whisper, pygame
+- **Python 3.14: sprawdzone 2026-10-15** — `venv` OK (3.14.4, 32/32 bramek po naprawie testów); `server/.venv` (panel admina) NIESPRAWDZONY, wg COMMON zepsuty (3.14 → pakiety 3.12) — naprawa dowiązaniem na `python3.12` wymaga zgody właściciela.
 - **Czym jest:** „pilot" nad CLI **Claude Code** — uruchamia `claude` w terminalu, dokłada głos (TTS/STT), zakładki agentów, MCP/Skills, skórki, auto-aktualizację. **Apka NIE hostuje modelu ani nie zawiera CLI** — konto/logowanie siedzi u usera (`~/.claude`).
 
 ```bash
@@ -77,8 +78,9 @@ WebTerminal na Linuksie do testów: `CVA_WEBTERMINAL=1 python3 src/main.py`. Whe
    - **Dyktowanie** (`2989e2f`): krótko po polsku („Tak") → nie cyrylica; „Yes, go ahead" → po angielsku, NIE przetłumaczone; zwykłe zdanie bez spowolnienia. Dowód w `dictation.log`: linie `ODPOWIEDZ: … jezyk='Polish'` i `JEZYK: wykryto … ponawiam jako 'pl'` (ile ponowień na ile dyktowań).
    - **Pusty pas** (`a36a437`): przy dziurze po „※ recap" user ma NIE klikać w terminal, tylko przełączyć zakładkę i wrócić. Dowód w `webterminal.log`: `odmalowanie[okno|zakladka] roznic_pamiec_vs_ekran=N` (wina rysowania, strażnik leczy) albo `dziura_w_pamieci=N` przy `roznic=0` (wina Claude → następny krok: wysłać mu focus-in `\x1b[I` przy powrocie do okna). Brak wpisów + brak dziur = zamknąć. Diagnoza: `CLAUDE-VOICE-ASSISTANT-PULAPKI.md`, „Architektura terminala".
 0a. 🔴 **WYDANIE 1.0.30 — PRIORYTET (2026-10-14).** Paczki Mac/Windows wożą edge-tts < 7.3.1 → Microsoft odpowiada 403 od 12.10 → **czytanie na głos u tych użytkowników NIE DZIAŁA** (zawiadomienie AI Managera na górze pliku). Do wydania wejdą też `74413f6` (okno na małym ekranie) oraz `e544499` i `f2c289d` — te dwa DOPIERO po teście 15.10. Najpierw zmierz, co jest w wydanej 1.0.29 (pamięć `weryfikacja-fixu-w-paczce`).
-0b. 🔴 **4 CZERWONE BRAMKI (zmierzone 2026-10-14):** `test-exit-order`, `test-hooks-resume`, `test-model-catalog`, `test-subagent-effort` padają IDENTYCZNIE na kodzie bez zmian dnia (`git stash`) — podejrzenie: upgrade Pythona 3.14 albo nowy model w katalogu (przestarzała premisa, sekcja „Pułapki bramek"). Niezbadane. Pozostałe 28 bramek zielone.
-1. **Odchudzenie tego pliku: ~505 linii (2026-10-14; 477 → 2026-10-12) przy budżecie ~350** (rośnie też od kontraktów sąsiadów). Przepis: COMMON „ODCHUDZANIE…", bramka `sprawdz-konsolidacje.py` (uruchamiana z `~/Projekty`).
+0b. ✅ **4 CZERWONE BRAMKI NAPRAWIONE 2026-10-15 (`1be8d80`) — żadna nie była błędem programu.** `test-exit-order` (Python 3.14 sam sprząta w dobrej kolejności), `test-hooks-resume` + `test-model-catalog` (czytały prawdziwy `models-cache.json` usera z Haiku 5.5), `test-subagent-effort` (znacznik OSC 3008 od systemd). Przy okazji wbudowane Haiku 4.5 → **Haiku 5.5** (0,10/0,50, 1 mln, `medium`) i Sonnet 5 → **Sonnet 5.5**; katalog bez wysiłku dla rodziny KASUJE wbudowany. **32/32 bramki zielone.** Nauki: sekcja „Pułapki bramek testowych".
+0c. ⏳ **TEST W OKNIE: modele (`1be8d80`, NIEPRZETESTOWANE u usera — przy najbliższym naturalnym restarcie bety).** (1) okno agenta → lista: „Haiku 5.5", „Sonnet 5.5", pod listą cena; (2) „Poziom wysiłku modeli": Haiku „Domyślny modelu (średni)", Sonnet „(wysoki)"; (3) regresja: Opus 5.5 średni, Fable wysoki. Apka u usera i tak pokazuje te nazwy z katalogu (pobrany 12.10) — to sprawdzenie, czy nic się nie rozjechało.
+1. **Odchudzenie tego pliku: 512 linii (2026-10-15; ~505 → 2026-10-14; 477 → 2026-10-12) przy budżecie ~350** (rośnie też od kontraktów sąsiadów). Przepis: COMMON „ODCHUDZANIE…", bramka `sprawdz-konsolidacje.py` (uruchamiana z `~/Projekty`).
 2. Szybkie: lupa w `_apply_skin_icons` · dwie usterki planu B lektora (sekcja „Inne otwarte TODO").
 3. Celowy test ochrony ZAZNACZENIA przy dyktowaniu (zaznacz tekst w polu → podyktuj → zaznaczenie ma zostać). Stan 2026-10-06: ~355 dyktowań w `dictation.log`, **wszystkie `zaznaczone=0`** — samo z ruchu się nie sprawdzi.
 
@@ -260,6 +262,7 @@ Plan z `docs/PRD.md` ruszył od brandingu/strony, NIE od kodu monetyzacji.
 - **Sieci NIE MA w imporcie `config.py`** — pobiera wątek tła 5 s po starcie i tylko gdy cache >7 dni; ręcznie: Ustawienia → „Sprawdź nowe modele".
 - ⚠️ **Nowej RODZINY nie dodajemy sami** — nie wiadomo, czy `claude --model <alias>` przyjmie ją w CLI usera; apka o niej INFORMUJE (`new_families`), decyduje człowiek.
 - ⚠️ **Nałożenie katalogu MUTUJE słowniki w miejscu** (`apply_model_catalog`) — inne moduły zrobiły `from config import CLAUDE_MODELS` i trzymają referencję; podmiana przypisania byłaby dla nich niewidoczna.
+- 🔧 **Strona przeniesiona (zmierzone 2026-10-15):** stary adres daje `307` → `/docs/en/models/overview.md`; `requests` podąża sam, parser czyta poprawnie (4 rodziny, Haiku 5.5). TODO drobne: przestawić `CATALOG_URL` w `core/model_catalog.py` na nowy adres, zanim przekierowanie zniknie.
 - Bramka: `tools/test-model-catalog.py` (61/0) — parser na PRAWDZIWEJ stronie w `tools/fixtures/`, z kontrolami negatywnymi.
 
 **Czego uruchomi „Domyślny", apka NIE WIE z góry** — dowiaduje się po fakcie z dziennika (`message.model`); mapę `identyfikator API → klucz` trzyma `config.CLAUDE_MODEL_API_IDS` (katalog + wpisy wbudowane). Stąd pasek „Domyślny (Opus 5)" — patrz „⏳ CZEKA NA TEST NA ŻYWO".
@@ -343,6 +346,9 @@ Plan: `docs/PLAN-CHMURA-SYNC.md` (sekcja 9 = szyfrowanie). Pamięć: `chmura-syn
 
 - ⚠️ **Zdjęcie panelu ukrytego w zakładce (2026-10-14):** widżet w niepokazanym QSplitterze przyjmuje `resize` z opóźnieniem — pierwszy `render` miał jeszcze 100×24, punkt (3,40) wypadał POZA obrazek i czytał czerń `#000000` (3 fałszywe FAIL; drugi odczyt już dobry, co wygląda jak „niestabilny test"). Mierz w RZECZYWISTYM `size()` (np. `(2, h//2)`), nie po `resize` w stałym punkcie. `ensurePolished`/`layout().activate()` NIE pomagały — sprawdzone.
 - ⭐ **Bramka GUI bez ciężkiego MainWindow:** `MainWindow.__new__(MainWindow)` + `QMainWindow.__init__(obj)` + ręcznie podane pola (`agent_tabs`, `tab_widget`, `skin_colors`) → woła PRAWDZIWE metody, łącznie z `changeEvent` (super() działa, bo obiekt jest instancją MainWindow). Stan okna podmieniasz na instancji: `obj.isActiveWindow = lambda: flaga`. Wzór: `tools/test-bottom-panel-active.py`.
+
+- ⛔ **Test importujący `config` czytał PRAWDZIWY katalog usera (zmierzone 2026-10-15).** `config` przy imporcie nakłada `~/.vibe-coding-assistant/models-cache.json`; gdy apka pobrała Haiku 5.5 (12.10), dwa testy sprawdzające KOD zaczęły sprawdzać INTERNET i poczerwieniały nad działającym programem. **Każdy nowy test importujący `config` ustawia atrapę `HOME` PRZED importem** (wzór: góra `tools/test-model-catalog.py`) i sam jawnie nakłada katalog z `tools/fixtures/` — najlepiej z TEGO SAMEGO dnia co inne nagrane dane (hooki 09-14 ↔ strona 09-14).
+- ⛔ **Python lokalnie 3.14, paczki Mac/Win budowane na 3.12 (`.github/workflows/build-*.yml`) — zielony test na komputerze NIE dowodzi zachowania paczki.** Zmierzone na `test-exit-order`: stary wzorzec `sys.exit(app.exec_())` na 3.14 niszczy okno PRZED aplikacją (dobrze), na 3.12 PO (crash Maca) — fix w `src/main.py` nadal potrzebny. Kontrola negatywna ma psuć rzecz CELOWO (wzorzec „zly": `del app` przed `del window`), nie liczyć na zachowanie interpretera. Gdy wynik może zależeć od wersji, puść bramkę też przez `/usr/bin/python3.12`.
 
 ## Nauki z kodu (2026-10-14)
 
