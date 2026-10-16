@@ -78,6 +78,66 @@ def _encode_project_dir(working_directory: str) -> str:
     return re.sub(r'[^A-Za-z0-9]', '-', abspath)
 
 
+# Wpisy TECHNICZNE Claude Code (od 2.1.300, zmierzone 2026-10-16): kopia
+# zapytania wysłanego do serwera (`api-request`) i jej części (`api-request-blob`).
+# Nie mają roli ani modelu, a rosną razem z rozmową — w długiej sesji CRM
+# pojedynczy wpis miał 154 KB, czyli więcej niż cały dawny 64-KB ogon. Ogon
+# zawierał wtedy SAME takie wpisy i flaga „agent czeka" nie zapalała się nigdy.
+# Rozpoznajemy je po początku linii, bez rozbierania JSON-a (to on kosztuje).
+# Wzorzec toleruje spacje (`"type": "api-request"`) — sprawdzone bramką: sztywny
+# napis bez spacji przepuszczał taki wpis i budżet ogona znów się zapychał.
+# Gdyby Claude Code przesunął pole "type" dalej, linia i tak odpadnie niżej
+# przy sprawdzaniu roli — będzie tylko wolniej, nie źle.
+_TECH_LINE_RE = re.compile(r'\s*\{\s*"type"\s*:\s*"api-request')
+_TECH_LINE_RE_B = re.compile(_TECH_LINE_RE.pattern.encode())
+
+# Odczyt ogona dziennika WSTECZ, kawałkami (patrz _tail_lines_reversed).
+TAIL_BLOCK_BYTES = 64 * 1024
+# Twardy sufit bajtów przeczytanych od końca — także tych technicznych.
+# Chroni pętlę GUI przed czytaniem wielu MB przy każdym ticku.
+TAIL_HARD_CAP_BYTES = 4 * 1024 * 1024
+
+
+def _is_tech_line(line) -> bool:
+    """Czy linia dziennika to wpis techniczny bez treści rozmowy?"""
+    if isinstance(line, bytes):
+        return _TECH_LINE_RE_B.match(line, 0, 64) is not None
+    return _TECH_LINE_RE.match(line, 0, 64) is not None
+
+
+def _tail_lines_reversed(path: str, budget: int,
+                         hard_cap: int = TAIL_HARD_CAP_BYTES):
+    """Oddawaj PEŁNE linie dziennika od końca, z pominięciem technicznych.
+
+    `budget` liczy wyłącznie bajty linii oddanych (prawdziwych wpisów) — wpisy
+    techniczne go nie zjadają, więc ich rozmiar nie zasłania już rozmowy.
+    Linia, która przekracza budżet, jest jeszcze oddawana (zawsze w całości).
+    `hard_cap` ogranicza wszystko, co w ogóle przeczytamy od końca.
+    Linia przecięta sufitem jest porzucana (nie da się jej poprawnie odczytać).
+    """
+    with open(path, "rb") as f:
+        f.seek(0, os.SEEK_END)
+        pos = f.tell()
+        floor = max(0, pos - hard_cap)
+        carry = b""        # początek linii, której reszta jest w późniejszym kawałku
+        used = 0
+        while pos > floor:
+            step = min(TAIL_BLOCK_BYTES, pos - floor)
+            pos -= step
+            f.seek(pos)
+            parts = (f.read(step) + carry).split(b"\n")
+            carry = parts[0]
+            for line in reversed(parts[1:]):
+                if not line.strip() or _is_tech_line(line):
+                    continue
+                yield line
+                used += len(line)
+                if used >= budget:
+                    return
+        if pos == 0 and carry.strip() and not _is_tech_line(carry):
+            yield carry
+
+
 class TranscriptReader:
     """Czyta nowe wypowiedzi tekstowe Claude'a z dziennika sesji."""
 
@@ -374,9 +434,13 @@ class TranscriptReader:
 
     # ---------- jaki model REALNIE odpowiada ----------
 
-    # Ile bajtów z KOŃCA dziennika przegląda jednorazowy skan (patrz
-    # active_model). 256 KB to z zapasem kilkadziesiąt wypowiedzi.
+    # Ile bajtów PRAWDZIWYCH wpisów z KOŃCA dziennika przegląda jednorazowy
+    # skan (patrz active_model). 256 KB to z zapasem kilkadziesiąt wypowiedzi.
+    # Wpisy techniczne (`api-request`) się nie liczą — patrz _tail_lines_reversed.
     MODEL_TAIL_BYTES = 256 * 1024
+    # To samo dla roli ostatniego wpisu (flaga „agent czeka", 🔊). Zwykle
+    # wystarcza pierwszy wpis od końca; budżet tylko ogranicza poszukiwania.
+    ROLE_TAIL_BYTES = 256 * 1024
     # Minimalny odstęp między skanami ogona, gdy model wciąż nieznany.
     # Bez tego sesja, w której agent jeszcze nic nie powiedział (a plik rośnie
     # od wpisów użytkownika), skanowałaby ogon przy KAŻDYM ticku timera.
@@ -439,31 +503,21 @@ class TranscriptReader:
 
     def _scan_tail_for_model(self, path: str) -> Optional[str]:
         """Przejrzyj KONIEC dziennika wstecz w poszukiwaniu nazwy modelu."""
+        # Linię rozciętą sufitem odczytu _tail_lines_reversed porzuca sam
+        # (a gdyby nie, ogryzek nie parsuje się jako JSON i wypada w `except`).
         try:
-            size = self._safe_size(path)
-            if size <= 0:
+            if self._safe_size(path) <= 0:
                 return None
-            with open(path, "rb") as f:
-                if size > self.MODEL_TAIL_BYTES:
-                    f.seek(size - self.MODEL_TAIL_BYTES)
-                    # Skok w środek pliku rozcina linię — porzucamy ją jawnie.
-                    # (Zabezpieczenie DRUGIEJ linii: ogryzek i tak nie parsuje
-                    # się jako JSON i wypadłby niżej w `except` — sprawdzone
-                    # sabotażem, patrz tools/test-detected-model.py.)
-                    f.readline()
-                raw = f.read()
+            for bline in _tail_lines_reversed(path, self.MODEL_TAIL_BYTES):
+                try:
+                    obj = json.loads(bline.decode("utf-8", "ignore"))
+                except Exception:
+                    continue
+                model = self._entry_model(obj)
+                if model:
+                    return model
         except Exception:
             return None
-        for bline in reversed(raw.split(b"\n")):
-            if not bline.strip():
-                continue
-            try:
-                obj = json.loads(bline.decode("utf-8", "ignore"))
-            except Exception:
-                continue
-            model = self._entry_model(obj)
-            if model:
-                return model
         return None
 
     # ---------- błędy Claude Code (wygasłe logowanie, przeciążenie) ----------
@@ -561,7 +615,7 @@ class TranscriptReader:
             with open(self._session_file, encoding="utf-8", errors="ignore") as f:
                 for line in f:
                     line = line.strip()
-                    if not line:
+                    if not line or _is_tech_line(line):
                         continue
                     try:
                         obj = json.loads(line)
@@ -661,7 +715,7 @@ class TranscriptReader:
             with open(self._session_file, encoding="utf-8", errors="ignore") as f:
                 for line in f:
                     line = line.strip()
-                    if not line:
+                    if not line or _is_tech_line(line):
                         continue
                     try:
                         obj = json.loads(line)
@@ -857,37 +911,42 @@ class TranscriptReader:
         """
         if not self._session_file:
             return None
+        # Pamięć ostatniego wyniku: przy czekającym agencie plik STOI, a flaga
+        # pyta co tick — bez tego przy wielkich wpisach technicznych czytalibyśmy
+        # setki KB co ~0,8 s, choć odpowiedź się nie zmienia.
+        size = self._safe_size(self._session_file)
+        key = (self._session_file, size, skip_agent_turns)
+        cache = getattr(self, "_role_cache", None)
+        if cache and cache[0] == key:
+            return cache[1]
+        role = self._scan_last_entry_role(skip_agent_turns)
+        self._role_cache = (key, role)
+        return role
+
+    def _scan_last_entry_role(self, skip_agent_turns: bool) -> Optional[str]:
+        # Ogon czytamy wstecz z pominięciem wpisów technicznych: dawny sztywny
+        # 64-KB ogon mieścił w długich sesjach SAME wpisy `api-request`, więc
+        # zwracał None i flaga „agent czeka" nie zapalała się (CRM, 2026-10-16).
         try:
-            with open(self._session_file, "rb") as f:
-                f.seek(0, os.SEEK_END)
-                end = f.tell()
-                start = max(0, end - 65536)   # ostatnie ~64 KB wystarczą na kilka wpisów
-                f.seek(start)
-                tail = f.read()
+            for bline in _tail_lines_reversed(self._session_file,
+                                              self.ROLE_TAIL_BYTES):
+                try:
+                    obj = json.loads(bline.decode("utf-8", "ignore"))
+                except Exception:
+                    continue
+                if obj.get("isSidechain"):
+                    continue
+                msg = obj.get("message")
+                role = msg.get("role") if isinstance(msg, dict) else None
+                if role == "user" and skip_agent_turns and self._is_agent_turn_userentry(obj):
+                    continue   # wynik narzędzia / przerwanie — nie granica użytkownika
+                if role == "user" and skip_agent_turns and self._is_compact_summary(obj):
+                    continue   # streszczenie po skróceniu rozmowy — nie granica użytkownika
+                if role in ("assistant", "user"):
+                    return role
+                # wpis bez roli (snapshot itp.) — szukaj dalej wstecz
         except Exception:
             return None
-        lines = tail.split(b"\n")
-        if start > 0 and lines:
-            lines = lines[1:]   # pierwsza linia mogła być ucięta w połowie
-        for bline in reversed(lines):
-            bline = bline.strip()
-            if not bline:
-                continue
-            try:
-                obj = json.loads(bline.decode("utf-8", "ignore"))
-            except Exception:
-                continue
-            if obj.get("isSidechain"):
-                continue
-            msg = obj.get("message")
-            role = msg.get("role") if isinstance(msg, dict) else None
-            if role == "user" and skip_agent_turns and self._is_agent_turn_userentry(obj):
-                continue   # wynik narzędzia / przerwanie — nie granica użytkownika
-            if role == "user" and skip_agent_turns and self._is_compact_summary(obj):
-                continue   # streszczenie po skróceniu rozmowy — nie granica użytkownika
-            if role in ("assistant", "user"):
-                return role
-            # wpis bez roli (snapshot itp.) — szukaj dalej wstecz
         return None
 
     @staticmethod
