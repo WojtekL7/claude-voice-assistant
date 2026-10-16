@@ -8,6 +8,14 @@ w zeszły czwartek", na które `git log` odpowiada zbyt drobno. Wpis: 3–8 lini
 
 ---
 
+## 2026-10-16
+
+- **Flaga „agent czeka" w CRM nie zapalała się (`76d0e71`, nieprzetestowane):** Claude Code 2.1.300+ wpisuje do dziennika wielkie `api-request` (do 154 KB), czytnik ogona 64 KB widział same te wpisy. Czytanie wstecz z pomijaniem wpisów technicznych; bramka 14/0, na starym kodzie 7 FAIL.
+- **Tryb jasny — cały plan (6 kroków):** jasna paleta, Claude Code jasny tylko w zakładkach (przez nasz `--settings`), ~40 kolorów na sztywno, ikony SVG, kolory agentów, osobna skórka trybu jasnego, Ustawienia → 🌓 Wygląd z ponownym uruchomieniem. Bramka `test-theme-light.py` 47/0 (sabotaż 6), pozostałe 33 bramki zielone, test end-to-end restartu na izolowanej kopii OK. Zrzuty `~/Pictures/VCA-tryb-jasny/` 1–10.
+- **Właściciel obejrzał zrzuty i zaakceptował kolorystykę;** testy na żywo obu zmian wybrane („wszystkie") na 2026-10-17 po restarcie bety.
+
+**Zostaje otwarte:** testy 17.10 (punkt `0000` w pamięci), wydanie 1.0.30, strażnik `sabotaz-subagent-effort` (1 kotwica), testy z 14–15.10, `server/.venv`, konsolidacja pamięci (~520 linii).
+
 ## 2026-10-15
 
 - **Start:** lista „co wisi" zmierzona — beta wstała 07:11 (po wszystkich commitach z 14.10), od restartu 0 użyć lektora/dyktowania; kanał aktualizacji nadal 1.0.29.
