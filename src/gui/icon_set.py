@@ -27,7 +27,8 @@ _source_cache = {}
 _RENDER_PX = 64
 
 # Kolor używany, gdy wołający nie poda własnego (stary kod, testy).
-_DEFAULT_COLOR = '#9b93a8'
+from gui import theme  # noqa: E402
+_DEFAULT_COLOR = theme.TEXT_DIM   # w trybie ciemnym = dawne '#9b93a8'
 
 # (klucz, stan) → nazwa pliku SVG (bez rozszerzenia).
 _STATE_TO_FILE = {

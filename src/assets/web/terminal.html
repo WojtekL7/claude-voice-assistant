@@ -102,6 +102,18 @@
     // Na macOS/Windows DejaVu zwykle nie ma → łańcuch schodzi do Menlo/Consolas.
     var FONT_STACK = '"JetBrains Mono", "Ubuntu Mono", "DejaVu Sans Mono", Menlo, Consolas, monospace';
 
+    // Kolory od PIERWSZEJ klatki: Python dokleja je do adresu (?bg=…&fg=…),
+    // zanim zdąży dosłać pełny motyw przez __termTheme. Bez tego tryb jasny
+    // mignąłby ciemnym terminalem przy każdym starcie zakładki. Brak/zły
+    // parametr = dawne kolory ciemne.
+    const START_THEME = (function () {
+      const q = new URLSearchParams(location.search);
+      const hex = (v, d) => (/^[0-9a-fA-F]{6}$/.test(v || '') ? '#' + v : d);
+      return { background: hex(q.get('bg'), '#0a080e'),
+               foreground: hex(q.get('fg'), '#b8b2c4') };
+    })();
+    document.documentElement.style.background = START_THEME.background;
+    document.body.style.background = START_THEME.background;
     const term = new Terminal({
       fontFamily: FONT_STACK,
       // 17 px = 13 pt przeliczone (96/72) — wartość startowa zgodna z tym, co
@@ -111,7 +123,7 @@
       cursorBlink: true,
       scrollback: 10000,
       allowProposedApi: true,
-      theme: { background: '#0a080e', foreground: '#b8b2c4' }
+      theme: START_THEME
     });
     const fitAddon = new FitAddon.FitAddon();
     term.loadAddon(fitAddon);
@@ -391,7 +403,16 @@
     // Przyjmuje obiekt ITheme (z Pythona idzie jako literał JSON). Brak pola =
     // xterm użyje swojego domyślnego.
     window.__termTheme  = function (theme) {
-      if (theme && typeof theme === 'object') term.options.theme = theme;
+      if (theme && typeof theme === 'object') {
+        term.options.theme = theme;
+        // Tło STRONY idzie za motywem: pod ostatnim wierszem kratki zostaje
+        // pasek wolnego miejsca, który inaczej świeci ciemnym kolorem z CSS
+        // (w trybie jasnym czarny pas pod terminalem — zmierzone 2026-10-16).
+        if (theme.background) {
+          document.documentElement.style.background = theme.background;
+          document.body.style.background = theme.background;
+        }
+      }
     };
     // Python dosyła TU rodzinę i rozmiar czcionki. fit() NIE MOŻE iść w tym samym
     // takcie: xterm.js przemierza kratkę dopiero przy najbliższym rysowaniu, więc

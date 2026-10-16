@@ -10,7 +10,11 @@ token stąd, a `skin_colors()` składa z tokenów słownik, którego oczekuje
 `MainWindow` (klucze bez zmian — dialog edycji skórki działa jak działał).
 
 Motyw: „Vibe Purple" (redesign 2026-07) — ciemne tło z fioletowym akcentem.
+Od 2026-10 także wariant JASNY (paleta `_LIGHT`, wybór przy starcie programu).
 """
+import json
+import os
+
 
 # === Tła (od najciemniejszego) ===
 BG_CANVAS = '#0a080e'    # terminal / obszar rozmowy — najgłębszy
@@ -75,6 +79,22 @@ ALERT = '#f08b4c'   # pośredni stopień ostrzeżenia (skala obciążenia RAM)
 INFO = '#5b9dd9'
 TEAL = '#4fb3a8'
 
+# === Tory pasków (np. zużycie kontekstu na pasku statusu) ===
+TRACK_BG = '#2a2a2e'
+TRACK_BORDER = '#3a3a3e'
+
+# === Terminal ===
+# Barwy tekstu w terminalu, których nie da się wziąć z tokenów wyżej (tekst
+# terminala jest celowo ciemniejszy niż TEXT, a „jasne" warianty ANSI mają
+# własne odcienie). Trzymane jako tokeny, żeby tryb jasny mógł je podmienić.
+TERM_FG = '#b8b2c4'
+TERM_BLACK = '#1a1622'
+TERM_BLACK_BRIGHT = '#4a4356'
+TERM_GREEN_BRIGHT = '#5fe0a6'
+TERM_YELLOW_BRIGHT = '#f0c979'
+TERM_BLUE_BRIGHT = '#7db8e8'
+TERM_TEAL_BRIGHT = '#6fd0c4'
+
 # === Typografia ===
 # Nazwy rodzin tak, jak rejestruje je QFontDatabase z plików w assets/fonts.
 FONT_UI = 'IBM Plex Sans'
@@ -88,6 +108,164 @@ RADIUS_SM = 6    # drobne elementy (znaczki, X zakładki)
 RADIUS = 10      # przyciski narzędziowe
 RADIUS_LG = 12   # pole wpisywania, przycisk Enter
 RADIUS_XL = 14   # okna modalne
+
+
+# === TRYB JASNY ===
+# Druga paleta w tej samej rodzinie „Vibe Purple": jasne liliowe tła, ciemny
+# tekst, ciemniejszy fiolet akcentu (jasny fiolet z trybu ciemnego ginie na
+# bieli). Tryb wybieramy RAZ, przy imporcie tego modułu — kilka miejsc zapamiętuje
+# kolory już przy ładowaniu programu (DEFAULT_SKIN_COLORS w main_window, kolory
+# wskaźnika RAM), więc podmiana później byłaby niepełna. Zmiana trybu = restart.
+# Kontrast pilnuje tools/test-theme-light.py (tekst ≥ 4,5:1, drobne ≥ 3:1).
+APPEARANCE_DARK = 'dark'
+APPEARANCE_LIGHT = 'light'
+
+_LIGHT = {
+    'BG_CANVAS': '#fcfbfe',
+    'BG_WINDOW': '#f6f3fb',
+    'BG_PANEL': '#f1ecf8',
+    'BG_BAR': '#ebe5f4',
+    'BG_INPUT': '#ffffff',
+    'SURFACE': '#ffffff',
+    'SURFACE_ALT': '#faf8fd',
+    'SURFACE_HOVER': '#ece4f8',
+    # Sygnały (patrz uwaga przy ciemnych): na jasnym tle sygnałem jest
+    # PRZYCIEMNIENIE — różnica jasności wobec BG_PANEL mierzona w bramce.
+    'TAB_ACTIVE': '#c6b2ea',
+    'SURFACE_INACTIVE': '#c8bed6',
+    'ACCENT': '#7c3aed',
+    'ACCENT_LIGHT': '#6d28d9',   # ikony/linki/tekst — na bieli MUSI być ciemniejszy
+    'ACCENT_DEEP': '#5b21b6',
+    'ACCENT_GLOW': '#c026d3',
+    'BORDER': '#d5c6ec',
+    'BORDER_SUBTLE': '#e4dcef',
+    'HOVER': '#e2d4f8',          # też zaznaczenie w terminalu
+    'TEXT': '#1d1726',
+    'TEXT_DIM': '#4f4760',
+    'TEXT_FAINT': '#7f778c',
+    'DANGER': '#c42b3a',
+    'DANGER_LIGHT': '#d24955',
+    'SUCCESS': '#12805a',
+    'WARNING': '#9a6200',
+    'ALERT': '#b8521a',
+    'INFO': '#2566ad',
+    'TEAL': '#1a7a70',
+    # Terminal: „jasne" warianty ANSI mają być WYRAŹNIEJSZE, czyli na bieli
+    # ciemniejsze lub nasycone — nie bledsze (jaskrawa żółć zniknęłaby).
+    'TRACK_BG': '#e2dcea',
+    'TRACK_BORDER': '#cfc6dc',
+    'TERM_FG': '#2b2435',
+    'TERM_BLACK': '#1d1726',
+    'TERM_BLACK_BRIGHT': '#6b6478',
+    'TERM_GREEN_BRIGHT': '#0f9963',
+    'TERM_YELLOW_BRIGHT': '#a86f00',
+    'TERM_BLUE_BRIGHT': '#2f78c2',
+    'TERM_TEAL_BRIGHT': '#168a7e',
+}
+
+
+def _wanted_appearance() -> str:
+    """Tryb z ustawień programu; zmienna CVA_APPEARANCE ma pierwszeństwo (testy).
+
+    Fail-safe: nieczytelny plik, brak klucza albo dziwna wartość = ciemny,
+    czyli wygląd sprzed wprowadzenia trybu jasnego.
+    """
+    env = (os.environ.get('CVA_APPEARANCE') or '').strip().lower()
+    if env in (APPEARANCE_DARK, APPEARANCE_LIGHT):
+        return env
+    try:
+        from config import CONFIG_FILE
+        with open(CONFIG_FILE, encoding='utf-8') as f:
+            value = json.load(f).get('appearance')
+    except Exception:
+        return APPEARANCE_DARK
+    return APPEARANCE_LIGHT if value == APPEARANCE_LIGHT else APPEARANCE_DARK
+
+
+APPEARANCE = _wanted_appearance()
+if APPEARANCE == APPEARANCE_LIGHT:
+    globals().update(_LIGHT)
+
+
+def is_light() -> bool:
+    """Czy program działa w trybie jasnym (decyzja z chwili startu)."""
+    return APPEARANCE == APPEARANCE_LIGHT
+
+
+def by_mode(dark: str, light: str) -> str:
+    """Kolor zależny od trybu — dla STARYCH miejsc z kolorem wpisanym na sztywno.
+
+    W trybie ciemnym oddaje DOKŁADNIE dawną wartość (wygląd ciemny bez zmian,
+    co do piksela), w jasnym — podany token. Nowy kod niech sięga po tokeny.
+    """
+    return light if is_light() else dark
+
+
+def _lum(hexc: str) -> float:
+    r, g, b = (int(hexc[i:i + 2], 16) / 255 for i in (1, 3, 5))
+    f = lambda c: c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
+
+
+def contrast_ratio(a: str, b: str) -> float:
+    """Kontrast WCAG dwóch kolorów #rrggbb (1..21)."""
+    la, lb = sorted((_lum(a), _lum(b)), reverse=True)
+    return (la + 0.05) / (lb + 0.05)
+
+
+def readable(color: str, minimum: float = 3.0) -> str:
+    """Kolor WYBRANY PRZEZ UŻYTKOWNIKA (np. kolor agenta) czytelny na tle paska.
+
+    Paleta kolorów agentów była dobierana pod ciemne tło — jasnoszary czy żółty
+    znikają na jasnym. W trybie jasnym przyciemniamy taki kolor (ten sam odcień),
+    aż odetnie się od BG_PANEL co najmniej `minimum`:1. Zapisany kolor agenta się
+    NIE zmienia — to tylko sposób wyświetlenia. Tryb ciemny: bez zmian.
+    """
+    if not is_light() or not isinstance(color, str):
+        return color
+    c = color.strip()
+    if len(c) == 4 and c.startswith('#'):
+        c = '#' + ''.join(ch * 2 for ch in c[1:])
+    if len(c) != 7 or not c.startswith('#'):
+        return color
+    try:
+        r, g, b = (int(c[i:i + 2], 16) for i in (1, 3, 5))
+    except ValueError:
+        return color
+    k = 1.0
+    out = c
+    while contrast_ratio(out, BG_PANEL) < minimum and k > 0.05:
+        k -= 0.05
+        out = '#%02x%02x%02x' % (round(r * k), round(g * k), round(b * k))
+    return out
+
+
+def icon_path(path, color: str) -> str:
+    """Ścieżka ikony SVG dopasowanej do trybu (do `url(...)` w QSS i QIcon).
+
+    Pliki .svg mają kolor wpisany w środek (szary #9b93a8 albo biały) —
+    dobry na ciemnym tle, niewidoczny na jasnym. W trybie ciemnym zwracamy
+    oryginał bez zmian; w jasnym — kopię przemalowaną na `color`, zapisaną
+    w katalogu ustawień programu. Fail-open: błąd zapisu = oryginał.
+    """
+    path = str(path)
+    if not is_light():
+        return path
+    try:
+        from pathlib import Path
+        from config import CONFIG_DIR
+        src = Path(path)
+        svg = src.read_text(encoding='utf-8')
+        for old in ('#9b93a8', '#ffffff', '#FFFFFF', '"white"'):
+            svg = svg.replace(old, f'"{color}"' if old.startswith('"') else color)
+        out_dir = CONFIG_DIR / 'theme-icons'
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out = out_dir / f'{src.stem}-{color.lstrip("#")}{src.suffix}'
+        if not out.exists() or out.read_text(encoding='utf-8') != svg:
+            out.write_text(svg, encoding='utf-8')
+        return str(out)
+    except Exception:
+        return path
 
 
 def _family_or_fallback(wanted: str, fallback: str) -> str:
@@ -182,21 +360,21 @@ def skin_colors() -> dict:
         # Dobrane pod składnię, jaką rysuje Claude Code: zielony = dodane linie,
         # czerwony = usunięte, fiolet = słowa kluczowe, niebieski = nazwy plików.
         'terminal_bg': BG_CANVAS,
-        'terminal_fg': '#b8b2c4',
-        'terminal_color_0': '#1a1622',
+        'terminal_fg': TERM_FG,
+        'terminal_color_0': TERM_BLACK,
         'terminal_color_1': DANGER,
         'terminal_color_2': SUCCESS,
         'terminal_color_3': WARNING,
         'terminal_color_4': INFO,
         'terminal_color_5': ACCENT,
         'terminal_color_6': TEAL,
-        'terminal_color_7': '#b8b2c4',
-        'terminal_color_0_bright': '#4a4356',
+        'terminal_color_7': TERM_FG,
+        'terminal_color_0_bright': TERM_BLACK_BRIGHT,
         'terminal_color_1_bright': DANGER_LIGHT,
-        'terminal_color_2_bright': '#5fe0a6',
-        'terminal_color_3_bright': '#f0c979',
-        'terminal_color_4_bright': '#7db8e8',
+        'terminal_color_2_bright': TERM_GREEN_BRIGHT,
+        'terminal_color_3_bright': TERM_YELLOW_BRIGHT,
+        'terminal_color_4_bright': TERM_BLUE_BRIGHT,
         'terminal_color_5_bright': ACCENT_LIGHT,
-        'terminal_color_6_bright': '#6fd0c4',
+        'terminal_color_6_bright': TERM_TEAL_BRIGHT,
         'terminal_color_7_bright': TEXT,
     }

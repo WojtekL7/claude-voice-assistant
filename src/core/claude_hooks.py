@@ -101,18 +101,61 @@ def _script_body(dziennik: Path) -> str:
     )
 
 
-def build_settings(script: Path) -> dict:
-    """Plik ustawień z samymi hookami — nic poza nimi tu nie wchodzi."""
+def build_settings(script: Path, claude_theme: str | None = None) -> dict:
+    """Plik ustawień zakładek VCA: hooki + (w trybie jasnym) motyw Claude Code.
+
+    `claude_theme` patrz `claude_theme_for`. None = klucza nie ma, więc
+    obowiązuje motyw z ustawień użytkownika (zachowanie sprzed trybu jasnego).
+    """
     polecenie = str(script)
-    return {
+    ustawienia = {
         "hooks": {
             zdarzenie: [{"hooks": [{"type": "command", "command": polecenie}]}]
             for zdarzenie in HOOK_EVENTS
         }
     }
+    if claude_theme:
+        ustawienia["theme"] = claude_theme
+    return ustawienia
 
 
-def ensure_hooks(config_dir: Path) -> Path:
+def _user_claude_theme(home: Path | None = None) -> str:
+    """Motyw Claude Code wybrany przez użytkownika ('' = nie wiadomo).
+
+    Zmierzone 2026-10-16 (2.1.301): siedzi w `~/.claude/settings.json`;
+    starsze wersje trzymały go w `~/.claude.json` — sprawdzamy oba.
+    """
+    home = Path(home) if home else Path.home()
+    for plik in (home / ".claude" / "settings.json", home / ".claude.json"):
+        try:
+            with open(plik, encoding="utf-8") as f:
+                wartosc = json.load(f).get("theme")
+        except Exception:
+            continue
+        if isinstance(wartosc, str) and wartosc.strip():
+            return wartosc.strip()
+    return ""
+
+
+def claude_theme_for(light_app: bool, home: Path | None = None) -> str | None:
+    """Jaki motyw narzucić Claude Code w zakładkach (None = nie narzucaj).
+
+    Tekst odpowiedzi agenta rysuje SAM Claude Code. W motywie ciemnym pisze
+    jasnoszarym — na jasnym tle programu prawie niewidocznym. Dlatego w trybie
+    jasnym VCA podaje mu `"theme": "light"` przez NASZ plik `--settings`
+    (zmierzone 2026-10-16: działa per uruchomienie, ustawień użytkownika nie
+    rusza — szarość 153→102, żółć 255,193,7→150,108,30).
+    Wybór użytkownika szanujemy: jasną odmianę (np. `light-daltonized`)
+    zostawiamy. W trybie ciemnym nic się nie zmienia — jak przed trybem jasnym.
+    """
+    if not light_app:
+        return None
+    if _user_claude_theme(home).startswith("light"):
+        return None
+    return "light"
+
+
+def ensure_hooks(config_dir: Path, claude_theme: str | None = None) -> Path:
     """Przygotuj skrypt i plik ustawień; zwróć ścieżkę pliku ustawień.
 
     Idempotentne — wołane przy każdym starcie zakładki. Rzuca `HooksError`,
@@ -129,7 +172,7 @@ def ensure_hooks(config_dir: Path) -> Path:
             skrypt.chmod(skrypt.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP)
         ustawienia = settings_path(config_dir)
         ustawienia.write_text(
-            json.dumps(build_settings(skrypt), ensure_ascii=False, indent=2) + "\n",
+            json.dumps(build_settings(skrypt, claude_theme), ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8")
         return ustawienia
     except Exception as exc:

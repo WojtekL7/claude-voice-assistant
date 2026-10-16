@@ -91,7 +91,8 @@ WARIANTY = {
            "        if False:\n            continue"),
     # ⛔ NAJWAZNIEJSZY WARIANT tego pliku.
     "H6": (OKNO, "hooki wpisywane do ~/.claude/settings.json (cudzy plik!)",
-           "            return claude_hooks.settings_argument(claude_hooks.ensure_hooks(CONFIG_DIR))",
+           "            return claude_hooks.settings_argument(claude_hooks.ensure_hooks(\n"
+           "                CONFIG_DIR, claude_hooks.claude_theme_for(theme.is_light())))",
            "            from core import claude_settings\n"
            "            claude_settings.read_settings()  # SABOTAZ: cudzy plik\n"
            "            return ''"),

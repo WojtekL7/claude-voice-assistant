@@ -249,7 +249,12 @@ class WebTerminal(QWidget):
         url = ASSET_DIR / "terminal.html"
         _log(f"WebTerminal: start, html={url} (istnieje={url.exists()}), "
              f"PTY={_PTY_KIND or 'BRAK'}, shell={self._shell}")
-        self.view.load(QUrl.fromLocalFile(str(url)))
+        # Kolory startowe w adresie — strona maluje je od pierwszej klatki
+        # (patrz START_THEME w terminal.html); pełny motyw dojdzie później.
+        start_url = QUrl.fromLocalFile(str(url))
+        start_url.setQuery(f"bg={theme.BG_CANVAS.lstrip('#')}"
+                           f"&fg={theme.TERM_FG.lstrip('#')}")
+        self.view.load(start_url)
 
     # ==================== API zbliżone do QTermWidget ====================
 
@@ -544,9 +549,9 @@ class WebTerminal(QWidget):
         page = (
             f"<html><body style='background:{theme.BG_CANVAS};color:{theme.TEXT};"
             "font-family:sans-serif;padding:18px'>"
-            "<h3 style='color:#ef8080'>Terminal nie wystartował</h3>"
+            f"<h3 style='color:{theme.by_mode('#ef8080', theme.DANGER)}'>Terminal nie wystartował</h3>"
             f"<p>{safe_reason}</p>"
-            "<p style='color:#999'>Szczegóły w pliku:<br>"
+            f"<p style='color:{theme.by_mode('#999', theme.TEXT_DIM)}'>Szczegóły w pliku:<br>"
             f"<code>{safe_log}</code></p>"
             "</body></html>")
         self.view.setHtml(page)

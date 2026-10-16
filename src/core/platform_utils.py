@@ -580,3 +580,61 @@ def macos_app_bundle() -> Path:
         if bundle.suffix == ".app" and bundle.is_dir():
             return bundle
     return None
+
+
+# ==================== Ponowne uruchomienie programu ====================
+
+# Zmienne, które ustawia sam spakowany program (PyInstaller) albo plik AppImage
+# dla SIEBIE. Nowa instancja dostaje je od swojego startera na nowo — odziedziczone
+# wskazywałyby na katalog tymczasowy STAREJ instancji, który znika przy zamknięciu.
+_FROZEN_LIBRARY_VARS = ("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH", "DYLD_FRAMEWORK_PATH",
+                        "QT_PLUGIN_PATH", "QML2_IMPORT_PATH", "TCL_LIBRARY", "TK_LIBRARY")
+_APPIMAGE_VARS = ("APPDIR", "APPIMAGE", "ARGV0", "OWD")
+
+
+def relaunch_command() -> tuple:
+    """(polecenie, środowisko) uruchamiające TEN SAM program od nowa.
+
+    Używane po zmianie ustawienia, które działa dopiero od startu (wygląd).
+    - AppImage: plik .AppImage z dysku (`sys.executable` leży w znikającym
+      montażu /tmp/.mount_*),
+    - spakowany .exe/.app: ten sam plik wykonywalny,
+    - z kodu (beta): ten sam Python + ten sam skrypt.
+    """
+    env = dict(os.environ)
+    argv = list(sys.argv[1:])
+    app_image = appimage_path()
+    if is_frozen():
+        for var in _FROZEN_LIBRARY_VARS:
+            orig = env.pop(var + "_ORIG", None)
+            if orig is not None:
+                env[var] = orig
+            else:
+                env.pop(var, None)
+        # PyInstaller ≥ 6: nowa, NIEZALEŻNA instancja (nie „dziecko" starej).
+        env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+    if app_image is not None:
+        for var in _APPIMAGE_VARS:
+            env.pop(var, None)
+        return [str(app_image)] + argv, env
+    if is_frozen():
+        return [sys.executable] + argv, env
+    return [sys.executable, os.path.abspath(sys.argv[0])] + argv, env
+
+
+def relaunch_detached() -> bool:
+    """Uruchom program od nowa jako osobny proces. True = wystartował."""
+    try:
+        cmd, env = relaunch_command()
+        kwargs = {"env": env, "cwd": os.getcwd(), "close_fds": True,
+                  "stdin": subprocess.DEVNULL}
+        if is_windows():
+            kwargs["creationflags"] = (getattr(subprocess, "DETACHED_PROCESS", 0)
+                                       | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
+        else:
+            kwargs["start_new_session"] = True
+        subprocess.Popen(cmd, **kwargs)
+        return True
+    except Exception as e:
+        print(f"Ponowne uruchomienie nie powiodło się: {e}")
+        return False

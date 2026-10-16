@@ -22,7 +22,7 @@ from PyQt5.QtWidgets import (
     QColorDialog, QGridLayout, QGroupBox, QScrollArea, QFileDialog,
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
     QTabWidget, QTabBar, QProgressBar, QProxyStyle, QStyle, QStyleFactory,
-    QShortcut
+    QShortcut, QActionGroup
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QObject, QEvent, QPoint, QRect
 from PyQt5.QtGui import QFont, QTextCursor, QIcon, QKeySequence, QPalette, QColor, QTextCharFormat, QPainter, QPen, QPixmap, QLinearGradient
@@ -492,6 +492,19 @@ DEFAULT_SKIN_COLORS = theme.skin_colors()
 # Sprawdzone PRZED podbiciem (ten sam przepis co przy v5): 40/40 kolorów
 # identycznych z domyślnymi, zero własnych — migracja nic nie kasuje.
 SKIN_VERSION = 6
+
+# Tryb JASNY ma WŁASNĄ zapisaną skórkę, osobno od ciemnej (decyzja 2026-10-16).
+# Gdyby oba tryby dzieliły klucz `skin_colors`, zapisane u użytkownika ciemne
+# kolory przykryłyby jasną paletę (ten sam mechanizm co przy SKIN_VERSION),
+# a poprawki zrobione w jednym trybie psułyby drugi. Ciemny zostaje na starych
+# kluczach — jego zapis u obecnych użytkowników jest nietknięty.
+SKIN_KEYS_DARK = ('skin_colors', 'skin_version')
+SKIN_KEYS_LIGHT = ('skin_colors_light', 'skin_version_light')
+
+
+def skin_keys() -> tuple:
+    """(klucz kolorów, klucz wersji) skórki trybu, w którym program działa."""
+    return SKIN_KEYS_LIGHT if theme.is_light() else SKIN_KEYS_DARK
 
 # Nazwy kolorów do wyświetlenia w UI (po polsku)
 SKIN_COLOR_NAMES = {
@@ -2313,6 +2326,21 @@ class MainWindow(QMainWindow):
         settings_menu.addSeparator()
 
         # UI / aplikacja (przeniesione z dawnego menu Edycja)
+        # Wygląd: ciemny / jasny. Działa od następnego startu (paleta jest
+        # ustalana raz, przy ładowaniu programu — patrz gui/theme.py).
+        self.appearance_menu = settings_menu.addMenu(f"🌓 {tr('menu_appearance')}")
+        self.appearance_actions = {}
+        appearance_group = QActionGroup(self)
+        for mode, label_key in ((theme.APPEARANCE_DARK, 'appearance_dark'),
+                                (theme.APPEARANCE_LIGHT, 'appearance_light')):
+            action = QAction(tr(label_key), self)
+            action.setCheckable(True)
+            action.setChecked(mode == self.appearance_setting)
+            action.triggered.connect(lambda checked, m=mode: self._set_appearance(m))
+            appearance_group.addAction(action)
+            self.appearance_menu.addAction(action)
+            self.appearance_actions[mode] = action
+
         skin_colors_action = QAction(f"🎨 {tr('menu_skin_colors')}", self)
         skin_colors_action.triggered.connect(self._show_skin_settings)
         settings_menu.addAction(skin_colors_action)
@@ -2749,6 +2777,10 @@ class MainWindow(QMainWindow):
     def _load_settings(self):
         """Load settings from file."""
         self.anthropic_api_key = ""  # Initialize
+        # Wygląd zapisany w config.json; domyślnie ten, w którym program wstał
+        # (brak klucza = ciemny). Skórka drugiego trybu — patrz niżej.
+        self.appearance_setting = theme.APPEARANCE
+        self._other_mode_skin = {}
         # Pierwszy start (brak zapisanego configu) → język wg systemu:
         # angielski system = interfejs EN, każdy inny = PL. Zapisany 'language'
         # (poniżej) ma pierwszeństwo, więc obecni użytkownicy zostają na swoim.
@@ -2775,14 +2807,25 @@ class MainWindow(QMainWindow):
                     # jest porzucana na rzecz nowych domyślnych — inaczej stare
                     # kolory z config.json przykryłyby nowy motyw i użytkownik
                     # nie zobaczyłby żadnej zmiany. Kopia zapasowa poniżej.
-                    saved_version = settings.get('skin_version', 1)
+                    # Każdy tryb (ciemny/jasny) czyta WYŁĄCZNIE swoją skórkę;
+                    # skórkę drugiego trybu przechowujemy bez zmian do zapisu.
+                    colors_key, version_key = skin_keys()
+                    self._other_mode_skin = {
+                        k: settings[k]
+                        for k in SKIN_KEYS_DARK + SKIN_KEYS_LIGHT
+                        if k not in (colors_key, version_key) and k in settings}
+                    saved_version = settings.get(version_key, 1)
                     if saved_version >= SKIN_VERSION:
-                        saved_skin = settings.get('skin_colors', {})
+                        saved_skin = settings.get(colors_key, {})
                         for key in DEFAULT_SKIN_COLORS:
                             if key in saved_skin:
                                 self.skin_colors[key] = saved_skin[key]
-                    elif settings.get('skin_colors'):
+                    elif settings.get(colors_key):
                         self._backup_config_before_skin_migration(settings, saved_version)
+                    # Wybrany wygląd (działa od NASTĘPNEGO startu — patrz theme).
+                    if settings.get('appearance') in (theme.APPEARANCE_DARK,
+                                                      theme.APPEARANCE_LIGHT):
+                        self.appearance_setting = settings['appearance']
 
                     # Ikony przycisków NIE podlegają migracji — to własne napisy
                     # i emoji użytkownika (np. „Poszło" na przycisku wysyłania),
@@ -2833,14 +2876,16 @@ class MainWindow(QMainWindow):
         świeżo zmigrowanymi wartościami. Kto miał własną paletę, odtworzy ją
         stąd ręcznie w oknie „Skórka".
         """
-        backup = CONFIG_FILE.with_suffix(f'.skin-v{old_version}.bak')
+        colors_key, version_key = skin_keys()
+        tryb = '-light' if theme.is_light() else ''
+        backup = CONFIG_FILE.with_suffix(f'.skin{tryb}-v{old_version}.bak')
         if backup.exists():
             return
         try:
             with open(backup, 'w') as f:
                 json.dump({
-                    'skin_version': old_version,
-                    'skin_colors': settings.get('skin_colors', {}),
+                    version_key: old_version,
+                    colors_key: settings.get(colors_key, {}),
                     'skin_icons': settings.get('skin_icons', {}),
                 }, f, indent=2, ensure_ascii=False)
             print(f"Skórka zmigrowana do v{SKIN_VERSION}; poprzednia zapisana w {backup}")
@@ -2856,8 +2901,7 @@ class MainWindow(QMainWindow):
             'groq_api_key': self.stt.api_key,
             'stt_fix_enabled': self.stt.fix_enabled,
             'anthropic_api_key': getattr(self, 'anthropic_api_key', ''),
-            'skin_version': SKIN_VERSION,     # patrz _load_settings (migracja)
-            'skin_colors': self.skin_colors,  # Zawiera kolory interfejsu + terminala
+            'appearance': getattr(self, 'appearance_setting', theme.APPEARANCE),
             'skin_icons': self.skin_icons,    # Zawiera ikony przycisków
             'claude_command': self.claude_command,
             'auto_run_claude': self.auto_run_claude,
@@ -2865,6 +2909,12 @@ class MainWindow(QMainWindow):
             'auto_check_updates': getattr(self, 'auto_check_updates', True),
             'dictation_reminder_dismissed': getattr(self, 'dictation_reminder_dismissed', False),
         }
+        # Skórka trybu, w którym program działa (interfejs + terminal), pod
+        # JEGO kluczami; skórka drugiego trybu wraca do pliku nietknięta.
+        settings.update(getattr(self, '_other_mode_skin', {}))
+        colors_key, version_key = skin_keys()
+        settings[version_key] = SKIN_VERSION   # patrz _load_settings (migracja)
+        settings[colors_key] = self.skin_colors
         try:
             with open(CONFIG_FILE, 'w') as f:
                 json.dump(settings, f, indent=2)
@@ -2987,7 +3037,8 @@ class MainWindow(QMainWindow):
         try:
             from core import claude_hooks
             claude_hooks.trim_events(CONFIG_DIR)
-            return claude_hooks.settings_argument(claude_hooks.ensure_hooks(CONFIG_DIR))
+            return claude_hooks.settings_argument(claude_hooks.ensure_hooks(
+                CONFIG_DIR, claude_hooks.claude_theme_for(theme.is_light())))
         except Exception:
             self._hooks_failed = True
             return ""
@@ -3141,6 +3192,34 @@ class MainWindow(QMainWindow):
 
         self._save_settings()
 
+    def _set_appearance(self, mode: str):
+        """Wybór wyglądu z menu: zapisz i zaproponuj ponowne uruchomienie.
+
+        Paleta jest ustalana RAZ, przy ładowaniu programu (kilka miejsc
+        zapamiętuje kolory już wtedy), więc przełączenie „na żywo" byłoby
+        niepełne — stąd restart. Odmowa = wybór zostaje zapisany i zadziała
+        przy następnym uruchomieniu.
+        """
+        for m, action in self.appearance_actions.items():
+            action.setChecked(m == mode)
+        if mode == self.appearance_setting:
+            return
+        self.appearance_setting = mode
+        self._save_settings()
+        if mode == theme.APPEARANCE:
+            return   # powrót do trybu, w którym program już działa
+        box = QMessageBox(QMessageBox.Question, tr('appearance_restart_title'),
+                          tr('appearance_restart_text'), parent=self)
+        now_btn = box.addButton(tr('appearance_restart_now'), QMessageBox.AcceptRole)
+        box.addButton(tr('appearance_restart_later'), QMessageBox.RejectRole)
+        box.setDefaultButton(now_btn)
+        box.exec_()
+        if box.clickedButton() is now_btn:
+            # Sam start nowej instancji robi main.py PO zamknięciu tej
+            # (closeEvent zapisuje stan) — dwa okna naraz nigdy nie istnieją.
+            self.restart_requested = True
+            self.close()
+
     def _get_text(self, key: str) -> str:
         """Get translated text for current language (delegates to config.t)."""
         return tr(key)
@@ -3221,12 +3300,12 @@ class MainWindow(QMainWindow):
             if "Processing" in text or "⏳" in text:
                 # Purple color for processing
                 fmt = QTextCharFormat()
-                fmt.setForeground(QColor("#a78bfa"))
+                fmt.setForeground(QColor(theme.by_mode("#a78bfa", theme.ACCENT_LIGHT)))
                 cursor.insertText("⏳ Processing...\n", fmt)
             else:
                 # White color for AI response
                 fmt = QTextCharFormat()
-                fmt.setForeground(QColor("#e4e4e7"))
+                fmt.setForeground(QColor(theme.by_mode("#e4e4e7", theme.TEXT)))
                 cursor.insertText(text, fmt)
 
             self.conversation_area.setTextCursor(cursor)
@@ -4576,7 +4655,7 @@ class MainWindow(QMainWindow):
                 font-weight: bold;
             }}
             QPushButton:hover {{
-                color: #ff6b6b;
+                color: {theme.by_mode('#ff6b6b', theme.DANGER_LIGHT)};
             }}
         """)
         remove_btn.clicked.connect(lambda: self._remove_attachment(file_path))
@@ -5338,8 +5417,10 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         X (close_x.svg) zlewa się z tłem i widać go dopiero na hover (czerwone
         tło). Ciemna półprzezroczysta podkładka przywraca kontrast. Na Linux/Win
         nic nie zmieniamy (tam X jest dobrze widoczny na ciemnej zakładce)."""
+        # Tryb jasny: X jest ciemny (przemalowany w theme.icon_path), więc
+        # ciemna podkładka by go zasłoniła — tam jej nie dajemy.
         return ("background-color: rgba(0,0,0,0.38); border-radius: 3px;"
-                if sys.platform == "darwin" else "")
+                if sys.platform == "darwin" and not theme.is_light() else "")
 
     def _compose_tabbar_qss(self, colors: dict) -> str:
         """Arkusz stylu paska zakładek — JEDNO źródło dla startu i zmiany skórki.
@@ -5352,10 +5433,13 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         Uwaga: `padding`/`font-size` w `QTabBar::tab` są IGNOROWANE, bo pasek ma
         własny QStyle (Fusion). Rozmiar czcionki i ikon ustawiamy przez API.
         """
-        close_icon_url = (Path(__file__).parent / "close_x.svg").as_posix()
-        close_hover_url = (Path(__file__).parent / "close_x_hover.svg").as_posix()
-        chevron_left_url = (Path(__file__).parent / "chevron-left.svg").as_posix()
-        chevron_right_url = (Path(__file__).parent / "chevron-right.svg").as_posix()
+        # Ikony mają kolor wpisany w plik — w trybie jasnym bierzemy kopię
+        # przemalowaną na kolor tekstu (X na hover zostaje biały: leży na czerwieni).
+        _gui_dir = Path(__file__).parent
+        close_icon_url = Path(theme.icon_path(_gui_dir / "close_x.svg", theme.TEXT_DIM)).as_posix()
+        close_hover_url = (_gui_dir / "close_x_hover.svg").as_posix()
+        chevron_left_url = Path(theme.icon_path(_gui_dir / "chevron-left.svg", theme.TEXT_DIM)).as_posix()
+        chevron_right_url = Path(theme.icon_path(_gui_dir / "chevron-right.svg", theme.TEXT_DIM)).as_posix()
         panel = colors.get('menu_bar_bg', theme.BG_PANEL)
         # Wypełnienie AKTYWNEJ zakładki NIE idzie ze skórki (`button_bg`), tylko
         # z palety: to SYGNAŁ („tu jesteś"), a nie zwykła powierzchnia. Ze skórki
@@ -6101,7 +6185,7 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
 
         # Cyan color for system messages
         fmt = QTextCharFormat()
-        fmt.setForeground(QColor("#22d3ee"))
+        fmt.setForeground(QColor(theme.by_mode("#22d3ee", theme.TEAL)))
 
         cursor.insertText("\n", QTextCharFormat())
         cursor.insertText(f"[System] {text}", fmt)
@@ -6150,7 +6234,8 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         if isinstance(agent_config, dict):
             c = agent_config.get('tab_color')
             if isinstance(c, str) and c:
-                return c
+                # Tryb jasny: jasne kolory z palety przyciemnione do czytelności.
+                return theme.readable(c)
         return None
 
     def _agent_voice(self, tab):
@@ -6383,7 +6468,7 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         elif percentage < 70:
             color = f"{theme.WARNING}"   # żółty
         elif percentage < 90:
-            color = "#f97316"   # pomarańczowy
+            color = theme.by_mode("#f97316", theme.ALERT)   # pomarańczowy
         else:
             color = f"{theme.DANGER}"   # czerwony
 
@@ -6411,8 +6496,8 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
             self._context_bar.setValue(bar_value)
             self._context_bar.setStyleSheet(f"""
                 QProgressBar {{
-                    background-color: #2a2a2e;
-                    border: 1px solid #3a3a3e;
+                    background-color: {theme.TRACK_BG};
+                    border: 1px solid {theme.TRACK_BORDER};
                     border-radius: 3px;
                 }}
                 QProgressBar::chunk {{
@@ -6930,7 +7015,7 @@ class SkinSettingsDialog(QDialog):
             QScrollArea {{
                 border: 1px solid {theme.BORDER};
                 border-radius: 8px;
-                background-color: #1a0a14;
+                background-color: {theme.by_mode('#1a0a14', theme.SURFACE_ALT)};
             }}
         """)
 
@@ -7076,7 +7161,7 @@ class SkinSettingsDialog(QDialog):
         apply_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {theme.SUCCESS};
-                color: #0f172a;
+                color: {theme.by_mode('#0f172a', '#ffffff')};
                 border: none;
                 border-radius: 6px;
                 padding: 10px 20px;
@@ -7107,7 +7192,7 @@ class SkinSettingsDialog(QDialog):
 
         # Hex value label
         hex_label = QLabel(self.colors[color_key])
-        hex_label.setStyleSheet("color: #9ca3af; font-family: monospace;")
+        hex_label.setStyleSheet(f"color: {theme.by_mode('#9ca3af', theme.TEXT_DIM)}; font-family: monospace;")
         hex_label.setFixedWidth(80)
         layout.addWidget(hex_label, row, 2)
 
@@ -7118,7 +7203,7 @@ class SkinSettingsDialog(QDialog):
         # Calculate contrasting text color
         qcolor = QColor(color)
         luminance = (0.299 * qcolor.red() + 0.587 * qcolor.green() + 0.114 * qcolor.blue()) / 255
-        text_color = "#000000" if luminance > 0.5 else f"{theme.TEXT}"
+        text_color = "#000000" if luminance > 0.5 else theme.by_mode(theme.TEXT, "#ffffff")
 
         button.setStyleSheet(f"""
             QPushButton {{
@@ -7219,7 +7304,7 @@ class SkinSettingsDialog(QDialog):
                 font-size: 16px;
             }}
             QPushButton:hover {{
-                background-color: rgba(106, 42, 90, 0.5);
+                background-color: {theme.by_mode('rgba(106, 42, 90, 0.5)', theme.HOVER)};
             }}
         """
 
@@ -7236,13 +7321,13 @@ class SkinSettingsDialog(QDialog):
         dialog.setFixedWidth(300)
         dialog.setStyleSheet(f"""
             QDialog {{
-                background-color: #2d1a2d;
+                background-color: {theme.by_mode('#2d1a2d', theme.BG_WINDOW)};
             }}
             QLabel {{
                 color: {theme.TEXT};
             }}
             QLineEdit {{
-                background-color: #1a0a1a;
+                background-color: {theme.by_mode('#1a0a1a', theme.BG_INPUT)};
                 color: {theme.TEXT};
                 border: 1px solid {theme.HOVER};
                 border-radius: 4px;
@@ -7279,7 +7364,7 @@ class SkinSettingsDialog(QDialog):
         def update_color_btn():
             qcolor = QColor(selected_color[0])
             luminance = (0.299 * qcolor.red() + 0.587 * qcolor.green() + 0.114 * qcolor.blue()) / 255
-            text_color = "#000000" if luminance > 0.5 else f"{theme.TEXT}"
+            text_color = "#000000" if luminance > 0.5 else theme.by_mode(theme.TEXT, "#ffffff")
             color_btn.setStyleSheet(f"""
                 QPushButton {{
                     background-color: {selected_color[0]};
@@ -7294,7 +7379,7 @@ class SkinSettingsDialog(QDialog):
             # Update text input color preview
             text_input.setStyleSheet(f"""
                 QLineEdit {{
-                    background-color: #1a0a1a;
+                    background-color: {theme.by_mode('#1a0a1a', theme.BG_INPUT)};
                     color: {selected_color[0]};
                     border: 1px solid {theme.HOVER};
                     border-radius: 4px;
@@ -7341,7 +7426,7 @@ class SkinSettingsDialog(QDialog):
         ok_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {theme.SUCCESS};
-                color: #000000;
+                color: {theme.by_mode('#000000', '#ffffff')};
                 border: none;
             }}
             QPushButton:hover {{
@@ -7380,7 +7465,7 @@ class SkinSettingsDialog(QDialog):
         msg.setText(help_text)
         msg.setStyleSheet(f"""
             QMessageBox {{
-                background-color: #1a0a14;
+                background-color: {theme.by_mode('#1a0a14', theme.SURFACE_ALT)};
             }}
             QMessageBox QLabel {{
                 color: {theme.TEXT};

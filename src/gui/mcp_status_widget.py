@@ -225,7 +225,8 @@ class McpStatusWidget(QWidget):
         self.refresh_btn = QToolButton()
         refresh_icon_path = Path(__file__).parent / "refresh.svg"
         if refresh_icon_path.exists():
-            self.refresh_btn.setIcon(QIcon(str(refresh_icon_path)))
+            # Plik ma białą strzałkę — w trybie jasnym kopia w kolorze ikon.
+            self.refresh_btn.setIcon(QIcon(theme.icon_path(refresh_icon_path, theme.TEXT_DIM)))
             self.refresh_btn.setIconSize(QSize(16, 16))
         else:
             # Fallback gdyby brakowało pliku

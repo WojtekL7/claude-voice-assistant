@@ -148,6 +148,18 @@ def main():
     # Dlatego niszczymy okno JAWNIE, póki `QApplication` jeszcze żyje.
     # ⚠️ Kolejność jest tu istotą poprawki — nie „upraszczaj" tego z powrotem do jednej linii.
     rc = app.exec_()
+    # Ponowne uruchomienie na życzenie (np. zmiana wyglądu). Startujemy nową
+    # instancję TUTAJ: okno jest już zamknięte, a closeEvent zapisał stan i
+    # zamknął terminale zakładek — więc dwie instancje nie walczą o te same
+    # pliki. Celowo PRZED sprzątaniem niżej: gdyby ono się wysypało (znany
+    # przypadek przy zamykaniu, patrz komentarz wyżej), restart i tak nastąpi.
+    if getattr(window, "restart_requested", False):
+        from core.platform_utils import relaunch_detached
+        if not relaunch_detached():
+            from PyQt5.QtWidgets import QMessageBox
+            from config import t as tr
+            QMessageBox.warning(None, tr("appearance_restart_title"),
+                                tr("appearance_restart_failed"))
     del window
     gc.collect()
     sys.exit(rc)

@@ -971,6 +971,18 @@ UI_TRANSLATIONS = {
         "menu_skills": "Umiejętności (Skills)...",
         "menu_mcp": "Serwery MCP...",
         "menu_skin_colors": "Zmień kolory skórki...",
+        "menu_appearance": "Wygląd",
+        "appearance_dark": "Ciemny",
+        "appearance_light": "Jasny",
+        "appearance_restart_title": "Zmiana wyglądu",
+        "appearance_restart_text": ("Nowy wygląd pojawi się po ponownym uruchomieniu programu.\n\n"
+                                    "Uruchomić program ponownie teraz? Rozmowy agentów będzie "
+                                    "można wznowić po starcie, tak jak po zwykłym zamknięciu."),
+        "appearance_restart_now": "Uruchom ponownie",
+        "appearance_restart_later": "Później",
+        "appearance_restart_failed": ("Nie udało się uruchomić programu ponownie. "
+                                      "Wybrany wygląd jest zapisany — pojawi się przy następnym "
+                                      "uruchomieniu."),
         "menu_groq_api": "Klucz AI Managera (dyktowanie)...",
         "menu_anthropic_api": "Klucz API Anthropic...",
         "menu_claude_command": "Komenda Claude Code...",
@@ -1883,6 +1895,17 @@ UI_TRANSLATIONS = {
         "menu_skills": "Skills...",
         "menu_mcp": "MCP servers...",
         "menu_skin_colors": "Change skin colors...",
+        "menu_appearance": "Appearance",
+        "appearance_dark": "Dark",
+        "appearance_light": "Light",
+        "appearance_restart_title": "Change appearance",
+        "appearance_restart_text": ("The new appearance will be applied after the program restarts.\n\n"
+                                    "Restart the program now? Agent conversations can be resumed "
+                                    "after startup, just like after a normal close."),
+        "appearance_restart_now": "Restart now",
+        "appearance_restart_later": "Later",
+        "appearance_restart_failed": ("Could not restart the program. The chosen appearance is "
+                                      "saved and will be applied the next time you start it."),
         "menu_groq_api": "AI Manager key (dictation)...",
         "menu_anthropic_api": "Anthropic API key...",
         "menu_claude_command": "Claude Code command...",

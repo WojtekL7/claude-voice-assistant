@@ -37,6 +37,7 @@ from PyQt5.QtGui import QFont, QClipboard
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from core.platform_utils import is_macos, is_windows, default_shell
+from gui import theme
 
 # QTermWidget jest tylko-Linux. Import strażniczy — na macOS/Windows go nie ma,
 # i to jest OK: fabryka i tak wybierze tam WebTerminal.
@@ -59,12 +60,12 @@ _QTERMWIDGET_SCROLLBAR_QSS = """
         margin: 2px;
     }
     QScrollBar::handle:vertical {
-        background: #3a2a5a;
+        background: %HANDLE%;
         border-radius: 5px;
         min-height: 30px;
     }
     QScrollBar::handle:vertical:hover {
-        background: #6b46a8;
+        background: %HANDLE_HOVER%;
     }
     QScrollBar::add-line:vertical,
     QScrollBar::sub-line:vertical {
@@ -75,6 +76,10 @@ _QTERMWIDGET_SCROLLBAR_QSS = """
         background: transparent;
     }
 """
+# Uchwyt suwaka zależny od trybu (ciemny: wartości jak dotąd).
+_QTERMWIDGET_SCROLLBAR_QSS = (_QTERMWIDGET_SCROLLBAR_QSS
+    .replace('%HANDLE_HOVER%', theme.by_mode('#6b46a8', theme.TEXT_FAINT))
+    .replace('%HANDLE%', theme.by_mode('#3a2a5a', theme.BORDER)))
 
 
 def _xterm_theme_from_colors(colors: dict) -> dict:

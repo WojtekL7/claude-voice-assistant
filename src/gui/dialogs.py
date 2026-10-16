@@ -1072,7 +1072,7 @@ class AgentConfigDialog(QDialog):
             sw.setToolTip(hexc)
             sw.setStyleSheet(
                 f"QLabel{{background:{hexc};border:1px solid #00000055;border-radius:4px;}}"
-                f"QLabel:hover{{border:2px solid #ffffff;}}")
+                f"QLabel:hover{{border:2px solid {theme.by_mode('#ffffff', theme.TEXT)};}}")
             sw.clicked.connect(lambda c=hexc: self._set_tab_color(c))
             color_layout.addWidget(sw)
         color_layout.addStretch()
@@ -1089,7 +1089,7 @@ class AgentConfigDialog(QDialog):
         # Głos czytającego (Funkcja #3): per-agent. Puste = domyślny dla języka.
         self.tts_voice = self.agent.get('tts_voice') if isinstance(self.agent.get('tts_voice'), str) else None
         self._all_voices = []  # cache pełnej listy z internetu (po „Więcej głosów…")
-        voice_chevron = str(ASSETS_DIR / "chevron-down.svg").replace("\\", "/")
+        voice_chevron = theme.icon_path(ASSETS_DIR / "chevron-down.svg", theme.TEXT_DIM).replace("\\", "/")
         voice_layout = QHBoxLayout()
         voice_layout.setSpacing(6)
         self.voice_combo = _StyledComboBox()
@@ -1114,7 +1114,7 @@ class AgentConfigDialog(QDialog):
         self._voices_loaded.connect(self._on_voices_loaded)
 
         # Model Claude Code
-        chevron_path = str(ASSETS_DIR / "chevron-down.svg").replace("\\", "/")
+        chevron_path = theme.icon_path(ASSETS_DIR / "chevron-down.svg", theme.TEXT_DIM).replace("\\", "/")
         self.model_combo = _StyledComboBox()
         self.model_combo.setMinimumHeight(36)  # podnoszone do natury na końcu zakładki
         model_view = QListView()
@@ -1636,7 +1636,7 @@ class AgentConfigDialog(QDialog):
         search = QLineEdit()
         search.setPlaceholderText(tr('dlg_agent_voice_search_ph'))
         search.setStyleSheet(
-            f"QLineEdit{{background:{theme.BG_INPUT};color:#fff;border:1px solid {theme.BORDER};"
+            f"QLineEdit{{background:{theme.BG_INPUT};color:{theme.by_mode('#fff', theme.TEXT)};border:1px solid {theme.BORDER};"
             "border-radius:6px;padding:8px;}")
         v.addWidget(search)
 
@@ -1646,9 +1646,9 @@ class AgentConfigDialog(QDialog):
 
         listw = QListWidget()
         listw.setStyleSheet(
-            f"QListWidget{{background:{theme.SURFACE_ALT};color:#fff;border:1px solid {theme.BORDER};border-radius:6px;}}"
+            f"QListWidget{{background:{theme.SURFACE_ALT};color:{theme.by_mode('#fff', theme.TEXT)};border:1px solid {theme.BORDER};border-radius:6px;}}"
             "QListWidget::item{padding:7px 10px;}"
-            f"QListWidget::item:selected{{background:{theme.SURFACE_HOVER};color:#fff;}}")
+            f"QListWidget::item:selected{{background:{theme.SURFACE_HOVER};color:{theme.by_mode('#fff', theme.TEXT)};}}")
         v.addWidget(listw, stretch=1)
 
         # Pozycje: (etykieta, voice_id, tekst-do-wyszukania).
@@ -3053,7 +3053,7 @@ _MCP_STATUS_BADGE_DATA = {
     STATUS_CONNECTED: ("✅", f"{theme.SUCCESS}", "dlg_mcp_status_connected"),
     STATUS_NEEDS_AUTH: ("🔐", f"{theme.WARNING}", "dlg_mcp_status_needs_auth"),
     STATUS_FAILED: ("❌", f"{theme.DANGER}", "dlg_mcp_status_failed"),
-    STATUS_UNKNOWN: ("❓", "#94a3b8", "dlg_mcp_status_unknown"),
+    STATUS_UNKNOWN: ("❓", theme.by_mode("#94a3b8", theme.TEXT_FAINT), "dlg_mcp_status_unknown"),
 }
 
 _MCP_SCOPE_LABEL_KEY = {

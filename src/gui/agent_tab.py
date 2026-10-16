@@ -120,15 +120,18 @@ class AutoResizeTextEdit(QTextEdit):
         # Wygląd suwaka = ta sama ciemna rynna + szary uchwyt co w terminalu
         # (WebTerminal). Stylujemy TYLKO sam pasek (verticalScrollBar), żeby nie
         # ruszać palety/tła pola (chroni fix białego błysku po Enter).
+        rynna = theme.by_mode('#2a2a2d', theme.TRACK_BG)
         self.verticalScrollBar().setStyleSheet(
-            "QScrollBar:vertical { width: 12px; background: #2a2a2d; margin: 0; }"
-            "QScrollBar::handle:vertical { background: #8a8a8a; border-radius: 5px;"
+            f"QScrollBar:vertical {{ width: 12px; background: {rynna}; margin: 0; }}"
+            "QScrollBar::handle:vertical { background: "
+            f"{theme.by_mode('#8a8a8a', theme.TEXT_FAINT)}; border-radius: 5px;"
             " min-height: 30px; }"
-            "QScrollBar::handle:vertical:hover { background: #a6a6a6; }"
+            "QScrollBar::handle:vertical:hover { background: "
+            f"{theme.by_mode('#a6a6a6', theme.TEXT_DIM)}; }}"
             "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
             " height: 0; background: none; border: none; }"
             "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {"
-            " background: #2a2a2d; }")
+            f" background: {rynna}; }}")
         self._max_lines = 5
         # Ile pikseli POZA obszarem tekstu zjada sama oprawa pola: ramka QSS
         # (2 px × 2) + padding QSS (12 px × 2) = 28. Używane tylko dopóki nie da
@@ -425,7 +428,8 @@ class AgentTab(QWidget):
         # Tło dopasowane do skin terminal_bg — żeby nie błyskało białym przed
         # aktywacją. Bardziej szczegółowe kolory ustawi MainWindow przy
         # apply_terminal_colors po terminal_ready.
-        self._terminal_placeholder.setStyleSheet("background-color: #1a1a1a;")
+        self._terminal_placeholder.setStyleSheet(
+            f"background-color: {theme.by_mode('#1a1a1a', theme.BG_CANVAS)};")
         self.main_splitter.addWidget(self._terminal_placeholder)
         self.terminal = None
         self.conversation_area = None
@@ -1336,12 +1340,12 @@ class AgentTab(QWidget):
     def _add_attachment_chip(self, file_path: str):
         """Add attachment chip to UI."""
         chip = QFrame()
-        chip.setStyleSheet("""
-            QFrame {
-                background-color: #4a1a3a;
+        chip.setStyleSheet(f"""
+            QFrame {{
+                background-color: {theme.by_mode('#4a1a3a', theme.SURFACE_HOVER)};
                 border-radius: 12px;
                 padding: 2px;
-            }
+            }}
         """)
         chip_layout = QHBoxLayout(chip)
         chip_layout.setContentsMargins(8, 4, 4, 4)
@@ -1357,22 +1361,22 @@ class AgentTab(QWidget):
                "📦" if ext in ['.zip', '.tar', '.gz'] else "📎"
 
         label = QLabel(f"{icon} {file_name}")
-        label.setStyleSheet("color: #ffffff; font-size: 11px;")
+        label.setStyleSheet(f"color: {theme.by_mode('#ffffff', theme.TEXT)}; font-size: 11px;")
         chip_layout.addWidget(label)
 
         # Remove button
         remove_btn = QPushButton("✕")
         remove_btn.setFixedSize(20, 20)
-        remove_btn.setStyleSheet("""
-            QPushButton {
+        remove_btn.setStyleSheet(f"""
+            QPushButton {{
                 background-color: transparent;
-                color: #ef4444;
+                color: {theme.by_mode('#ef4444', theme.DANGER)};
                 border: none;
                 font-size: 12px;
-            }
-            QPushButton:hover {
-                color: #ffffff;
-            }
+            }}
+            QPushButton:hover {{
+                color: {theme.by_mode('#ffffff', theme.DANGER_LIGHT)};
+            }}
         """)
         remove_btn.clicked.connect(lambda: self._remove_attachment(file_path, chip))
         chip_layout.addWidget(remove_btn)
@@ -1424,10 +1428,11 @@ class AgentTab(QWidget):
         cfg = self.agent_config if isinstance(self.agent_config, dict) else {}
         raw = cfg.get('tab_color')
         if isinstance(raw, str) and raw:
-            col = QColor(raw)
+            col = QColor(theme.readable(raw))
             if col.isValid():
                 base = col.name()
-                focus = col.lighter(135).name()
+                # „Mocniej" po kliknięciu: na ciemnym tle = jaśniej, na jasnym = ciemniej.
+                focus = (col.darker(130) if theme.is_light() else col.lighter(135)).name()
         return base, focus
 
     def _apply_input_border(self):
