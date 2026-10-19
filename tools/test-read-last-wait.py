@@ -148,7 +148,7 @@ _WAIT_METHODS = ('_agent_is_writing', '_terminal_idle_secs', '_should_wait_for_r
                  '_give_up_read_last_wait', '_session_size', '_read_last_debug',
                  '_already_spoken', '_should_skip_repeat',
                  '_speak_screen_text', '_screen_tail_since', '_screen_source',
-                 '_journal_is_frozen')
+                 '_journal_is_frozen', '_question_on_screen')
 
 
 class FakeWindow:
@@ -159,6 +159,10 @@ class FakeWindow:
         self.tts = FakeTts()
         self.current_language = 'pl-PL'
         self._bez_spacji = MainWindow._bez_spacji   # statyczna — bez wiązania
+        # Stopka pytania (2026-10-19): czysta funkcja + stałe klasy, bez wiązania.
+        self._refresh_screen = MainWindow._refresh_screen
+        self._QUESTION_FOOTER_RE = MainWindow._QUESTION_FOOTER_RE
+        self._QUESTION_FOOTER_LINES = MainWindow._QUESTION_FOOTER_LINES
         self.statuses = []
         self._current_tab = tab
         self._read_wait_timer = FakeTimer()
@@ -350,6 +354,10 @@ class FakeQWindow(QObject):
         self.tts = FakeTts()
         self.current_language = 'pl-PL'
         self._bez_spacji = MainWindow._bez_spacji   # statyczna — bez wiązania
+        # Stopka pytania (2026-10-19): czysta funkcja + stałe klasy, bez wiązania.
+        self._refresh_screen = MainWindow._refresh_screen
+        self._QUESTION_FOOTER_RE = MainWindow._QUESTION_FOOTER_RE
+        self._QUESTION_FOOTER_LINES = MainWindow._QUESTION_FOOTER_LINES
         self.statuses = []
         self._current_tab = tab
         self._read_wait_timer = None

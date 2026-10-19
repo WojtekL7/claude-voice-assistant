@@ -4080,6 +4080,9 @@ class MainWindow(QMainWindow):
         self._read_wait_size = self._session_size(reader)
         self._read_wait_size_changed = now
         self._read_wait_tool_since = None
+        # Świeża siatka ekranu na PIERWSZY obrót pętli (odpowiedź xterm.js wraca
+        # callbackiem) — po to, by pytanie z polami wyboru wykryć w ~0,5 s.
+        self._refresh_screen(tab)
         self._read_last_debug(
             f"WAIT start: stan_tury={turn_state} limit={timeout:.0f}s "
             f"cisza_terminala={self._terminal_idle_secs(tab):.1f}s "
@@ -4089,6 +4092,15 @@ class MainWindow(QMainWindow):
         self._read_wait_timer.timeout.connect(self._check_read_last_wait)
         self._read_wait_timer.start(READ_LAST_WAIT_POLL_MS)
         self._update_status(tr('status_reading_wait'))
+
+    @staticmethod
+    def _refresh_screen(tab):
+        """Poproś zakładkę o świeżą migawkę ekranu (asynchronicznie, bez wyjątków)."""
+        try:
+            if tab is not None:
+                tab.refresh_screen_text_cache()
+        except Exception:
+            pass
 
     def _session_size(self, reader) -> int:
         """Rozmiar pliku sesji (-1 = nie znamy). Przyrost = agent pracuje."""
@@ -4121,6 +4133,39 @@ class MainWindow(QMainWindow):
         except Exception:
             return -1.0
         return wiek if wiek >= READ_LAST_BLOCKED_AGE_SECS else -1.0
+
+    # Stopka okienka pytania z polami wyboru w Claude Code — STAŁY napis na samym
+    # dole: „Enter to select · Tab/Arrow keys to navigate · Esc to cancel".
+    # Kotwiczymy na POCZĄTKU wiersza: wypowiedź, która ten napis CYTUJE (np. ta
+    # diagnoza), ma go w środku zdania i nie może udawać pytania.
+    _QUESTION_FOOTER_RE = re.compile(r"^\s*Enter to select\b.*\bto navigate\b")
+    _QUESTION_FOOTER_LINES = 8   # tyle ostatnich NIEPUSTYCH wierszy przeglądamy
+
+    def _question_on_screen(self, tab) -> bool:
+        """Czy na dole ekranu WISI pytanie z polami wyboru (agent czeka na usera)?
+
+        ⛔ Po co (2026-10-19, dwa zgłoszenia jednego dnia): Claude Code wstrzymuje
+        zapis do dziennika, dopóki pytanie czeka. Szybka ścieżka `_journal_is_frozen`
+        rusza dopiero po 120 s bezruchu dziennika, a user klika 🔊 po 19–106 s
+        (zmierzone w read-last-debug.log 10:07–10:08 i 15:26) → program czekał
+        na odpowiedź, która NIE PRZYJDZIE, i przycisk wyglądał na martwy.
+        Stopka pytania to dowód natychmiastowy, a nie zgadywanie po czasie.
+
+        Tylko ŚWIEŻA siatka xterma (to, co user widzi). Strumień PTY (bufor 5000)
+        się nie nadaje: ma sekwencje sterujące i STARE stopki sprzed odpowiedzi.
+        Brak świeżej siatki = „nie wiem" = False → zachowanie jak dotąd.
+        """
+        if tab is None:
+            return False
+        try:
+            siatka = tab.screen_text_snapshot(READ_LAST_SCREEN_FRESH_SECS)
+        except Exception:
+            return False
+        if not siatka:
+            return False
+        wiersze = [w for w in siatka.splitlines() if w.strip()]
+        return any(self._QUESTION_FOOTER_RE.search(w)
+                   for w in wiersze[-self._QUESTION_FOOTER_LINES:])
 
     def _screen_source(self, tab):
         """Skad wziac tekst EKRANU — i powiedz WPROST, ktore to zrodlo.
@@ -4298,6 +4343,14 @@ class MainWindow(QMainWindow):
                 self._update_status(tr('status_response_no_content'))
             return
 
+        # Na ekranie wisi PYTANIE z polami wyboru → dziennik nie drgnie, dopóki
+        # user nie odpowie. Czekanie nic nie da: od razu plan B (ekran).
+        if self._question_on_screen(tab):
+            self._give_up_read_last_wait(last, 'status_reading_wait_stalled',
+                                         'pytanie na ekranie')
+            return
+        self._refresh_screen(tab)
+
         # Przyrost dziennika = agent pracuje (myślenie kończy się wpisem).
         size = self._session_size(reader)
         if size != self._read_wait_size:
@@ -4433,6 +4486,16 @@ class MainWindow(QMainWindow):
                 # SZYBKA ŚCIEŻKA: tura „winna tekst”, ale dziennik nie drgnął
                 # od dawna = agent NIE myśli, tylko czeka na Ciebie (pytanie
                 # z polami wyboru). Czekanie 30 s niczego nie przyniesie.
+                # NAJSZYBSZA ŚCIEŻKA: na ekranie WIDAĆ stopkę pytania z polami
+                # wyboru → agent czeka na Ciebie, dziennik stoi z definicji.
+                # Nie ma na co czekać, niezależnie od tego, ile sekund minęło.
+                if turn_state == TURN_OWES_TEXT and self._question_on_screen(tab):
+                    self._read_last_debug(
+                        f"PYTANIE NA EKRANIE przy stanie {turn_state} "
+                        f"-> probuje EKRANU bez czekania")
+                    if self._speak_screen_text(tab, last, 'pytanie na ekranie'):
+                        return
+
                 wiek = self._journal_is_frozen(reader, turn_state)
                 if wiek >= 0:
                     self._read_last_debug(

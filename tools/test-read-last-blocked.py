@@ -126,7 +126,8 @@ class FakeTts:
 
 _METODY = ('_screen_tail_since', '_screen_source', '_speak_screen_text',
            '_journal_is_frozen', '_terminal_idle_secs', '_give_up_read_last_wait',
-           '_cancel_read_last_wait')
+           '_cancel_read_last_wait', '_question_on_screen', '_check_read_last_wait',
+           '_session_size')
 
 
 class FakeWindow:
@@ -144,6 +145,9 @@ class FakeWindow:
         # `_bez_spacji` jest statyczna — wiązanie przez __get__ wpychałoby self
         # jako pierwszy argument. Bierzemy gołą funkcję.
         self._bez_spacji = MainWindow._bez_spacji
+        self._refresh_screen = MainWindow._refresh_screen
+        self._QUESTION_FOOTER_RE = MainWindow._QUESTION_FOOTER_RE
+        self._QUESTION_FOOTER_LINES = MainWindow._QUESTION_FOOTER_LINES
         for m in _METODY:
             setattr(self, m, getattr(MainWindow, m).__get__(self))
 
@@ -263,6 +267,159 @@ w._give_up_read_last_wait("stara wypowiedz", 'status_reading_wait_stalled', 'tes
 jest("E3 gdy ekran też nic nie ma → milczy jak dotąd i mówi o tym userowi "
      "(kontrola, że E1 nie zdaje przez przypadek)",
      not w.tts.wypowiedziane and w.statuses)
+
+print()
+print("=" * 78)
+print("G. STOPKA PYTANIA NA EKRANIE = NIE CZEKAJ (2026-10-19)")
+print("=" * 78)
+# Siatka przepisana z PRAWDZIWEGO zrzutu usera (2026-10-19 15:26, zakładka CRM):
+# dwie wypowiedzi PO ostatniej zapisanej w dzienniku + pytanie z polami wyboru.
+# Dziennik stał 19 s, więc szybka ścieżka (120 s) nie miała prawa ruszyć.
+KOTWICA_G = ("Klient dzisiaj (19.10) odpisał i podał dane osoby odpowiedzialnej "
+             "za produkt w UE. Czytam cały mail.")
+SIATKA_PYTANIE = """● Karta 681 jest, a klient 13.10 wypełnił formularz danych do umowy (zgłoszenie #125).
+
+  Ran 5 shell commands
+
+● Klient dzisiaj (19.10) odpisał i podał dane osoby odpowiedzialnej za produkt w UE.
+  Czytam cały mail.
+
+  Ran 4 shell commands
+
+● Potwierdziłem w wykazie podatników, że firma ma status „czynny VAT”, a adres zgadza
+  się z danymi od klienta. Teraz sprawdzę dostępne opcje odpowiedzi w formularzu.
+
+  Ran 3 shell commands
+
+● Z 38 wymaganych danych mam już 31, a brakujące uzupełnię z maila klienta i wzorca
+  umowy — proszę o zgodę na zapis zmian w bazie produkcyjnej.
+────────────────────────────────────────────────────────────────────────────────
+ ←  ☐ GPSR kontakt  ☐ Zgoda  ✔ Submit  →
+
+Telefon i e-mail firmy Neurobit (osoby odpowiedzialnej w UE) – co wpisać?
+
+❯ 1. Zostaw widoczny brak (Recommended)
+     Umowa pokaże „[DO UZUPEŁNIENIA]” w dwóch miejscach.
+  2. Znam te dane – podam
+  3. Przygotuj mail do klienta
+  4. Type something.
+────────────────────────────────────────────────────────────────────────────────
+  5. Chat about this
+
+Enter to select · Tab/Arrow keys to navigate · Esc to cancel
+
+"""
+# Wypowiedź, która stopkę CYTUJE (tak jak diagnoza tego błędu w zakładce VCA).
+SIATKA_CYTAT = """● Pytanie z polami wyboru ma na dole stały napis
+  „Enter to select · Tab/Arrow keys to navigate”. Proponuję, żeby program
+  przy kliknięciu 🔊 najpierw sprawdzał, czy ten napis jest widoczny.
+
+  Czy mogę to zrobić?
+
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle)
+"""
+
+
+class FakeTabSiatka(FakeTab):
+    """Zakładka z siatką xterma: `snapshot` oddaje ją tylko, gdy jest „świeża”."""
+
+    def __init__(self, siatka, swieza=True, bufor="", idle=1.0):
+        super().__init__(bufor, idle)
+        self._siatka = siatka
+        self._swieza = swieza
+        self.odswiezen = 0
+
+    def screen_text_snapshot(self, max_age_secs):
+        return self._siatka if self._swieza else ""
+
+    def refresh_screen_text_cache(self):
+        self.odswiezen += 1
+
+
+w = FakeWindow()
+jest("G1 stopka pytania na dole świeżej siatki → wykryte",
+     w._question_on_screen(FakeTabSiatka(SIATKA_PYTANIE)))
+jest("G2 wypowiedź CYTUJĄCA stopkę w środku zdania → NIE pytanie "
+     "(kontrola negatywna: inaczej 🔊 w zakładce z tą diagnozą czytałby ekran)",
+     not w._question_on_screen(FakeTabSiatka(SIATKA_CYTAT)))
+stara = SIATKA_PYTANIE + "\n".join(f"● wiersz po odpowiedzi {i}" for i in range(12))
+jest("G3 stopka wyjechała w górę (pytanie już odpowiedziane) → NIE pytanie",
+     not w._question_on_screen(FakeTabSiatka(stara)))
+jest("G4 siatka nieświeża → „nie wiem” = False (zachowanie jak dotąd)",
+     not w._question_on_screen(FakeTabSiatka(SIATKA_PYTANIE, swieza=False)))
+jest("G5 zakładka bez siatki (stary silnik) → False, nic nie wybucha",
+     not w._question_on_screen(FakeTab(SIATKA_PYTANIE)))
+jest("G6 brak zakładki → False", not w._question_on_screen(None))
+
+
+class FakeTurnReader:
+    def __init__(self, last, stan):
+        self._last, self._stan = last, stan
+
+    def turn_snapshot(self):
+        return self._last, self._stan
+
+    def session_size(self):
+        return 1000
+
+
+class FakeTimer:
+    def __init__(self):
+        self.zatrzymany = False
+
+    def stop(self):
+        self.zatrzymany = True
+
+
+def petla(siatka, swieza=True):
+    """Jeden obrót PRAWDZIWEJ `_check_read_last_wait` przy czekaniu na odpowiedź."""
+    w = FakeWindow()
+    tab = FakeTabSiatka(siatka, swieza=swieza, idle=1.0)
+    w._get_current_agent_tab = lambda: tab
+    timer = FakeTimer()
+    teraz = time.monotonic()
+    w._read_wait_timer = timer
+    w._read_wait_tab = tab
+    w._read_wait_reader = FakeTurnReader(KOTWICA_G, TURN_OWES_TEXT)
+    w._read_wait_before = KOTWICA_G
+    w._read_wait_started = teraz
+    w._read_wait_hard_deadline = teraz + 180
+    w._read_wait_size = 1000
+    w._read_wait_size_changed = teraz
+    w._read_wait_tool_since = None
+    w._check_read_last_wait()
+    return w, tab, timer
+
+
+w, tab, timer = petla(SIATKA_PYTANIE)
+mowione = w.tts.wypowiedziane[0] if w.tts.wypowiedziane else ""
+jest("G7 czekanie + pytanie na ekranie → czyta OD RAZU (pierwszy obrót pętli)",
+     bool(mowione) and timer.zatrzymany, f"log={w.log}")
+jest("G8 ...i czyta NOWE wypowiedzi spod kotwicy, nie starą z dziennika",
+     "Z 38 wymaganych" in mowione and "Potwierdziłem" in mowione
+     and "Czytam cały mail" not in mowione, repr(mowione[:160]))
+jest("G9 ...a w logu stoi powód „pytanie na ekranie” (diagnoza po fakcie)",
+     any("pytanie na ekranie" in l for l in w.log), f"log={w.log}")
+
+w, tab, timer = petla(SIATKA_CYTAT)
+jest("G10 agent MYŚLI (brak stopki pytania) → czeka dalej jak dotąd, nic nie czyta",
+     not w.tts.wypowiedziane and not timer.zatrzymany, f"log={w.log}")
+jest("G11 ...i w każdym obrocie prosi o świeżą siatkę (inaczej G7 nie zadziała na żywo)",
+     tab.odswiezen >= 1)
+
+w, tab, timer = petla(SIATKA_PYTANIE, swieza=False)
+jest("G12 siatka nieświeża → czeka dalej (nie zgaduje po starym ekranie)",
+     not w.tts.wypowiedziane and not timer.zatrzymany)
+
+zrodlo_g = (ROOT / "src" / "gui" / "main_window.py").read_text(encoding="utf-8")
+klik = zrodlo_g.split("def _read_last_response(self):")[1]
+jest("G13 kliknięcie sprawdza stopkę PRZED szybką ścieżką 120 s",
+     0 <= klik.find("_question_on_screen(tab)") < klik.find("_journal_is_frozen(reader"))
+start = zrodlo_g.split("def _start_read_last_wait")[1].split("def ")[0]
+jest("G14 start czekania prosi o świeżą siatkę", "_refresh_screen(tab)" in start)
 
 print()
 print("=" * 78)
