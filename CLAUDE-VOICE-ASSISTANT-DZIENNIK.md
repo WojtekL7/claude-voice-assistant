@@ -8,6 +8,13 @@ w zeszły czwartek", na które `git log` odpowiada zbyt drobno. Wpis: 3–8 lini
 
 ---
 
+## 2026-10-19
+
+- **Start sesji:** pamięć przeczytana w całości, lista „co wisi” z pomiarami (beta od 09:15, 1.0.30 niewydane, `server/.venv` zepsute, stary `CATALOG_URL`, pusty pas: oba rodzaje dowodów w logu).
+- **🔊 „nie działa” (2 zrzuty, 10:08 i 15:26, zakładka CRM):** wisiało pytanie z polami wyboru, Claude Code wstrzymał zapis dziennika; szybka ścieżka czekała na 120 s bezruchu, user klikał po 19–106 s → `WAIT` do 3 min = martwy przycisk.
+- **Poprawka `58c5cf5` (NIEPRZETESTOWANE u usera, test 20.10 po restarcie bety):** stopka pytania na dole świeżej siatki xterma = czytaj od razu z ekranu (klik + pętla czekania). Bramka `test-read-last-blocked.py` 39/0, sabotaż 4/4, `test-read-last-wait.py` 59/0.
+- Pamięć: test dopisany jako pierwszy punkt (`40a25fa`); nauki do `read-last-drzewo-diagnostyczne.md` (przyczyna nr 6 + wzorzec „WAIT bez ciągu dalszego”).
+
 ## 2026-10-16
 
 - **Flaga „agent czeka" w CRM nie zapalała się (`76d0e71`, nieprzetestowane):** Claude Code 2.1.300+ wpisuje do dziennika wielkie `api-request` (do 154 KB), czytnik ogona 64 KB widział same te wpisy. Czytanie wstecz z pomijaniem wpisów technicznych; bramka 14/0, na starym kodzie 7 FAIL.
