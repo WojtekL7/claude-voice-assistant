@@ -44,24 +44,26 @@ from core.mcp_templates import MCP_TEMPLATES, McpTemplate
 
 # === Stylizowane dialogi plików ===
 
-# Domyślne kolory dla dialogów (ciemny motyw)
-# Paleta okien wyboru plików (QFileDialog). Neutralna, „systemowa" — ciemny
-# GNOME-owy wygląd zamiast fioletu aplikacji. Prawdziwie natywne okno GNOME nie
-# jest tu dostępne dla Qt (brak aktywnej integracji portal/GTK dla okien plików),
-# więc dajemy czysty, neutralny zamiennik dopasowany do ciemnej aplikacji.
-DIALOG_COLORS = {
-    'bg': f'{theme.SURFACE}',          # tło okna (ciemnoszare)
-    'text': f'{theme.TEXT}',        # jasny tekst
-    'input_bg': f'{theme.BG_WINDOW}',    # pola/listy (ciemniejsze)
-    'border': f'{theme.BORDER}',      # neutralna ramka
-    'hover': f'{theme.SURFACE_HOVER}',       # podświetlenie najechania
-    'selection': f'{theme.ACCENT}',   # zaznaczenie = niebieski akcent GNOME
-}
+# Paleta okien wyboru plików (QFileDialog). Neutralna, „systemowa" — zamiast
+# fioletu aplikacji. Prawdziwie natywne okno GNOME nie jest tu dostępne dla Qt
+# (brak aktywnej integracji portal/GTK dla okien plików), więc dajemy czysty,
+# neutralny zamiennik dopasowany do trybu aplikacji.
+# ⚠️ Funkcja, nie stała: kolory czytane w chwili otwarcia okna. Stała z importu
+# zostawała w trybie ze startu po przełączeniu jasny/ciemny W LOCIE (2026-10-20).
+def _dialog_colors() -> dict:
+    return {
+        'bg': theme.SURFACE,             # tło okna
+        'text': theme.TEXT,
+        'input_bg': theme.BG_WINDOW,     # pola/listy
+        'border': theme.BORDER,          # neutralna ramka
+        'hover': theme.SURFACE_HOVER,    # podświetlenie najechania
+        'selection': theme.ACCENT,       # zaznaczenie
+    }
 
 
 def get_file_dialog_stylesheet() -> str:
     """Zwraca stylesheet dla stylizowanych dialogów plików."""
-    c = DIALOG_COLORS
+    c = _dialog_colors()
     return f"""
         QFileDialog {{
             background-color: {c['bg']};
@@ -631,17 +633,16 @@ class _StyledComboBox(QComboBox):
     system default colors and shows as white strips above/below the items.
     """
 
-    _POPUP_CONTAINER_STYLE = (
-        f"background-color: {theme.SURFACE_ALT};"
-        f"border: 1px solid {theme.BORDER};"
-        "border-radius: 4px;"
-    )
-
     def showPopup(self):
         super().showPopup()
         container = self.view().parentWidget()
         if container is not None:
-            container.setStyleSheet(self._POPUP_CONTAINER_STYLE)
+            # Kolory w chwili otwarcia — tryb mógł się przełączyć w locie.
+            container.setStyleSheet(
+                f"background-color: {theme.SURFACE_ALT};"
+                f"border: 1px solid {theme.BORDER};"
+                "border-radius: 4px;"
+            )
 
 
 # Gotowa pula ikon (emoji) do szybkiego wyboru w konfiguracji agenta.
@@ -3048,12 +3049,13 @@ class SkillsManagerDialog(QDialog):
 
 # Mapowanie statusu na ikonę + kolor (do listy). Etykieta tekstowa jest
 # tłumaczona w locie przez _mcp_status_badge() — tu trzymamy tylko ikonę,
-# kolor i klucz tłumaczenia.
+# kolor i klucz tłumaczenia. Kolor = funkcja: czytany w chwili rysowania, bo
+# tryb jasny/ciemny przełącza się w locie (stała z importu zostawała w starym).
 _MCP_STATUS_BADGE_DATA = {
-    STATUS_CONNECTED: ("✅", f"{theme.SUCCESS}", "dlg_mcp_status_connected"),
-    STATUS_NEEDS_AUTH: ("🔐", f"{theme.WARNING}", "dlg_mcp_status_needs_auth"),
-    STATUS_FAILED: ("❌", f"{theme.DANGER}", "dlg_mcp_status_failed"),
-    STATUS_UNKNOWN: ("❓", theme.by_mode("#94a3b8", theme.TEXT_FAINT), "dlg_mcp_status_unknown"),
+    STATUS_CONNECTED: ("✅", lambda: theme.SUCCESS, "dlg_mcp_status_connected"),
+    STATUS_NEEDS_AUTH: ("🔐", lambda: theme.WARNING, "dlg_mcp_status_needs_auth"),
+    STATUS_FAILED: ("❌", lambda: theme.DANGER, "dlg_mcp_status_failed"),
+    STATUS_UNKNOWN: ("❓", lambda: theme.by_mode("#94a3b8", theme.TEXT_FAINT), "dlg_mcp_status_unknown"),
 }
 
 _MCP_SCOPE_LABEL_KEY = {
@@ -3068,7 +3070,7 @@ def _mcp_status_badge(status):
     icon, color, key = _MCP_STATUS_BADGE_DATA.get(
         status, _MCP_STATUS_BADGE_DATA[STATUS_UNKNOWN]
     )
-    return icon, color, tr(key)
+    return icon, color(), tr(key)
 
 
 def _mcp_scope_label(scope: str) -> str:

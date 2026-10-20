@@ -605,7 +605,7 @@ spr("18b", "okno główne MA wpięty ten sygnał (inaczej nadawca woła w próż
         "jest" if "request_button_flash.connect" in _zrodlo_okna else "BRAK"))
 
 MainWindow._flash_button(_atrapa, tab, "clear_input_btn",
-                         MainWindow._FLASH_COLORS["clear_input_btn"])
+                         getattr(theme, MainWindow._FLASH_COLORS["clear_input_btn"]))
 _mrug = reguly(tab.clear_input_btn)
 spr("18c", 'mrugnięcie jest CZERWONE (nie zielone jak SKOPIOWANE)',
     theme.DANGER.lower() in _mrug.get("", {}).get("border", "").lower()

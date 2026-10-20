@@ -1330,7 +1330,7 @@ class MainWindow(QMainWindow):
             lambda attr, on, tab=agent_tab: self._set_button_active(tab, attr, on))
         agent_tab.request_button_flash.connect(
             lambda attr, tab=agent_tab: self._flash_button(
-                tab, attr, self._FLASH_COLORS.get(attr, theme.ACCENT)))
+                tab, attr, getattr(theme, self._FLASH_COLORS.get(attr, 'ACCENT'))))
         agent_tab.request_search.connect(
             lambda tab=agent_tab: self._open_search_in_tab(tab))
         agent_tab.message_sent.connect(self._on_message_sent)
@@ -5210,8 +5210,10 @@ class MainWindow(QMainWindow):
 
     # Barwa błysku „zrobione" per przycisk. Czerwień przy czyszczeniu pola NIE znaczy
     # „błąd" — znaczy „wyczyszczone"; nie zmieniaj jej na zieloną „dla spójności".
+    # Wartość = NAZWA tokenu z theme, nie kolor: kolor czytany w chwili błysku,
+    # bo tryb jasny/ciemny przełącza się w locie (stała zostawała w starym trybie).
     _FLASH_COLORS = {
-        'clear_input_btn': theme.DANGER,
+        'clear_input_btn': 'DANGER',
     }
 
     def _set_button_active(self, tab, attr: str, active: bool):
