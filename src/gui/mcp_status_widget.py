@@ -45,7 +45,10 @@ from config import (
 CACHE_TTL_SECONDS = 30
 
 # Wspólny styl klikalnych "kafelków" w pasku statusu (kolory z palety — gui/theme.py).
-_TILE_STYLE = f"""
+# Funkcja, nie stała z importu: po przełączeniu jasny/ciemny w locie styl musi
+# powstać na nowo z bieżącej palety (patrz McpStatusWidget.apply_theme).
+def _tile_style() -> str:
+    return f"""
     QPushButton, QToolButton {{
         background: transparent;
         color: {theme.TEXT};
@@ -167,7 +170,7 @@ class McpStatusWidget(QWidget):
         self.mcp_btn = QPushButton()
         self.mcp_btn.setFlat(True)
         self.mcp_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        self.mcp_btn.setStyleSheet(_TILE_STYLE)
+        self.mcp_btn.setStyleSheet(_tile_style())
         self.mcp_btn.clicked.connect(self._on_mcp_click)
         layout.addWidget(self.mcp_btn)
 
@@ -175,7 +178,7 @@ class McpStatusWidget(QWidget):
         self.skills_btn = QPushButton()
         self.skills_btn.setFlat(True)
         self.skills_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        self.skills_btn.setStyleSheet(_TILE_STYLE)
+        self.skills_btn.setStyleSheet(_tile_style())
         self.skills_btn.clicked.connect(self._on_skills_click)
         layout.addWidget(self.skills_btn)
 
@@ -183,7 +186,7 @@ class McpStatusWidget(QWidget):
         self.files_btn = QPushButton()
         self.files_btn.setFlat(True)
         self.files_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        self.files_btn.setStyleSheet(_TILE_STYLE)
+        self.files_btn.setStyleSheet(_tile_style())
         self.files_btn.clicked.connect(self._on_edit_agent_click)
         layout.addWidget(self.files_btn)
 
@@ -191,7 +194,7 @@ class McpStatusWidget(QWidget):
         self.model_btn = QPushButton()
         self.model_btn.setFlat(True)
         self.model_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        self.model_btn.setStyleSheet(_TILE_STYLE)
+        self.model_btn.setStyleSheet(_tile_style())
         self.model_btn.clicked.connect(self._on_edit_agent_click)
         layout.addWidget(self.model_btn)
 
@@ -199,14 +202,7 @@ class McpStatusWidget(QWidget):
         # nieklikalny — czysta informacja. Aktualizowany przez set_total_tokens()
         # wywoływane z MainWindow.
         self.total_tokens_label = QLabel("Σ 0")
-        self.total_tokens_label.setStyleSheet(f"""
-            QLabel {{
-                color: {theme.TEXT};
-                font-size: 11px;
-                padding: 2px 6px;
-                font-weight: 500;
-            }}
-        """)
+        self._style_total_label()
         self.total_tokens_label.setToolTip(tr('total_tokens_tooltip'))
         # Stała zarezerwowana szerokość pod największą realną sumę — bez tego
         # rosnąca liczba cyfr przesuwałaby sąsiednie kafelki i przycisk 🔄 przy
@@ -223,6 +219,24 @@ class McpStatusWidget(QWidget):
 
         # 🔄 Refresh wszystkich liczników — ikona SVG (biała strzałka anticlockwise).
         self.refresh_btn = QToolButton()
+        self._set_refresh_icon()
+        self.refresh_btn.setToolTip(tr('refresh_status_tooltip'))
+        self.refresh_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self.refresh_btn.setStyleSheet(_tile_style())
+        self.refresh_btn.clicked.connect(self.force_refresh)
+        layout.addWidget(self.refresh_btn)
+
+    def _style_total_label(self):
+        self.total_tokens_label.setStyleSheet(f"""
+            QLabel {{
+                color: {theme.TEXT};
+                font-size: 11px;
+                padding: 2px 6px;
+                font-weight: 500;
+            }}
+        """)
+
+    def _set_refresh_icon(self):
         refresh_icon_path = Path(__file__).parent / "refresh.svg"
         if refresh_icon_path.exists():
             # Plik ma białą strzałkę — w trybie jasnym kopia w kolorze ikon.
@@ -231,11 +245,14 @@ class McpStatusWidget(QWidget):
         else:
             # Fallback gdyby brakowało pliku
             self.refresh_btn.setText("⟳")
-        self.refresh_btn.setToolTip(tr('refresh_status_tooltip'))
-        self.refresh_btn.setCursor(QCursor(Qt.PointingHandCursor))
-        self.refresh_btn.setStyleSheet(_TILE_STYLE)
-        self.refresh_btn.clicked.connect(self.force_refresh)
-        layout.addWidget(self.refresh_btn)
+
+    def apply_theme(self):
+        """Przemaluj pasek po przełączeniu jasny/ciemny W LOCIE (bez restartu)."""
+        for btn in (self.mcp_btn, self.skills_btn, self.files_btn,
+                    self.model_btn, self.refresh_btn):
+            btn.setStyleSheet(_tile_style())
+        self._style_total_label()
+        self._set_refresh_icon()
 
     # ---------- Public API: globalny licznik ----------
 

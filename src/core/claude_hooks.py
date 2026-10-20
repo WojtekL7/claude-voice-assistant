@@ -102,7 +102,7 @@ def _script_body(dziennik: Path) -> str:
 
 
 def build_settings(script: Path, claude_theme: str | None = None) -> dict:
-    """Plik ustawień zakładek VCA: hooki + (w trybie jasnym) motyw Claude Code.
+    """Plik ustawień zakładek VCA: hooki + motyw Claude Code.
 
     `claude_theme` patrz `claude_theme_for`. None = klucza nie ma, więc
     obowiązuje motyw z ustawień użytkownika (zachowanie sprzed trybu jasnego).
@@ -140,19 +140,26 @@ def _user_claude_theme(home: Path | None = None) -> str:
 def claude_theme_for(light_app: bool, home: Path | None = None) -> str | None:
     """Jaki motyw narzucić Claude Code w zakładkach (None = nie narzucaj).
 
-    Tekst odpowiedzi agenta rysuje SAM Claude Code. W motywie ciemnym pisze
-    jasnoszarym — na jasnym tle programu prawie niewidocznym. Dlatego w trybie
-    jasnym VCA podaje mu `"theme": "light"` przez NASZ plik `--settings`
-    (zmierzone 2026-10-16: działa per uruchomienie, ustawień użytkownika nie
-    rusza — szarość 153→102, żółć 255,193,7→150,108,30).
-    Wybór użytkownika szanujemy: jasną odmianę (np. `light-daltonized`)
-    zostawiamy. W trybie ciemnym nic się nie zmienia — jak przed trybem jasnym.
+    Od 2026-10-20 (przełączanie jasny/ciemny W LOCIE, decyzja właściciela):
+    **zawsze `dark-ansi`** — Claude Code rysuje wtedy WYŁĄCZNIE 16 kolorami
+    terminala, a te program przełącza w locie, więc działająca rozmowa zmienia
+    wygląd razem z oknem. Zmierzone na 2.1.304:
+      * motyw „zwykły" (`dark`/`light`) jest wczytywany RAZ przy starcie —
+        podmiana w pliku --settings po 20 s nie zmieniła ani jednego koloru;
+      * `dark-ansi` vs `light-ansi`: drugorzędny tekst to w dark-ansi kolor
+        tekstu + przygaszenie (czytelne w OBU trybach), a w light-ansi szarość
+        `90`, która na ciemnym tle prawie znika — stąd jeden wariant na oba.
+    Cena (zaakceptowana): znika pomarańcz Claude, akcenty idą z naszej palety.
+    Wyjątek — wariant dla daltonistów wybrany przez użytkownika: to ustawienie
+    DOSTĘPNOŚCI, więc go nie odbieramy, tylko dobieramy jasną/ciemną odmianę
+    do trybu (takiej zakładki tryb przełączony w locie nie przemaluje — dopiero
+    przy następnym starcie Claude w tej zakładce).
     """
-    if not light_app:
-        return None
-    if _user_claude_theme(home).startswith("light"):
-        return None
-    return "light"
+    uzytkownika = _user_claude_theme(home)
+    if "daltonized" in uzytkownika:
+        wanted = "light-daltonized" if light_app else "dark-daltonized"
+        return None if uzytkownika == wanted else wanted
+    return "dark-ansi"
 
 
 def ensure_hooks(config_dir: Path, claude_theme: str | None = None) -> Path:

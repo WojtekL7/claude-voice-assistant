@@ -38,10 +38,8 @@ except Exception:  # ImportError lub błąd ładowania natywnego rozszerzenia
 
 # Progi kolorów (procent obciążenia pamięci → kolor ikony).
 # To SKALA OSTRZEGANIA, nie dekoracja — kolory znaczeniowe z palety, nigdy akcent.
-_GREEN = QColor(theme.SUCCESS)
-_YELLOW = QColor(theme.WARNING)
-_ORANGE = QColor(theme.ALERT)
-_RED = QColor(theme.DANGER)
+# Kolory czytane z palety PRZY RYSOWANIU (nie stałe z importu) — inaczej po
+# przełączeniu jasny/ciemny w locie ikona zostałaby w kolorach starego trybu.
 
 # Co ile odświeżać pomiar (ms). 2,5 s = na bieżąco, bez obciążania CPU.
 _REFRESH_MS = 2500
@@ -63,12 +61,12 @@ def _human_bytes(n: float) -> str:
 def _color_for(pressure: float) -> QColor:
     """Kolor ikony wg łącznego obciążenia pamięci (0–100)."""
     if pressure >= 95:
-        return _RED
+        return QColor(theme.DANGER)
     if pressure >= 85:
-        return _ORANGE
+        return QColor(theme.ALERT)
     if pressure >= 70:
-        return _YELLOW
-    return _GREEN
+        return QColor(theme.WARNING)
+    return QColor(theme.SUCCESS)
 
 
 class ResourceMonitorWidget(QWidget):

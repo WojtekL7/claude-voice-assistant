@@ -113,9 +113,14 @@ RADIUS_XL = 14   # okna modalne
 # === TRYB JASNY ===
 # Druga paleta w tej samej rodzinie „Vibe Purple": jasne liliowe tła, ciemny
 # tekst, ciemniejszy fiolet akcentu (jasny fiolet z trybu ciemnego ginie na
-# bieli). Tryb wybieramy RAZ, przy imporcie tego modułu — kilka miejsc zapamiętuje
-# kolory już przy ładowaniu programu (DEFAULT_SKIN_COLORS w main_window, kolory
-# wskaźnika RAM), więc podmiana później byłaby niepełna. Zmiana trybu = restart.
+# bieli). Tryb startowy wybieramy przy imporcie tego modułu; od 2026-10-20
+# przełącza się też W LOCIE (`set_appearance`, bez restartu programu).
+# ⚠️ Zasada dla całej warstwy GUI: sięgaj po kolor jako `theme.X` W CHWILI
+# rysowania/stylowania. Kopia zrobiona przy imporcie (`_X = theme.Y` na górze
+# modułu, wartość domyślna parametru) zostaje przy starym trybie — to dokładnie
+# te miejsca wymagały przeróbki przy przełączaniu w locie. Pilnuje tego
+# tools/test-theme-live.py (okno przełączone w locie = okno uruchomione od razu
+# w tym trybie, co do piksela).
 # Kontrast pilnuje tools/test-theme-light.py (tekst ≥ 4,5:1, drobne ≥ 3:1).
 APPEARANCE_DARK = 'dark'
 APPEARANCE_LIGHT = 'light'
@@ -182,13 +187,33 @@ def _wanted_appearance() -> str:
     return APPEARANCE_LIGHT if value == APPEARANCE_LIGHT else APPEARANCE_DARK
 
 
+# Wartości ciemne zapamiętane PRZED ewentualną podmianą — bez nich powrót
+# z jasnego na ciemny w locie nie miałby skąd wziąć kolorów.
+_DARK = {k: globals()[k] for k in _LIGHT}
+
 APPEARANCE = _wanted_appearance()
 if APPEARANCE == APPEARANCE_LIGHT:
     globals().update(_LIGHT)
 
 
+def set_appearance(mode: str) -> bool:
+    """Przełącz paletę W LOCIE; zwraca True, gdy tryb faktycznie się zmienił.
+
+    Podmienia tokeny tego modułu. Przemalowanie widżetów, które już stoją,
+    należy do wołającego (MainWindow._apply_appearance). Nieznana wartość =
+    ciemny (fail-safe jak przy starcie).
+    """
+    global APPEARANCE
+    mode = APPEARANCE_LIGHT if mode == APPEARANCE_LIGHT else APPEARANCE_DARK
+    if mode == APPEARANCE:
+        return False
+    globals().update(_LIGHT if mode == APPEARANCE_LIGHT else _DARK)
+    APPEARANCE = mode
+    return True
+
+
 def is_light() -> bool:
-    """Czy program działa w trybie jasnym (decyzja z chwili startu)."""
+    """Czy program działa teraz w trybie jasnym."""
     return APPEARANCE == APPEARANCE_LIGHT
 
 
@@ -261,6 +286,42 @@ def icon_path(path, color: str) -> str:
         out_dir = CONFIG_DIR / 'theme-icons'
         out_dir.mkdir(parents=True, exist_ok=True)
         out = out_dir / f'{src.stem}-{color.lstrip("#")}{src.suffix}'
+        if not out.exists() or out.read_text(encoding='utf-8') != svg:
+            out.write_text(svg, encoding='utf-8')
+        return str(out)
+    except Exception:
+        return path
+
+
+def toggle_icon_path(path, checked: bool) -> str:
+    """Obrazek przełącznika „Auto-czytaj odpowiedzi" dopasowany do trybu.
+
+    Pliki toggle-*.svg mają kolory trybu ciemnego wpisane na sztywno, a szyna
+    wyłączonego przełącznika (#2a2435) była na jasnym panelu ciemną plamą
+    (zgłoszenie właściciela 2026-10-20: „tło przełącznika powinno być jasne").
+    W jasnym: szyna jasna z cienką obwódką, gałka przygaszona; włączony zostaje
+    w kolorze akcentu, bo kolor niesie tu STAN. W ciemnym: oryginał bez zmian.
+    """
+    path = str(path)
+    if not is_light():
+        return path
+    if checked:
+        svg = ('<svg xmlns="http://www.w3.org/2000/svg" width="42" height="24" '
+               'viewBox="0 0 42 24">'
+               f'<rect x="0" y="0" width="42" height="24" rx="12" fill="{ACCENT}"/>'
+               '<circle cx="30" cy="12" r="9" fill="#ffffff"/></svg>')
+    else:
+        svg = ('<svg xmlns="http://www.w3.org/2000/svg" width="42" height="24" '
+               'viewBox="0 0 42 24">'
+               f'<rect x="0.5" y="0.5" width="41" height="23" rx="11.5" '
+               f'fill="{TRACK_BG}" stroke="{TRACK_BORDER}"/>'
+               f'<circle cx="12" cy="12" r="9" fill="{TEXT_FAINT}"/></svg>')
+    try:
+        from pathlib import Path
+        from config import CONFIG_DIR
+        out_dir = CONFIG_DIR / 'theme-icons'
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out = out_dir / f'{Path(path).stem}-light.svg'
         if not out.exists() or out.read_text(encoding='utf-8') != svg:
             out.write_text(svg, encoding='utf-8')
         return str(out)

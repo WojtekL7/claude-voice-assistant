@@ -39,6 +39,12 @@ import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src"))
+# Bramka mierzy reguły TRYBU CIEMNEGO (sygnały jaśniejsze od tła itd.), a tryb
+# startowy `theme` czyta z PRAWDZIWEGO config.json użytkownika. Zmierzone
+# 2026-10-20: po przestawieniu bety na jasny ten sam test dał 5 FAIL także na
+# starym kodzie — mierzył stan komputera, nie program. Tryb jasny ma własne
+# bramki (test-theme-light, test-theme-live).
+os.environ["CVA_APPEARANCE"] = "dark"
 
 from PyQt5.QtCore import Qt                                  # noqa: E402
 from PyQt5.QtGui import QPixmap                              # noqa: E402

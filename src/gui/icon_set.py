@@ -26,9 +26,10 @@ _source_cache = {}
 # ekrany o wysokim DPI — QIcon skaluje w dół ostro, w górę byłoby rozmyte.
 _RENDER_PX = 64
 
-# Kolor używany, gdy wołający nie poda własnego (stary kod, testy).
+# Kolor używany, gdy wołający nie poda własnego (stary kod, testy): bieżące
+# theme.TEXT_DIM, czytane W CHWILI wywołania — stała z importu zostałaby przy
+# trybie, w którym program wstał (przełączanie jasny/ciemny w locie).
 from gui import theme  # noqa: E402
-_DEFAULT_COLOR = theme.TEXT_DIM   # w trybie ciemnym = dawne '#9b93a8'
 
 # (klucz, stan) → nazwa pliku SVG (bez rozszerzenia).
 _STATE_TO_FILE = {
@@ -80,15 +81,16 @@ def _render(name: str, color: str) -> QIcon:
     return QIcon(pm)
 
 
-def icon_by_name(name: str, color: str = _DEFAULT_COLOR) -> QIcon:
+def icon_by_name(name: str, color: str = None) -> QIcon:
     """QIcon dla pliku <name>.svg pomalowany na `color` (z cache)."""
+    color = color or theme.TEXT_DIM
     key = (name, color)
     if key not in _cache:
         _cache[key] = _render(name, color)
     return _cache[key]
 
 
-def button_icon(key: str, state: str = 'normal', color: str = _DEFAULT_COLOR) -> QIcon:
+def button_icon(key: str, state: str = 'normal', color: str = None) -> QIcon:
     """QIcon dla przycisku o danym kluczu i stanie (fallback na stan 'normal')."""
     name = _STATE_TO_FILE.get((key, state)) or _STATE_TO_FILE.get((key, 'normal'))
     return icon_by_name(name, color) if name else QIcon()

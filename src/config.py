@@ -975,11 +975,8 @@ UI_TRANSLATIONS = {
         "appearance_dark": "Ciemny",
         "appearance_light": "Jasny",
         "appearance_restart_title": "Zmiana wyglądu",
-        "appearance_restart_text": ("Nowy wygląd pojawi się po ponownym uruchomieniu programu.\n\n"
-                                    "Uruchomić program ponownie teraz? Rozmowy agentów będzie "
-                                    "można wznowić po starcie, tak jak po zwykłym zamknięciu."),
-        "appearance_restart_now": "Uruchom ponownie",
-        "appearance_restart_later": "Później",
+        "appearance_toggle_to_light": "Przełącz na jasny wygląd",
+        "appearance_toggle_to_dark": "Przełącz na ciemny wygląd",
         "appearance_restart_failed": ("Nie udało się uruchomić programu ponownie. "
                                       "Wybrany wygląd jest zapisany — pojawi się przy następnym "
                                       "uruchomieniu."),
@@ -1899,11 +1896,8 @@ UI_TRANSLATIONS = {
         "appearance_dark": "Dark",
         "appearance_light": "Light",
         "appearance_restart_title": "Change appearance",
-        "appearance_restart_text": ("The new appearance will be applied after the program restarts.\n\n"
-                                    "Restart the program now? Agent conversations can be resumed "
-                                    "after startup, just like after a normal close."),
-        "appearance_restart_now": "Restart now",
-        "appearance_restart_later": "Later",
+        "appearance_toggle_to_light": "Switch to light appearance",
+        "appearance_toggle_to_dark": "Switch to dark appearance",
         "appearance_restart_failed": ("Could not restart the program. The chosen appearance is "
                                       "saved and will be applied the next time you start it."),
         "menu_groq_api": "AI Manager key (dictation)...",

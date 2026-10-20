@@ -120,6 +120,19 @@ class AutoResizeTextEdit(QTextEdit):
         # Wygląd suwaka = ta sama ciemna rynna + szary uchwyt co w terminalu
         # (WebTerminal). Stylujemy TYLKO sam pasek (verticalScrollBar), żeby nie
         # ruszać palety/tła pola (chroni fix białego błysku po Enter).
+        self.style_scrollbar()
+        self._max_lines = 5
+        # Ile pikseli POZA obszarem tekstu zjada sama oprawa pola: ramka QSS
+        # (2 px × 2) + padding QSS (12 px × 2) = 28. Używane tylko dopóki nie da
+        # się tego ZMIERZYĆ (patrz _chrome) — nie zgadujemy w ciemno.
+        self._fallback_chrome = 28
+        self._min_height = 55  # dolna granica estetyczna (równanie z przyciskami)
+        self._max_height = 180  # przeliczane w _adjust_height wg czcionki (5 linii)
+        self.setMinimumHeight(self._min_height)
+        self.setMaximumHeight(self._min_height)
+
+    def style_scrollbar(self):
+        """Suwak pola z bieżącej palety (wołane też po przełączeniu trybu w locie)."""
         rynna = theme.by_mode('#2a2a2d', theme.TRACK_BG)
         self.verticalScrollBar().setStyleSheet(
             f"QScrollBar:vertical {{ width: 12px; background: {rynna}; margin: 0; }}"
@@ -132,15 +145,6 @@ class AutoResizeTextEdit(QTextEdit):
             " height: 0; background: none; border: none; }"
             "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {"
             f" background: {rynna}; }}")
-        self._max_lines = 5
-        # Ile pikseli POZA obszarem tekstu zjada sama oprawa pola: ramka QSS
-        # (2 px × 2) + padding QSS (12 px × 2) = 28. Używane tylko dopóki nie da
-        # się tego ZMIERZYĆ (patrz _chrome) — nie zgadujemy w ciemno.
-        self._fallback_chrome = 28
-        self._min_height = 55  # dolna granica estetyczna (równanie z przyciskami)
-        self._max_height = 180  # przeliczane w _adjust_height wg czcionki (5 linii)
-        self.setMinimumHeight(self._min_height)
-        self.setMaximumHeight(self._min_height)
 
     def _chrome(self) -> int:
         """Ile pikseli zjada ramka + padding pola (oprawa wokół tekstu).
@@ -428,8 +432,7 @@ class AgentTab(QWidget):
         # Tło dopasowane do skin terminal_bg — żeby nie błyskało białym przed
         # aktywacją. Bardziej szczegółowe kolory ustawi MainWindow przy
         # apply_terminal_colors po terminal_ready.
-        self._terminal_placeholder.setStyleSheet(
-            f"background-color: {theme.by_mode('#1a1a1a', theme.BG_CANVAS)};")
+        self._style_placeholder()
         self.main_splitter.addWidget(self._terminal_placeholder)
         self.terminal = None
         self.conversation_area = None
@@ -1463,6 +1466,20 @@ class AgentTab(QWidget):
         # Nowy arkusz = potencjalnie inna ramka/padding, czyli inna oprawa pola.
         # Przelicz wysokość, żeby zmiana skórki nie ucięła ogonków liter.
         self.input_field._adjust_height()
+
+    def _style_placeholder(self):
+        """Tło zakładki, zanim wstanie terminal (bez białego błysku)."""
+        if self._terminal_placeholder is not None:
+            self._terminal_placeholder.setStyleSheet(
+                f"background-color: {theme.by_mode('#1a1a1a', theme.BG_CANVAS)};")
+
+    def refresh_theme(self):
+        """Przemaluj to, co zakładka styluje SAMA przy budowie — po przełączeniu
+        jasny/ciemny W LOCIE. Resztę (panel, pole, ikony skórki, terminal)
+        przemalowuje MainWindow przez apply_styles/_apply_skin_icons."""
+        self.input_field.style_scrollbar()
+        self._style_placeholder()
+        self.search_btn.setIcon(icon_set.button_icon('search'))
 
     def apply_styles(self, skin_colors: dict, skin_icons: dict):
         """Apply skin colors and icons."""

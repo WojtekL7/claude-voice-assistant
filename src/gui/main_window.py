@@ -468,6 +468,9 @@ from gui.resource_monitor import ResourceMonitorWidget
 
 # Domyślne kolory skórki (motyw „Vibe Purple") — interfejs + terminal.
 # Wartości pochodzą z jednej palety (gui/theme.py), nie są tu wpisywane wprost.
+# Po przełączeniu jasny/ciemny W LOCIE słownik jest odświeżany W MIEJSCU
+# (MainWindow._apply_appearance) — inne moduły i testy trzymają do niego
+# referencję z `from gui.main_window import DEFAULT_SKIN_COLORS`.
 DEFAULT_SKIN_COLORS = theme.skin_colors()
 
 # Wersja schematu skórki. Podbicie = zapisana u użytkownika skórka jest
@@ -925,25 +928,7 @@ class MainWindow(QMainWindow):
 
         # Create dropdown menu for "+" tab
         self._add_tab_menu = QMenu(self)
-        self._add_tab_menu.setStyleSheet(f"""
-            QMenu {{
-                background-color: {theme.BG_WINDOW};
-                color: {theme.TEXT};
-                border: 1px solid {theme.BORDER};
-                padding: 5px;
-            }}
-            QMenu::item {{
-                padding: 8px 25px;
-            }}
-            QMenu::item:selected {{
-                background-color: {theme.SURFACE_HOVER};
-            }}
-            QMenu::separator {{
-                height: 1px;
-                background-color: {theme.SURFACE};
-                margin: 5px 10px;
-            }}
-        """)
+        self._style_add_tab_menu()
 
         self._populate_add_tab_menu()
 
@@ -1095,10 +1080,7 @@ class MainWindow(QMainWindow):
         self._update_indicator.setToolTip(tr('update_indicator_tooltip'))
         self._update_indicator.setCursor(Qt.PointingHandCursor)
         self._update_indicator.setAutoRaise(True)
-        self._update_indicator.setStyleSheet(
-            f"QToolButton {{ color: {theme.SUCCESS}; font-size: 11px; font-weight: bold;"
-            " padding: 0 8px; border: none; }"
-            f"QToolButton:hover {{ color: {theme.SUCCESS}; }}")
+        self._style_update_indicator()
         self._update_indicator.clicked.connect(self._open_pending_update)
         self._update_indicator.setVisible(False)
         self.status_bar.addPermanentWidget(self._update_indicator)
@@ -1127,8 +1109,49 @@ class MainWindow(QMainWindow):
         # Menu bar
         self._create_menu_bar()
 
+        # ☀️/🌙 Przełącznik wyglądu JEDNYM kliknięciem, w prawym rogu paska
+        # menu (życzenie właściciela 2026-10-20: bez restartu, bez szukania
+        # w Ustawieniach). Tworzony RAZ — zmiana języka odbudowuje akcje menu,
+        # a widżet w rogu zostaje (odświeża go _refresh_appearance_button).
+        self._appearance_btn = QToolButton(self)
+        self._appearance_btn.setAutoRaise(True)
+        self._appearance_btn.setCursor(Qt.PointingHandCursor)
+        self._appearance_btn.setIconSize(QSize(18, 18))
+        self._appearance_btn.clicked.connect(self._toggle_appearance)
+        self.menuBar().setCornerWidget(self._appearance_btn, Qt.TopRightCorner)
+        self._refresh_appearance_button()
+
         # Apply dark theme (includes terminal colors via apply_skin_colors)
         self._apply_dark_theme()
+
+    def _style_add_tab_menu(self):
+        """Menu rozwijane zakładki „+" (własny arkusz, z bieżącej palety)."""
+        self._add_tab_menu.setStyleSheet(f"""
+            QMenu {{
+                background-color: {theme.BG_WINDOW};
+                color: {theme.TEXT};
+                border: 1px solid {theme.BORDER};
+                padding: 5px;
+            }}
+            QMenu::item {{
+                padding: 8px 25px;
+            }}
+            QMenu::item:selected {{
+                background-color: {theme.SURFACE_HOVER};
+            }}
+            QMenu::separator {{
+                height: 1px;
+                background-color: {theme.SURFACE};
+                margin: 5px 10px;
+            }}
+        """)
+
+    def _style_update_indicator(self):
+        """Lampka „nowa wersja" w pasku statusu (z bieżącej palety)."""
+        self._update_indicator.setStyleSheet(
+            f"QToolButton {{ color: {theme.SUCCESS}; font-size: 11px; font-weight: bold;"
+            " padding: 0 8px; border: none; }"
+            f"QToolButton:hover {{ color: {theme.SUCCESS}; }}")
 
     # ==================== Agent Management ====================
 
@@ -2326,8 +2349,8 @@ class MainWindow(QMainWindow):
         settings_menu.addSeparator()
 
         # UI / aplikacja (przeniesione z dawnego menu Edycja)
-        # Wygląd: ciemny / jasny. Działa od następnego startu (paleta jest
-        # ustalana raz, przy ładowaniu programu — patrz gui/theme.py).
+        # Wygląd: ciemny / jasny — przełącza od razu, bez restartu (to samo
+        # robi przycisk ☀️/🌙 w rogu paska menu).
         self.appearance_menu = settings_menu.addMenu(f"🌓 {tr('menu_appearance')}")
         self.appearance_actions = {}
         appearance_group = QActionGroup(self)
@@ -3193,32 +3216,97 @@ class MainWindow(QMainWindow):
         self._save_settings()
 
     def _set_appearance(self, mode: str):
-        """Wybór wyglądu z menu: zapisz i zaproponuj ponowne uruchomienie.
+        """Wybór wyglądu (menu albo przycisk ☀️/🌙): przełącz W LOCIE i zapisz.
 
-        Paleta jest ustalana RAZ, przy ładowaniu programu (kilka miejsc
-        zapamiętuje kolory już wtedy), więc przełączenie „na żywo" byłoby
-        niepełne — stąd restart. Odmowa = wybór zostaje zapisany i zadziała
-        przy następnym uruchomieniu.
+        Do 2026-10-20 wymagało restartu programu. Teraz paleta przełącza się
+        od razu (`_apply_appearance`), a Claude Code w zakładkach idzie za nią,
+        bo rysuje kolorami terminala (motyw `dark-ansi`, patrz claude_hooks).
         """
-        for m, action in self.appearance_actions.items():
+        mode = (theme.APPEARANCE_LIGHT if mode == theme.APPEARANCE_LIGHT
+                else theme.APPEARANCE_DARK)
+        for m, action in getattr(self, 'appearance_actions', {}).items():
             action.setChecked(m == mode)
-        if mode == self.appearance_setting:
-            return
         self.appearance_setting = mode
+        self._apply_appearance(mode)
         self._save_settings()
-        if mode == theme.APPEARANCE:
-            return   # powrót do trybu, w którym program już działa
-        box = QMessageBox(QMessageBox.Question, tr('appearance_restart_title'),
-                          tr('appearance_restart_text'), parent=self)
-        now_btn = box.addButton(tr('appearance_restart_now'), QMessageBox.AcceptRole)
-        box.addButton(tr('appearance_restart_later'), QMessageBox.RejectRole)
-        box.setDefaultButton(now_btn)
-        box.exec_()
-        if box.clickedButton() is now_btn:
-            # Sam start nowej instancji robi main.py PO zamknięciu tej
-            # (closeEvent zapisuje stan) — dwa okna naraz nigdy nie istnieją.
-            self.restart_requested = True
-            self.close()
+
+    def _toggle_appearance(self):
+        """Przycisk ☀️/🌙: jasny ↔ ciemny jednym kliknięciem."""
+        self._set_appearance(theme.APPEARANCE_DARK if theme.is_light()
+                             else theme.APPEARANCE_LIGHT)
+
+    def _refresh_appearance_button(self):
+        """Ikona i podpowiedź przycisku ☀️/🌙 — pokazuje tryb, NA KTÓRY przełączy."""
+        btn = getattr(self, '_appearance_btn', None)
+        if btn is None:
+            return
+        if theme.is_light():
+            btn.setIcon(icon_set.icon_by_name('moon', theme.TEXT_DIM))
+            btn.setToolTip(tr('appearance_toggle_to_dark'))
+        else:
+            btn.setIcon(icon_set.icon_by_name('sun', theme.TEXT_DIM))
+            btn.setToolTip(tr('appearance_toggle_to_light'))
+        btn.setStyleSheet(
+            f"QToolButton {{ background: transparent; border: none;"
+            f" border-radius: {theme.RADIUS_SM}px; padding: 2px 8px; }}"
+            f"QToolButton:hover {{ background-color: {theme.SURFACE_HOVER}; }}")
+
+    def _apply_appearance(self, mode: str):
+        """Przemaluj CAŁE okno na tryb `mode` bez restartu programu.
+
+        Kolejność ma znaczenie:
+        1. skórka bieżącego trybu wraca do schowka drugiego trybu (każdy tryb ma
+           WŁASNĄ zapisaną skórkę — ta sama logika co w _load_settings),
+        2. paleta (`theme.set_appearance`) i domyślne kolory skórki,
+        3. skórka nowego trybu z config.json (stara wersja schematu = porzucona
+           z kopią zapasową, jak przy starcie),
+        4. przemalowanie wszystkiego, co kolory ustawia samo przy budowie.
+        Dowód kompletności: tools/test-theme-live.py (okno przełączone w locie
+        = okno uruchomione od razu w tym trybie, co do piksela).
+        """
+        old_colors_key, old_version_key = skin_keys()
+        current_skin = dict(self.skin_colors)
+        if not theme.set_appearance(mode):
+            return
+        if not isinstance(getattr(self, '_other_mode_skin', None), dict):
+            self._other_mode_skin = {}
+        self._other_mode_skin[old_colors_key] = current_skin
+        self._other_mode_skin[old_version_key] = SKIN_VERSION
+
+        DEFAULT_SKIN_COLORS.clear()
+        DEFAULT_SKIN_COLORS.update(theme.skin_colors())
+        colors_key, version_key = skin_keys()
+        saved_skin = self._other_mode_skin.pop(colors_key, None)
+        saved_version = self._other_mode_skin.pop(version_key, 1)
+        self.skin_colors = DEFAULT_SKIN_COLORS.copy()
+        if saved_skin and saved_version >= SKIN_VERSION:
+            for key in DEFAULT_SKIN_COLORS:
+                if key in saved_skin:
+                    self.skin_colors[key] = saved_skin[key]
+        elif saved_skin:
+            self._backup_config_before_skin_migration(
+                {colors_key: saved_skin, 'skin_icons': self.skin_icons}, saved_version)
+
+        # Elementy stylowane RAZ przy budowie (poza apply_skin_colors).
+        self._style_add_tab_menu()
+        self._style_update_indicator()
+        self._refresh_context_label()
+        for tab in self.agent_tabs.values():
+            tab.refresh_theme()
+        if getattr(self, 'mcp_status_widget', None) is not None:
+            self.mcp_status_widget.apply_theme()
+        if getattr(self, 'resource_monitor', None) is not None:
+            self.resource_monitor.update()
+        self._refresh_appearance_button()
+
+        # Okno, zakładki, panel, przyciski, ikony skórki i terminale (xterm
+        # dostaje nowe kolory ANSI → Claude Code w motywie dark-ansi zmienia
+        # wygląd razem z oknem, bez restartu rozmowy).
+        self._apply_dark_theme()
+        # Ramka akcentu i kreska pod zakładką malują się same z palety.
+        if self.centralWidget() is not None:
+            self.centralWidget().update()
+        self.tab_widget.tabBar().update()
 
     def _get_text(self, key: str) -> str:
         """Get translated text for current language (delegates to config.t)."""
@@ -3251,6 +3339,7 @@ class MainWindow(QMainWindow):
             a.setShortcut(QKeySequence())
             a.deleteLater()
         self._create_menu_bar()
+        self._refresh_appearance_button()   # podpowiedź ☀️/🌙 w nowym języku
         # Menu rozwijane zakładki „+" (budowane osobno w _setup_ui; samo czyści stare akcje).
         if hasattr(self, '_add_tab_menu'):
             self._populate_add_tab_menu()
@@ -5581,8 +5670,12 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         ramkę koloru aktywnego agenta rysuje ręcznie centralny widget (_AccentFrame),
         żeby nie kaskadować stylu na QTermWidget i nie gubić górnej/dolnej krawędzi."""
         checkmark_path = str(ASSETS_DIR / "checkmark.png").replace("\\", "/")
-        toggle_off_path = str(ASSETS_DIR / "icons" / "toggle-off.svg").replace("\\", "/")
-        toggle_on_path = str(ASSETS_DIR / "icons" / "toggle-on.svg").replace("\\", "/")
+        # Przełącznik auto-czytania: w trybie jasnym kopia z jasną szyną
+        # (oryginały mają kolory trybu ciemnego wpisane na sztywno).
+        toggle_off_path = theme.toggle_icon_path(
+            ASSETS_DIR / "icons" / "toggle-off.svg", checked=False).replace("\\", "/")
+        toggle_on_path = theme.toggle_icon_path(
+            ASSETS_DIR / "icons" / "toggle-on.svg", checked=True).replace("\\", "/")
         return f"""
             QMainWindow {{
                 background-color: {colors['main_window_bg']};

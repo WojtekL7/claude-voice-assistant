@@ -305,6 +305,11 @@ class WebTerminal(QWidget):
         """Zastosuj pełny motyw xterm (dict ITheme: background/foreground/cursor/
         selectionBackground + 16 kolorów ANSI). Przed gotowością frontu — buforuj."""
         self._pending_theme = dict(theme) if theme else None
+        # Tło samej strony (widać je przy zmianie rozmiaru, zanim xterm dorysuje)
+        # idzie za motywem — inaczej po przełączeniu jasny/ciemny w locie
+        # błyskałoby kolorem trybu, w którym terminal wstał.
+        if self._pending_theme and self._pending_theme.get('background'):
+            self._page.setBackgroundColor(QColor(self._pending_theme['background']))
         if self._frontend_ready:
             self._push_theme()
 

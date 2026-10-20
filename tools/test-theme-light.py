@@ -11,8 +11,9 @@ Co pilnuje:
       znaczeniowe ≥ 3:1 — mierzone na każdym tle, na którym dany kolor leży,
   [D] sygnały (aktywna zakładka, panel „nieaktywny") wyraźnie odcięte od tła,
   [E] wybór trybu: zmienna CVA_APPEARANCE, config.json, fail-safe na ciemny,
-  [F] motyw Claude Code w zakładkach: tryb jasny → "light" w NASZYM pliku
-      --settings; wybór jasnej odmiany przez usera szanowany; tryb ciemny bez zmian,
+  [F] motyw Claude Code w zakładkach: od 2026-10-20 ZAWSZE "dark-ansi" w NASZYM
+      pliku --settings (przełącza się w locie kolorami terminala — szczegóły
+      i pomiar w tools/test-theme-live.py [E]); wariant dla daltonistów szanowany,
   [G] stare kolory wpisane na sztywno (theme.by_mode): ciemny = dawna wartość,
   [H] kolory agentów (paleta + dowolny wybrany) czytelne na jasnym pasku,
       a w trybie ciemnym nietknięte,
@@ -256,16 +257,18 @@ def main():
     from core import claude_hooks as ch
     with tempfile.TemporaryDirectory() as home:
         h = Path(home)
-        check("[F1] tryb ciemny → nie narzucamy motywu", ch.claude_theme_for(False, h) is None)
-        check("[F2] tryb jasny, user bez motywu → light", ch.claude_theme_for(True, h) == "light")
+        # Przesłanka zmieniona ŚWIADOMIE 2026-10-20 (przełączanie w locie):
+        # dawniej tryb jasny → "light", ciemny → nic. Patrz claude_theme_for.
+        check("[F1] tryb ciemny → dark-ansi", ch.claude_theme_for(False, h) == "dark-ansi")
+        check("[F2] tryb jasny, user bez motywu → dark-ansi", ch.claude_theme_for(True, h) == "dark-ansi")
         (h / ".claude").mkdir()
         (h / ".claude" / "settings.json").write_text(json.dumps({"theme": "dark"}))
-        check("[F3] tryb jasny, user ma dark → light", ch.claude_theme_for(True, h) == "light")
+        check("[F3] tryb jasny, user ma dark → dark-ansi", ch.claude_theme_for(True, h) == "dark-ansi")
         (h / ".claude" / "settings.json").write_text(json.dumps({"theme": "light-daltonized"}))
-        check("[F4] user wybrał jasną odmianę → zostawiamy jego wybór",
+        check("[F4] user wybrał odmianę dla daltonistów pasującą do trybu → zostawiamy",
               ch.claude_theme_for(True, h) is None)
         (h / ".claude" / "settings.json").write_text("{ zepsuty")
-        (h / ".claude.json").write_text(json.dumps({"theme": "light-ansi"}))
+        (h / ".claude.json").write_text(json.dumps({"theme": "light-daltonized"}))
         check("[F5] stare miejsce ~/.claude.json też czytane",
               ch.claude_theme_for(True, h) is None)
         kat = h / "cfg"

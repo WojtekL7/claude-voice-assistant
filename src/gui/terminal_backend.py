@@ -76,10 +76,18 @@ _QTERMWIDGET_SCROLLBAR_QSS = """
         background: transparent;
     }
 """
-# Uchwyt suwaka zależny od trybu (ciemny: wartości jak dotąd).
-_QTERMWIDGET_SCROLLBAR_QSS = (_QTERMWIDGET_SCROLLBAR_QSS
-    .replace('%HANDLE_HOVER%', theme.by_mode('#6b46a8', theme.TEXT_FAINT))
-    .replace('%HANDLE%', theme.by_mode('#3a2a5a', theme.BORDER)))
+
+
+def _qtermwidget_scrollbar_qss() -> str:
+    """Arkusz suwaka z uchwytem zależnym od BIEŻĄCEGO trybu (ciemny: jak dotąd).
+
+    Liczony przy tworzeniu terminala, nie przy imporcie — tryb przełącza się
+    w locie. Terminal QTermWidget już otwarty zatrzymuje kolor uchwytu do
+    ponownego otwarcia zakładki (silnik opcjonalny, CVA_QTERMWIDGET=1).
+    """
+    return (_QTERMWIDGET_SCROLLBAR_QSS
+            .replace('%HANDLE_HOVER%', theme.by_mode('#6b46a8', theme.TEXT_FAINT))
+            .replace('%HANDLE%', theme.by_mode('#3a2a5a', theme.BORDER)))
 
 
 def _xterm_theme_from_colors(colors: dict) -> dict:
@@ -282,7 +290,7 @@ class QTermWidgetBackend(TerminalBackend):
         self._term.setFlowControlEnabled(False)
         self._term.setFlowControlWarningEnabled(False)
         self._term.setTerminalSizeHint(False)
-        self._term.setStyleSheet(_QTERMWIDGET_SCROLLBAR_QSS)
+        self._term.setStyleSheet(_qtermwidget_scrollbar_qss())
 
         # receivedData (PyQt5) niesie str (QString), NIE QByteArray — normalizujemy
         # w _on_received i wystawiamy ujednolicony sygnał output_received(str).
