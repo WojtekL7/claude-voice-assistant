@@ -46,6 +46,7 @@ _STATE_TO_FILE = {
     ('clear_input', 'normal'): 'close',
     ('add_media', 'normal'): 'clip',
     ('quick_actions', 'normal'): 'bolt',
+    ('slash_commands', 'normal'): 'slash',
     ('search', 'normal'): 'search',
     ('repair_terminal', 'normal'): 'refresh',
 }

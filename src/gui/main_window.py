@@ -3369,6 +3369,7 @@ class MainWindow(QMainWindow):
             tab.clear_input_btn.setToolTip(tr('clear_input_tooltip'))
             tab.add_media_btn.setToolTip(tr('add_media_tooltip'))
             tab.quick_actions_btn.setToolTip(tr('quick_actions'))
+            tab.slash_commands_btn.setToolTip(tr('slash_tooltip'))
             tab.repair_terminal_btn.setToolTip(tr('repair_terminal_tooltip'))
             tab.auto_read_checkbox.setText(tr('auto_read'))
         except Exception:
@@ -5117,11 +5118,13 @@ class MainWindow(QMainWindow):
                 ('clear_input_btn', 'clear_input'),
                 ('add_media_btn', 'add_media'),
                 ('quick_actions_btn', 'quick_actions'),
+                ('slash_commands_btn', 'slash_commands'),
                 ('repair_terminal_btn', 'repair_terminal'),
             ):
                 btn = getattr(tab, attr, None)
                 if btn is not None:
-                    btn.setIcon(self._icon(key))
+                    # Klucz koloru z JEDNEJ mapy — „/” pożycza kolor błyskawicy.
+                    btn.setIcon(self._icon(key, color_key=self._BUTTON_COLOR_KEYS.get(attr)))
 
             # Przełącznik trybu myszy trzyma DWIE ikony (stan przewijania /
             # zaznaczania) poza pętlą powyżej — przemaluj obie i odśwież bieżącą.
@@ -5152,6 +5155,9 @@ class MainWindow(QMainWindow):
         'clear_input_btn': 'icon_clear_input_color',
         'add_media_btn': 'icon_add_media_color',
         'quick_actions_btn': 'icon_quick_actions_color',
+        # „/” pożycza kolor błyskawicy — ta sama rodzina (wpisuje gotowe polecenie),
+        # a nowy klucz skórki wymusiłby migrację ustawień użytkownika.
+        'slash_commands_btn': 'icon_quick_actions_color',
         'mouse_mode_btn': 'icon_copy_color',
         'search_btn': 'icon_search_color',
     }
@@ -5165,6 +5171,7 @@ class MainWindow(QMainWindow):
         'clear_input_btn': 'clear_input',
         'add_media_btn': 'add_media',
         'quick_actions_btn': 'quick_actions',
+        'slash_commands_btn': 'slash_commands',
         'search_btn': 'search',
     }
 
@@ -5205,7 +5212,8 @@ class MainWindow(QMainWindow):
     # ⛔ Kopiuj i Wyczyść pole są tu POMINIĘTE ŚWIADOMIE: obie akcje trwają ułamek
     # sekundy, więc nie mają „podczas" — ich komunikatem jest BŁYSK, nie stan.
     _BUTTONS_WITH_ACTIVE_STATE = frozenset({
-        'add_media_btn', 'quick_actions_btn', 'mouse_mode_btn', 'search_btn',
+        'add_media_btn', 'quick_actions_btn', 'slash_commands_btn', 'mouse_mode_btn',
+        'search_btn',
     })
 
     # Barwa błysku „zrobione" per przycisk. Czerwień przy czyszczeniu pola NIE znaczy
@@ -5434,6 +5442,10 @@ class MainWindow(QMainWindow):
             # sam rozpoznaje klasę widżetu i sam ukrywa strzałkę menu.
             if hasattr(tab, 'quick_actions_btn'):
                 self._apply_button_icon_style(tab.quick_actions_btn, 'icon_quick_actions_color')
+
+            # „/” — drugi QToolButton z menu; ten sam malarz (sam chowa strzałkę menu).
+            if hasattr(tab, 'slash_commands_btn'):
+                self._apply_button_icon_style(tab.slash_commands_btn, 'icon_quick_actions_color')
 
         # Napis na przycisku tempa ustawiamy DOPIERO TERAZ, na koncu malarza —
         # i to jest jedyne miejsce, z ktorego go wolamy. Powody, oba zmierzone:

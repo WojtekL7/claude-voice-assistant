@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (
     QMessageBox
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QSize, QEvent
-from PyQt5.QtGui import QFont, QFontMetrics, QIcon, QColor
+from PyQt5.QtGui import QFont, QFontMetrics, QIcon, QColor, QTextCursor
 
 # QTermWidget for real terminal emulation
 try:
@@ -39,11 +39,12 @@ from config import (
     MEMORY_READY_TIMEOUT_SECS, MEMORY_ENTER_DELAY_MS,
     READ_LAST_STREAM_WINDOW_SECS,
     TTS_RATE_LEVELS, TTS_DEFAULT_RATE, tts_rate_label,
-    t as tr,
+    t as tr, current_ui_language,
 )
 from core.platform_utils import default_shell
 from gui.dialogs import styled_get_open_file_names
 from gui.terminal_backend import create_terminal_backend
+from core import slash_commands
 from gui import icon_set
 from gui import theme
 
@@ -660,6 +661,29 @@ class AgentTab(QWidget):
         self._update_quick_actions_menu()
         layout.addWidget(self.quick_actions_btn)
 
+        # „/" — polecenia Claude Code z opisem po polsku (życzenie właściciela
+        # 2026-10-20). Klik w pozycję WPISUJE polecenie w pole, nie wysyła.
+        # Menu budowane przy KAŻDYM rozwinięciu: skille czytane z dysku na
+        # bieżąco, opisy w bieżącym języku. Źródła listy i to, czego celowo na
+        # niej nie ma — patrz core/slash_commands.
+        # ⚠️ Przycisk MUSI być w `MainWindow._apply_button_icon_styles` (inaczej
+        # biały kwadrat Qt — patrz komentarz przy lupie niżej).
+        self.slash_commands_btn = QToolButton()
+        self.slash_commands_btn.setIcon(icon_set.button_icon('slash_commands'))
+        self.slash_commands_btn.setIconSize(PANEL_ICON_SIZE)
+        self.slash_commands_btn.setToolTip(tr('slash_tooltip'))
+        self.slash_commands_btn.setPopupMode(QToolButton.InstantPopup)
+        self.slash_commands_btn.setFixedSize(btn_size, btn_size)
+        slash_menu = QMenu(self.slash_commands_btn)
+        slash_menu.setToolTipsVisible(True)
+        slash_menu.aboutToShow.connect(self._build_slash_menu)
+        slash_menu.aboutToShow.connect(
+            lambda: self.button_active_changed.emit('slash_commands_btn', True))
+        slash_menu.aboutToHide.connect(
+            lambda: self.button_active_changed.emit('slash_commands_btn', False))
+        self.slash_commands_btn.setMenu(slash_menu)
+        layout.addWidget(self.slash_commands_btn)
+
         # Przełącznik trybu myszy — NA KOŃCU paska, po „błyskawicy", ikoną w tej
         # samej konwencji co reszta. Ikona pokazuje AKTUALNY tryb: mysz+strzałki
         # (przewijanie) ↔ mysz+ramka (zaznaczanie). Klik przeskakuje między nimi.
@@ -774,6 +798,64 @@ class AgentTab(QWidget):
         menu.aboutToHide.connect(
             lambda: self.button_active_changed.emit('quick_actions_btn', False))
         self.quick_actions_btn.setMenu(menu)
+
+    def _build_slash_menu(self):
+        """Zbuduj od nowa menu „/" (woła je Qt tuż przed rozwinięciem)."""
+        menu = self.slash_commands_btn.menu()
+        menu.clear()
+
+        def add(target, cmd):
+            act = target.addAction(f"/{cmd.name}    {slash_commands.short(cmd.description)}")
+            act.setToolTip(cmd.description)
+            act.triggered.connect(lambda _=False, c=cmd: self._insert_slash_command(c.text))
+
+        builtin = slash_commands.builtin_commands(current_ui_language())
+        # Nagłówek jako WYSZARZONA pozycja, nie `addSection`: arkusz stylów okna
+        # (QMenu {...}) gubi napis sekcji — zostaje sama kreska (zmierzone na zrzucie).
+        naglowek = menu.addAction(tr('slash_common'))
+        naglowek.setEnabled(False)
+        font = naglowek.font()
+        font.setBold(True)
+        naglowek.setFont(font)
+        for cmd in builtin:
+            if cmd.common:
+                add(menu, cmd)
+
+        rest = [c for c in builtin if not c.common]
+        sub = menu.addMenu(tr('slash_all_builtin').format(n=len(rest)))
+        sub.setToolTipsVisible(True)
+        for cmd in rest:
+            add(sub, cmd)
+
+        custom = slash_commands.custom_commands(self.working_directory)
+        sub = menu.addMenu(tr('slash_custom').format(n=len(custom)))
+        sub.setToolTipsVisible(True)
+        if custom:
+            for cmd in custom:
+                add(sub, cmd)
+        else:
+            sub.addAction(tr('slash_custom_none')).setEnabled(False)
+
+        menu.addSeparator()
+        full = menu.addAction(tr('slash_full_list'))
+        full.setToolTip(tr('slash_full_list_tooltip'))
+        full.triggered.connect(self._show_native_slash_list)
+
+    def _insert_slash_command(self, text: str):
+        """Wpisz polecenie w pole i postaw kursor NA KOŃCU (pod argument)."""
+        self.input_field.setText(text)
+        self.input_field.moveCursor(QTextCursor.End)
+        self.input_field.setFocus()
+
+    def _show_native_slash_list(self):
+        """Wpisz sam „/" w terminal: Claude Code otwiera WŁASNĄ, pełną listę.
+
+        Siatka bezpieczeństwa dla spisanej listy wbudowanych (zestarzeje się
+        z nową wersją Claude Code) i dla wtyczek, których nie czytamy.
+        """
+        if self.terminal_backend:
+            self.terminal_backend.send_text("/")
+            self.terminal_backend.focus_terminal()
 
     def _insert_quick_action(self, command: str):
         """Insert quick action command into input field."""
