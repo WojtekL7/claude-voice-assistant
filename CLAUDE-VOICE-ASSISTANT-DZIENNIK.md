@@ -8,6 +8,13 @@ w zeszły czwartek", na które `git log` odpowiada zbyt drobno. Wpis: 3–8 lini
 
 ---
 
+## 2026-10-20
+
+- Start sesji: pomiar listy „co wisi” (beta od 09:10, kanał 1.0.29, `server/.venv` zepsute, plik pamięci 520 linii).
+- Zamówienie właściciela: jasny/ciemny **w locie, jednym kliknięciem** + jasne tło przełącznika „Auto-czytaj”. Pomiar: Claude Code nie przeładowuje motywu → wybrany wariant „kolory programu” (`dark-ansi`). Zrobione w `30fb6c7` (NIEPRZETESTOWANE w becie): przycisk ☀️/🌙, `theme.set_appearance`, `MainWindow._apply_appearance`, nowa bramka pikselowa 24/24 + sabotaż 9/9, 34/34 bramki.
+- `test-bottom-bar-icons` przypięty do trybu ciemnego (czytał prawdziwy config usera). COMMON-TESTY: dopisek o sabotażu źródła w bramce „dwa przebiegi” (`2ba4c49`).
+- Zostaje: test usera po restarcie bety (7 punktów), test 🔊 z `58c5cf5`, wydanie 1.0.30, odchudzenie pliku pamięci.
+
 ## 2026-10-19
 
 - **Start sesji:** pamięć przeczytana w całości, lista „co wisi” z pomiarami (beta od 09:15, 1.0.30 niewydane, `server/.venv` zepsute, stary `CATALOG_URL`, pusty pas: oba rodzaje dowodów w logu).
