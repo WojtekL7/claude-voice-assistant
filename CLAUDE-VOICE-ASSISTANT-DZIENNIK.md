@@ -14,6 +14,10 @@ w zeszły czwartek", na które `git log` odpowiada zbyt drobno. Wpis: 3–8 lini
 - Zamówienie właściciela: jasny/ciemny **w locie, jednym kliknięciem** + jasne tło przełącznika „Auto-czytaj”. Pomiar: Claude Code nie przeładowuje motywu → wybrany wariant „kolory programu” (`dark-ansi`). Zrobione w `30fb6c7` (NIEPRZETESTOWANE w becie): przycisk ☀️/🌙, `theme.set_appearance`, `MainWindow._apply_appearance`, nowa bramka pikselowa 24/24 + sabotaż 9/9, 34/34 bramki.
 - `test-bottom-bar-icons` przypięty do trybu ciemnego (czytał prawdziwy config usera). COMMON-TESTY: dopisek o sabotażu źródła w bramce „dwa przebiegi” (`2ba4c49`).
 - Zostaje: test usera po restarcie bety (7 punktów), test 🔊 z `58c5cf5`, wydanie 1.0.30, odchudzenie pliku pamięci.
+- Po południu: zgłoszenie ze zrzutu — okno „Dodaj pliki” jasne w ciemnym programie. Przyczyna: kolory zamrożone przy imporcie (4 miejsca). Fix `e7d6167` + bramka `test-theme-live-dialogs` 21/21 ze skanem całego kodu (NIEPRZETESTOWANE w becie).
+- Nowa funkcja: przycisk „/” na dolnym pasku — polecenia Claude Code z opisem PL (12 najczęstszych + 47 wbudowanych + skille z dysku + „pełna lista w Claude”). `eba70f3`, bramka 30/30, sabotaż 4/4, 37/37 bramek (NIEPRZETESTOWANE w becie).
+- Korekta: 🔊 przy pytaniu z polami wyboru zadziałało raz na żywo (09:31, 1610 zn.).
+- Zostaje: testy obu nowości po restarcie bety 21.10, wydanie 1.0.30, odchudzenie pamięci (530 linii).
 
 ## 2026-10-19
 
