@@ -8,6 +8,12 @@ w zeszły czwartek", na które `git log` odpowiada zbyt drobno. Wpis: 3–8 lini
 
 ---
 
+## 2026-10-21
+
+- Start: przeczytane oba pliki pamięci, lista „co wisi” z pomiarem (appcast 1.0.29, zepsute `server/.venv`, stary `CATALOG_URL`, brak `install.ps1` w instrukcji, lupa poza skórką).
+- Zmiana ikony przycisku „/”: sama ukośna kreska bez kwadratu (`c385b13`, NIEPRZETESTOWANE w becie); bramki 30/0, 48/48, 47/0; render w obu trybach obejrzany.
+- **Zostaje otwarte:** test ikony i reszty przycisku „/” po restarcie bety + wcześniejsze testy (motyw w locie, okna poboczne, 🔊 przy pytaniu).
+
 ## 2026-10-20
 
 - Start sesji: pomiar listy „co wisi” (beta od 09:10, kanał 1.0.29, `server/.venv` zepsute, plik pamięci 520 linii).
