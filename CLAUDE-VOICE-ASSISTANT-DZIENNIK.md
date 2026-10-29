@@ -13,7 +13,8 @@ w zeszły czwartek", na które `git log` odpowiada zbyt drobno. Wpis: 3–8 lini
 - Start sesji: pamięć wczytana, sprawy otwarte zmierzone (beta od 08:48 ma wszystko do `c385b13`; kanał 1.0.29; lupa, `CATALOG_URL`, `install.ps1`, `server/.venv` bez zmian).
 - Zgłoszenie „Σ na dole nie zgadza się z sumą agentów” → diagnoza z kodu: tło liczone na aktywnej zakładce, Σ bez resetu, znaki z ekranu ÷ 3,5, wiadomość 2×.
 - Poprawka `7449e06`: licznik z `usage` w dzienniku sesji, Σ = suma zakładek; bramka `test-token-counter.py` 21/21, sabotaż 6/6, 38/38 bramek.
-- Zostaje: test usera po restarcie (6 punktów w żywej pamięci).
+- Druga prośba: Σ = dzisiejsze zużycie także zamkniętych zakładek → `src/core/daily_usage.py`, wersja B (wybór właściciela), deduplikacja po `message.id`; bramka 30/30, sabotaż 7/7, 38/38 bramek.
+- Zostaje: test usera przy następnym otwarciu programu (7 punktów w żywej pamięci).
 
 ## 2026-10-21
 
