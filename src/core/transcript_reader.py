@@ -24,7 +24,7 @@ import glob
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 
 # Stan TURY odczytany ze struktury dziennika (patrz TranscriptReader.turn_snapshot).
@@ -519,6 +519,79 @@ class TranscriptReader:
         except Exception:
             return None
         return None
+
+    # ---------- ile tokenów REALNIE zajmuje rozmowa ----------
+
+    # Ile bajtów prawdziwych wpisów od końca przegląda skan zużycia. Wpis
+    # z `usage` to ostatnia wypowiedź agenta, więc zwykle trafiamy w pierwszy.
+    USAGE_TAIL_BYTES = 256 * 1024
+
+    @staticmethod
+    def _entry_usage(obj: dict) -> Optional[Tuple[int, str]]:
+        """(tokeny kontekstu, identyfikator wypowiedzi) z wpisu albo None.
+
+        Rozmiar rozmowy = wejście + odczyt z pamięci podręcznej + zapis do
+        pamięci podręcznej + wyjście ostatniej odpowiedzi — dokładnie tyle
+        zajmuje teraz okno kontekstu (te same liczby Claude Code dostaje
+        z API). Tylko GŁÓWNY agent: pod-agent (`isSidechain`) ma własne,
+        osobne okno, a komunikat techniczny (`<synthetic>`) ma same zera.
+        """
+        if not isinstance(obj, dict) or obj.get("type") != "assistant":
+            return None
+        if obj.get("isSidechain") or obj.get("isApiErrorMessage"):
+            return None
+        msg = obj.get("message")
+        if not isinstance(msg, dict):
+            return None
+        model = msg.get("model")
+        if isinstance(model, str) and model.strip().startswith("<"):
+            return None
+        usage = msg.get("usage")
+        if not isinstance(usage, dict):
+            return None
+        total = 0
+        for key in ("input_tokens", "cache_read_input_tokens",
+                    "cache_creation_input_tokens", "output_tokens"):
+            value = usage.get(key)
+            if isinstance(value, int) and value > 0:
+                total += value
+        if total <= 0:
+            return None
+        ident = msg.get("id") or obj.get("uuid") or ""
+        return total, str(ident)
+
+    def context_usage(self) -> Optional[Tuple[int, str]]:
+        """(tokeny kontekstu, identyfikator wypowiedzi) z OSTATNIEJ odpowiedzi.
+
+        None = jeszcze nie wiadomo (brak sesji, agent nic nie odpowiedział).
+        Wynik trzymamy w pamięci, dopóki plik sesji nie urośnie — skan ogona
+        robimy tylko wtedy, gdy przybyło coś nowego (zwykle raz na wpis).
+        Identyfikator pozwala GUI odróżnić „nowa odpowiedź po /clear" od
+        „ta sama stara odpowiedź".
+        """
+        self._ensure_session()
+        path = self._session_file
+        if not path:
+            return None
+        size = self._safe_size(path)
+        cache = getattr(self, "_usage_cache", None)
+        if cache and cache[0] == path and cache[1] == size:
+            return cache[2]
+        found = None
+        try:
+            if size > 0:
+                for bline in _tail_lines_reversed(path, self.USAGE_TAIL_BYTES):
+                    try:
+                        obj = json.loads(bline.decode("utf-8", "ignore"))
+                    except Exception:
+                        continue
+                    found = self._entry_usage(obj)
+                    if found:
+                        break
+        except Exception:
+            found = None
+        self._usage_cache = (path, size, found)
+        return found
 
     # ---------- błędy Claude Code (wygasłe logowanie, przeciążenie) ----------
 

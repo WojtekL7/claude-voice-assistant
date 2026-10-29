@@ -1064,7 +1064,7 @@ UI_TRANSLATIONS = {
         # --- TTS ---
         "tts_no_audio": "Brak urządzenia audio — czytanie niedostępne",
         # --- Widżet statusu (MCP / Skille / Pliki / Model / liczniki) ---
-        "total_tokens_tooltip": "Łączne (przybliżone) tokeny ze wszystkich zakładek od startu aplikacji.\nWzór: liczba znaków ÷ 3,5.\nReset przy: restarcie aplikacji.\n(Indywidualny licznik agenta — po prawej, z kolorem zależnym od % okna kontekstu.)",
+        "total_tokens_tooltip": "Suma liczników wszystkich otwartych zakładek.\nKażdy licznik to rozmiar rozmowy agenta odczytany z jego dziennika sesji (te same liczby, które Claude Code dostaje z API).\n(Indywidualny licznik agenta — po prawej, z kolorem zależnym od % okna kontekstu.)",
         "refresh_status_tooltip": "Odśwież status agenta (MCP, skille, pliki, model).\nKlika się gdy zmieniłeś coś w menedżerach lub edycji agenta.",
         "status_idle_skills": "Wybierz zakładkę agenta, aby zobaczyć liczbę aktywnych skilli.",
         "status_idle_files": "Wybierz zakładkę agenta, aby zobaczyć pliki pamięci.",
@@ -1185,7 +1185,7 @@ UI_TRANSLATIONS = {
         "status_reading_backlog": "Czytam {n} zaległych wypowiedzi...",
         "status_copied": "Skopiowano do schowka ({n} znaków)",
         "status_files_added": "Dodano {n} plik(ów)",
-        "context_label_tooltip": "Przybliżony licznik tokenów aktywnego agenta + procent okna kontekstu modelu.\nKolory: do 50% zielony, 50–70% żółty, 70–90% pomarańczowy, ≥90% czerwony.\nAuto-compact w Claude Code: ~80–90% tej wartości.\nReset przy: /clear, /compact, restarcie aplikacji.",
+        "context_label_tooltip": "Rozmiar rozmowy aktywnego agenta (tokeny z ostatniej odpowiedzi, odczytane z dziennika sesji) + procent okna kontekstu modelu.\nKolory: do 50% zielony, 50–70% żółty, 70–90% pomarańczowy, ≥90% czerwony.\nAuto-compact w Claude Code: ~80–90% tej wartości.\nPo /clear i /compact: 0 do następnej odpowiedzi agenta.",
         "status_unread_backlog": "🔔 {n} nieprzeczytanych wypowiedzi w tej zakładce — kliknij 🔊, aby doczytać",
         # === Dialogi (src/gui/dialogs.py) ===
         # --- Wspólne przyciski ---
@@ -1989,7 +1989,7 @@ UI_TRANSLATIONS = {
         # --- TTS ---
         "tts_no_audio": "No audio device — reading unavailable",
         # --- Status widget (MCP / Skills / Files / Model / counters) ---
-        "total_tokens_tooltip": "Total (approximate) tokens across all tabs since the app started.\nFormula: character count ÷ 3.5.\nResets on: app restart.\n(Per-agent counter is on the right, colored by % of the model context window.)",
+        "total_tokens_tooltip": "Sum of the counters of all open tabs.\nEach counter is the agent's conversation size read from its session log (the same numbers Claude Code gets from the API).\n(Per-agent counter is on the right, colored by % of the model context window.)",
         "refresh_status_tooltip": "Refresh agent status (MCP, skills, files, model).\nClick it after you change something in the managers or agent settings.",
         "status_idle_skills": "Select an agent tab to see the number of active skills.",
         "status_idle_files": "Select an agent tab to see its memory files.",
@@ -2105,7 +2105,7 @@ UI_TRANSLATIONS = {
         "status_reading_backlog": "Reading {n} pending responses...",
         "status_copied": "Copied to clipboard ({n} chars)",
         "status_files_added": "Added {n} file(s)",
-        "context_label_tooltip": "Approximate token count of the active agent + percent of the model context window.\nColors: up to 50% green, 50–70% yellow, 70–90% orange, ≥90% red.\nAuto-compact in Claude Code: ~80–90% of this value.\nResets on: /clear, /compact, app restart.",
+        "context_label_tooltip": "Conversation size of the active agent (tokens from its latest reply, read from the session log) + percent of the model context window.\nColors: up to 50% green, 50–70% yellow, 70–90% orange, ≥90% red.\nAuto-compact in Claude Code: ~80–90% of this value.\nAfter /clear and /compact: 0 until the agent's next reply.",
         "status_unread_backlog": "🔔 {n} unread responses in this tab — click 🔊 to catch up",
         # === Dialogs (src/gui/dialogs.py) ===
         # --- Shared buttons ---

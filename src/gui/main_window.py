@@ -1006,11 +1006,13 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.status_bar)
         self._update_status(tr('status_ready'))
 
-        # Context usage counter (per-agent — pokazuje licznik aktywnej zakładki).
-        # Każdy AgentTab przechowuje własny total_context_tokens; tu trzymamy
-        # tylko współczynnik, globalny sumator i sam label.
-        self._chars_per_token = 3.5  # Średnia dla polskiego (angielski ~4).
-        self._total_app_tokens = 0   # Suma tokenów ze wszystkich zakładek (od startu).
+        # Licznik tokenów (per-agent — pokazuje licznik aktywnej zakładki).
+        # Każdy AgentTab trzyma własny total_context_tokens, ODCZYTANY z dziennika
+        # sesji (`usage` ostatniej odpowiedzi — patrz _sync_context_tokens).
+        # Σ to suma tych liczb ze wszystkich otwartych zakładek.
+        # ⛔ Do 2026-10-29 liczyliśmy tu znaki z terminala ÷ 3,5: przerysowania
+        # TUI i animacje zawyżały wynik, a wyjście zakładki W TLE trafiało do
+        # licznika zakładki AKTYWNEJ — Σ nie zgadzała się z sumą agentów.
         # Throttling odświeżania paska tokenów. Terminal emituje chunki kilkadziesiąt
         # razy na sekundę przy streamingu odpowiedzi Claude — bez tego setStyleSheet
         # leciał tysiącami i blokował UI.
@@ -1493,6 +1495,7 @@ class MainWindow(QMainWindow):
             agent_id = widget.agent_id
             if agent_id in self.agent_tabs:
                 del self.agent_tabs[agent_id]
+                self._refresh_total_tokens_label()
             if agent_id in self._tab_mru:
                 self._tab_mru.remove(agent_id)
 
@@ -1712,6 +1715,11 @@ class MainWindow(QMainWindow):
                 continue
             try:
                 if not reader.has_session():
+                    # Brak pliku sesji (np. tuż po restarcie zakładki) — stara
+                    # liczba byłaby już nieprawdą.
+                    if tab.total_context_tokens:
+                        tab.total_context_tokens = 0
+                        self._schedule_tokens_refresh()
                     continue
                 # Jaki model REALNIE odpowiada w tej zakładce? Ma znaczenie
                 # przy ustawieniu agenta „Domyślny" — apka nie przekazuje
@@ -1719,6 +1727,8 @@ class MainWindow(QMainWindow):
                 # Sprawdzamy przed primingiem, żeby po restarcie apki przy
                 # trwającej rozmowie pasek uzupełnił się od razu.
                 self._sync_detected_model(tab, reader, tab is active)
+                # Licznik tokenów TEJ zakładki — z jej dziennika, nie z ekranu.
+                self._sync_context_tokens(tab, reader, tab is active)
                 # Priming — pomiń to, co było przed startem czytania.
                 if not getattr(tab, '_transcript_primed', False):
                     reader.seek_to_end()
@@ -2171,9 +2181,7 @@ class MainWindow(QMainWindow):
         # Sprawdzamy pierwsze słowo, by nie reagować na np. "/clearance".
         first_word = message.strip().split(maxsplit=1)[0] if message.strip() else ""
         if first_word in ("/clear", "/compact"):
-            self._reset_context_usage()
-            return
-        self._update_context_usage(len(message))
+            self._reset_context_usage(src_tab if isinstance(src_tab, AgentTab) else None)
 
     def _show_memory_projects_dialog(self):
         """Show memory projects management dialog."""
@@ -3446,16 +3454,13 @@ class MainWindow(QMainWindow):
             # Add to buffer with newline separator
             self._terminal_output_buffer += clean_text + "\n"
 
-            # Update context usage counter
-            self._update_context_usage(len(clean_text))
-
             # LIMIT buffer size to last 5000 characters to prevent memory issues
             if len(self._terminal_output_buffer) > 5000:
                 self._terminal_output_buffer = self._terminal_output_buffer[-5000:]
 
             # Auto-czytanie korzysta teraz z dziennika sesji (Droga A,
-            # _poll_transcripts), nie z tego bufora. Bufor zostaje wyłącznie
-            # do liczenia tokenów (_update_context_usage powyżej).
+            # _poll_transcripts), nie z tego bufora. Tokeny też liczy dziennik
+            # (_sync_context_tokens).
 
             # NOTE: Removed auto-scroll on terminal output - user controls scroll manually
             # Previously this caused annoying jumps when trying to read history
@@ -3771,8 +3776,6 @@ class MainWindow(QMainWindow):
                 QTimer.singleShot(50, lambda: self.terminal_backend.send_text("\r"))
                 self.input_field.clear()
                 self._clear_attachments()
-                # Update context usage with user input
-                self._update_context_usage(len(full_message))
             else:
                 # Empty field - just send Enter (accept Claude Code proposal)
                 self.terminal_backend.send_text("\r")
@@ -3797,8 +3800,6 @@ class MainWindow(QMainWindow):
         # Fallback to Claude bridge
         self._append_user_message(full_message)
         self.claude.send(full_message)
-        # Update context usage with user input
-        self._update_context_usage(len(full_message))
         self._update_status(tr('status_sent'))
 
     def _build_message_with_attachments(self, text: str) -> str:
@@ -6581,23 +6582,33 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
         if bar is not None:
             bar.showMessage(text)
 
-    def _update_context_usage(self, additional_chars: int = 0):
-        """Dolicz znaki do licznika aktywnej zakładki + globalnego sumatora aplikacji.
+    def _sync_context_tokens(self, tab, reader, is_active: bool):
+        """Ustaw licznik zakładki z dziennika JEJ sesji (nie z ekranu).
 
-        Wzór: 1 token ≈ 3,5 znaku (przybliżenie dla polskiego).
-        Per-agent licznik resetuje się przy /clear, /compact, restarcie.
-        Globalny licznik resetuje się tylko przy restarcie aplikacji.
-
-        Odświeżanie UI jest throttlowane (max 1 raz na 200 ms) — patrz
-        _schedule_tokens_refresh. Liczniki same akumulują się bez strat.
+        Liczba = rozmiar rozmowy z ostatniej odpowiedzi agenta (`usage`), czyli
+        to samo, co Claude Code zna z API. Wołane w _poll_transcripts dla
+        KAŻDEJ zakładki, więc praca agenta w tle zmienia wyłącznie jego licznik.
+        Po /clear lub /compact pokazujemy 0, dopóki nie przyjdzie NOWA odpowiedź
+        (identyfikator inny niż zapamiętany w chwili polecenia).
         """
-        tab = self._get_current_agent_tab()
-        if tab is None:
+        try:
+            found = reader.context_usage()
+        except Exception:
             return
-        additional_tokens = int(additional_chars / self._chars_per_token)
-        tab.total_context_tokens += additional_tokens
-        self._total_app_tokens += additional_tokens
-        self._schedule_tokens_refresh()
+        tokens, ident = found if found else (0, None)
+        mark = getattr(tab, '_context_reset_mark', None)
+        if mark is not None:
+            if ident is not None and ident != mark:
+                tab._context_reset_mark = None
+            else:
+                tokens = 0
+        if tokens == tab.total_context_tokens:
+            return
+        tab.total_context_tokens = tokens
+        if is_active:
+            self._schedule_tokens_refresh()
+        else:
+            self._refresh_total_tokens_label()
 
     def _schedule_tokens_refresh(self):
         """Throttle: pierwsze wywołanie schedują odświeżenie za 200 ms,
@@ -6676,20 +6687,39 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
                 }}
             """)
 
+    def _total_tokens(self) -> int:
+        """Σ = suma liczników WSZYSTKICH otwartych zakładek (z definicji zgodna)."""
+        return sum(tab.total_context_tokens
+                   for tab in getattr(self, "agent_tabs", {}).values()
+                   if isinstance(tab, AgentTab))
+
     def _refresh_total_tokens_label(self):
         """Aktualizuj globalny licznik (Σ N) w widgecie statusu."""
         if hasattr(self, "mcp_status_widget") and self.mcp_status_widget is not None:
-            self.mcp_status_widget.set_total_tokens(self._total_app_tokens)
+            self.mcp_status_widget.set_total_tokens(self._total_tokens())
 
-    def _reset_context_usage(self):
-        """Wyzeruj licznik tokenów aktywnej zakładki (np. po /clear lub /compact).
+    def _reset_context_usage(self, tab=None):
+        """Wyzeruj licznik zakładki po /clear lub /compact.
 
-        UWAGA: globalny licznik aplikacji NIE jest zerowany — to suma od startu.
+        Zapamiętujemy identyfikator ostatniej odpowiedzi z dziennika — licznik
+        stoi na 0, dopóki nie przyjdzie odpowiedź o INNYM identyfikatorze
+        (wtedy dziennik zna już nowy rozmiar rozmowy).
         """
-        tab = self._get_current_agent_tab()
-        if tab is not None:
-            tab.total_context_tokens = 0
+        if tab is None:
+            tab = self._get_current_agent_tab()
+        if tab is None:
+            return
+        reader = getattr(tab, '_transcript_reader', None)
+        found = None
+        if reader is not None:
+            try:
+                found = reader.context_usage()
+            except Exception:
+                found = None
+        tab._context_reset_mark = found[1] if found else ""
+        tab.total_context_tokens = 0
         self._refresh_context_label()
+        self._refresh_total_tokens_label()
 
     def resizeEvent(self, event):
         """Handle window resize."""
