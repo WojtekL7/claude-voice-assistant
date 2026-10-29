@@ -445,6 +445,7 @@ from core.text_cleaner import (TextCleanerForTTS, extract_last_claude_response,
                               fix_polish_encoding, prose_from_markdown,
                               repair_terminal_mojibake, strip_tui_noise)
 from gui.search_dialog import SearchDialog
+from core.daily_usage import DailyUsage
 from core.transcript_reader import (
     TranscriptReader,
     TURN_IDLE, TURN_OWES_TEXT, TURN_TOOL_PENDING, TURN_UNKNOWN,
@@ -1009,7 +1010,8 @@ class MainWindow(QMainWindow):
         # Licznik tokenów (per-agent — pokazuje licznik aktywnej zakładki).
         # Każdy AgentTab trzyma własny total_context_tokens, ODCZYTANY z dziennika
         # sesji (`usage` ostatniej odpowiedzi — patrz _sync_context_tokens).
-        # Σ to suma tych liczb ze wszystkich otwartych zakładek.
+        # Σ to DZISIEJSZE zużycie ze wszystkich dzienników Claude Code — także
+        # zakładek zamkniętych i sprzed restartu (core/daily_usage.py).
         # ⛔ Do 2026-10-29 liczyliśmy tu znaki z terminala ÷ 3,5: przerysowania
         # TUI i animacje zawyżały wynik, a wyjście zakładki W TLE trafiało do
         # licznika zakładki AKTYWNEJ — Σ nie zgadzała się z sumą agentów.
@@ -1017,6 +1019,14 @@ class MainWindow(QMainWindow):
         # razy na sekundę przy streamingu odpowiedzi Claude — bez tego setStyleSheet
         # leciał tysiącami i blokował UI.
         self._refresh_tokens_pending = False
+        # Σ = dzisiejsze zużycie. Odczyt dzienników w wątku tła (pierwszy
+        # ~0,2–0,4 s, kolejne kilka ms); wynik wyświetla timer w wątku GUI.
+        self._daily_usage = DailyUsage()
+        self._daily_usage_thread = None
+        self._daily_usage_timer = QTimer(self)
+        self._daily_usage_timer.timeout.connect(self._tick_daily_usage)
+        self._daily_usage_timer.start(5000)
+        QTimer.singleShot(0, self._tick_daily_usage)
         self._context_label = QLabel("0")
         self._context_label.setToolTip(tr('context_label_tooltip'))
         self._context_label.setStyleSheet(f"""
@@ -6687,16 +6697,26 @@ Color={hex_to_rgb(colors.get('terminal_color_7_bright', '#EEEEEC'))}
                 }}
             """)
 
-    def _total_tokens(self) -> int:
-        """Σ = suma liczników WSZYSTKICH otwartych zakładek (z definicji zgodna)."""
-        return sum(tab.total_context_tokens
-                   for tab in getattr(self, "agent_tabs", {}).values()
-                   if isinstance(tab, AgentTab))
+    def _tick_daily_usage(self):
+        """Co 5 s: pokaż ostatni wynik i zleć doczytanie dzienników w tle."""
+        self._refresh_total_tokens_label()
+        th = getattr(self, "_daily_usage_thread", None)
+        if th is not None and th.is_alive():
+            return
+        th = threading.Thread(target=self._daily_usage.refresh, daemon=True)
+        self._daily_usage_thread = th
+        th.start()
 
     def _refresh_total_tokens_label(self):
-        """Aktualizuj globalny licznik (Σ N) w widgecie statusu."""
-        if hasattr(self, "mcp_status_widget") and self.mcp_status_widget is not None:
-            self.mcp_status_widget.set_total_tokens(self._total_tokens())
+        """Σ = dzisiejsze zużycie (wersja B), w podpowiedzi warianty A/B/C."""
+        widget = getattr(self, "mcp_status_widget", None)
+        daily = getattr(self, "_daily_usage", None)
+        if widget is None or daily is None:
+            return
+        snap = daily.snapshot()
+        widget.set_total_tokens(snap["b"], tr('total_tokens_tooltip_today').format(
+            b=f"{snap['b']:,}", a=f"{snap['a']:,}", c=f"{snap['c']:,}",
+            n=f"{snap['responses']:,}"))
 
     def _reset_context_usage(self, tab=None):
         """Wyzeruj licznik zakładki po /clear lub /compact.

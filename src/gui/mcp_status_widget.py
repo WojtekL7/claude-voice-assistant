@@ -256,8 +256,10 @@ class McpStatusWidget(QWidget):
 
     # ---------- Public API: globalny licznik ----------
 
-    def set_total_tokens(self, value: int):
-        """Ustaw globalną sumę tokenów (suma ze wszystkich zakładek)."""
+    def set_total_tokens(self, value: int, tooltip: str = None):
+        """Ustaw Σ — dzisiejsze zużycie tokenów (core.daily_usage)."""
+        if tooltip:
+            self.total_tokens_label.setToolTip(tooltip)
         # 2× NBSP dla odstępu między Σ a liczbą.
         self.total_tokens_label.setText(f"Σ  {value:,}")
 

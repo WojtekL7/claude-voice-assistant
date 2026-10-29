@@ -1064,7 +1064,8 @@ UI_TRANSLATIONS = {
         # --- TTS ---
         "tts_no_audio": "Brak urządzenia audio — czytanie niedostępne",
         # --- Widżet statusu (MCP / Skille / Pliki / Model / liczniki) ---
-        "total_tokens_tooltip": "Suma liczników wszystkich otwartych zakładek.\nKażdy licznik to rozmiar rozmowy agenta odczytany z jego dziennika sesji (te same liczby, które Claude Code dostaje z API).\n(Indywidualny licznik agenta — po prawej, z kolorem zależnym od % okna kontekstu.)",
+        "total_tokens_tooltip_today": "Dzisiejsze zużycie tokenów (od północy) ze wszystkich rozmów Claude Code na tym komputerze — także zamkniętych zakładek i sprzed ponownego uruchomienia programu.\nΣ: {b} — wejście + zapis do pamięci podręcznej + wyjście, każda odpowiedź liczona raz.\nRazem z ponownym czytaniem rozmowy przy każdej odpowiedzi: {a}.\nSamo pisanie agentów: {c}.\nOdpowiedzi agentów dziś: {n}.",
+        "total_tokens_tooltip": "Dzisiejsze zużycie tokenów ze wszystkich rozmów Claude Code (od północy, także zamknięte zakładki).\n(Indywidualny licznik agenta — po prawej: rozmiar jego rozmowy i % okna kontekstu.)",
         "refresh_status_tooltip": "Odśwież status agenta (MCP, skille, pliki, model).\nKlika się gdy zmieniłeś coś w menedżerach lub edycji agenta.",
         "status_idle_skills": "Wybierz zakładkę agenta, aby zobaczyć liczbę aktywnych skilli.",
         "status_idle_files": "Wybierz zakładkę agenta, aby zobaczyć pliki pamięci.",
@@ -1989,7 +1990,8 @@ UI_TRANSLATIONS = {
         # --- TTS ---
         "tts_no_audio": "No audio device — reading unavailable",
         # --- Status widget (MCP / Skills / Files / Model / counters) ---
-        "total_tokens_tooltip": "Sum of the counters of all open tabs.\nEach counter is the agent's conversation size read from its session log (the same numbers Claude Code gets from the API).\n(Per-agent counter is on the right, colored by % of the model context window.)",
+        "total_tokens_tooltip_today": "Today's token usage (since midnight) from all Claude Code conversations on this computer — including closed tabs and before the app was restarted.\nΣ: {b} — input + cache writes + output, each reply counted once.\nIncluding re-reading the conversation on every reply: {a}.\nAgents' writing only: {c}.\nAgent replies today: {n}.",
+        "total_tokens_tooltip": "Today's token usage from all Claude Code conversations (since midnight, including closed tabs).\n(Per-agent counter is on the right: its conversation size and % of the context window.)",
         "refresh_status_tooltip": "Refresh agent status (MCP, skills, files, model).\nClick it after you change something in the managers or agent settings.",
         "status_idle_skills": "Select an agent tab to see the number of active skills.",
         "status_idle_files": "Select an agent tab to see its memory files.",
