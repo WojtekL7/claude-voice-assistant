@@ -580,16 +580,33 @@ class TranscriptReader:
         found = None
         try:
             if size > 0:
-                for bline in _tail_lines_reversed(path, self.USAGE_TAIL_BYTES):
-                    try:
-                        obj = json.loads(bline.decode("utf-8", "ignore"))
-                    except Exception:
-                        continue
-                    found = self._entry_usage(obj)
-                    if found:
+                # ⛔ Obrazek (zrzut ekranu, zdjęcie) to JEDEN wpis do ~1 MB
+                # (zmierzone 2026-10-30: 958 KB). Liczony do budżetu zasłaniał
+                # wypowiedź agenta tuż przed nim → licznik mrugał zerem. Wpisy
+                # większe niż cały budżet go nie zjadają; czytanie i tak
+                # ogranicza TAIL_HARD_CAP_BYTES (helper dostaje go jako budżet).
+                used = 0
+                for bline in _tail_lines_reversed(path, TAIL_HARD_CAP_BYTES):
+                    if len(bline) <= self.USAGE_TAIL_BYTES:
+                        used += len(bline)
+                    if b'"usage"' in bline:
+                        try:
+                            obj = json.loads(bline.decode("utf-8", "ignore"))
+                        except Exception:
+                            obj = None
+                        found = self._entry_usage(obj)
+                        if found:
+                            break
+                    if used >= self.USAGE_TAIL_BYTES:
                         break
         except Exception:
             found = None
+        if found is None and cache and cache[0] == path and cache[2] \
+                and cache[1] <= size:
+            # Plik tylko urósł, a w zasięgu nie ma nowej odpowiedzi — rozmowa
+            # nie zmalała, więc zostaje poprzednia liczba (nie 0). Po /clear
+            # zero daje znacznik w GUI; po kompakcji plik maleje → skan od nowa.
+            found = cache[2]
         self._usage_cache = (path, size, found)
         return found
 

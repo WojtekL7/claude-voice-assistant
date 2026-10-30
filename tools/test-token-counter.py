@@ -142,6 +142,45 @@ _tr._tail_lines_reversed = _orig_tail
 spr("A7", "plik bez zmian → bez ponownego skanu (pętla co tick)", _licz["n"] == 0, _licz["n"])
 
 
+# Obrazek (zrzut ekranu) = jeden wpis `tool_result` ~1 MB (zmierzone 2026-10-30:
+# 958 KB). Stary skan zjadał nim cały budżet → None → licznik mrugał zerem.
+def obrazek(kb):
+    return {"type": "user", "isSidechain": False, "uuid": f"img{kb}",
+            "message": {"role": "user", "content": [{
+                "type": "tool_result", "tool_use_id": "t1",
+                "content": [{"type": "image", "source": {
+                    "type": "base64", "media_type": "image/png",
+                    "data": "A" * (kb * 1024)}}]}]}}
+
+
+dopisz(plik, obrazek(958))
+spr("A8", "obrazek 958 KB po odpowiedzi → dalej liczba (nie None)",
+    r.context_usage() == (5043, "m2"), r.context_usage())
+
+img = os.path.join(tmp, "obrazek.jsonl")
+dopisz(img, odp("i1", 1, 70000, 0, 9), obrazek(958))
+spr("A9", "pierwszy odczyt (bez pamięci) z obrazkiem na końcu → liczba",
+    czytnik_na(img).context_usage() == (70010, "i1"), czytnik_na(img).context_usage())
+
+# Seria obrazków ponad twardy sufit czytania (4 MB): skan nie sięga odpowiedzi,
+# ale rozmowa nie zmalała → zostaje POPRZEDNIA liczba, nie 0.
+dopisz(plik, *[obrazek(900) for _ in range(5)])
+spr("A10", "obrazki ponad sufit 4 MB → poprzednia liczba zostaje",
+    r.context_usage() == (5043, "m2"), r.context_usage())
+
+dopisz(plik, odp("m3", 2, 6000, 0, 8))
+spr("A11", "po obrazkach nowa odpowiedź → nowa liczba",
+    r.context_usage() == (6010, "m3"), r.context_usage())
+
+# Kontrola odwrotna: plik MNIEJSZY (inny/skrócony) bez odpowiedzi → None, nie stara liczba.
+krotki = os.path.join(tmp, "krotki.jsonl")
+dopisz(krotki, {"type": "user", "message": {"role": "user", "content": "x"}})
+r._session_file = krotki
+spr("A12", "inny plik bez odpowiedzi → None (stara liczba NIE przechodzi)",
+    r.context_usage() is None, r.context_usage())
+r._session_file = plik
+
+
 # ============================== B — okno ==============================
 class Czytnik:
     """Atrapa czytnika: zwraca to, co mu ustawimy."""
