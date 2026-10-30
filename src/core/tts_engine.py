@@ -62,6 +62,9 @@ _SPEECH_EMOTICON_RE = re.compile(
 _SPEECH_EMOTICON_GLUED_RE = re.compile(
     r"(?<!\d)(?<![:/\\])[:;][-~^']?[)(\]\[DdPp](?!\w)"
 )
+# Kopia _DIGIT_BRACKET_COLON z text_cleaner: głos czyta „(12): gotowe" jako
+# „12 emotikon smutek gotowe" (zgłoszenie 2026-10-30) → odstęp przed dwukropkiem.
+_SPEECH_DIGIT_BRACKET_COLON_RE = re.compile(r"(?<=\d)\):(?=\s|$)")
 
 # CZUJKA (nie filtr!) — co POZOSTAŁO w tekście, a głos potrafi wymówić jako
 # emotikonę. Celowo SZERSZA niż filtry: ma zgłaszać także kształty, których
@@ -69,6 +72,7 @@ _SPEECH_EMOTICON_GLUED_RE = re.compile(
 # emotikonę" miało dowód co do znaku zamiast zgadywania. Sama niczego nie usuwa.
 _SPEECH_EMOTICON_AUDIT_RE = re.compile(
     r"[:;=8][-~^']?[)(\]\[DPpOo|/\\3<>*]|[xX][DdPp]|<3|\^\^|-_-|>_<|;_;"
+    r"|\d\):(?=\s|$)"   # „(12): " — przed 30.10 czujka widziała to tylko przy cyfrze 8
 )
 
 
@@ -79,6 +83,7 @@ def _sanitize_for_speech(text: str) -> str:
     text = _SPEECH_EMOJI_RE.sub(" ", text)
     text = _SPEECH_EMOTICON_RE.sub(" ", text)
     text = _SPEECH_EMOTICON_GLUED_RE.sub(" ", text)
+    text = _SPEECH_DIGIT_BRACKET_COLON_RE.sub(") :", text)
     return text
 
 

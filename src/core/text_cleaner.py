@@ -1001,6 +1001,14 @@ _EMOTICONS = re.compile(
 _EMOTICONS_GLUED = re.compile(
     r"(?<!\d)(?<![:/\\])[:;][-~^']?[)(\]\[DdPp](?!\w)"
 )
+# 3) ODWROTNY: „):" PO CYFRZE — zgłoszenie 2026-10-30 („dalej czyta emotikon
+#    smutek, co chwilę"). Głos (edge-tts pl-PL-ZofiaNeural) czyta „(12): gotowe"
+#    jako „12 emotikon smutek gotowe" — zmierzone rozpoznawaniem mowy na
+#    nagraniu. Po literze („(abc):") i bez odstępu po dwukropku („(12):x")
+#    czyta poprawnie. Skala: 39 z 405 dłuższych wypowiedzi z 7 dni („KonnectaMED
+#    (#756): …", „dziś (23.10): …"). NIE wycinamy — odstęp przed dwukropkiem
+#    („(12) :") głos czyta jako zwykłą pauzę, a treść zostaje cała.
+_DIGIT_BRACKET_COLON = re.compile(r"(?<=\d)\):(?=\s|$)")
 
 
 def strip_emoji_and_emoticons(text: str) -> str:
@@ -1015,6 +1023,8 @@ def strip_emoji_and_emoticons(text: str) -> str:
     # Druga runda: emotikony PRZYKLEJONE do słowa („Gotowe:("), których wzorzec
     # wolnostojący nie może złapać bez rozbrojenia ochrony godzin i ścieżek.
     text = _EMOTICONS_GLUED.sub(" ", text)
+    # Trzecia: „(12): …" → „(12) : …" (głos czytał „):" jako emotikonę).
+    text = _DIGIT_BRACKET_COLON.sub(") :", text)
     return text
 
 

@@ -132,6 +132,52 @@ for tekst, ksztalt, opis in MUSI_ZOSTAC:
 
 print()
 print("=" * 72)
+print("H. „):” PO CYFRZE — zgłoszenie 2026-10-30 („dalej czyta emotikon smutek”)")
+print("=" * 72)
+print("    Zmierzone rozpoznawaniem mowy na nagraniu edge-tts: '(12): gotowe' →")
+print("    '12 emotikon smutek gotowe'; '(12) : gotowe' → 'Wynik 12. Gotowe.'")
+
+# Kształty, przy których głos MÓWIŁ „emotikon smutek” (każdy zmierzony na nagraniu).
+CZYTANE_JAKO_SMUTEK = [
+    ("Wynik (12): gotowe.", "(12) : gotowe"),
+    ("Uwaga (krok 3):", "(krok 3) :"),
+    ("Lista (2026-10-30): gotowe.", "(2026-10-30) : gotowe"),
+    ("Wynik 8): gotowe.", "8) : gotowe"),
+    ("KonnectaMED (#756): formularz", "(#756) : formularz"),   # prawdziwe zdanie z dziennika
+]
+for tekst, oczekiwane in CZYTANE_JAKO_SMUTEK:
+    for nazwa, f in (("czyścik", strip_emoji_and_emoticons), ("bramka głosu", _sanitize_for_speech)):
+        wynik = f(tekst)
+        sprawdz("):" not in wynik and oczekiwane in wynik,
+                f"H1 {nazwa}: {tekst!r} → ma ') :' i całą treść ({wynik!r})")
+
+# Kontrola odwrotna: kształty, które głos czytał POPRAWNIE — nie ruszamy.
+BEZ_ZMIAN = ["Wynik (abc): gotowe.", "Pozycje (niezweryfikowane): dane.",
+             "Wynik (12):gotowe.", "Spotkanie o 10:30 dzisiaj", "Kroki (1-8) dalej"]
+for tekst in BEZ_ZMIAN:
+    sprawdz(strip_emoji_and_emoticons(tekst) == tekst and _sanitize_for_speech(tekst) == tekst,
+            f"H2 bez zmian: {tekst!r}")
+
+# Pełna droga z markdownu (pogrubienie przed nawiasem, jak piszą agenci).
+md = "**Sprawdzone dziś (23.10):** nocny przegląd przeszedł."
+droga = _sanitize_for_speech(prose_from_markdown(md))
+sprawdz("):" not in droga and "(23.10) :" in droga, f"H3 pełna droga z markdownu ({droga!r})")
+
+atrapa_h = AtrapaLogu() if "AtrapaLogu" in globals() else None
+if atrapa_h is None:
+    class AtrapaLogu(TTSEngine):  # noqa: F811 — ta sama atrapa co w sekcji F
+        def __init__(self):
+            self.zapisane = []
+
+        def _log_error(self, msg):
+            self.zapisane.append(msg)
+    atrapa_h = AtrapaLogu()
+atrapa_h._audit_emoticons("Klient (12): dane")
+sprawdz(len(atrapa_h.zapisane) == 1 and "2):" in atrapa_h.zapisane[0],
+        "H4 czujka melduje '):' po DOWOLNEJ cyfrze (dotąd tylko po 8)")
+
+print()
+print("=" * 72)
 print("D. DWIE KOPIE WZORCA NIE MOGĄ SIĘ ROZJECHAĆ")
 print("=" * 72)
 print("    (kopia w tts_engine.py jest ŚWIADOMA — silnik bywa współdzielony;")
@@ -139,7 +185,8 @@ print("     bramka nie każe jej usuwać, tylko pilnuje zgodności zachowania)")
 
 ZESTAW_WSPOLNY = ([f"Ala {e} Ola" for e in WOLNE]
                   + [f"Gotowe{e} koniec" for e in [":(", ":)", ":D", ":P"]]
-                  + [t for t, _, _ in MUSI_ZOSTAC])
+                  + [t for t, _, _ in MUSI_ZOSTAC]
+                  + [t for t, _ in CZYTANE_JAKO_SMUTEK] + BEZ_ZMIAN)
 rozjazdy = []
 for tekst in ZESTAW_WSPOLNY:
     a = strip_emoji_and_emoticons(tekst)

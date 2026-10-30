@@ -110,6 +110,31 @@ WARIANTY = [
      '    pass  # SABOTAZ',
      "A — wszystko przestaje działać"),
 
+    ("S14 czyścik nie rozdziela '):' po cyfrze (stan przed 2026-10-30)", CLEANER,
+     '    text = _DIGIT_BRACKET_COLON.sub(") :", text)',
+     '    pass  # SABOTAZ',
+     "H1/D1 — zgłoszenie 2026-10-30"),
+
+    ("S15 bramka głosu nie rozdziela '):' po cyfrze", ENGINE,
+     '    text = _SPEECH_DIGIT_BRACKET_COLON_RE.sub(") :", text)',
+     '    pass  # SABOTAZ',
+     "H1/H3/D1 — druga droga"),
+
+    ("S16 '):' rozdzielane także po LITERZE (zmiana zdań, które głos czytał dobrze)", CLEANER,
+     r're.compile(r"(?<=\d)\):(?=\s|$)")',
+     r're.compile(r"(?<=\w)\):(?=\s|$)")',
+     "H2 — kontrola odwrotna"),
+
+    ("S17 '):' rozdzielane także BEZ odstępu po dwukropku", ENGINE,
+     r're.compile(r"(?<=\d)\):(?=\s|$)")',
+     r're.compile(r"(?<=\d)\):")',
+     "H2/D1 — '(12):gotowe' głos czytał dobrze"),
+
+    ("S18 czujka nie widzi '):' po cyfrze innej niż 8", ENGINE,
+     r'    r"|\d\):(?=\s|$)"',
+     r'    r"|8\):(?=\s|$)"',
+     "H4"),
+
     ("S13 czujka nie odróżnia pustego wyniku", ENGINE,
      "            if not trafienia:\n                return",
      "            if False:\n                return",
