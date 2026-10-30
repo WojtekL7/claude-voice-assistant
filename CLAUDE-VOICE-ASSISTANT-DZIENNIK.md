@@ -8,6 +8,12 @@ w zeszły czwartek", na które `git log` odpowiada zbyt drobno. Wpis: 3–8 lini
 
 ---
 
+## 2026-10-30
+- Start sesji: odczyt pamięci + pomiar spraw otwartych (beta 10:18, appcast 1.0.29, `server/.venv` zepsuty).
+- „Licznik tokenów przestał działać?” — zmierzone: Σ i licznik liczą dobrze (zrzut 15:00 zgodny); znaleziona usterka: po obrazku licznik agenta spadał do 0 → `76fa670`.
+- „Dalej czyta emotikon smutek” — głos czyta `):` po cyfrze jako emotikonę (zmierzone STT na nagraniach) → `1bc1fcf`; nauka w `CLAUDE-COMMON-DESKTOP.md` (`198f20b`).
+- Otwarte: testy obu poprawek po restarcie (właściciel 31.10), reszta listy „DO ZROBIENIA JAKO PIERWSZE”.
+
 ## 2026-10-29
 
 - Start sesji: pamięć wczytana, sprawy otwarte zmierzone (beta od 08:48 ma wszystko do `c385b13`; kanał 1.0.29; lupa, `CATALOG_URL`, `install.ps1`, `server/.venv` bez zmian).

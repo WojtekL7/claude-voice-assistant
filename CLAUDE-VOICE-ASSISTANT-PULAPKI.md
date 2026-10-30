@@ -69,6 +69,7 @@ Są tu POMIARY i pułapki, których nie odtworzysz z kodu ani z głowy.
 `terminal_backend.py` = interfejs `TerminalBackend` (`set_shell_program`, `start_shell_program`, `send_text`, `selected_text`, `copy_selection`, `set_font`, `set_color_scheme`, `scroll_to_text`, `shutdown`; sygnały `output_received(str)`, `finished`). Fabryka: **Linux→QTermWidget** (chyba że `CVA_WEBTERMINAL=1`/brak wheela), **macOS/Windows→WebTerminal**. AgentTab woła backend, nie surowy widget. Gotcha: `AA_ShareOpenGLContexts` + wczesny import QtWebEngine w `main.py`.
 
 ## Architektura auto-czytania (Droga A — z dziennika, NIE z terminala)
+- ⛔ **Obrazek w dzienniku Claude Code = JEDEN wpis do ~1 MB** (zmierzone 2026-10-30: zrzut ekranu jako `tool_result` z base64 = 958 KB; w rozmowach „Domy strona” do 115 takich wpisów). Każdy czytnik ogona z BUDŻETEM BAJTÓW (`_tail_lines_reversed(path, budget)`) zjada nim cały budżet i nie dociera do wpisu tuż przed nim → wynik `None`. Licznik tokenów mrugał przez to zerem (`76fa670`): wpisy większe niż budżet go nie zjadają, a twardy sufit `TAIL_HARD_CAP_BYTES` zostaje. Ten sam kształt co wielkie `api-request` (2.1.300+) — inne źródło, ten sam skutek; sprawdź każdy nowy czytnik ogona na obu.
 
 Proza idzie z **dziennika sesji** `~/.claude/projects/<zakodowana-cwd>/<sesja>.jsonl`, **nie** ze strumienia terminala (TUI = przerysowania, spinner, ghost-text, skoki kursora → śmieci).
 
